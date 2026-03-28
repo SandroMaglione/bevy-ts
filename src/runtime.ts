@@ -40,10 +40,17 @@ export interface Runtime<S extends Schema.Any, Services extends Record<string, u
   readonly services: Services
   /**
    * Runs one schedule once and clears events afterwards.
+   *
+   * Deferred commands are flushed after each individual system run, so later
+   * systems in the same schedule observe changes produced by earlier systems.
    */
   readonly runSchedule: (schedule: ScheduleDefinition<S>) => void
   /**
    * Runs multiple schedules in sequence.
+   *
+   * Because schedules are executed one after another, later schedules in the
+   * same `tick(...)` call can observe the fully flushed world changes from
+   * earlier schedules.
    */
   readonly tick: (...schedules: ReadonlyArray<ScheduleDefinition<S>>) => void
 }
@@ -53,6 +60,9 @@ export interface Runtime<S extends Schema.Any, Services extends Record<string, u
  *
  * This is the main integration point for embedding the ECS into another loop,
  * renderer, or host application.
+ *
+ * The runtime does not own the outer frame loop. It only owns ECS state plus
+ * the host-provided services that systems are allowed to depend on.
  */
 export const makeRuntime = <S extends Schema.Any, Services extends Record<string, unknown>>(options: {
   readonly schema: S
@@ -321,6 +331,10 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
 
   /**
    * Runs one system, then flushes its deferred commands.
+   *
+   * This per-system flush behavior is intentional in the current prototype and
+   * is what allows later systems or schedules in the same update pass to see
+   * spawned entities and resource writes immediately.
    */
   const runSystem = (
     system: SystemDefinition<any, any, any>

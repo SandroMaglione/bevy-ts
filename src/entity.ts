@@ -24,6 +24,10 @@ export type ComponentProof = Record<string, unknown>
  *
  * `EntityId` proves only that the id belongs to a runtime built from schema `S`.
  * It does not prove anything about the entity's current component set.
+ *
+ * The numeric `value` is stable for the lifetime of the runtime and can be used
+ * as an external integration key, for example when mirroring ECS entities into
+ * renderer-owned maps such as Pixi sprites.
  */
 export type EntityId<S extends Schema.Any> = Brand<
   typeof entityTypeId,
@@ -108,6 +112,8 @@ export interface EntityMut<
  * Creates an opaque entity id from a runtime integer id.
  *
  * This is a low-level constructor used by the runtime and command system.
+ * The `value` it stores is the stable per-runtime numeric identity exposed on
+ * `EntityId`.
  */
 export const makeEntityId = <S extends Schema.Any>(value: number): EntityId<S> =>
   ({

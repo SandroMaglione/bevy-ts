@@ -14,6 +14,11 @@ The main rule of the codebase is simple: if TypeScript cannot prove something ho
 
 This is still an early implementation scaffold. The runtime is intentionally simple for now, but the public type model is already the main design surface.
 
+One important current runtime behavior: deferred commands are flushed after each
+system run. That means later systems, and later schedules in the same
+`app.update(...)` or `runtime.tick(...)` call, can observe changes from earlier
+systems immediately.
+
 ## Status
 
 Current implementation includes:
@@ -111,6 +116,10 @@ Important rule:
 - `EntityId` does not prove component presence
 - exact component proofs are local and temporary, not global and permanent
 
+Also note:
+
+- `EntityId.value` is stable within one runtime and can be used as an external integration key for host-owned objects
+
 ### [`src/query.ts`](./src/query.ts)
 
 Defines explicit query access:
@@ -185,6 +194,9 @@ Defines the actual in-memory runtime:
 
 The runtime is intentionally loop-agnostic. It does not own rendering, windowing, or the main loop.
 
+The current prototype flushes commands after each system, which is why setup
+systems can spawn entities that later systems in the same update pass can read.
+
 ### [`src/app.ts`](./src/app.ts)
 
 Defines a small convenience wrapper:
@@ -214,6 +226,9 @@ At execution time:
 5. the runtime provides the declared services to that `Fx`
 6. the system runs
 7. queued commands are flushed into world state
+
+Because flushing happens after each system in the current prototype, this flow
+applies incrementally during a schedule, not only once at the very end.
 
 ## Usage
 
@@ -376,6 +391,61 @@ const runtime = Runtime.makeRuntime({
 // The app wrapper is optional convenience over the runtime.
 const app = App.makeApp(runtime)
 app.update(update)
+```
+
+## Renderer Integration
+
+The intended rendering pattern is:
+
+- keep renderer objects outside ECS
+- inject the renderer host as a typed service
+- store only simulation and render-description data inside ECS
+- use a sync system to project ECS state into renderer-owned objects
+- let the external renderer or host own the actual frame loop
+
+This is exactly the pattern used by [`src/examples/pixi.ts`](./src/examples/pixi.ts).
+
+```ts
+const PixiHost = Descriptor.defineService<{
+  readonly application: Application
+  readonly sprites: Map<number, Sprite>
+}>()("PixiHost")
+
+const SyncPixiSceneSystem = System.define(
+  {
+    id: "SyncPixiSceneSystem",
+    schema,
+    queries: {
+      renderables: Query.define({
+        selection: {
+          position: Query.read(Position),
+          renderable: Query.read(Renderable)
+        }
+      })
+    },
+    services: {
+      pixi: System.service(PixiHost)
+    }
+  },
+  ({ queries, services }) =>
+    Fx.sync(() => {
+      for (const match of queries.renderables.each()) {
+        // Stable within this runtime, so it can key host-side objects.
+        const entityId = match.entity.id.value
+
+        let sprite = services.pixi.sprites.get(entityId)
+        if (!sprite) {
+          sprite = new Sprite(Texture.WHITE)
+          services.pixi.application.stage.addChild(sprite)
+          services.pixi.sprites.set(entityId, sprite)
+        }
+
+        // ECS data stays authoritative; Pixi objects are synchronized from it.
+        const position = match.data.position.get()
+        sprite.position.set(position.x, position.y)
+      }
+    })
+)
 ```
 
 ## Concrete Game Examples
@@ -554,6 +624,15 @@ Run the smoke example:
 npm run smoke
 ```
 
+Run the PixiJS loop integration example:
+
+```bash
+npm run example:pixi
+```
+
+This starts a Vite dev server and opens [`pixi.html`](./pixi.html), where Pixi owns the canvas and ticker while
+the ECS world is defined in [`src/examples/pixi.ts`](./src/examples/pixi.ts).
+
 ## Current Limitations
 
 The current runtime is intentionally simple:
@@ -576,3 +655,10 @@ The next high-value implementation steps are:
 - separate command staging phases more explicitly
 - add tests that assert type failures with example misuse cases
 - add richer examples as real source files instead of README-only snippets
+
+## Example Conventions
+
+- `src/examples/smoke.ts` is a minimal API exercise
+- `src/examples/pixi.ts` is a browser-side integration demo
+- examples may auto-run when they are meant to be opened directly as demos
+- README snippets aim to show library usage patterns without requiring the full example setup
