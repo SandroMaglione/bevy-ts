@@ -1,5 +1,5 @@
 import type { Descriptor } from "./descriptor.ts"
-import type { EntityMut, EntityRef } from "./entity.ts"
+import type { EntityId, EntityMut, EntityRef } from "./entity.ts"
 import type { Schema } from "./schema.ts"
 
 /**
@@ -86,6 +86,21 @@ export interface QuerySpec<
  */
 export namespace Query {
   /**
+   * Small result type used by lookup-style query operations.
+   *
+   * Query handles use a value-level result instead of throwing so callers can
+   * keep failure cases explicit and type-directed.
+   */
+  export type Result<A, E> =
+    | { readonly ok: true; readonly value: A }
+    | { readonly ok: false; readonly error: E }
+
+  /**
+   * A non-empty readonly array.
+   */
+  export type NonEmptyReadonlyArray<T> = readonly [T, ...T[]]
+
+  /**
    * Any supported query specification.
    */
   export type Any = QuerySpec<Record<string, Access<Descriptor.Any>>, ReadonlyArray<Descriptor.Any>, ReadonlyArray<Descriptor.Any>>
@@ -116,6 +131,47 @@ export namespace Query {
       : T["selection"][K] extends WriteAccess<infer D> ? WriteCell<Descriptor.Value<D>>
       : never
   }
+
+  /**
+   * Entity lookup failed because the entity id is not currently alive.
+   */
+  export interface MissingEntityError {
+    readonly _tag: "MissingEntity"
+    readonly entityId: number
+  }
+
+  /**
+   * Entity lookup failed because the entity does not satisfy the query.
+   */
+  export interface QueryMismatchError {
+    readonly _tag: "QueryMismatch"
+    readonly entityId: number
+  }
+
+  /**
+   * A query expected one result, but matched none.
+   */
+  export interface NoEntitiesError {
+    readonly _tag: "NoEntities"
+  }
+
+  /**
+   * A query expected one result, but matched multiple.
+   */
+  export interface MultipleEntitiesError {
+    readonly _tag: "MultipleEntities"
+    readonly count: number
+  }
+
+  /**
+   * Errors produced by exact entity lookup helpers.
+   */
+  export type LookupError = MissingEntityError | QueryMismatchError
+
+  /**
+   * Errors produced by exact-one query helpers.
+   */
+  export type SingleError = NoEntitiesError | MultipleEntitiesError
 }
 
 /**
@@ -160,6 +216,53 @@ export type QueryMatch<S extends Schema.Any, Q extends Query.Any> =
         readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>>
         readonly data: Query.Cells<Q>
       }
+
+/**
+ * Successful result constructor used by runtime query helpers.
+ */
+export const success = <A>(value: A): Query.Result<A, never> => ({
+  ok: true,
+  value
+})
+
+/**
+ * Failed result constructor used by runtime query helpers.
+ */
+export const failure = <E>(error: E): Query.Result<never, E> => ({
+  ok: false,
+  error
+})
+
+/**
+ * Creates a typed missing-entity error.
+ */
+export const missingEntityError = (entityId: number): Query.MissingEntityError => ({
+  _tag: "MissingEntity",
+  entityId
+})
+
+/**
+ * Creates a typed query-mismatch error.
+ */
+export const queryMismatchError = (entityId: number): Query.QueryMismatchError => ({
+  _tag: "QueryMismatch",
+  entityId
+})
+
+/**
+ * Creates a typed zero-match error.
+ */
+export const noEntitiesError = (): Query.NoEntitiesError => ({
+  _tag: "NoEntities"
+})
+
+/**
+ * Creates a typed multi-match error.
+ */
+export const multipleEntitiesError = (count: number): Query.MultipleEntitiesError => ({
+  _tag: "MultipleEntities",
+  count
+})
 
 /**
  * Creates an explicit query specification.

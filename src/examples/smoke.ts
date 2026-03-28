@@ -5,7 +5,7 @@
  * descriptors, schemas, systems, queries, commands, schedules, runtime
  * construction, and app-style updates.
  */
-import { App, Command, Descriptor, Fx, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
 
 // Components used by the movement example.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -18,6 +18,8 @@ const TickEvent = Descriptor.defineEvent<{ readonly dt: number }>()("TickEvent")
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
 // A host-provided logging service.
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
+const MoveSystemLabel = Label.defineSystemLabel("MoveSystem")
+const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
 
 // Feature-local schema fragment for the movement example.
 const motionSchema = Schema.fragment({
@@ -43,7 +45,7 @@ const schema = Schema.build(motionSchema)
 // queues a spawned entity to exercise the command API.
 const MoveSystem = System.define(
   {
-    id: "MoveSystem",
+    label: MoveSystemLabel,
     schema,
     queries: {
       moving: Query.define({
@@ -83,13 +85,10 @@ const MoveSystem = System.define(
         })
       }
 
-      const spawned = Command.insert(Command.insert(Command.spawn<typeof schema>(), Position, {
-        x: dt,
-        y: dt
-      }), Velocity, {
-        x: 1,
-        y: 1
-      })
+      const spawned = Command.spawnWith<typeof schema>(
+        [Position, { x: dt, y: dt }],
+        [Velocity, { x: 1, y: 1 }]
+      )
       commands.spawn(spawned)
       events.tick.emit({ dt })
       services.logger.log(`tick=${dt}`)
@@ -98,7 +97,7 @@ const MoveSystem = System.define(
 
 // The schedule that runs the example system.
 const schedule = Schedule.define({
-  label: "Update",
+  label: UpdateScheduleLabel,
   schema,
   systems: [MoveSystem]
 })
@@ -107,7 +106,7 @@ const schedule = Schedule.define({
 const runtime = Runtime.makeRuntime({
   schema,
   services: {
-    Logger: {
+    [Logger.name]: {
       log(message: string) {
         console.log(message)
       }

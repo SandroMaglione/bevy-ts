@@ -22,7 +22,46 @@ export namespace Draft {
   > = Omit<P, Key> & {
     readonly [K in Key]: Value
   }
+
+  /**
+   * Adds the proof implied by one descriptor/value entry.
+   */
+  export type InsertEntry<
+    P extends Entity.ComponentProof,
+    Entry extends readonly [Descriptor<"component", string, any>, unknown]
+  > = Entry extends readonly [infer D extends Descriptor<"component", string, any>, infer _Value]
+    ? Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>
+    : P
+
+  /**
+   * Folds a readonly tuple of entries into one final component proof.
+   */
+  export type FoldEntries<
+    Entries extends ReadonlyArray<readonly [Descriptor<"component", string, any>, unknown]>,
+    P extends Entity.ComponentProof = {}
+  > = Entries extends readonly [
+    infer Head extends readonly [Descriptor<"component", string, any>, unknown],
+    ...infer Tail extends Array<readonly [Descriptor<"component", string, any>, unknown]>
+  ]
+    ? FoldEntries<Tail, InsertEntry<P, Head>>
+    : P
 }
+
+/**
+ * A typed descriptor/value pair used by the flat command authoring APIs.
+ */
+export type Entry<D extends Descriptor<"component", string, any>> = readonly [D, Descriptor.Value<D>]
+
+/**
+ * Extracts the component-descriptor union from a schema.
+ */
+type SchemaComponentDescriptor<S extends Schema.Any> =
+  Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+
+/**
+ * Any component entry accepted by a schema-aware command API.
+ */
+export type SchemaEntry<S extends Schema.Any> = Entry<SchemaComponentDescriptor<S>>
 
 /**
  * A deferred world mutation.
@@ -61,6 +100,10 @@ export interface InternalWorld<S extends Schema.Any> {
    */
   readonly destroyEntity: (id: Entity.EntityId<S>) => void
   /**
+   * Removes a component from an entity.
+   */
+  readonly removeComponent: (id: Entity.EntityId<S>, descriptor: Descriptor.Any) => void
+  /**
    * Writes a world-level resource or state value.
    */
   readonly writeResource: (descriptor: Descriptor.Any, value: unknown) => void
@@ -78,6 +121,17 @@ export interface InternalWorld<S extends Schema.Any> {
  */
 export const spawn = <S extends Schema.Any>(): Entity.EntityDraft<S, {}> =>
   Entity.draft(Entity.makeEntityId<S>(-1), {})
+
+/**
+ * Creates a typed component entry.
+ *
+ * This helper is optional, but it gives a named constructor for the flat
+ * variadic APIs when plain tuple literals feel too bare.
+ */
+export const entry = <D extends Descriptor<"component", string, any>>(
+  descriptor: D,
+  value: Descriptor.Value<D>
+): Entry<D> => [descriptor, value]
 
 /**
  * Adds a component to an entity draft and returns a more precise draft type.
@@ -100,6 +154,43 @@ export const insert = <
   } as Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>)
 
 /**
+ * Adds multiple components to an entity draft in one flat call.
+ *
+ * This preserves the same exact proof precision as repeated `insert(...)`
+ * calls, but folds the proof internally instead of forcing users to nest
+ * builders manually.
+ */
+export const insertMany = <
+  S extends Schema.Any,
+  P extends Entity.ComponentProof,
+  const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
+>(
+  draft: Entity.EntityDraft<S, P>,
+  ...entries: Entries
+): Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>> => {
+  let current: Entity.EntityDraft<S, Entity.ComponentProof> = draft
+  for (const [descriptor, value] of entries) {
+    current = insert(current, descriptor, value)
+  }
+  return current as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>>
+}
+
+/**
+ * Starts a staged entity definition and inserts multiple components at once.
+ *
+ * This is the recommended authoring API for new entity drafts because it keeps
+ * the exact proof typing without the visual noise of nested `insert(...)`
+ * chains.
+ */
+export const spawnWith = <
+  S extends Schema.Any,
+  const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
+>(
+  ...entries: Entries
+): Entity.EntityDraft<S, Draft.FoldEntries<Entries>> =>
+  insertMany(spawn<S>(), ...entries)
+
+/**
  * Public command API exposed to systems.
  *
  * This is the only mutation entrypoint in the runtime model. Systems can queue
@@ -120,9 +211,23 @@ export interface CommandsApi<S extends Schema.Any> {
     value: Descriptor.Value<D>
   ) => Entity.EntityId<S>
   /**
+   * Queues multiple component inserts on an existing entity.
+   */
+  readonly insertMany: (
+    entity: Entity.EntityId<S>,
+    ...entries: ReadonlyArray<SchemaEntry<S>>
+  ) => Entity.EntityId<S>
+  /**
    * Queues an entity removal.
    */
   readonly despawn: (entity: Entity.EntityId<S>) => void
+  /**
+   * Queues a component removal on an existing entity.
+   */
+  readonly remove: <D extends Schema.Components<S>[keyof Schema.Components<S>]>(
+    entity: Entity.EntityId<S>,
+    descriptor: D
+  ) => Entity.EntityId<S>
   /**
    * Queues a resource write.
    */
@@ -183,6 +288,18 @@ export const makeCommands = <S extends Schema.Any>(
       })
       return entity
     },
+    insertMany(entity, ...entries) {
+      queue.push({
+        tag: "insertMany",
+        apply(world) {
+          const store = world.ensureEntityStore(entity)
+          for (const [descriptor, value] of entries) {
+            store.set(descriptor.key, value)
+          }
+        }
+      })
+      return entity
+    },
     despawn(entity) {
       queue.push({
         tag: "despawn",
@@ -190,6 +307,15 @@ export const makeCommands = <S extends Schema.Any>(
           world.destroyEntity(entity)
         }
       })
+    },
+    remove(entity, descriptor) {
+      queue.push({
+        tag: "remove",
+        apply(world) {
+          world.removeComponent(entity, descriptor)
+        }
+      })
+      return entity
     },
     setResource(descriptor, value) {
       queue.push({

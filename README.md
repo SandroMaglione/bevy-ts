@@ -157,9 +157,11 @@ Defines deferred mutation:
 
 - `Command.spawn()`
 - `Command.insert(...)`
+- `Command.spawnWith(...)`
+- `commands.insertMany(...)`
 - `CommandsApi`
 
-Systems do not mutate the runtime directly. They queue commands, and the runtime flushes them after the system effect completes.
+Systems do not mutate the runtime directly. They queue commands, and the runtime applies them at schedule apply phases.
 
 ### [`src/fx.ts`](./src/fx.ts)
 
@@ -344,11 +346,10 @@ const SpawnProjectileSystem = System.define(
   },
   ({ commands, services }) =>
     Fx.sync(() => {
-      // Build a draft with an exact staged component proof.
-      const projectile = Command.insert(
-        Command.insert(Command.spawn<typeof schema>(), Position, { x: 0, y: 0 }),
-        Velocity,
-        { x: 4, y: 0 }
+      // Build a draft with an exact staged component proof in one flat call.
+      const projectile = Command.spawnWith<typeof schema>(
+        [Position, { x: 0, y: 0 }],
+        [Velocity, { x: 4, y: 0 }]
       )
 
       // The runtime turns the draft into a deferred spawn command.

@@ -1,7 +1,9 @@
 import * as Command from "./command.ts"
 import * as Entity from "./entity.ts"
 import * as Fx from "./fx.ts"
-import type { Query, QueryMatch, ReadCell, WriteCell } from "./query.ts"
+import * as Query from "./query.ts"
+import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
+import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
 import type { Schema } from "./schema.ts"
 import type {
@@ -39,18 +41,25 @@ export interface Runtime<S extends Schema.Any, Services extends Record<string, u
    */
   readonly services: Services
   /**
-   * Runs one schedule once and clears events afterwards.
+   * Runs one or more schedules as an initialization step.
    *
-   * Deferred commands are flushed after each individual system run, so later
-   * systems in the same schedule observe changes produced by earlier systems.
+   * This is a semantic alias for a one-off bootstrap phase before entering the
+   * repeating outer loop.
+   */
+  readonly initialize: (...schedules: ReadonlyArray<ScheduleDefinition<S>>) => void
+  /**
+   * Runs one schedule once.
+   *
+   * Deferred commands and events advance only at explicit schedule marker
+   * steps, plus one final end-of-schedule apply/update pass for safety.
    */
   readonly runSchedule: (schedule: ScheduleDefinition<S>) => void
   /**
    * Runs multiple schedules in sequence.
    *
    * Because schedules are executed one after another, later schedules in the
-   * same `tick(...)` call can observe the fully flushed world changes from
-   * earlier schedules.
+   * same `tick(...)` call can observe the fully applied world changes and event
+   * updates produced by earlier schedules.
    */
   readonly tick: (...schedules: ReadonlyArray<ScheduleDefinition<S>>) => void
 }
@@ -91,9 +100,13 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
    */
   const states = new Map<symbol, unknown>()
   /**
-   * Descriptor-keyed event buffers for the current schedule step.
+   * Descriptor-keyed readable event buffers for the current phase.
    */
-  const events = new Map<symbol, Array<unknown>>()
+  let readableEvents = new Map<symbol, Array<unknown>>()
+  /**
+   * Descriptor-keyed pending event buffers written before the next event update.
+   */
+  let pendingEvents = new Map<symbol, Array<unknown>>()
 
   /**
    * Seeds runtime resources from the host-provided initial values.
@@ -136,6 +149,9 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
     destroyEntity(id) {
       entities.delete(id.value)
     },
+    removeComponent(id, descriptor) {
+      entities.get(id.value)?.delete(descriptor.key)
+    },
     writeResource(descriptor, value) {
       if (descriptor.kind === "state") {
         states.set(descriptor.key, value)
@@ -144,9 +160,9 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
       resources.set(descriptor.key, value)
     },
     appendEvent(descriptor, value) {
-      const queue = events.get(descriptor.key) ?? []
+      const queue = pendingEvents.get(descriptor.key) ?? []
       queue.push(value)
-      events.set(descriptor.key, queue)
+      pendingEvents.set(descriptor.key, queue)
     }
   }
 
@@ -174,7 +190,7 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
    * The handle performs filtering, builds typed cells, and attaches the
    * matching entity proof for each result.
    */
-  const makeQueryHandle = <Q extends Query.Any>(query: Q): QueryHandle<S, Q> => ({
+  const makeQueryHandle = <Q extends Query.Query.Any>(query: Q): QueryHandle<S, Q> => ({
     each() {
       const matches: Array<QueryMatch<S, Q>> = []
       for (const [idValue, store] of entities) {
@@ -199,7 +215,7 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
         }
 
         const data = {} as Record<string, unknown>
-        for (const [slot, access] of Object.entries(query.selection)) {
+        for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
           const descriptor = access.descriptor
           if (!store.has(descriptor.key)) {
             include = false
@@ -221,10 +237,11 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
         }
 
         const readProof = Object.fromEntries(
-          Object.entries(query.selection).map(([slot, access]) => [slot, store.get(access.descriptor.key)])
+          (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
+            .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
         )
         const writeProof = Object.fromEntries(
-          Object.entries(query.selection)
+          (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
             .filter(([, access]) => access.mode === "write")
             .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
         )
@@ -237,8 +254,70 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
         } as QueryMatch<S, Q>)
       }
       return matches
+    },
+    get(entityId) {
+      const match = lookup.get(entityId, query)
+      return match
+    },
+    single() {
+      const matches = this.each()
+      if (matches.length === 0) {
+        return Query.failure(Query.noEntitiesError())
+      }
+      if (matches.length > 1) {
+        return Query.failure(Query.multipleEntitiesError(matches.length))
+      }
+      return Query.success(matches[0]!)
     }
   })
+
+  const lookup = {
+    get<Q extends Query.Query.Any>(entityId: Entity.EntityId<S>, query: Q): Query.Query.Result<QueryMatch<S, Q>, Query.Query.LookupError> {
+      const store = entities.get(entityId.value)
+      if (!store) {
+        return Query.failure(Query.missingEntityError(entityId.value))
+      }
+      for (const descriptor of query.with) {
+        if (!store.has(descriptor.key)) {
+          return Query.failure(Query.queryMismatchError(entityId.value))
+        }
+      }
+      for (const descriptor of query.without) {
+        if (store.has(descriptor.key)) {
+          return Query.failure(Query.queryMismatchError(entityId.value))
+        }
+      }
+      const data = {} as Record<string, unknown>
+      for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
+        if (!store.has(access.descriptor.key)) {
+          return Query.failure(Query.queryMismatchError(entityId.value))
+        }
+        data[slot] = access.mode === "read"
+          ? makeReadCell(() => store.get(access.descriptor.key) as never)
+          : makeWriteCell(
+              () => store.get(access.descriptor.key) as never,
+              (value) => {
+                store.set(access.descriptor.key, value)
+              }
+            )
+      }
+      const readProof = Object.fromEntries(
+        (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
+          .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
+      )
+      const writeProof = Object.fromEntries(
+        (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
+          .filter(([, access]) => access.mode === "write")
+          .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
+      )
+      return Query.success({
+        entity: Object.keys(writeProof).length > 0
+          ? Entity.mut(entityId, readProof, writeProof)
+          : Entity.ref(entityId, readProof),
+        data
+      } as QueryMatch<S, Q>)
+    }
+  } satisfies import("./system.ts").LookupApi<S>
 
   /**
    * Creates a read-only resource or state view.
@@ -262,7 +341,7 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
    */
   const makeEventReadView = <T>(descriptorKey: symbol): EventReadView<T> => ({
     all() {
-      return (events.get(descriptorKey) ?? []) as ReadonlyArray<T>
+      return (readableEvents.get(descriptorKey) ?? []) as ReadonlyArray<T>
     }
   })
 
@@ -271,9 +350,9 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
    */
   const makeEventWriteView = <T>(descriptorKey: symbol): EventWriteView<T> => ({
     emit(value) {
-      const queue = events.get(descriptorKey) ?? []
+      const queue = pendingEvents.get(descriptorKey) ?? []
       queue.push(value)
-      events.set(descriptorKey, queue)
+      pendingEvents.set(descriptorKey, queue)
     }
   })
 
@@ -289,7 +368,7 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
   ): SystemContext<any> => {
     const commands = Command.makeCommands<S>(() => internalWorld.nextEntityId())
     const queries = Object.fromEntries(
-      Object.entries(system.spec.queries as Record<string, Query.Any>).map(([key, query]) => [key, makeQueryHandle(query)])
+      Object.entries(system.spec.queries as Record<string, Query.Query.Any>).map(([key, query]) => [key, makeQueryHandle(query)])
     )
     const resourceViews = Object.fromEntries(
       Object.entries(system.spec.resources as Record<string, any>).map(([key, access]) => [
@@ -321,6 +400,7 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
 
     return {
       queries,
+      lookup,
       resources: resourceViews,
       events: eventViews,
       states: stateViews,
@@ -330,22 +410,35 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
   }
 
   /**
-   * Runs one system, then flushes its deferred commands.
+   * Runs one system and returns the commands it queued.
    *
-   * This per-system flush behavior is intentional in the current prototype and
-   * is what allows later systems or schedules in the same update pass to see
-   * spawned entities and resource writes immediately.
+   * The schedule decides when those commands become visible by placing
+   * `applyDeferred()` steps.
    */
   const runSystem = (
     system: SystemDefinition<any, any, any>
-  ): void => {
+  ): ReadonlyArray<Command.DeferredCommand<S>> => {
     const context = makeContext(system)
     const effect = system.run(context)
     Fx.runSync(Fx.provide(effect as never, context.services))
-    const flushed = context.commands.flush()
-    for (const command of flushed) {
+    return context.commands.flush()
+  }
+
+  /**
+   * Applies all queued commands gathered since the previous apply step.
+   */
+  const applyDeferred = (commands: Array<Command.DeferredCommand<S>>): void => {
+    for (const command of commands.splice(0, commands.length)) {
       command.apply(internalWorld as never)
     }
+  }
+
+  /**
+   * Advances the readable event buffers to the latest pending writes.
+   */
+  const updateEvents = (): void => {
+    readableEvents = pendingEvents
+    pendingEvents = new Map()
   }
 
   /**
@@ -354,11 +447,24 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
   const runtime: Runtime<S, Services> = {
     schema: options.schema,
     services: options.services,
+    initialize(...schedules) {
+      runtime.tick(...schedules)
+    },
     runSchedule(schedule) {
-      for (const system of schedule.systems) {
-        runSystem(system as SystemDefinition<any, any, any>)
+      const deferred: Array<Command.DeferredCommand<S>> = []
+      for (const step of schedule.steps) {
+        if (Schedule.isSystemStep(step)) {
+          deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
+          continue
+        }
+        if (step.kind === "applyDeferred") {
+          applyDeferred(deferred)
+          continue
+        }
+        updateEvents()
       }
-      events.clear()
+      applyDeferred(deferred)
+      updateEvents()
     },
     tick(...schedules) {
       for (const schedule of schedules) {

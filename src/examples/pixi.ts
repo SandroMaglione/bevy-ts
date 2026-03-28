@@ -1,6 +1,6 @@
 import { Application, Sprite, Texture } from "pixi.js"
 
-import { App, Command, Descriptor, Fx, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
 
 // ECS-owned simulation data.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -23,6 +23,13 @@ const PixiHost = Descriptor.defineService<{
     deltaSeconds: number
   }
 }>()("PixiHost")
+const SetupSceneSystemLabel = Label.defineSystemLabel("SetupSceneSystem")
+const CaptureFrameInputSystemLabel = Label.defineSystemLabel("CaptureFrameInputSystem")
+const IntegrateMotionSystemLabel = Label.defineSystemLabel("IntegrateMotionSystem")
+const BounceWithinViewportSystemLabel = Label.defineSystemLabel("BounceWithinViewportSystem")
+const SyncPixiSceneSystemLabel = Label.defineSystemLabel("SyncPixiSceneSystem")
+const SetupScheduleLabel = Label.defineScheduleLabel("Setup")
+const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
 
 const pixiSchema = Schema.fragment({
   components: {
@@ -46,7 +53,7 @@ const schema = Schema.build(pixiSchema)
 // the simulation phase to Running.
 const SetupSceneSystem = System.define(
   {
-    id: "SetupSceneSystem",
+    label: SetupSceneSystemLabel,
     schema,
     states: {
       phase: System.writeState(SimulationPhase)
@@ -70,28 +77,21 @@ const SetupSceneSystem = System.define(
         const size = 18 + (index % 4) * 6
         const tint = palette[index % palette.length] ?? palette[0]
 
-        const draft = Command.insert(
-          Command.insert(
-            Command.insert(
-              Command.insert(Command.spawn<typeof schema>(), Position, {
-                x: width * 0.5 + Math.cos(angle) * 140,
-                y: height * 0.5 + Math.sin(angle) * 90
-              }),
-              Velocity,
-              {
-                x: Math.cos(angle) * speed,
-                y: Math.sin(angle) * speed
-              }
-            ),
-            Renderable,
-            {
-              size
-            }
-          ),
-          Tint,
-          {
+        const draft = Command.spawnWith<typeof schema>(
+          [Position, {
+            x: width * 0.5 + Math.cos(angle) * 140,
+            y: height * 0.5 + Math.sin(angle) * 90
+          }],
+          [Velocity, {
+            x: Math.cos(angle) * speed,
+            y: Math.sin(angle) * speed
+          }],
+          [Renderable, {
+            size
+          }],
+          [Tint, {
             value: tint
-          }
+          }]
         )
 
         commands.spawn(draft)
@@ -105,7 +105,7 @@ const SetupSceneSystem = System.define(
 // simulation systems run.
 const CaptureFrameInputSystem = System.define(
   {
-    id: "CaptureFrameInputSystem",
+    label: CaptureFrameInputSystemLabel,
     schema,
     resources: {
       deltaTime: System.writeResource(DeltaTime),
@@ -128,7 +128,7 @@ const CaptureFrameInputSystem = System.define(
 // Pure simulation step: integrates positions from velocity and delta time.
 const IntegrateMotionSystem = System.define(
   {
-    id: "IntegrateMotionSystem",
+    label: IntegrateMotionSystemLabel,
     schema,
     queries: {
       moving: Query.define({
@@ -167,8 +167,9 @@ const IntegrateMotionSystem = System.define(
 // Applies simple screen-bounds collision using ECS-only data.
 const BounceWithinViewportSystem = System.define(
   {
-    id: "BounceWithinViewportSystem",
+    label: BounceWithinViewportSystemLabel,
     schema,
+    after: [IntegrateMotionSystemLabel],
     queries: {
       moving: Query.define({
         selection: {
@@ -239,8 +240,9 @@ const BounceWithinViewportSystem = System.define(
 // the host can keep a sprite map outside the ECS world.
 const SyncPixiSceneSystem = System.define(
   {
-    id: "SyncPixiSceneSystem",
+    label: SyncPixiSceneSystemLabel,
     schema,
+    after: [BounceWithinViewportSystemLabel],
     queries: {
       renderables: Query.define({
         selection: {
@@ -287,14 +289,14 @@ const SyncPixiSceneSystem = System.define(
 
 // Setup runs once before the repeating update schedule.
 const setupSchedule = Schedule.define({
-  label: "Setup",
+  label: SetupScheduleLabel,
   schema,
   systems: [SetupSceneSystem]
 })
 
 // Update runs every frame and is intentionally ordered.
 const updateSchedule = Schedule.define({
-  label: "Update",
+  label: UpdateScheduleLabel,
   schema,
   systems: [CaptureFrameInputSystem, IntegrateMotionSystem, BounceWithinViewportSystem, SyncPixiSceneSystem]
 })
@@ -333,7 +335,7 @@ export const startPixiExample = async (mount = document.body): Promise<void> => 
   const runtime = Runtime.makeRuntime({
     schema,
     services: {
-      PixiHost: host
+      [PixiHost.name]: host
     },
     resources: {
       DeltaTime: host.clock.deltaSeconds,
@@ -348,9 +350,9 @@ export const startPixiExample = async (mount = document.body): Promise<void> => 
   })
 
   const app = App.makeApp(runtime)
-  // The initial update runs setup first, then update. This works because the
-  // runtime flushes commands after each system and schedule.
-  app.update(setupSchedule, updateSchedule)
+  // Setup is explicit and runs once before the recurring update schedule.
+  app.bootstrap(setupSchedule)
+  app.update(updateSchedule)
 
   application.ticker.add((ticker) => {
     host.clock.deltaSeconds = ticker.deltaMS / 1000

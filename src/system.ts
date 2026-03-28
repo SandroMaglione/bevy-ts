@@ -4,6 +4,7 @@ import type { Query, QueryMatch } from "./query.ts"
 import type { ReadCell, WriteCell } from "./query.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
+import type { Label } from "./label.ts"
 
 /**
  * Declares a dependency-injected service requirement for a system.
@@ -180,7 +181,36 @@ export interface EventWriteView<T> {
  */
 export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
   each(): ReadonlyArray<QueryMatch<S, Q>>
+  /**
+   * Retrieves the match for one specific entity id when it satisfies the query.
+   */
+  get(entityId: import("./entity.ts").EntityId<S>): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  /**
+   * Returns a single match when exactly one entity satisfies the query.
+   */
+  single(): Query.Result<QueryMatch<S, Q>, Query.SingleError>
 }
+
+/**
+ * Typed entity lookup API exposed to systems.
+ *
+ * Use this when you already have an entity id and want a validated, typed view
+ * over a specific component access specification.
+ */
+export interface LookupApi<S extends Schema.Any> {
+  get<Q extends Query.Any>(
+    entityId: import("./entity.ts").EntityId<S>,
+    query: Q
+  ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+}
+
+/**
+ * An ordering target inside one schedule.
+ *
+ * Systems can order themselves relative to concrete systems or whole system
+ * sets. Both are nominal labels, not strings.
+ */
+export type OrderTarget = Label.System | Label.SystemSet
 
 /**
  * An explicit system specification.
@@ -196,7 +226,10 @@ export interface SystemSpec<
   out Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
   out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {}
 > {
-  readonly id: string
+  readonly label: Label.System
+  readonly inSets: ReadonlyArray<Label.SystemSet>
+  readonly after: ReadonlyArray<OrderTarget>
+  readonly before: ReadonlyArray<OrderTarget>
   readonly queries: Queries
   readonly resources: Resources
   readonly events: Events
@@ -255,6 +288,7 @@ type QueryContext<Spec extends SystemSpec<any, any, any, any, any>> = {
  */
 export interface SystemContext<Spec extends SystemSpec<any, any, any, any, any>> {
   readonly queries: QueryContext<Spec>
+  readonly lookup: LookupApi<Spec["schema"]>
   readonly resources: ResourceContext<Spec>
   readonly events: EventContext<Spec>
   readonly states: StateContext<Spec>
@@ -303,8 +337,11 @@ export const define = <
   E = never
 >(
   spec: {
-    readonly id: string
+    readonly label: Label.System
     readonly schema: S
+    readonly inSets?: ReadonlyArray<Label.SystemSet>
+    readonly after?: ReadonlyArray<OrderTarget>
+    readonly before?: ReadonlyArray<OrderTarget>
     readonly queries?: Queries
     readonly resources?: Resources
     readonly events?: Events
@@ -318,8 +355,11 @@ export const define = <
   >
 ): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States>, A, E> => ({
   spec: {
-    id: spec.id,
+    label: spec.label,
     schema: spec.schema,
+    inSets: spec.inSets ?? [],
+    after: spec.after ?? [],
+    before: spec.before ?? [],
     queries: (spec.queries ?? {}) as Queries,
     resources: (spec.resources ?? {}) as Resources,
     events: (spec.events ?? {}) as Events,

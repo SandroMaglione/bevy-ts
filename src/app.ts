@@ -14,6 +14,10 @@ export interface App<S extends Schema.Any, Services extends Record<string, unkno
    */
   readonly runtime: Runtime<S, Services>
   /**
+   * Runs one or more initialization schedules before the main loop.
+   */
+  readonly bootstrap: (...schedules: ReadonlyArray<ScheduleDefinition<S>>) => void
+  /**
    * Runs one or more schedules once.
    *
    * Use this from an external loop, test, or host integration whenever you
@@ -32,6 +36,9 @@ export const makeApp = <S extends Schema.Any, Services extends Record<string, un
   runtime: Runtime<S, Services>
 ): App<S, Services> => ({
   runtime,
+  bootstrap(...schedules) {
+    runtime.initialize(...schedules)
+  },
   update(...schedules) {
     runtime.tick(...schedules)
   }
