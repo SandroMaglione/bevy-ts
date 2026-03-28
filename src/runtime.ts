@@ -1,11 +1,12 @@
 import * as Command from "./command.ts"
+import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
 import * as Fx from "./fx.ts"
 import * as Query from "./query.ts"
 import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
 import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
-import type { Schema } from "./schema.ts"
+import type { Registry, Schema } from "./schema.ts"
 import type {
   EventReadView,
   EventWriteView,
@@ -24,6 +25,41 @@ import type {
  * Each entity id maps to descriptor-keyed component storage.
  */
 type EntityStore = Map<number, Map<symbol, unknown>>
+
+/**
+ * The caller-facing initialization shape for one descriptor registry.
+ *
+ * Initialization is keyed by schema property names, not descriptor names. This
+ * is the same key space exposed by `Schema.Resources<S>` and `Schema.States<S>`.
+ */
+type InitialRegistryValues<R extends Registry> = Partial<{
+  readonly [K in keyof R]: Descriptor.Value<R[K]>
+}>
+
+/**
+ * Seeds a descriptor-keyed runtime store from one schema registry.
+ *
+ * The public initialization API is keyed by schema property names, while the
+ * runtime store is keyed by descriptor symbols. This helper is the only place
+ * that converts between the two, so descriptor names can never drift into the
+ * seeding path.
+ */
+const seedRegistryStore = <R extends Registry>(
+  registry: R,
+  initialValues: InitialRegistryValues<R> | undefined,
+  target: Map<symbol, unknown>
+): void => {
+  if (!initialValues) {
+    return
+  }
+
+  for (const [schemaKey, descriptor] of Object.entries(registry) as Array<[keyof R, R[keyof R]]>) {
+    const initial = initialValues[schemaKey]
+    if (initial !== undefined) {
+      target.set(descriptor.key, initial)
+    }
+  }
+}
 
 /**
  * A loop-agnostic execution runtime.
@@ -111,22 +147,12 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
   /**
    * Seeds runtime resources from the host-provided initial values.
    */
-  for (const descriptor of Object.values(options.schema.resources)) {
-    const initial = options.resources?.[descriptor.name as keyof typeof options.resources]
-    if (initial !== undefined) {
-      resources.set(descriptor.key, initial)
-    }
-  }
+  seedRegistryStore(options.schema.resources, options.resources, resources)
 
   /**
    * Seeds runtime states from the host-provided initial values.
    */
-  for (const descriptor of Object.values(options.schema.states)) {
-    const initial = options.states?.[descriptor.name as keyof typeof options.states]
-    if (initial !== undefined) {
-      states.set(descriptor.key, initial)
-    }
-  }
+  seedRegistryStore(options.schema.states, options.states, states)
 
   /**
    * Internal world adapter used by deferred commands.

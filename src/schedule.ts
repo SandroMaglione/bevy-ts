@@ -8,19 +8,23 @@ import type { OrderTarget, SystemDefinition } from "./system.ts"
  * This is the Bevy-inspired grouping layer used to order multiple systems as a
  * unit without falling back to string identifiers.
  */
-export interface SystemSetConfig {
+export interface SystemSetConfig<
+  out Set extends Label.SystemSet = Label.SystemSet,
+  out After extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>,
+  out Before extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>
+> {
   /**
    * Nominal identity of the configured system set.
    */
-  readonly label: Label.SystemSet
+  readonly label: Set
   /**
    * Other systems or sets that must run before this set.
    */
-  readonly after: ReadonlyArray<OrderTarget>
+  readonly after: After
   /**
    * Other systems or sets that must run after this set.
    */
-  readonly before: ReadonlyArray<OrderTarget>
+  readonly before: Before
   /**
    * Whether systems assigned to this set should run in declaration order.
    */
@@ -91,18 +95,105 @@ export namespace Schedule {
   export type Step = ScheduleStep
 }
 
+type AnySystem = SystemDefinition<any, any, any>
+type AnySetConfig = SystemSetConfig<any, any, any>
+type AnyOrderTarget = OrderTarget
+
+/**
+ * Extracts the union of system-set labels configured in one schedule.
+ */
+type ScheduleSetLabels<Sets extends ReadonlyArray<AnySetConfig>> = Sets[number]["label"]
+
+/**
+ * Extracts the union of systems included in one schedule.
+ */
+type ScheduleSystems<Systems extends ReadonlyArray<AnySystem>> = Systems[number]
+
+/**
+ * Extracts the union of internal system labels included in one schedule.
+ */
+type ScheduleSystemLabels<Systems extends ReadonlyArray<AnySystem>> = ScheduleSystems<Systems>["spec"]["label"]
+
+/**
+ * Produces a readable type-level name for a target or label.
+ */
+type TargetName<Target> = Target extends { readonly name: infer Name extends string } ? Name : never
+
+/**
+ * The union of all system-level ordering targets declared in one schedule.
+ */
+type SystemOrderTargets<Systems extends ReadonlyArray<AnySystem>> =
+  ScheduleSystems<Systems>["spec"]["after"][number]
+  | ScheduleSystems<Systems>["spec"]["before"][number]
+
+/**
+ * Collects undeclared set memberships from `system.spec.inSets`.
+ */
+type InvalidSystemMemberships<
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> = Exclude<ScheduleSystems<Systems>["spec"]["inSets"][number], ScheduleSetLabels<Sets>>
+
+/**
+ * Collects undeclared ordering targets from system-level `after` / `before`.
+ */
+type InvalidSystemOrderTargets<
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> =
+  | Exclude<Extract<SystemOrderTargets<Systems>, AnySystem>, ScheduleSystems<Systems>>
+  | Exclude<Extract<SystemOrderTargets<Systems>, Label.System>, ScheduleSystemLabels<Systems>>
+  | Exclude<Extract<SystemOrderTargets<Systems>, Label.SystemSet>, ScheduleSetLabels<Sets>>
+
+/**
+ * Builds a compile-time error payload for invalid schedule-local references.
+ */
+type ScheduleValidationErrors<
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> =
+  | ([InvalidSystemMemberships<Systems, Sets>] extends [never]
+    ? never
+    : {
+        readonly __scheduleValidationError__: "Unknown system set in system.inSets"
+        readonly __missingTargets__: TargetName<InvalidSystemMemberships<Systems, Sets>>
+      })
+  | ([InvalidSystemOrderTargets<Systems, Sets>] extends [never]
+    ? never
+    : {
+        readonly __scheduleValidationError__: "Unknown ordering target in system.after/system.before"
+        readonly __missingTargets__: TargetName<InvalidSystemOrderTargets<Systems, Sets>>
+      })
+
+/**
+ * Intersects schedule options with a required impossible property only when the
+ * schedule contains unresolved typed references.
+ */
+type ValidateScheduleOptions<
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> = [ScheduleValidationErrors<Systems, Sets>] extends [never]
+  ? {}
+  : {
+      readonly __fixScheduleReferences__: ScheduleValidationErrors<Systems, Sets>
+    }
+
 /**
  * Creates a typed system-set configuration.
  */
-export const configureSet = (config: {
-  readonly label: Label.SystemSet
-  readonly after?: ReadonlyArray<OrderTarget>
-  readonly before?: ReadonlyArray<OrderTarget>
+export const configureSet = <
+  const Set extends Label.SystemSet,
+  const After extends ReadonlyArray<OrderTarget> = [],
+  const Before extends ReadonlyArray<OrderTarget> = []
+>(config: {
+  readonly label: Set
+  readonly after?: After
+  readonly before?: Before
   readonly chain?: boolean
-}): SystemSetConfig => ({
+}): SystemSetConfig<Set, After, Before> => ({
   label: config.label,
-  after: config.after ?? [],
-  before: config.before ?? [],
+  after: (config.after ?? []) as After,
+  before: (config.before ?? []) as Before,
   chain: config.chain ?? false
 })
 
@@ -126,13 +217,17 @@ export const updateEvents = (): EventUpdateStep => ({
  * When only `systems` are provided, the schedule uses the resolved system order
  * followed by an implicit `applyDeferred()` and `updateEvents()` pair.
  */
-export const define = <S extends Schema.Any>(options: {
+export const define = <
+  S extends Schema.Any,
+  const Systems extends ReadonlyArray<AnySystem>,
+  const Sets extends ReadonlyArray<AnySetConfig> = []
+>(options: {
   readonly label: Label.Schedule
   readonly schema: S
-  readonly systems: ReadonlyArray<SystemDefinition<any, any, any>>
-  readonly sets?: ReadonlyArray<SystemSetConfig>
+  readonly systems: Systems
+  readonly sets?: Sets
   readonly steps?: ReadonlyArray<ScheduleStep>
-}): ScheduleDefinition<S> => {
+} & ValidateScheduleOptions<Systems, Sets>): ScheduleDefinition<S> => {
   const orderedSystems = resolveSystems(options.systems, options.sets ?? [])
   const orderedSystemMap = new Map(
     orderedSystems.map((system) => [system.spec.label.key, system] as const)
@@ -201,6 +296,13 @@ const resolveSystems = (
   }
 
   const resolveTargetSystems = (target: OrderTarget, sourceName: string): ReadonlyArray<SystemDefinition<any, any, any>> => {
+    if ("spec" in target) {
+      const system = byKey.get(target.spec.label.key)
+      if (!system) {
+        throw new Error(`Missing system dependency '${target.name}' referenced by '${sourceName}'`)
+      }
+      return [system]
+    }
     if (target.kind === "system") {
       const system = byKey.get(target.key)
       if (!system) {

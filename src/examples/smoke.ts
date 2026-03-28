@@ -18,7 +18,6 @@ const TickEvent = Descriptor.defineEvent<{ readonly dt: number }>()("TickEvent")
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
 // A host-provided logging service.
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
-const MoveSystemLabel = Label.defineSystemLabel("MoveSystem")
 const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
 
 // Feature-local schema fragment for the movement example.
@@ -44,8 +43,8 @@ const schema = Schema.build(motionSchema)
 // A movement system that reads velocity, writes position, emits an event, and
 // queues a spawned entity to exercise the command API.
 const MoveSystem = System.define(
+  "MoveSystem",
   {
-    label: MoveSystemLabel,
     schema,
     queries: {
       moving: Query.define({

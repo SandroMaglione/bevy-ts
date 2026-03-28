@@ -2,6 +2,10 @@ import { Application, Sprite, Texture } from "pixi.js"
 
 import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
 
+export interface BrowserExampleHandle {
+  destroy(): Promise<void>
+}
+
 // ECS-owned simulation data.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
@@ -23,11 +27,7 @@ const PixiHost = Descriptor.defineService<{
     deltaSeconds: number
   }
 }>()("PixiHost")
-const SetupSceneSystemLabel = Label.defineSystemLabel("SetupSceneSystem")
-const CaptureFrameInputSystemLabel = Label.defineSystemLabel("CaptureFrameInputSystem")
-const IntegrateMotionSystemLabel = Label.defineSystemLabel("IntegrateMotionSystem")
-const BounceWithinViewportSystemLabel = Label.defineSystemLabel("BounceWithinViewportSystem")
-const SyncPixiSceneSystemLabel = Label.defineSystemLabel("SyncPixiSceneSystem")
+
 const SetupScheduleLabel = Label.defineScheduleLabel("Setup")
 const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
 
@@ -49,11 +49,9 @@ const pixiSchema = Schema.fragment({
 
 const schema = Schema.build(pixiSchema)
 
-// Bootstraps the ECS world once by spawning renderable entities and flipping
-// the simulation phase to Running.
 const SetupSceneSystem = System.define(
+  "SetupSceneSystem",
   {
-    label: SetupSceneSystemLabel,
     schema,
     states: {
       phase: System.writeState(SimulationPhase)
@@ -77,35 +75,33 @@ const SetupSceneSystem = System.define(
         const size = 18 + (index % 4) * 6
         const tint = palette[index % palette.length] ?? palette[0]
 
-        const draft = Command.spawnWith<typeof schema>(
-          [Position, {
-            x: width * 0.5 + Math.cos(angle) * 140,
-            y: height * 0.5 + Math.sin(angle) * 90
-          }],
-          [Velocity, {
-            x: Math.cos(angle) * speed,
-            y: Math.sin(angle) * speed
-          }],
-          [Renderable, {
-            size
-          }],
-          [Tint, {
-            value: tint
-          }]
+        commands.spawn(
+          Command.spawnWith<typeof schema>(
+            [Position, {
+              x: width * 0.5 + Math.cos(angle) * 140,
+              y: height * 0.5 + Math.sin(angle) * 90
+            }],
+            [Velocity, {
+              x: Math.cos(angle) * speed,
+              y: Math.sin(angle) * speed
+            }],
+            [Renderable, {
+              size
+            }],
+            [Tint, {
+              value: tint
+            }]
+          )
         )
-
-        commands.spawn(draft)
       }
 
       states.phase.set("Running")
     })
 )
 
-// Copies frame-local inputs from the Pixi host into ECS resources before the
-// simulation systems run.
 const CaptureFrameInputSystem = System.define(
+  "CaptureFrameInputSystem",
   {
-    label: CaptureFrameInputSystemLabel,
     schema,
     resources: {
       deltaTime: System.writeResource(DeltaTime),
@@ -125,10 +121,9 @@ const CaptureFrameInputSystem = System.define(
     })
 )
 
-// Pure simulation step: integrates positions from velocity and delta time.
 const IntegrateMotionSystem = System.define(
+  "IntegrateMotionSystem",
   {
-    label: IntegrateMotionSystemLabel,
     schema,
     queries: {
       moving: Query.define({
@@ -164,12 +159,11 @@ const IntegrateMotionSystem = System.define(
     })
 )
 
-// Applies simple screen-bounds collision using ECS-only data.
 const BounceWithinViewportSystem = System.define(
+  "BounceWithinViewportSystem",
   {
-    label: BounceWithinViewportSystemLabel,
     schema,
-    after: [IntegrateMotionSystemLabel],
+    after: [IntegrateMotionSystem],
     queries: {
       moving: Query.define({
         selection: {
@@ -234,15 +228,11 @@ const BounceWithinViewportSystem = System.define(
     })
 )
 
-// Projects ECS render data into Pixi renderer objects.
-//
-// `match.entity.id.value` is used as the stable per-runtime integration key so
-// the host can keep a sprite map outside the ECS world.
 const SyncPixiSceneSystem = System.define(
+  "SyncPixiSceneSystem",
   {
-    label: SyncPixiSceneSystemLabel,
     schema,
-    after: [BounceWithinViewportSystemLabel],
+    after: [BounceWithinViewportSystem],
     queries: {
       renderables: Query.define({
         selection: {
@@ -287,14 +277,12 @@ const SyncPixiSceneSystem = System.define(
     })
 )
 
-// Setup runs once before the repeating update schedule.
 const setupSchedule = Schedule.define({
   label: SetupScheduleLabel,
   schema,
   systems: [SetupSceneSystem]
 })
 
-// Update runs every frame and is intentionally ordered.
 const updateSchedule = Schedule.define({
   label: UpdateScheduleLabel,
   schema,
@@ -302,27 +290,20 @@ const updateSchedule = Schedule.define({
 })
 
 /**
- * Starts the Pixi integration demo.
- *
- * This example is intentionally browser-side and self-running. It demonstrates
- * the intended host-bridge pattern:
- * - Pixi stays outside the ECS runtime
- * - ECS state drives simulation
- * - a sync system projects ECS data into Pixi objects
- * - the Pixi ticker owns the outer game loop
+ * Starts the bouncing Pixi integration demo inside a host container.
  */
-export const startPixiExample = async (mount = document.body): Promise<void> => {
+export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
   const application = new Application()
   await application.init({
     antialias: true,
     background: "#101418",
-    resizeTo: window
+    resizeTo: mount
   })
 
   const wrapper = document.createElement("section")
   wrapper.className = "pixi-example-shell"
   wrapper.appendChild(application.canvas)
-  mount.appendChild(wrapper)
+  mount.replaceChildren(wrapper)
 
   const host = {
     application,
@@ -350,17 +331,22 @@ export const startPixiExample = async (mount = document.body): Promise<void> => 
   })
 
   const app = App.makeApp(runtime)
-  // Setup is explicit and runs once before the recurring update schedule.
   app.bootstrap(setupSchedule)
   app.update(updateSchedule)
 
-  application.ticker.add((ticker) => {
+  const tick = (ticker: { readonly deltaMS: number }) => {
     host.clock.deltaSeconds = ticker.deltaMS / 1000
     app.update(updateSchedule)
-  })
-}
+  }
 
-// This example auto-starts when loaded in a browser so it behaves as a runnable
-// demo, not just an imported code snippet.
-const mount = document.querySelector<HTMLElement>("[data-pixi-example-root]") ?? document.body
-void startPixiExample(mount)
+  application.ticker.add(tick)
+
+  return {
+    async destroy() {
+      application.ticker.remove(tick)
+      host.sprites.clear()
+      application.destroy(true)
+      mount.replaceChildren()
+    }
+  }
+}

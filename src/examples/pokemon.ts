@@ -1,28 +1,51 @@
 /**
- * Minimal `pokemon`-style example.
+ * Minimal `pokemon`-style example with interpolated tile movement.
  *
- * This example mirrors the reference repo's grid-movement structure:
- * - input comes from a host service
- * - movement intent is planned first
- * - collision cancels illegal targets
- * - movement is applied afterwards in dependency order
+ * ECS owns gameplay state:
+ * - tile coordinates
+ * - movement intent
+ * - collision decisions
+ * - interpolation progress
+ *
+ * Pixi owns rendering objects and the outer frame loop.
  */
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { Application, Container, Graphics } from "pixi.js"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Pokemon/Position")
+import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import type { BrowserExampleHandle } from "./pixi.ts"
+
+const GRID_COLS = 10
+const GRID_ROWS = 10
+const TILE_SIZE = 32
+const MOVE_DURATION_SECONDS = 0.18
+
+type Direction = "up" | "down" | "left" | "right"
+type TilePosition = { col: number; row: number }
+
+const Position = Descriptor.defineComponent<TilePosition>()("Pokemon/Position")
 const Movement = Descriptor.defineComponent<{
-  direction: "up" | "down" | "left" | "right" | null
-  targetX: number
-  targetY: number
+  direction: Direction | null
+  from: TilePosition
+  to: TilePosition
+  progress: number
   isMoving: boolean
 }>()("Pokemon/Movement")
 const Player = Descriptor.defineComponent<{}>()("Pokemon/Player")
 const Solid = Descriptor.defineComponent<{}>()("Pokemon/Solid")
 
-const GridSize = Descriptor.defineResource<{ width: number; height: number; tileSize: number }>()("Pokemon/GridSize")
+const GridSize = Descriptor.defineResource<{ cols: number; rows: number; tileSize: number }>()("GridSize")
+const DeltaTime = Descriptor.defineResource<number>()("DeltaTime")
 const InputManager = Descriptor.defineService<{
-  readonly direction: () => "up" | "down" | "left" | "right" | null
+  readonly direction: () => Direction | null
 }>()("Pokemon/InputManager")
+const PixiHost = Descriptor.defineService<{
+  readonly application: Application
+  readonly scene: Container
+  readonly nodes: Map<number, Graphics>
+  readonly clock: {
+    deltaSeconds: number
+  }
+}>()("Pokemon/PixiHost")
 
 const schema = Schema.build(
   Schema.fragment({
@@ -33,16 +56,12 @@ const schema = Schema.build(
       Solid
     },
     resources: {
-      GridSize
+      GridSize,
+      DeltaTime
     }
   })
 )
 
-const SetupSystemLabel = Label.defineSystemLabel("Pokemon/Setup")
-const InputSystemLabel = Label.defineSystemLabel("Pokemon/Input")
-const PlanMovementSystemLabel = Label.defineSystemLabel("Pokemon/PlanMovement")
-const CollisionSystemLabel = Label.defineSystemLabel("Pokemon/Collision")
-const ApplyMovementSystemLabel = Label.defineSystemLabel("Pokemon/ApplyMovement")
 const InputPipelineSetLabel = Label.defineSystemSetLabel("Pokemon/InputPipeline")
 const ResolveMovementSetLabel = Label.defineSystemSetLabel("Pokemon/ResolveMovement")
 
@@ -51,44 +70,121 @@ const UpdateScheduleLabel = Label.defineScheduleLabel("Pokemon/Update")
 
 const PlayerQuery = Query.define({
   selection: {
-    position: Query.read(Position),
+    position: Query.write(Position),
     movement: Query.write(Movement),
     player: Query.read(Player)
   }
 })
 
+const makePokemonNode = (kind: "player" | "solid", tileSize: number): Graphics => {
+  const node = new Graphics()
+  if (kind === "player") {
+    node.roundRect(0, 0, tileSize - 10, tileSize - 10, 10)
+    node.fill(0xff8f3f)
+    node.stroke({
+      color: 0xffd2a8,
+      width: 2
+    })
+    return node
+  }
+
+  node.roundRect(0, 0, tileSize - 8, tileSize - 8, 6)
+  node.fill(0x2fb7c8)
+  node.stroke({
+    color: 0xa7f1ff,
+    width: 2
+  })
+  return node
+}
+
+const normalizeDirection = (key: string): Direction | null => {
+  switch (key) {
+    case "ArrowUp":
+    case "w":
+    case "W":
+      return "up"
+    case "ArrowDown":
+    case "s":
+    case "S":
+      return "down"
+    case "ArrowLeft":
+    case "a":
+    case "A":
+      return "left"
+    case "ArrowRight":
+    case "d":
+    case "D":
+      return "right"
+    default:
+      return null
+  }
+}
+
+const nextTileFromDirection = (position: TilePosition, direction: Direction): TilePosition =>
+  direction === "up" ? { col: position.col, row: position.row - 1 }
+  : direction === "down" ? { col: position.col, row: position.row + 1 }
+  : direction === "left" ? { col: position.col - 1, row: position.row }
+  : { col: position.col + 1, row: position.row }
+
 const SetupSystem = System.define(
+  "Pokemon/Setup",
   {
-    label: SetupSystemLabel,
     schema
   },
   ({ commands }) =>
     Fx.sync(() => {
       commands.spawn(
         Command.spawnWith<typeof schema>(
-          [Position, { x: 32 * 3, y: 32 * 3 }],
+          [Position, { col: 3, row: 3 }],
           [Movement, {
             direction: null,
-            targetX: 32 * 3,
-            targetY: 32 * 3,
+            from: { col: 3, row: 3 },
+            to: { col: 3, row: 3 },
+            progress: 1,
             isMoving: false
           }],
           [Player, {}]
         )
       )
 
-      commands.spawn(
-        Command.spawnWith<typeof schema>(
-          [Position, { x: 32 * 5, y: 32 * 5 }],
-          [Solid, {}]
+      const solids = [
+        { col: 5, row: 5 },
+        { col: 2, row: 6 },
+        { col: 7, row: 3 },
+        { col: 6, row: 7 }
+      ] as const
+
+      for (const solid of solids) {
+        commands.spawn(
+          Command.spawnWith<typeof schema>(
+            [Position, solid],
+            [Solid, {}]
+          )
         )
-      )
+      }
+    })
+)
+
+const CaptureFrameInputSystem = System.define(
+  "Pokemon/CaptureFrameInput",
+  {
+    schema,
+    resources: {
+      deltaTime: System.writeResource(DeltaTime)
+    },
+    services: {
+      pixi: System.service(PixiHost)
+    }
+  },
+  ({ resources, services }) =>
+    Fx.sync(() => {
+      resources.deltaTime.set(services.pixi.clock.deltaSeconds)
     })
 )
 
 const InputSystem = System.define(
+  "Pokemon/Input",
   {
-    label: InputSystemLabel,
     schema,
     inSets: [InputPipelineSetLabel],
     queries: {
@@ -101,32 +197,37 @@ const InputSystem = System.define(
   ({ queries, services }) =>
     Fx.sync(() => {
       const direction = services.input.direction()
+      if (direction === null) {
+        return
+      }
+
       const player = queries.player.single()
       if (!player.ok) {
         return
       }
-      player.value.data.movement.update((movement) => ({
-        ...movement,
-        direction
-      }))
+
+      player.value.data.movement.update((movement) =>
+        movement.isMoving
+          ? movement
+          : {
+              ...movement,
+              direction
+            }
+      )
     })
 )
 
 const PlanMovementSystem = System.define(
+  "Pokemon/PlanMovement",
   {
-    label: PlanMovementSystemLabel,
     schema,
     inSets: [InputPipelineSetLabel],
     queries: {
       player: PlayerQuery
-    },
-    resources: {
-      grid: System.readResource(GridSize)
     }
   },
-  ({ queries, resources }) =>
+  ({ queries }) =>
     Fx.sync(() => {
-      const { tileSize } = resources.grid.get()
       const player = queries.player.single()
       if (!player.ok) {
         return
@@ -139,23 +240,19 @@ const PlanMovementSystem = System.define(
         return
       }
 
-      const offset = movement.direction === "up" ? { x: 0, y: -tileSize }
-        : movement.direction === "down" ? { x: 0, y: tileSize }
-        : movement.direction === "left" ? { x: -tileSize, y: 0 }
-        : { x: tileSize, y: 0 }
-
       match.data.movement.set({
         ...movement,
-        targetX: position.x + offset.x,
-        targetY: position.y + offset.y,
+        from: position,
+        to: nextTileFromDirection(position, movement.direction),
+        progress: 0,
         isMoving: true
       })
     })
 )
 
 const CollisionSystem = System.define(
+  "Pokemon/Collision",
   {
-    label: CollisionSystemLabel,
     schema,
     inSets: [ResolveMovementSetLabel],
     queries: {
@@ -173,11 +270,11 @@ const CollisionSystem = System.define(
   },
   ({ queries, resources }) =>
     Fx.sync(() => {
-      const { width, height } = resources.grid.get()
+      const { cols, rows } = resources.grid.get()
       const occupied = new Set(
         queries.solids.each().map((match) => {
           const position = match.data.position.get()
-          return `${position.x},${position.y}`
+          return `${position.col},${position.row}`
         })
       )
 
@@ -192,28 +289,37 @@ const CollisionSystem = System.define(
         return
       }
 
-      const outOfBounds = movement.targetX < 0 || movement.targetY < 0 || movement.targetX >= width || movement.targetY >= height
-      const occupiedTarget = occupied.has(`${movement.targetX},${movement.targetY}`)
+      const outOfBounds =
+        movement.to.col < 0 ||
+        movement.to.row < 0 ||
+        movement.to.col >= cols ||
+        movement.to.row >= rows
+      const occupiedTarget = occupied.has(`${movement.to.col},${movement.to.row}`)
       if (outOfBounds || occupiedTarget) {
         match.data.movement.set({
           ...movement,
           direction: null,
+          to: movement.from,
+          progress: 1,
           isMoving: false
         })
       }
     })
 )
 
-const ApplyMovementSystem = System.define(
+const AdvanceMovementSystem = System.define(
+  "Pokemon/AdvanceMovement",
   {
-    label: ApplyMovementSystemLabel,
     schema,
     inSets: [ResolveMovementSetLabel],
     queries: {
       player: PlayerQuery
+    },
+    resources: {
+      deltaTime: System.readResource(DeltaTime)
     }
   },
-  ({ queries, lookup }) =>
+  ({ queries, resources }) =>
     Fx.sync(() => {
       const player = queries.player.single()
       if (!player.ok) {
@@ -221,31 +327,100 @@ const ApplyMovementSystem = System.define(
       }
 
       const match = player.value
-      {
-        const movement = match.data.movement.get()
-        if (!movement.isMoving) {
-          return
-        }
+      const movement = match.data.movement.get()
+      if (!movement.isMoving) {
+        return
+      }
 
-        const lookedUp = lookup.get(match.entity.id, Query.define({
-          selection: {
-            position: Query.write(Position)
-          }
-        }))
-        if (!lookedUp.ok) {
-          return
-        }
+      const nextProgress = Math.min(movement.progress + resources.deltaTime.get() / MOVE_DURATION_SECONDS, 1)
 
-        lookedUp.value.data.position.set({
-          x: movement.targetX,
-          y: movement.targetY
-        })
-
+      if (nextProgress >= 1) {
+        match.data.position.set(movement.to)
         match.data.movement.set({
-          ...movement,
           direction: null,
+          from: movement.to,
+          to: movement.to,
+          progress: 1,
           isMoving: false
         })
+        return
+      }
+
+      match.data.movement.set({
+        ...movement,
+        progress: nextProgress
+      })
+    })
+)
+
+const SyncPixiSceneSystem = System.define(
+  "Pokemon/SyncPixiScene",
+  {
+    schema,
+    queries: {
+      player: PlayerQuery,
+      solids: Query.define({
+        selection: {
+          position: Query.read(Position),
+          solid: Query.read(Solid)
+        }
+      })
+    },
+    resources: {
+      grid: System.readResource(GridSize)
+    },
+    services: {
+      pixi: System.service(PixiHost)
+    }
+  },
+  ({ queries, resources, services }) =>
+    Fx.sync(() => {
+      const { tileSize } = resources.grid.get()
+      const seen = new Set<number>()
+      const playerMatches = queries.player.each()
+      const solidMatches = queries.solids.each()
+
+      const placeNode = (entityId: number, kind: "player" | "solid", x: number, y: number) => {
+        let node = services.pixi.nodes.get(entityId)
+        if (!node) {
+          node = makePokemonNode(kind, tileSize)
+          services.pixi.scene.addChild(node)
+          services.pixi.nodes.set(entityId, node)
+        }
+
+        seen.add(entityId)
+        const inset = kind === "player" ? 5 : 4
+        node.position.set(x + inset, y + inset)
+      }
+
+      for (const match of playerMatches) {
+        const position = match.data.position.get()
+        const movement = match.data.movement.get()
+        const fromX = movement.from.col * tileSize
+        const fromY = movement.from.row * tileSize
+        const toX = movement.to.col * tileSize
+        const toY = movement.to.row * tileSize
+        const renderX = fromX + (toX - fromX) * movement.progress
+        const renderY = fromY + (toY - fromY) * movement.progress
+        placeNode(match.entity.id.value, "player", renderX, renderY)
+      }
+
+      for (const match of solidMatches) {
+        const position = match.data.position.get()
+        placeNode(
+          match.entity.id.value,
+          "solid",
+          position.col * tileSize,
+          position.row * tileSize
+        )
+      }
+
+      for (const [entityId, node] of services.pixi.nodes) {
+        if (seen.has(entityId)) {
+          continue
+        }
+        node.destroy()
+        services.pixi.nodes.delete(entityId)
       }
     })
 )
@@ -256,10 +431,17 @@ const setupSchedule = Schedule.define({
   systems: [SetupSystem]
 })
 
+const browserSetupSchedule = Schedule.define({
+  label: SetupScheduleLabel,
+  schema,
+  systems: [SetupSystem, SyncPixiSceneSystem],
+  steps: [SetupSystem, Schedule.applyDeferred(), SyncPixiSceneSystem]
+})
+
 const updateSchedule = Schedule.define({
   label: UpdateScheduleLabel,
   schema,
-  systems: [InputSystem, PlanMovementSystem, CollisionSystem, ApplyMovementSystem],
+  systems: [InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem],
   sets: [
     Schedule.configureSet({
       label: InputPipelineSetLabel,
@@ -270,23 +452,49 @@ const updateSchedule = Schedule.define({
       after: [InputPipelineSetLabel],
       chain: true
     })
+  ] as const
+})
+
+const browserUpdateSchedule = Schedule.define({
+  label: UpdateScheduleLabel,
+  schema,
+  systems: [CaptureFrameInputSystem, InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem, SyncPixiSceneSystem],
+  sets: [
+    Schedule.configureSet({
+      label: InputPipelineSetLabel,
+      chain: true
+    }),
+    Schedule.configureSet({
+      label: ResolveMovementSetLabel,
+      after: [InputPipelineSetLabel],
+      chain: true
+    })
+  ] as const,
+  steps: [
+    CaptureFrameInputSystem,
+    InputSystem,
+    PlanMovementSystem,
+    CollisionSystem,
+    AdvanceMovementSystem,
+    SyncPixiSceneSystem
   ]
 })
 
 export const createPokemonExample = (input: {
-  readonly direction: () => "up" | "down" | "left" | "right" | null
+  readonly direction: () => Direction | null
 }) => {
   const runtime = Runtime.makeRuntime({
     schema,
     services: {
-      [InputManager.name]: input
+      [InputManager.name]: input,
     },
     resources: {
       GridSize: {
-        width: 32 * 10,
-        height: 32 * 10,
-        tileSize: 32
-      }
+        cols: GRID_COLS,
+        rows: GRID_ROWS,
+        tileSize: TILE_SIZE
+      },
+      DeltaTime: 1 / 60
     }
   })
 
@@ -298,6 +506,119 @@ export const createPokemonExample = (input: {
     app,
     update() {
       app.update(updateSchedule)
+    }
+  }
+}
+
+const renderGrid = (cols: number, rows: number, tileSize: number): Graphics => {
+  const width = cols * tileSize
+  const height = rows * tileSize
+  const grid = new Graphics()
+  grid.zIndex = 0
+
+  grid.roundRect(0, 0, width, height, 18)
+  grid.fill(0x101418)
+
+  for (let x = 0; x <= width; x += tileSize) {
+    grid.moveTo(x, 0)
+    grid.lineTo(x, height)
+  }
+  for (let y = 0; y <= height; y += tileSize) {
+    grid.moveTo(0, y)
+    grid.lineTo(width, y)
+  }
+  grid.stroke({
+    color: 0x24303b,
+    width: 1
+  })
+
+  return grid
+}
+
+export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
+  const application = new Application()
+  await application.init({
+    antialias: false,
+    background: "#0c1015",
+    width: GRID_COLS * TILE_SIZE,
+    height: GRID_ROWS * TILE_SIZE
+  })
+
+  const wrapper = document.createElement("section")
+  wrapper.className = "pixi-example-shell pixi-example-shell-grid"
+  wrapper.appendChild(application.canvas)
+  mount.replaceChildren(wrapper)
+
+  const scene = new Container()
+  scene.zIndex = 10
+  application.stage.sortableChildren = true
+  application.stage.addChild(renderGrid(GRID_COLS, GRID_ROWS, TILE_SIZE))
+  application.stage.addChild(scene)
+
+  let pendingDirection: Direction | null = null
+  const onKeyDown = (event: KeyboardEvent) => {
+    const direction = normalizeDirection(event.key)
+    if (direction === null) {
+      return
+    }
+
+    event.preventDefault()
+    pendingDirection = direction
+  }
+  window.addEventListener("keydown", onKeyDown)
+
+  const host = {
+    application,
+    scene,
+    nodes: new Map<number, Graphics>(),
+    clock: {
+      deltaSeconds: 1 / 60
+    }
+  }
+
+  const runtime = Runtime.makeRuntime({
+    schema,
+    services: {
+      [InputManager.name]: {
+        direction() {
+          const next = pendingDirection
+          pendingDirection = null
+          return next
+        }
+      },
+      [PixiHost.name]: host
+    },
+    resources: {
+      GridSize: {
+        cols: GRID_COLS,
+        rows: GRID_ROWS,
+        tileSize: TILE_SIZE
+      },
+      DeltaTime: host.clock.deltaSeconds
+    }
+  })
+
+  const app = App.makeApp(runtime)
+  app.bootstrap(browserSetupSchedule)
+  app.update(browserUpdateSchedule)
+
+  const tick = (ticker: { readonly deltaMS: number }) => {
+    host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
+    app.update(browserUpdateSchedule)
+  }
+
+  application.ticker.add(tick)
+
+  return {
+    async destroy() {
+      application.ticker.remove(tick)
+      window.removeEventListener("keydown", onKeyDown)
+      for (const node of host.nodes.values()) {
+        node.destroy()
+      }
+      host.nodes.clear()
+      application.destroy(true)
+      mount.replaceChildren()
     }
   }
 }

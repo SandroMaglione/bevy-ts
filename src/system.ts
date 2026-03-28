@@ -4,6 +4,7 @@ import type { Query, QueryMatch } from "./query.ts"
 import type { ReadCell, WriteCell } from "./query.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
+import * as LabelModule from "./label.ts"
 import type { Label } from "./label.ts"
 
 /**
@@ -207,10 +208,10 @@ export interface LookupApi<S extends Schema.Any> {
 /**
  * An ordering target inside one schedule.
  *
- * Systems can order themselves relative to concrete systems or whole system
- * sets. Both are nominal labels, not strings.
+ * Systems can order themselves relative to other system definitions or reusable
+ * typed system sets. No open string references are allowed.
  */
-export type OrderTarget = Label.System | Label.SystemSet
+export type OrderTarget = SystemDefinition<any, any, any> | Label.System | Label.SystemSet
 
 /**
  * An explicit system specification.
@@ -224,12 +225,15 @@ export interface SystemSpec<
   out Resources extends Record<string, ResourceAccess> = {},
   out Events extends Record<string, EventAccess> = {},
   out Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
-  out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {}
+  out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
+  out InSets extends ReadonlyArray<Label.SystemSet> = readonly [],
+  out After extends ReadonlyArray<OrderTarget> = readonly [],
+  out Before extends ReadonlyArray<OrderTarget> = readonly []
 > {
   readonly label: Label.System
-  readonly inSets: ReadonlyArray<Label.SystemSet>
-  readonly after: ReadonlyArray<OrderTarget>
-  readonly before: ReadonlyArray<OrderTarget>
+  readonly inSets: InSets
+  readonly after: After
+  readonly before: Before
   readonly queries: Queries
   readonly resources: Resources
   readonly events: Events
@@ -238,7 +242,22 @@ export interface SystemSpec<
   readonly schema: S
 }
 
-type ResourceContext<Spec extends SystemSpec<any, any, any, any, any>> = {
+/**
+ * Internal helper representing any fully-defined system spec shape.
+ */
+type AnySystemSpec = SystemSpec<
+  any,
+  any,
+  any,
+  any,
+  any,
+  any,
+  ReadonlyArray<Label.SystemSet>,
+  ReadonlyArray<OrderTarget>,
+  ReadonlyArray<OrderTarget>
+>
+
+type ResourceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["resources"]]:
     Spec["resources"][K] extends ResourceRead<infer D> ? ResourceReadView<Descriptor.Value<D>>
     : Spec["resources"][K] extends ResourceWrite<infer D> ? ResourceWriteView<Descriptor.Value<D>>
@@ -248,7 +267,7 @@ type ResourceContext<Spec extends SystemSpec<any, any, any, any, any>> = {
 /**
  * Derives the event view context from a system spec.
  */
-type EventContext<Spec extends SystemSpec<any, any, any, any, any>> = {
+type EventContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["events"]]:
     Spec["events"][K] extends EventRead<infer D> ? EventReadView<Descriptor.Value<D>>
     : Spec["events"][K] extends EventWrite<infer D> ? EventWriteView<Descriptor.Value<D>>
@@ -258,7 +277,7 @@ type EventContext<Spec extends SystemSpec<any, any, any, any, any>> = {
 /**
  * Derives the service environment from a system spec.
  */
-type ServiceContext<Spec extends SystemSpec<any, any, any, any, any>> = {
+type ServiceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["services"]]:
     Spec["services"][K] extends ServiceRead<infer D> ? Descriptor.Value<D> : never
 }
@@ -266,7 +285,7 @@ type ServiceContext<Spec extends SystemSpec<any, any, any, any, any>> = {
 /**
  * Derives the state view context from a system spec.
  */
-type StateContext<Spec extends SystemSpec<any, any, any, any, any>> = {
+type StateContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["states"]]:
     Spec["states"][K] extends StateRead<infer D> ? StateReadView<Descriptor.Value<D>>
     : Spec["states"][K] extends StateWrite<infer D> ? StateWriteView<Descriptor.Value<D>>
@@ -276,7 +295,7 @@ type StateContext<Spec extends SystemSpec<any, any, any, any, any>> = {
 /**
  * Derives the query handle context from a system spec.
  */
-type QueryContext<Spec extends SystemSpec<any, any, any, any, any>> = {
+type QueryContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["queries"]]: QueryHandle<Spec["schema"], Spec["queries"][K]>
 }
 
@@ -286,7 +305,7 @@ type QueryContext<Spec extends SystemSpec<any, any, any, any, any>> = {
  * Instead of inferring from callback parameters, the library computes this
  * context from the declared spec so the runtime and types stay in sync.
  */
-export interface SystemContext<Spec extends SystemSpec<any, any, any, any, any>> {
+export interface SystemContext<Spec extends AnySystemSpec> {
   readonly queries: QueryContext<Spec>
   readonly lookup: LookupApi<Spec["schema"]>
   readonly resources: ResourceContext<Spec>
@@ -299,16 +318,20 @@ export interface SystemContext<Spec extends SystemSpec<any, any, any, any, any>>
 /**
  * The service environment required by a system.
  */
-export type SystemDependencies<Spec extends SystemSpec<any, any, any, any, any>> = ServiceContext<Spec>
+export type SystemDependencies<Spec extends AnySystemSpec> = ServiceContext<Spec>
 
 /**
  * A fully defined system value ready to be placed into a schedule.
  */
 export interface SystemDefinition<
-  Spec extends SystemSpec<any, any, any, any, any>,
+  Spec extends AnySystemSpec,
   out A = void,
   out E = never
 > {
+  /**
+   * Human-readable declaration name used to derive the internal typed label.
+   */
+  readonly name: string
   /**
    * The explicit static description of the system.
    */
@@ -326,45 +349,158 @@ export interface SystemDefinition<
  * receives the capabilities declared in the spec, and the returned effect keeps
  * service dependencies tracked in the type system.
  */
-export const define = <
+export function define<
   S extends Schema.Any,
   const Queries extends Record<string, Query.Any> = {},
   const Resources extends Record<string, ResourceAccess> = {},
   const Events extends Record<string, EventAccess> = {},
   const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
   const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
+  const InSets extends ReadonlyArray<Label.SystemSet> = [],
+  const After extends ReadonlyArray<OrderTarget> = [],
+  const Before extends ReadonlyArray<OrderTarget> = [],
   A = void,
   E = never
 >(
+  name: string,
   spec: {
-    readonly label: Label.System
     readonly schema: S
-    readonly inSets?: ReadonlyArray<Label.SystemSet>
-    readonly after?: ReadonlyArray<OrderTarget>
-    readonly before?: ReadonlyArray<OrderTarget>
+    readonly inSets?: InSets
+    readonly after?: After
+    readonly before?: Before
     readonly queries?: Queries
     readonly resources?: Resources
     readonly events?: Events
     readonly services?: Services
     readonly states?: States
   },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States>>) => Fx<
+  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States>, A, E> => ({
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>, A, E>
+
+/**
+ * Legacy low-level overload that accepts an explicit system label.
+ *
+ * Prefer the string-name overload, which creates the internal typed label
+ * automatically and avoids manual label threading in user code.
+ */
+export function define<
+  S extends Schema.Any,
+  const Queries extends Record<string, Query.Any> = {},
+  const Resources extends Record<string, ResourceAccess> = {},
+  const Events extends Record<string, EventAccess> = {},
+  const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
+  const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
+  const InSets extends ReadonlyArray<Label.SystemSet> = [],
+  const After extends ReadonlyArray<OrderTarget> = [],
+  const Before extends ReadonlyArray<OrderTarget> = [],
+  A = void,
+  E = never
+>(
   spec: {
-    label: spec.label,
-    schema: spec.schema,
-    inSets: spec.inSets ?? [],
-    after: spec.after ?? [],
-    before: spec.before ?? [],
-    queries: (spec.queries ?? {}) as Queries,
-    resources: (spec.resources ?? {}) as Resources,
-    events: (spec.events ?? {}) as Events,
-    services: (spec.services ?? {}) as Services,
-    states: (spec.states ?? {}) as States
+    readonly label: Label.System
+    readonly schema: S
+    readonly inSets?: InSets
+    readonly after?: After
+    readonly before?: Before
+    readonly queries?: Queries
+    readonly resources?: Resources
+    readonly events?: Events
+    readonly services?: Services
+    readonly states?: States
   },
-  run
-})
+  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
+    A,
+    E,
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
+  >
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>, A, E>
+
+export function define<
+  S extends Schema.Any,
+  const Queries extends Record<string, Query.Any> = {},
+  const Resources extends Record<string, ResourceAccess> = {},
+  const Events extends Record<string, EventAccess> = {},
+  const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
+  const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
+  const InSets extends ReadonlyArray<Label.SystemSet> = [],
+  const After extends ReadonlyArray<OrderTarget> = [],
+  const Before extends ReadonlyArray<OrderTarget> = [],
+  A = void,
+  E = never
+>(
+  nameOrSpec: string | {
+    readonly label: Label.System
+    readonly schema: S
+    readonly inSets?: InSets
+    readonly after?: After
+    readonly before?: Before
+    readonly queries?: Queries
+    readonly resources?: Resources
+    readonly events?: Events
+    readonly services?: Services
+    readonly states?: States
+  },
+  specOrRun:
+    | {
+        readonly schema: S
+        readonly inSets?: InSets
+        readonly after?: After
+        readonly before?: Before
+        readonly queries?: Queries
+        readonly resources?: Resources
+        readonly events?: Events
+        readonly services?: Services
+        readonly states?: States
+      }
+    | ((context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
+        A,
+        E,
+        ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
+      >),
+  maybeRun?: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
+    A,
+    E,
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
+  >
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>, A, E> {
+  const named = typeof nameOrSpec === "string"
+  const name = named ? nameOrSpec : nameOrSpec.label.name
+  const spec = (named ? specOrRun : nameOrSpec) as {
+    readonly label?: Label.System
+    readonly schema: S
+    readonly inSets?: InSets
+    readonly after?: After
+    readonly before?: Before
+    readonly queries?: Queries
+    readonly resources?: Resources
+    readonly events?: Events
+    readonly services?: Services
+    readonly states?: States
+  }
+  const run = (named ? maybeRun : specOrRun) as (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
+    A,
+    E,
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
+  >
+
+  return {
+    name,
+    spec: {
+      label: spec.label ?? LabelModule.defineSystemLabel(name),
+      schema: spec.schema,
+      inSets: (spec.inSets ?? []) as InSets,
+      after: (spec.after ?? []) as After,
+      before: (spec.before ?? []) as Before,
+      queries: (spec.queries ?? {}) as Queries,
+      resources: (spec.resources ?? {}) as Resources,
+      events: (spec.events ?? {}) as Events,
+      services: (spec.services ?? {}) as Services,
+      states: (spec.states ?? {}) as States
+    },
+    run
+  }
+}
