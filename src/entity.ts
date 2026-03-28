@@ -1,0 +1,155 @@
+import type { Brand } from "./internal/brand.ts"
+import type { Schema } from "./schema.ts"
+
+/**
+ * String-literal type id used to mirror Effect's current `~effect/...` style.
+ */
+export type EntityTypeId = "~bevy-ts/Entity"
+
+/**
+ * Runtime value for the entity type id.
+ */
+const entityTypeId: EntityTypeId = "~bevy-ts/Entity"
+
+/**
+ * A structural proof describing which components are known to be present.
+ *
+ * The engine uses proof objects instead of pretending entity ids always know
+ * their exact runtime component set.
+ */
+export type ComponentProof = Record<string, unknown>
+
+/**
+ * An opaque schema-bound entity identity.
+ *
+ * `EntityId` proves only that the id belongs to a runtime built from schema `S`.
+ * It does not prove anything about the entity's current component set.
+ */
+export type EntityId<S extends Schema.Any> = Brand<
+  typeof entityTypeId,
+  {
+    readonly schema: S
+    readonly kind: "EntityId"
+    readonly value: number
+  }
+>
+
+/**
+ * A staged entity with an exact compile-time component proof.
+ *
+ * Drafts exist before the command queue is flushed. This is the place where the
+ * API can safely carry exact structural information.
+ */
+export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof> {
+  /**
+   * Runtime tag for debugging and pattern matching.
+   */
+  readonly kind: "EntityDraft"
+  /**
+   * The schema-bound entity identity associated with the draft.
+   */
+  readonly id: EntityId<S>
+  /**
+   * Exact staged component proof.
+   */
+  readonly proof: P
+}
+
+/**
+ * A read capability for an entity together with a proof of readable components.
+ *
+ * Query execution is the main source of `EntityRef` values.
+ */
+export interface EntityRef<S extends Schema.Any, out P extends ComponentProof> {
+  /**
+   * Runtime tag for debugging and pattern matching.
+   */
+  readonly kind: "EntityRef"
+  /**
+   * The schema-bound entity identity.
+   */
+  readonly id: EntityId<S>
+  /**
+   * The readable component proof attached to this access value.
+   */
+  readonly proof: P
+}
+
+/**
+ * A read/write capability for an entity.
+ *
+ * `P` tracks readable components and `W` tracks the writable subset. This keeps
+ * mutation capabilities explicit in query results.
+ */
+export interface EntityMut<
+  S extends Schema.Any,
+  out P extends ComponentProof,
+  out W extends ComponentProof
+> {
+  /**
+   * Runtime tag for debugging and pattern matching.
+   */
+  readonly kind: "EntityMut"
+  /**
+   * The schema-bound entity identity.
+   */
+  readonly id: EntityId<S>
+  /**
+   * The readable component proof attached to this access value.
+   */
+  readonly proof: P
+  /**
+   * The writable subset of the proof.
+   */
+  readonly writable: W
+}
+
+/**
+ * Creates an opaque entity id from a runtime integer id.
+ *
+ * This is a low-level constructor used by the runtime and command system.
+ */
+export const makeEntityId = <S extends Schema.Any>(value: number): EntityId<S> =>
+  ({
+    schema: undefined as unknown as S,
+    kind: "EntityId",
+    value
+  }) as EntityId<S>
+
+/**
+ * Creates a typed entity draft from an id and a proof.
+ */
+export const draft = <S extends Schema.Any, P extends ComponentProof>(
+  id: EntityId<S>,
+  proof: P
+): EntityDraft<S, P> => ({
+  kind: "EntityDraft",
+  id,
+  proof
+})
+
+/**
+ * Creates a read-only entity proof value.
+ */
+export const ref = <S extends Schema.Any, P extends ComponentProof>(
+  id: EntityId<S>,
+  proof: P
+): EntityRef<S, P> => ({
+  kind: "EntityRef",
+  id,
+  proof
+})
+
+/**
+ * Creates a mutable entity proof value.
+ */
+export const mut = <S extends Schema.Any, P extends ComponentProof, W extends ComponentProof>(
+  id: EntityId<S>,
+  proof: P,
+  writable: W
+): EntityMut<S, P, W> => ({
+  kind: "EntityMut",
+  id,
+  proof,
+  writable
+})
