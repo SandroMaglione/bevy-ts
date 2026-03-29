@@ -1,4 +1,7 @@
-import { Fx, Runtime, Schedule, System } from "../../src/index.ts"
+import { Fx } from "../../src/index.ts"
+import * as Runtime from "../../src/runtime.ts"
+import * as Schedule from "../../src/schedule.ts"
+import * as System from "../../src/system.ts"
 import type { Descriptor } from "../../src/descriptor.ts"
 import type { Schema } from "../../src/schema.ts"
 

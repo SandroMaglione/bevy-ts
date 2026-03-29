@@ -90,19 +90,19 @@ export interface InternalWorld<S extends Schema.Any> {
   /**
    * Allocates a fresh entity id.
    */
-  readonly nextEntityId: () => Entity.EntityId<S>
+  readonly nextEntityId: () => Entity.EntityId<S, any>
   /**
    * Retrieves or creates the component storage map for an entity.
    */
-  readonly ensureEntityStore: (id: Entity.EntityId<S>) => Map<symbol, unknown>
+  readonly ensureEntityStore: (id: Entity.EntityId<S, any>) => Map<symbol, unknown>
   /**
    * Removes an entity from storage.
    */
-  readonly destroyEntity: (id: Entity.EntityId<S>) => void
+  readonly destroyEntity: (id: Entity.EntityId<S, any>) => void
   /**
    * Removes a component from an entity.
    */
-  readonly removeComponent: (id: Entity.EntityId<S>, descriptor: Descriptor.Any) => void
+  readonly removeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor.Any) => void
   /**
    * Writes a world-level resource or state value.
    */
@@ -119,8 +119,8 @@ export interface InternalWorld<S extends Schema.Any> {
  * Use this inside a system to build an entity with an exact compile-time
  * component proof before the spawn command is queued.
  */
-export const spawn = <S extends Schema.Any>(): Entity.EntityDraft<S, {}> =>
-  Entity.draft(Entity.makeEntityId<S>(-1), {})
+export const spawn = <S extends Schema.Any, Root = unknown>(): Entity.EntityDraft<S, {}, Root> =>
+  Entity.draft(Entity.makeEntityId<S, Root>(-1), {})
 
 /**
  * Creates a typed component entry.
@@ -142,12 +142,13 @@ export const entry = <D extends Descriptor<"component", string, any>>(
 export const insert = <
   S extends Schema.Any,
   P extends Entity.ComponentProof,
-  D extends Descriptor<"component", string, any>
+  D extends Descriptor<"component", string, any>,
+  Root = unknown
 >(
-  draft: Entity.EntityDraft<S, P>,
+  draft: Entity.EntityDraft<S, P, Root>,
   descriptor: D,
   value: Descriptor.Value<D>
-): Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>> =>
+): Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root> =>
   Entity.draft(draft.id, {
     ...(draft.proof as object),
     [descriptor.name]: value
@@ -163,16 +164,17 @@ export const insert = <
 export const insertMany = <
   S extends Schema.Any,
   P extends Entity.ComponentProof,
+  Root = unknown,
   const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
 >(
-  draft: Entity.EntityDraft<S, P>,
+  draft: Entity.EntityDraft<S, P, Root>,
   ...entries: Entries
-): Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>> => {
-  let current: Entity.EntityDraft<S, Entity.ComponentProof> = draft
+): Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root> => {
+  let current: Entity.EntityDraft<S, Entity.ComponentProof, Root> = draft
   for (const [descriptor, value] of entries) {
     current = insert(current, descriptor, value)
   }
-  return current as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>>
+  return current as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root>
 }
 
 /**
@@ -184,11 +186,12 @@ export const insertMany = <
  */
 export const spawnWith = <
   S extends Schema.Any,
+  Root = unknown,
   const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
 >(
   ...entries: Entries
-): Entity.EntityDraft<S, Draft.FoldEntries<Entries>> =>
-  insertMany(spawn<S>(), ...entries)
+): Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root> =>
+  insertMany(spawn<S, Root>(), ...entries)
 
 /**
  * Public command API exposed to systems.
@@ -197,37 +200,37 @@ export const spawnWith = <
  * spawns, inserts, despawns, resource writes, and emitted events, then the
  * runtime flushes them in order after the system effect completes.
  */
-export interface CommandsApi<S extends Schema.Any> {
+export interface CommandsApi<S extends Schema.Any, Root = unknown> {
   /**
    * Queues a staged entity for spawning and returns its stable runtime id.
    */
-  readonly spawn: <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P>) => Entity.EntityId<S>
+  readonly spawn: <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root>) => Entity.EntityId<S, Root>
   /**
    * Queues a component insert on an existing entity.
    */
   readonly insert: <D extends Schema.Components<S>[keyof Schema.Components<S>]>(
-    entity: Entity.EntityId<S>,
+    entity: Entity.EntityId<S, Root>,
     descriptor: D,
     value: Descriptor.Value<D>
-  ) => Entity.EntityId<S>
+  ) => Entity.EntityId<S, Root>
   /**
    * Queues multiple component inserts on an existing entity.
    */
   readonly insertMany: (
-    entity: Entity.EntityId<S>,
+    entity: Entity.EntityId<S, Root>,
     ...entries: ReadonlyArray<SchemaEntry<S>>
-  ) => Entity.EntityId<S>
+  ) => Entity.EntityId<S, Root>
   /**
    * Queues an entity removal.
    */
-  readonly despawn: (entity: Entity.EntityId<S>) => void
+  readonly despawn: (entity: Entity.EntityId<S, Root>) => void
   /**
    * Queues a component removal on an existing entity.
    */
   readonly remove: <D extends Schema.Components<S>[keyof Schema.Components<S>]>(
-    entity: Entity.EntityId<S>,
+    entity: Entity.EntityId<S, Root>,
     descriptor: D
-  ) => Entity.EntityId<S>
+  ) => Entity.EntityId<S, Root>
   /**
    * Queues a resource write.
    */
@@ -254,9 +257,9 @@ export interface CommandsApi<S extends Schema.Any> {
  * The returned API is intentionally imperative for system authors, but all
  * mutations stay deferred until `flush()` is applied by the runtime.
  */
-export const makeCommands = <S extends Schema.Any>(
-  allocateId: () => Entity.EntityId<S>
-): CommandsApi<S> => {
+export const makeCommands = <S extends Schema.Any, Root = unknown>(
+  allocateId: () => Entity.EntityId<S, Root>
+): CommandsApi<S, Root> => {
   /**
    * The per-system command buffer.
    *
@@ -266,7 +269,7 @@ export const makeCommands = <S extends Schema.Any>(
   const queue: Array<DeferredCommand<S>> = []
 
   return {
-    spawn<P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P>): Entity.EntityId<S> {
+    spawn<P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root>): Entity.EntityId<S, Root> {
       const id = allocateId()
       queue.push({
         tag: "spawn",

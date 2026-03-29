@@ -1,4 +1,7 @@
-import { Descriptor, Fx, Label, Query, Schedule, Schema, System } from "../src/index.ts"
+import { Descriptor, Fx, Label, Schema } from "../src/index.ts"
+import * as Query from "../src/query.ts"
+import * as Schedule from "../src/schedule.ts"
+import * as System from "../src/system.ts"
 import { describe, it } from "tstyche"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")

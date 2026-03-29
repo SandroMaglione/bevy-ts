@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
+import { App, Descriptor, Fx, Label, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const STAGE_WIDTH = 640
@@ -100,24 +100,24 @@ const AppState = Game.StateMachine.define(
 
 const GameplaySet = Label.defineSystemSetLabel("StateMachineExample/Gameplay")
 
-const PlayerQuery = Query.define({
+const PlayerQuery = Game.Query.define({
   selection: {
-    position: Query.write(Position),
-    player: Query.read(Player)
+    position: Game.Query.write(Position),
+    player: Game.Query.read(Player)
   }
 })
 
-const PickupQuery = Query.define({
+const PickupQuery = Game.Query.define({
   selection: {
-    position: Query.read(Position),
-    pickup: Query.read(Pickup)
+    position: Game.Query.read(Position),
+    pickup: Game.Query.read(Pickup)
   }
 })
 
-const RenderQuery = Query.define({
+const RenderQuery = Game.Query.define({
   selection: {
-    position: Query.read(Position),
-    actor: Query.read(Actor)
+    position: Game.Query.read(Position),
+    actor: Game.Query.read(Actor)
   }
 })
 
@@ -184,7 +184,7 @@ const distanceSquared = (left: Vector, right: Vector): number => {
 }
 
 const makePickupDraft = (position: Vector) =>
-  Command.spawnWith<typeof schema>(
+  Game.Command.spawnWith(
     [Position, position],
     [Actor, { kind: "pickup" }],
     [Pickup, {}]
@@ -322,7 +322,7 @@ const SpawnPlayerSystem = Game.System.define(
   ({ commands }) =>
     Fx.sync(() => {
       commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, { x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 }],
           [Actor, { kind: "player" }],
           [Player, {}]
@@ -335,10 +335,10 @@ const CaptureFrameInputSystem = Game.System.define(
   "StateMachineExample/CaptureFrameInput",
   {
     resources: {
-      deltaTime: System.writeResource(DeltaTime)
+      deltaTime: Game.System.writeResource(DeltaTime)
     },
     services: {
-      host: System.service(BrowserHost)
+      host: Game.System.service(BrowserHost)
     }
   },
   ({ resources, services }) =>
@@ -352,10 +352,10 @@ const QueueStartFromTitleSystem = Game.System.define(
   {
     when: [Game.Condition.inState(AppState, "Title")],
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ nextMachines, services }) =>
@@ -374,10 +374,10 @@ const QueueRestartSystem = Game.System.define(
       Game.Condition.inState(AppState, "Defeat")
     )],
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ nextMachines, services }) =>
@@ -393,10 +393,10 @@ const QueuePauseSystem = Game.System.define(
   {
     when: [Game.Condition.inState(AppState, "Playing")],
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ nextMachines, services }) =>
@@ -412,10 +412,10 @@ const QueueResumeSystem = Game.System.define(
   {
     when: [Game.Condition.inState(AppState, "Paused")],
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ nextMachines, services }) =>
@@ -431,11 +431,11 @@ const TickCountdownSystem = Game.System.define(
   {
     when: [Game.Condition.inState(AppState, "Countdown")],
     resources: {
-      deltaTime: System.readResource(DeltaTime),
-      countdown: System.writeResource(CountdownRemaining)
+      deltaTime: Game.System.readResource(DeltaTime),
+      countdown: Game.System.writeResource(CountdownRemaining)
     },
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     }
   },
   ({ resources, nextMachines }) =>
@@ -456,11 +456,11 @@ const MovePlayerSystem = Game.System.define(
       player: PlayerQuery
     },
     resources: {
-      arena: System.readResource(Arena),
-      deltaTime: System.readResource(DeltaTime)
+      arena: Game.System.readResource(Arena),
+      deltaTime: Game.System.readResource(DeltaTime)
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ queries, resources, services }) =>
@@ -487,16 +487,16 @@ const CollectPickupsSystem = Game.System.define(
   {
     inSets: [GameplaySet],
     queries: {
-      player: Query.define({
+      player: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          player: Query.read(Player)
+          position: Game.Query.read(Position),
+          player: Game.Query.read(Player)
         }
       }),
       pickups: PickupQuery
     },
     resources: {
-      score: System.writeResource(Score)
+      score: Game.System.writeResource(Score)
     }
   },
   ({ queries, resources, commands }) =>
@@ -521,8 +521,8 @@ const TickRoundClockSystem = Game.System.define(
   {
     inSets: [GameplaySet],
     resources: {
-      deltaTime: System.readResource(DeltaTime),
-      roundTime: System.writeResource(RoundTimeRemaining)
+      deltaTime: Game.System.readResource(DeltaTime),
+      roundTime: Game.System.writeResource(RoundTimeRemaining)
     }
   },
   ({ resources }) =>
@@ -536,12 +536,12 @@ const QueueOutcomeSystem = Game.System.define(
   {
     inSets: [GameplaySet],
     resources: {
-      score: System.readResource(Score),
-      goal: System.readResource(PickupGoal),
-      roundTime: System.readResource(RoundTimeRemaining)
+      score: Game.System.readResource(Score),
+      goal: Game.System.readResource(PickupGoal),
+      roundTime: Game.System.readResource(RoundTimeRemaining)
     },
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     }
   },
   ({ resources, nextMachines }) =>
@@ -565,11 +565,11 @@ const ResetRoundOnCountdownEnterSystem = Game.System.define(
       pickups: PickupQuery
     },
     resources: {
-      score: System.writeResource(Score),
-      roundTime: System.writeResource(RoundTimeRemaining),
-      countdown: System.writeResource(CountdownRemaining),
-      goal: System.readResource(PickupGoal),
-      cursor: System.writeResource(SpawnCursor)
+      score: Game.System.writeResource(Score),
+      roundTime: Game.System.writeResource(RoundTimeRemaining),
+      countdown: Game.System.writeResource(CountdownRemaining),
+      goal: Game.System.readResource(PickupGoal),
+      cursor: Game.System.writeResource(SpawnCursor)
     }
   },
   ({ queries, resources, commands }) =>
@@ -604,10 +604,10 @@ const WriteTransitionNoticeSystem = Game.System.define(
   "StateMachineExample/WriteTransitionNotice",
   {
     transitions: {
-      app: System.transition(AppState)
+      app: Game.System.transition(AppState)
     },
     resources: {
-      notice: System.writeResource(TransitionNotice)
+      notice: Game.System.writeResource(TransitionNotice)
     }
   },
   ({ transitions, resources }) =>
@@ -624,8 +624,8 @@ const FadeTransitionNoticeSystem = Game.System.define(
   "StateMachineExample/FadeTransitionNotice",
   {
     resources: {
-      deltaTime: System.readResource(DeltaTime),
-      notice: System.writeResource(TransitionNotice)
+      deltaTime: Game.System.readResource(DeltaTime),
+      notice: Game.System.writeResource(TransitionNotice)
     }
   },
   ({ resources }) =>
@@ -650,7 +650,7 @@ const SyncSceneSystem = Game.System.define(
       renderables: RenderQuery
     },
     services: {
-      host: System.service(BrowserHost)
+      host: Game.System.service(BrowserHost)
     }
   },
   ({ queries, services }) =>
@@ -688,17 +688,17 @@ const SyncHudSystem = Game.System.define(
   "StateMachineExample/SyncHud",
   {
     resources: {
-      score: System.readResource(Score),
-      goal: System.readResource(PickupGoal),
-      roundTime: System.readResource(RoundTimeRemaining),
-      countdown: System.readResource(CountdownRemaining),
-      notice: System.readResource(TransitionNotice)
+      score: Game.System.readResource(Score),
+      goal: Game.System.readResource(PickupGoal),
+      roundTime: Game.System.readResource(RoundTimeRemaining),
+      countdown: Game.System.readResource(CountdownRemaining),
+      notice: Game.System.readResource(TransitionNotice)
     },
     machines: {
-      app: System.machine(AppState)
+      app: Game.System.machine(AppState)
     },
     services: {
-      host: System.service(BrowserHost)
+      host: Game.System.service(BrowserHost)
     }
   },
   ({ resources, machines, services }) =>
@@ -891,8 +891,8 @@ export const startStateMachineExample = async (mount: HTMLElement): Promise<Brow
   }
 
   const runtime = Game.Runtime.make({
-    services: Runtime.services(
-      Runtime.service(InputManager, {
+    services: Game.Runtime.services(
+      Game.Runtime.service(InputManager, {
         movement() {
           return normalizeMovement(pressedKeys)
         },
@@ -907,7 +907,7 @@ export const startStateMachineExample = async (mount: HTMLElement): Promise<Brow
           return next
         }
       }),
-      Runtime.service(BrowserHost, host)
+      Game.Runtime.service(BrowserHost, host)
     ),
     resources: {
       Arena: {
@@ -925,8 +925,8 @@ export const startStateMachineExample = async (mount: HTMLElement): Promise<Brow
         ttl: 0
       }
     },
-    machines: Runtime.machines(
-      Runtime.machine(AppState, "Title")
+    machines: Game.Runtime.machines(
+      Game.Runtime.machine(AppState, "Title")
     )
   })
 

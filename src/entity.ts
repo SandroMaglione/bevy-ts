@@ -29,10 +29,11 @@ export type ComponentProof = Record<string, unknown>
  * as an external integration key, for example when mirroring ECS entities into
  * renderer-owned maps such as Pixi sprites.
  */
-export type EntityId<S extends Schema.Any> = Brand<
+export type EntityId<S extends Schema.Any, Root = unknown> = Brand<
   typeof entityTypeId,
   {
     readonly schema: S
+    readonly root: Root
     readonly kind: "EntityId"
     readonly value: number
   }
@@ -44,7 +45,7 @@ export type EntityId<S extends Schema.Any> = Brand<
  * Drafts exist before the command queue is flushed. This is the place where the
  * API can safely carry exact structural information.
  */
-export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof> {
+export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof, Root = unknown> {
   /**
    * Runtime tag for debugging and pattern matching.
    */
@@ -52,7 +53,8 @@ export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof>
   /**
    * The schema-bound entity identity associated with the draft.
    */
-  readonly id: EntityId<S>
+  readonly id: EntityId<S, Root>
+  readonly __schemaRoot?: Root | undefined
   /**
    * Exact staged component proof.
    */
@@ -64,7 +66,7 @@ export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof>
  *
  * Query execution is the main source of `EntityRef` values.
  */
-export interface EntityRef<S extends Schema.Any, out P extends ComponentProof> {
+export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown> {
   /**
    * Runtime tag for debugging and pattern matching.
    */
@@ -72,7 +74,8 @@ export interface EntityRef<S extends Schema.Any, out P extends ComponentProof> {
   /**
    * The schema-bound entity identity.
    */
-  readonly id: EntityId<S>
+  readonly id: EntityId<S, Root>
+  readonly __schemaRoot?: Root | undefined
   /**
    * The readable component proof attached to this access value.
    */
@@ -88,7 +91,8 @@ export interface EntityRef<S extends Schema.Any, out P extends ComponentProof> {
 export interface EntityMut<
   S extends Schema.Any,
   out P extends ComponentProof,
-  out W extends ComponentProof
+  out W extends ComponentProof,
+  Root = unknown
 > {
   /**
    * Runtime tag for debugging and pattern matching.
@@ -97,7 +101,8 @@ export interface EntityMut<
   /**
    * The schema-bound entity identity.
    */
-  readonly id: EntityId<S>
+  readonly id: EntityId<S, Root>
+  readonly __schemaRoot?: Root | undefined
   /**
    * The readable component proof attached to this access value.
    */
@@ -115,47 +120,51 @@ export interface EntityMut<
  * The `value` it stores is the stable per-runtime numeric identity exposed on
  * `EntityId`.
  */
-export const makeEntityId = <S extends Schema.Any>(value: number): EntityId<S> =>
+export const makeEntityId = <S extends Schema.Any, Root = unknown>(value: number): EntityId<S, Root> =>
   ({
     schema: undefined as unknown as S,
+    root: undefined as unknown as Root,
     kind: "EntityId",
     value
-  }) as EntityId<S>
+  }) as EntityId<S, Root>
 
 /**
  * Creates a typed entity draft from an id and a proof.
  */
-export const draft = <S extends Schema.Any, P extends ComponentProof>(
-  id: EntityId<S>,
+export const draft = <S extends Schema.Any, P extends ComponentProof, Root = unknown>(
+  id: EntityId<S, Root>,
   proof: P
-): EntityDraft<S, P> => ({
+): EntityDraft<S, P, Root> => ({
   kind: "EntityDraft",
   id,
+  __schemaRoot: undefined as unknown as Root,
   proof
 })
 
 /**
  * Creates a read-only entity proof value.
  */
-export const ref = <S extends Schema.Any, P extends ComponentProof>(
-  id: EntityId<S>,
+export const ref = <S extends Schema.Any, P extends ComponentProof, Root = unknown>(
+  id: EntityId<S, Root>,
   proof: P
-): EntityRef<S, P> => ({
+): EntityRef<S, P, Root> => ({
   kind: "EntityRef",
   id,
+  __schemaRoot: undefined as unknown as Root,
   proof
 })
 
 /**
  * Creates a mutable entity proof value.
  */
-export const mut = <S extends Schema.Any, P extends ComponentProof, W extends ComponentProof>(
-  id: EntityId<S>,
+export const mut = <S extends Schema.Any, P extends ComponentProof, W extends ComponentProof, Root = unknown>(
+  id: EntityId<S, Root>,
   proof: P,
   writable: W
-): EntityMut<S, P, W> => ({
+): EntityMut<S, P, W, Root> => ({
   kind: "EntityMut",
   id,
+  __schemaRoot: undefined as unknown as Root,
   proof,
   writable
 })

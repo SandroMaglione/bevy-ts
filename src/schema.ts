@@ -1,5 +1,8 @@
+import * as Command from "./command.ts"
 import type { Descriptor } from "./descriptor.ts"
+import type * as Entity from "./entity.ts"
 import * as Machine from "./machine.ts"
+import * as QueryModule from "./query.ts"
 import * as Runtime from "./runtime.ts"
 import * as Schedule from "./schedule.ts"
 import * as System from "./system.ts"
@@ -120,6 +123,42 @@ export namespace Schema {
     States extends Runtime.RuntimeStates<S> = {},
     Machines extends Record<string, unknown> = {}
   > = Runtime.Runtime<S, Services, Resources, States, Root, Machines>
+
+  /**
+   * One fully bound public authoring surface.
+   */
+  export interface Game<S extends Any, Root = S> {
+    readonly schema: S
+    readonly Query: {
+      define: <
+        const Selection extends Record<string, QueryModule.Access<ComponentDescriptor<S>>>,
+        const With extends ReadonlyArray<ComponentDescriptor<S>> = [],
+        const Without extends ReadonlyArray<ComponentDescriptor<S>> = []
+      >(spec: {
+        readonly selection: Selection
+        readonly with?: With
+        readonly without?: Without
+      }) => QueryModule.QuerySpec<Selection, With, Without, Root>
+      read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
+      write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
+    }
+    readonly Command: {
+      spawn: () => Entity.EntityDraft<S, {}, Root>
+      entry: <D extends ComponentDescriptor<S>>(descriptor: D, value: Descriptor.Value<D>) => Command.Entry<D>
+      insert: <P extends Entity.ComponentProof, D extends ComponentDescriptor<S>>(
+        draft: Entity.EntityDraft<S, P, Root>,
+        descriptor: D,
+        value: Descriptor.Value<D>
+      ) => Entity.EntityDraft<S, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>
+      insertMany: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SchemaEntry<S>>>(
+        draft: Entity.EntityDraft<S, P, Root>,
+        ...entries: Entries
+      ) => Entity.EntityDraft<S, Command.Draft.FoldEntries<Entries, P>, Root>
+      spawnWith: <const Entries extends ReadonlyArray<Command.SchemaEntry<S>>>(
+        ...entries: Entries
+      ) => Entity.EntityDraft<S, Command.Draft.FoldEntries<Entries>, Root>
+    }
+  }
 }
 
 /**
@@ -139,6 +178,11 @@ type UnionToIntersection<A> =
  * Returns `{}` for empty unions before intersection folding.
  */
 type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
+
+type ComponentDescriptor<S extends Schema.Any> = Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+type ResourceDescriptor<S extends Schema.Any> = Extract<Schema.Resources<S>[keyof Schema.Resources<S>], Descriptor<"resource", string, any>>
+type EventDescriptor<S extends Schema.Any> = Extract<Schema.Events<S>[keyof Schema.Events<S>], Descriptor<"event", string, any>>
+type StateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Schema.States<S>], Descriptor<"state", string, any>>
 
 /**
  * Recomputes the aggregate runtime requirements for a bound schedule.
@@ -332,11 +376,11 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   let definedMachine: BoundMachine | undefined
 
   const defineSystem = <
-    const Queries extends Record<string, Query.Any> = {},
-    const Resources extends Record<string, System.ResourceRead<Descriptor<"resource", string, any>> | System.ResourceWrite<Descriptor<"resource", string, any>>> = {},
-    const Events extends Record<string, System.EventRead<Descriptor<"event", string, any>> | System.EventWrite<Descriptor<"event", string, any>>> = {},
+    const Queries extends Record<string, Query.Any<Root>> = {},
+    const Resources extends Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>> = {},
+    const Events extends Record<string, System.EventRead<EventDescriptor<S>> | System.EventWrite<EventDescriptor<S>>> = {},
     const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
-    const States extends Record<string, System.StateRead<Descriptor<"state", string, any>> | System.StateWrite<Descriptor<"state", string, any>>> = {},
+    const States extends Record<string, System.StateRead<StateDescriptor<S>> | System.StateWrite<StateDescriptor<S>>> = {},
     const InSets extends ReadonlyArray<Label.SystemSet> = [],
     const After extends ReadonlyArray<BoundOrderTarget> = [],
     const Before extends ReadonlyArray<BoundOrderTarget> = [],
@@ -362,18 +406,74 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       readonly when?: When
       readonly transitions?: Transitions
     },
-    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions>>) => Fx<
+    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root>>) => Fx<
       A,
       E,
-      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions>>
+      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root>>
     >
   ) => {
-    const system = System.define(name, {
+    const system = System.define<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root, A, E>(name, {
       schema,
       ...spec
     }, run)
     return system as typeof system & Schema.BoundSystem<S, Root, typeof system.spec, A, E>
   }
+
+  const commandSpawn = () => Command.spawn<S, Root>()
+
+  const commandEntry = <
+    D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+  >(
+    descriptor: D,
+    value: Descriptor.Value<D>
+  ) => Command.entry(descriptor, value)
+
+  const commandInsert = <
+    P extends Entity.ComponentProof,
+    D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+  >(
+    draft: Entity.EntityDraft<S, P, Root>,
+    descriptor: D,
+    value: Descriptor.Value<D>
+  ) => Command.insert(draft, descriptor, value)
+
+  const commandInsertMany = <
+    P extends Entity.ComponentProof,
+    const Entries extends ReadonlyArray<Command.SchemaEntry<S>> = ReadonlyArray<Command.SchemaEntry<S>>
+  >(
+    draft: Entity.EntityDraft<S, P, Root>,
+    ...entries: Entries
+  ) => Command.insertMany(draft, ...entries)
+
+  const commandSpawnWith = <
+    const Entries extends ReadonlyArray<Command.SchemaEntry<S>> = ReadonlyArray<Command.SchemaEntry<S>>
+  >(
+    ...entries: Entries
+  ) => Command.spawnWith<S, Root, Entries>(...entries)
+
+  const queryDefine = <
+    const Selection extends Record<string, QueryModule.Access<ComponentDescriptor<S>>>,
+    const With extends ReadonlyArray<ComponentDescriptor<S>> = [],
+    const Without extends ReadonlyArray<ComponentDescriptor<S>> = []
+  >(spec: {
+    readonly selection: Selection
+    readonly with?: With
+    readonly without?: Without
+  }) => QueryModule.define<Selection, With, Without, Root>(spec)
+
+  const queryRead = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.read(descriptor)
+  const queryWrite = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.write(descriptor)
+
+  const readResource = <D extends ResourceDescriptor<S>>(descriptor: D) => System.readResource(descriptor)
+  const writeResource = <D extends ResourceDescriptor<S>>(descriptor: D) => System.writeResource(descriptor)
+  const readEvent = <D extends EventDescriptor<S>>(descriptor: D) => System.readEvent(descriptor)
+  const writeEvent = <D extends EventDescriptor<S>>(descriptor: D) => System.writeEvent(descriptor)
+  const readState = <D extends StateDescriptor<S>>(descriptor: D) => System.readState(descriptor)
+  const writeState = <D extends StateDescriptor<S>>(descriptor: D) => System.writeState(descriptor)
+
+  const systemMachine = <M extends BoundMachine>(machine: M) => System.machine(machine)
+  const systemNextState = <M extends BoundMachine>(machine: M) => System.nextState(machine)
+  const systemTransition = <M extends BoundMachine>(machine: M) => System.transition(machine)
 
   const defineSchedule = <
     const Systems extends ReadonlyArray<BoundAnySystem>,
@@ -501,8 +601,25 @@ export const bind = <S extends Schema.Any>(schema: S) => {
     transitionSchedules
   })
 
+  const runtimeMachine = <M extends BoundMachine>(
+    machine: M,
+    initial: Machine.StateMachine.Value<M>
+  ) => Runtime.machine(machine, initial)
+
   return {
     schema,
+    Query: {
+      define: queryDefine,
+      read: queryRead,
+      write: queryWrite
+    },
+    Command: {
+      spawn: commandSpawn,
+      entry: commandEntry,
+      insert: commandInsert,
+      insertMany: commandInsertMany,
+      spawnWith: commandSpawnWith
+    },
     StateMachine: {
       define: defineMachine
     },
@@ -514,7 +631,17 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       or: Machine.or
     },
     System: {
-      define: defineSystem
+      define: defineSystem,
+      readResource,
+      writeResource,
+      readEvent,
+      writeEvent,
+      readState,
+      writeState,
+      service: System.service,
+      machine: systemMachine,
+      nextState: systemNextState,
+      transition: systemTransition
     },
     Schedule: {
       define: defineSchedule,
@@ -528,7 +655,11 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       applyStateTransitions: Schedule.applyStateTransitions
     },
     Runtime: {
-      make: makeRuntime
+      make: makeRuntime,
+      service: Runtime.service,
+      services: Runtime.services,
+      machine: runtimeMachine,
+      machines: Runtime.machines
     }
   }
 }

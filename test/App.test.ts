@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { App, Descriptor, Fx, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { App, Descriptor, Fx, Schema } from "../src/index.ts"
+import * as Runtime from "../src/runtime.ts"
+import * as Schedule from "../src/schedule.ts"
+import * as System from "../src/system.ts"
 
 const Counter = Descriptor.defineResource<number>()("Counter")
 const Log = Descriptor.defineResource<ReadonlyArray<string>>()("Log")

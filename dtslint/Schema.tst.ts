@@ -1,4 +1,5 @@
-import { App, Descriptor, Fx, Query, Runtime, Schema, System } from "../src/index.ts"
+import { App, Descriptor, Fx, Schema } from "../src/index.ts"
+import * as Public from "../src/index.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -8,6 +9,21 @@ const TickEvent = Descriptor.defineEvent<{ dt: number }>()("TickEvent")
 const Velocity = Descriptor.defineComponent<{ dx: number; dy: number }>()("Velocity")
 
 describe("Schema", () => {
+  it("does not export top-level runtime authoring namespaces from the public barrel", () => {
+    // @ts-expect-error!
+    Public.System
+    // @ts-expect-error!
+    Public.Schedule
+    // @ts-expect-error!
+    Public.Runtime
+    // @ts-expect-error!
+    Public.Query
+    // @ts-expect-error!
+    Public.Command
+    // @ts-expect-error!
+    Public.StateMachine
+  })
+
   it("preserves exact fragment registries", () => {
     const fragment = Schema.fragment({
       components: {
@@ -97,14 +113,14 @@ describe("Schema", () => {
       "Move",
       {
         queries: {
-          moving: Query.define({
+          moving: Game.Query.define({
             selection: {
-              position: Query.write(Position)
+              position: Game.Query.write(Position)
             }
           })
         },
         resources: {
-          time: System.readResource(Time)
+          time: Game.System.readResource(Time)
         }
       },
       ({ queries, resources }) =>
@@ -121,7 +137,7 @@ describe("Schema", () => {
     })
 
     const runtime = Game.Runtime.make({
-      services: Runtime.services(),
+      services: Game.Runtime.services(),
       resources: {
         DeltaTime: 1 / 60
       },
@@ -156,9 +172,9 @@ describe("Schema", () => {
       "A",
       {
         queries: {
-          moving: Query.define({
+          moving: GameA.Query.define({
             selection: {
-              position: Query.read(Position)
+              position: GameA.Query.read(Position)
             }
           })
         }
@@ -170,9 +186,9 @@ describe("Schema", () => {
       "B",
       {
         queries: {
-          moving: Query.define({
+          moving: GameB.Query.define({
             selection: {
-              velocity: Query.read(Velocity)
+              velocity: GameB.Query.read(Velocity)
             }
           })
         }
@@ -186,7 +202,7 @@ describe("Schema", () => {
     })
 
     const runtimeA = GameA.Runtime.make({
-      services: Runtime.services(),
+      services: GameA.Runtime.services(),
       resources: {
         DeltaTime: 1 / 60
       }

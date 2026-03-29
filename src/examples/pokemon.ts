@@ -11,7 +11,7 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
+import { App, Descriptor, Fx, Label, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const GRID_COLS = 10
@@ -66,11 +66,11 @@ const Game = Schema.bind(schema)
 const InputPipelineSetLabel = Label.defineSystemSetLabel("Pokemon/InputPipeline")
 const ResolveMovementSetLabel = Label.defineSystemSetLabel("Pokemon/ResolveMovement")
 
-const PlayerQuery = Query.define({
+const PlayerQuery = Game.Query.define({
   selection: {
-    position: Query.write(Position),
-    movement: Query.write(Movement),
-    player: Query.read(Player)
+    position: Game.Query.write(Position),
+    movement: Game.Query.write(Movement),
+    player: Game.Query.read(Player)
   }
 })
 
@@ -130,7 +130,7 @@ const SetupSystem = Game.System.define(
   ({ commands }) =>
     Fx.sync(() => {
       commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, { col: 3, row: 3 }],
           [Movement, {
             direction: null,
@@ -152,7 +152,7 @@ const SetupSystem = Game.System.define(
 
       for (const solid of solids) {
         commands.spawn(
-          Command.spawnWith<typeof schema>(
+          Game.Command.spawnWith(
             [Position, solid],
             [Solid, {}]
           )
@@ -165,10 +165,10 @@ const CaptureFrameInputSystem = Game.System.define(
   "Pokemon/CaptureFrameInput",
   {
     resources: {
-      deltaTime: System.writeResource(DeltaTime)
+      deltaTime: Game.System.writeResource(DeltaTime)
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ resources, services }) =>
@@ -185,7 +185,7 @@ const InputSystem = Game.System.define(
       player: PlayerQuery
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ queries, services }) =>
@@ -249,15 +249,15 @@ const CollisionSystem = Game.System.define(
     inSets: [ResolveMovementSetLabel],
     queries: {
       player: PlayerQuery,
-      solids: Query.define({
+      solids: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          solid: Query.read(Solid)
+          position: Game.Query.read(Position),
+          solid: Game.Query.read(Solid)
         }
       })
     },
     resources: {
-      grid: System.readResource(GridSize)
+      grid: Game.System.readResource(GridSize)
     }
   },
   ({ queries, resources }) =>
@@ -307,7 +307,7 @@ const AdvanceMovementSystem = Game.System.define(
       player: PlayerQuery
     },
     resources: {
-      deltaTime: System.readResource(DeltaTime)
+      deltaTime: Game.System.readResource(DeltaTime)
     }
   },
   ({ queries, resources }) =>
@@ -349,18 +349,18 @@ const SyncPixiSceneSystem = Game.System.define(
   {
     queries: {
       player: PlayerQuery,
-      solids: Query.define({
+      solids: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          solid: Query.read(Solid)
+          position: Game.Query.read(Position),
+          solid: Game.Query.read(Solid)
         }
       })
     },
     resources: {
-      grid: System.readResource(GridSize)
+      grid: Game.System.readResource(GridSize)
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ queries, resources, services }) =>
@@ -466,7 +466,7 @@ export const createPokemonExample = (input: {
   readonly direction: () => Direction | null
 }) => {
   const runtime = Game.Runtime.make({
-    services: Runtime.services(Runtime.service(InputManager, input)),
+    services: Game.Runtime.services(Game.Runtime.service(InputManager, input)),
     resources: {
       GridSize: {
         cols: GRID_COLS,
@@ -556,15 +556,15 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
   }
 
   const runtime = Game.Runtime.make({
-    services: Runtime.services(
-      Runtime.service(InputManager, {
+    services: Game.Runtime.services(
+      Game.Runtime.service(InputManager, {
         direction() {
           const next = pendingDirection
           pendingDirection = null
           return next
         }
       }),
-      Runtime.service(PixiHost, host)
+      Game.Runtime.service(PixiHost, host)
     ),
     resources: {
       GridSize: {

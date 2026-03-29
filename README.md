@@ -34,24 +34,24 @@ const Game = Schema.bind(schema)
 Define a system:
 
 ```ts
-import { Fx, Query, System } from "./src/index.ts"
+import { Fx } from "./src/index.ts"
 
 const MoveSystem = Game.System.define(
   "MoveSystem",
   {
     queries: {
-      moving: Query.define({
+      moving: Game.Query.define({
         selection: {
-          position: Query.write(Position),
-          velocity: Query.read(Velocity)
+          position: Game.Query.write(Position),
+          velocity: Game.Query.read(Velocity)
         }
       })
     },
     resources: {
-      time: System.readResource(Time)
+      time: Game.System.readResource(Time)
     },
     services: {
-      logger: System.service(Logger)
+      logger: Game.System.service(Logger)
     }
   },
   ({ queries, resources, services }) =>
@@ -75,16 +75,16 @@ const MoveSystem = Game.System.define(
 Create a schedule and runtime:
 
 ```ts
-import { App, Runtime } from "./src/index.ts"
+import { App } from "./src/index.ts"
 
 const update = Game.Schedule.define({
   systems: [MoveSystem]
 })
 
 const runtime = Game.Runtime.make({
-  services: Runtime.services(
+  services: Game.Runtime.services(
     // Services are provided through their descriptors.
-    Runtime.service(Logger, {
+    Game.Runtime.service(Logger, {
       log(message) {
         console.log(message)
       }
@@ -116,13 +116,13 @@ const TickSystem = Game.System.define(
   "TickSystem",
   {
     resources: {
-      time: System.readResource(Time)
+      time: Game.System.readResource(Time)
     },
     states: {
-      phase: System.readState(Phase)
+      phase: Game.System.readState(Phase)
     },
     services: {
-      logger: System.service(Logger)
+      logger: Game.System.service(Logger)
     }
   },
   ({ resources, states, services }) =>
@@ -134,9 +134,9 @@ const TickSystem = Game.System.define(
 const tick = Game.Schedule.define({ systems: [TickSystem] })
 
 const runtime = Game.Runtime.make({
-  services: Runtime.services(
+  services: Game.Runtime.services(
     // Services use their descriptors.
-    Runtime.service(Logger, {
+    Game.Runtime.service(Logger, {
       log(message) {
         console.log(message)
       }
@@ -181,7 +181,7 @@ const PauseInputSystem = Game.System.define(
   "PauseInput",
   {
     nextMachines: {
-      app: System.nextState(AppState)
+      app: Game.System.nextState(AppState)
     }
   },
   ({ nextMachines }) =>
@@ -223,7 +223,7 @@ const OnEnterPaused = Game.System.define(
   "OnEnterPaused",
   {
     transitions: {
-      app: System.transition(AppState)
+      app: Game.System.transition(AppState)
     }
   },
   ({ transitions }) =>
@@ -257,21 +257,21 @@ This unlocks the common orchestration cases that are awkward without a typed FSM
 
 ## Spawning entities
 
-Use `Command.spawnWith(...)` as the default way to create typed drafts without nested insert chains:
+Use `Game.Command.spawnWith(...)` as the default way to create typed drafts without nested insert chains:
 
 ```ts
-import { Command, Fx, System } from "./src/index.ts"
+import { Fx } from "./src/index.ts"
 
 const SpawnProjectileSystem = Game.System.define(
   "SpawnProjectileSystem",
   {
     services: {
-      logger: System.service(Logger)
+      logger: Game.System.service(Logger)
     }
   },
   ({ commands, services }) =>
     Fx.sync(() => {
-      const projectile = Command.spawnWith<typeof schema>(
+      const projectile = Game.Command.spawnWith(
         [Position, { x: 0, y: 0 }],
         [Velocity, { x: 4, y: 0 }]
       )
@@ -282,14 +282,14 @@ const SpawnProjectileSystem = Game.System.define(
 )
 ```
 
-`Command.spawn()` and single-step `Command.insert(...)` still exist, but `spawnWith(...)` is the intended authoring path.
+`Game.Command.spawn()` and single-step `Game.Command.insert(...)` still exist, but `spawnWith(...)` is the intended authoring path.
 
 ## Ordering systems
 
 Direct system references are the default ordering mechanism. Reusable sets stay explicit and typed.
 
 ```ts
-import { Label, System } from "./src/index.ts"
+import { Label } from "./src/index.ts"
 
 const MovementSet = Label.defineSystemSetLabel("Movement")
 
@@ -329,15 +329,15 @@ const SyncPixiSceneSystem = Game.System.define(
   "SyncPixiSceneSystem",
   {
     queries: {
-      renderables: Query.define({
+      renderables: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          renderable: Query.read(Renderable)
+          position: Game.Query.read(Position),
+          renderable: Game.Query.read(Renderable)
         }
       })
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ queries, services }) =>
@@ -386,39 +386,7 @@ This is still an early implementation. The public types are stricter than the ru
 
 The next meaningful additions are the ones that unlock broader classes of games, not just convenience. The order below is based on feature reach, not implementation ease.
 
-### 1. Bound API coherence and state-machine ergonomics
-
-The new state-machine example exposed the biggest remaining surface mismatch: the schema-bound API is still only half-bound. In real code it is still too common to mix `Game.System.define(...)` with top-level helpers like `System.readResource(...)`, `System.service(...)`, `System.machine(...)`, and `Runtime.machine(...)`.
-
-The highest-value cleanup now is to make the bound path feel complete and consistent:
-
-- expose the access constructors on the bound namespace as well
-- make machine initialization less verbose
-- make transition schedule registration and execution more explicit in the public model
-
-It would make code look more like:
-
-```ts
-const PauseSystem = Game.System.define(
-  "Pause",
-  {
-    nextMachines: {
-      app: Game.System.nextState(AppState)
-    },
-    services: {
-      input: Game.System.service(InputManager)
-    }
-  },
-  ({ nextMachines, services }) =>
-    Fx.sync(() => {
-      if (services.input.consumePause()) {
-        nextMachines.app.set("Paused")
-      }
-    })
-)
-```
-
-### 2. Multi-machine support and clearer transition orchestration
+### 1. Multi-machine support and clearer transition orchestration
 
 The current FSM layer is useful, but it is still effectively single-machine. The next real capability step here is allowing multiple independent machines, such as `AppState`, `RoundState`, or `ModalState`, without weakening type safety.
 
@@ -451,7 +419,7 @@ const EquippedBy = Descriptor.defineRelation<Entity.EntityId<typeof schema>>("Eq
 const ChildOf = Descriptor.defineRelation<Entity.EntityId<typeof schema>>("ChildOf")
 
 commands.spawn(
-  Command.spawnWith<typeof schema>(
+  Game.Command.spawnWith(
     [Sword, {}],
     [EquippedBy, playerId],
     [ChildOf, playerId]
@@ -472,10 +440,10 @@ const SpawnHealthBarSystem = Game.System.define(
     queries: {
       spawnedEnemies: Query.define({
         selection: {
-          enemy: Query.read(Enemy),
-          health: Query.read(Health)
+          enemy: Game.Query.read(Enemy),
+          health: Game.Query.read(Health)
         },
-        filters: [Query.added(Enemy)]
+        filters: [Game.Query.added(Enemy)]
       })
     }
   },
@@ -494,15 +462,15 @@ This matters even more once relationships and lifecycle signals exist. Optional 
 It would unlock things like:
 
 ```ts
-const InteractableQuery = Query.define({
+const InteractableQuery = Game.Query.define({
   selection: {
-    position: Query.read(Position),
-    npc: Query.optional(Npc),
-    item: Query.optional(Item)
+    position: Game.Query.read(Position),
+    npc: Game.Query.optional(Npc),
+    item: Game.Query.optional(Item)
   },
   filters: [
-    Query.with(Interactable),
-    Query.without(Hidden)
+    Game.Query.with(Interactable),
+    Game.Query.without(Hidden)
   ]
 })
 ```

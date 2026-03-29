@@ -1,6 +1,6 @@
 import { Application, Sprite, Texture } from "pixi.js"
 
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
+import { App, Descriptor, Fx, Label, Schema } from "../index.ts"
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -51,10 +51,10 @@ const SetupSceneSystem = Game.System.define(
   "SetupSceneSystem",
   {
     states: {
-      phase: System.writeState(SimulationPhase)
+      phase: Game.System.writeState(SimulationPhase)
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ commands, services, states }) =>
@@ -73,7 +73,7 @@ const SetupSceneSystem = Game.System.define(
         const tint = palette[index % palette.length] ?? palette[0]
 
         commands.spawn(
-          Command.spawnWith<typeof schema>(
+          Game.Command.spawnWith(
             [Position, {
               x: width * 0.5 + Math.cos(angle) * 140,
               y: height * 0.5 + Math.sin(angle) * 90
@@ -100,11 +100,11 @@ const CaptureFrameInputSystem = Game.System.define(
   "CaptureFrameInputSystem",
   {
     resources: {
-      deltaTime: System.writeResource(DeltaTime),
-      viewport: System.writeResource(Viewport)
+      deltaTime: Game.System.writeResource(DeltaTime),
+      viewport: Game.System.writeResource(Viewport)
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ resources, services }) =>
@@ -121,18 +121,18 @@ const IntegrateMotionSystem = Game.System.define(
   "IntegrateMotionSystem",
   {
     queries: {
-      moving: Query.define({
+      moving: Game.Query.define({
         selection: {
-          position: Query.write(Position),
-          velocity: Query.read(Velocity)
+          position: Game.Query.write(Position),
+          velocity: Game.Query.read(Velocity)
         }
       })
     },
     resources: {
-      deltaTime: System.readResource(DeltaTime)
+      deltaTime: Game.System.readResource(DeltaTime)
     },
     states: {
-      phase: System.readState(SimulationPhase)
+      phase: Game.System.readState(SimulationPhase)
     }
   },
   ({ queries, resources, states }) =>
@@ -159,19 +159,19 @@ const BounceWithinViewportSystem = Game.System.define(
   {
     after: [IntegrateMotionSystem],
     queries: {
-      moving: Query.define({
+      moving: Game.Query.define({
         selection: {
-          position: Query.write(Position),
-          velocity: Query.write(Velocity),
-          renderable: Query.read(Renderable)
+          position: Game.Query.write(Position),
+          velocity: Game.Query.write(Velocity),
+          renderable: Game.Query.read(Renderable)
         }
       })
     },
     resources: {
-      viewport: System.readResource(Viewport)
+      viewport: Game.System.readResource(Viewport)
     },
     states: {
-      phase: System.readState(SimulationPhase)
+      phase: Game.System.readState(SimulationPhase)
     }
   },
   ({ queries, resources, states }) =>
@@ -227,19 +227,19 @@ const SyncPixiSceneSystem = Game.System.define(
   {
     after: [BounceWithinViewportSystem],
     queries: {
-      renderables: Query.define({
+      renderables: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          renderable: Query.read(Renderable),
-          tint: Query.read(Tint)
+          position: Game.Query.read(Position),
+          renderable: Game.Query.read(Renderable),
+          tint: Game.Query.read(Tint)
         }
       })
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     },
     states: {
-      phase: System.readState(SimulationPhase)
+      phase: Game.System.readState(SimulationPhase)
     }
   },
   ({ queries, services, states }) =>
@@ -303,7 +303,7 @@ export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExamp
   }
 
   const runtime = Game.Runtime.make({
-    services: Runtime.services(Runtime.service(PixiHost, host)),
+    services: Game.Runtime.services(Game.Runtime.service(PixiHost, host)),
     resources: {
       DeltaTime: host.clock.deltaSeconds,
       Viewport: {

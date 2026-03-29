@@ -10,7 +10,7 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Command, Descriptor, Entity, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
+import { App, Descriptor, Entity, Fx, Label, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 /**
@@ -19,7 +19,7 @@ import type { BrowserExampleHandle } from "./pixi.ts"
  * Using `Schema.Any` here avoids a recursive type cycle during schema
  * construction while still preserving the stronger "typed entity id" model.
  */
-type SnakeEntityId = Entity.EntityId<Schema.Schema.Any>
+type SnakeEntityId = Entity.EntityId<Schema.Schema.Any, any>
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Snake/Position")
 const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Snake/Velocity")
@@ -66,32 +66,32 @@ const Game = Schema.bind(schema)
  * to avoid recursive type construction. Those ids are still produced only by
  * this schema's runtime, so narrowing them at the lookup boundary is sound.
  */
-const asSnakeRuntimeEntityId = (entityId: SnakeEntityId): Entity.EntityId<typeof schema> =>
-  entityId as Entity.EntityId<typeof schema>
+const asSnakeRuntimeEntityId = (entityId: SnakeEntityId): Entity.EntityId<typeof schema, typeof schema> =>
+  entityId as Entity.EntityId<typeof schema, typeof schema>
 
 const MovementSetLabel = Label.defineSystemSetLabel("Snake/Movement")
 const GrowthSetLabel = Label.defineSystemSetLabel("Snake/Growth")
 
-const HeadQuery = Query.define({
+const HeadQuery = Game.Query.define({
   selection: {
-    head: Query.read(SnakeHead),
-    position: Query.write(Position),
-    velocity: Query.read(Velocity)
+    head: Game.Query.read(SnakeHead),
+    position: Game.Query.write(Position),
+    velocity: Game.Query.read(Velocity)
   }
 })
 
-const FoodQuery = Query.define({
+const FoodQuery = Game.Query.define({
   selection: {
-    food: Query.read(Food),
-    position: Query.read(Position)
+    food: Game.Query.read(Food),
+    position: Game.Query.read(Position)
   }
 })
 
-const BodyQuery = Query.define({
+const BodyQuery = Game.Query.define({
   selection: {
-    body: Query.write(SnakeBody),
-    position: Query.write(Position),
-    followTarget: Query.write(FollowTarget)
+    body: Game.Query.write(SnakeBody),
+    position: Game.Query.write(Position),
+    followTarget: Game.Query.write(FollowTarget)
   }
 })
 
@@ -101,7 +101,7 @@ const SetupSystem = Game.System.define(
   ({ commands }) =>
     Fx.sync(() => {
       const headId = commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, { x: 5, y: 5 }],
           [Velocity, { x: 1, y: 0 }],
           [SnakeHead, {}]
@@ -109,7 +109,7 @@ const SetupSystem = Game.System.define(
       )
 
       commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, { x: 4, y: 5 }],
           [SnakeBody, { parent: headId, isTail: true }],
           [FollowTarget, { x: 5, y: 5 }]
@@ -117,7 +117,7 @@ const SetupSystem = Game.System.define(
       )
 
       commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, { x: 8, y: 5 }],
           [Food, {}]
         )
@@ -154,15 +154,15 @@ const BrowserInputSystem = Game.System.define(
   {
     inSets: [MovementSetLabel],
     queries: {
-      head: Query.define({
+      head: Game.Query.define({
         selection: {
-          head: Query.read(SnakeHead),
-          velocity: Query.write(Velocity)
+          head: Game.Query.read(SnakeHead),
+          velocity: Game.Query.write(Velocity)
         }
       })
     },
     services: {
-      input: System.service(DirectionInput)
+      input: Game.System.service(DirectionInput)
     }
   },
   ({ queries, services }) =>
@@ -219,7 +219,7 @@ const CollisionSystem = Game.System.define(
       food: FoodQuery
     },
     events: {
-      foodEaten: System.writeEvent(FoodEaten)
+      foodEaten: Game.System.writeEvent(FoodEaten)
     }
   },
   ({ queries, events }) =>
@@ -247,7 +247,7 @@ const GrowSystem = Game.System.define(
       body: BodyQuery
     },
     events: {
-      foodEaten: System.readEvent(FoodEaten)
+      foodEaten: Game.System.readEvent(FoodEaten)
     }
   },
   ({ queries, events, commands, lookup }) =>
@@ -279,9 +279,9 @@ const GrowSystem = Game.System.define(
       }
 
       const parent = tail?.entity.id ?? head.value.entity.id
-      const parentLookup = lookup.get(parent, Query.define({
+      const parentLookup = lookup.get(parent, Game.Query.define({
         selection: {
-          position: Query.read(Position)
+          position: Game.Query.read(Position)
         }
       }))
       if (!parentLookup.ok) {
@@ -290,7 +290,7 @@ const GrowSystem = Game.System.define(
       const parentPosition = parentLookup.value.data.position.get()
 
       commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, { x: parentPosition.x - 1, y: parentPosition.y }],
           [SnakeBody, { parent, isTail: true }],
           [FollowTarget, { x: parentPosition.x, y: parentPosition.y }]
@@ -298,7 +298,7 @@ const GrowSystem = Game.System.define(
       )
 
       commands.spawn(
-        Command.spawnWith<typeof schema>(
+        Game.Command.spawnWith(
           [Position, {
             x: (head.value.data.position.get().x + 3) % SNAKE_BOARD_WIDTH,
             y: head.value.data.position.get().y % SNAKE_BOARD_HEIGHT
@@ -323,9 +323,9 @@ const FollowSystem = Game.System.define(
         const body = match.data.body.get()
         const parentLookup = lookup.get(
           asSnakeRuntimeEntityId(body.parent),
-          Query.define({
+          Game.Query.define({
             selection: {
-              position: Query.read(Position)
+              position: Game.Query.read(Position)
             }
           })
         )
@@ -367,27 +367,27 @@ const SyncSnakeSceneSystem = Game.System.define(
   "Snake/SyncScene",
   {
     queries: {
-      head: Query.define({
+      head: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          head: Query.read(SnakeHead)
+          position: Game.Query.read(Position),
+          head: Game.Query.read(SnakeHead)
         }
       }),
-      body: Query.define({
+      body: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          body: Query.read(SnakeBody)
+          position: Game.Query.read(Position),
+          body: Game.Query.read(SnakeBody)
         }
       }),
-      food: Query.define({
+      food: Game.Query.define({
         selection: {
-          position: Query.read(Position),
-          food: Query.read(Food)
+          position: Game.Query.read(Position),
+          food: Game.Query.read(Food)
         }
       })
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ queries, services }) =>
@@ -499,7 +499,7 @@ const browserUpdateSchedule = Game.Schedule.define({
 
 export const createSnakeExample = () => {
   const runtime = Game.Runtime.make({
-    services: Runtime.services()
+    services: Game.Runtime.services()
   })
 
   const app = App.makeApp(runtime)
@@ -595,15 +595,15 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
   window.addEventListener("keydown", onKeyDown)
 
   const runtime = Game.Runtime.make({
-    services: Runtime.services(
-      Runtime.service(DirectionInput, {
+    services: Game.Runtime.services(
+      Game.Runtime.service(DirectionInput, {
         consume() {
           const next = pendingVelocity
           pendingVelocity = null
           return next
         }
       }),
-      Runtime.service(PixiHost, {
+      Game.Runtime.service(PixiHost, {
         scene,
         nodes: new Map<number, Graphics>(),
         tileSize

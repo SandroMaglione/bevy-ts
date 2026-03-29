@@ -419,7 +419,7 @@ export const makeRuntime = <
    */
   const internalWorld: Command.InternalWorld<S> = {
     nextEntityId() {
-      const id = Entity.makeEntityId<S>(nextEntity)
+      const id = Entity.makeEntityId<S, Root>(nextEntity)
       nextEntity += 1
       return id
     },
@@ -476,7 +476,7 @@ export const makeRuntime = <
    * The handle performs filtering, builds typed cells, and attaches the
    * matching entity proof for each result.
    */
-  const makeQueryHandle = <Q extends Query.Query.Any>(query: Q): QueryHandle<S, Q> => ({
+  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q): QueryHandle<S, Q> => ({
     each() {
       const matches: Array<QueryMatch<S, Q>> = []
       for (const [idValue, store] of entities) {
@@ -531,7 +531,7 @@ export const makeRuntime = <
             .filter(([, access]) => access.mode === "write")
             .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
         )
-        const entityId = Entity.makeEntityId<S>(idValue)
+        const entityId = Entity.makeEntityId<S, Query.Query.Root<Q>>(idValue)
         matches.push({
           entity: Object.keys(writeProof).length > 0
             ? Entity.mut(entityId, readProof, writeProof)
@@ -558,7 +558,7 @@ export const makeRuntime = <
   })
 
   const lookup = {
-    get<Q extends Query.Query.Any>(entityId: Entity.EntityId<S>, query: Q): Query.Query.Result<QueryMatch<S, Q>, Query.Query.LookupError> {
+    get<Q extends Query.Query.Any<Root>>(entityId: Entity.EntityId<S, Root>, query: Q): Query.Query.Result<QueryMatch<S, Q>, Query.Query.LookupError> {
       const store = entities.get(entityId.value)
       if (!store) {
         return Query.failure(Query.missingEntityError(entityId.value))
@@ -603,7 +603,7 @@ export const makeRuntime = <
         data
       } as QueryMatch<S, Q>)
     }
-  } satisfies import("./system.ts").LookupApi<S>
+  } satisfies import("./system.ts").LookupApi<S, Root>
 
   /**
    * Creates a read-only resource or state view.
@@ -707,9 +707,9 @@ export const makeRuntime = <
   const makeContext = (
     system: SystemDefinition<any, any, any>
   ): SystemContext<any> => {
-    const commands = Command.makeCommands<S>(() => internalWorld.nextEntityId())
+    const commands = Command.makeCommands<S, Root>(() => internalWorld.nextEntityId())
     const queries = Object.fromEntries(
-      Object.entries(system.spec.queries as Record<string, Query.Query.Any>).map(([key, query]) => [key, makeQueryHandle(query)])
+      Object.entries(system.spec.queries as Record<string, Query.Query.Any<Root>>).map(([key, query]) => [key, makeQueryHandle(query)])
     )
     const resourceViews = Object.fromEntries(
       Object.entries(system.spec.resources as Record<string, any>).map(([key, access]) => [

@@ -1,4 +1,6 @@
-import { Descriptor, Fx, Runtime, Schema, System } from "../src/index.ts"
+import { Descriptor, Fx, Schema } from "../src/index.ts"
+import * as Runtime from "../src/runtime.ts"
+import * as System from "../src/system.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("StateMachine/Position")

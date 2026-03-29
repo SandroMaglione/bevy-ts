@@ -5,7 +5,7 @@
  * descriptors, schemas, systems, queries, commands, schedules, runtime
  * construction, and app-style updates.
  */
-import { App, Command, Descriptor, Fx, Query, Runtime, Schema, System } from "../index.ts"
+import { App, Descriptor, Fx, Schema } from "../index.ts"
 
 // Components used by the movement example.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -46,24 +46,24 @@ const MoveSystem = Game.System.define(
   "MoveSystem",
   {
     queries: {
-      moving: Query.define({
+      moving: Game.Query.define({
         selection: {
-          position: Query.write(Position),
-          velocity: Query.read(Velocity)
+          position: Game.Query.write(Position),
+          velocity: Game.Query.read(Velocity)
         }
       })
     },
     resources: {
-      time: System.readResource(Time)
+      time: Game.System.readResource(Time)
     },
     events: {
-      tick: System.writeEvent(TickEvent)
+      tick: Game.System.writeEvent(TickEvent)
     },
     services: {
-      logger: System.service(Logger)
+      logger: Game.System.service(Logger)
     },
     states: {
-      phase: System.writeState(Phase)
+      phase: Game.System.writeState(Phase)
     }
   },
   ({ queries, resources, events, services, states, commands }) =>
@@ -83,7 +83,7 @@ const MoveSystem = Game.System.define(
         })
       }
 
-      const spawned = Command.spawnWith<typeof schema>(
+      const spawned = Game.Command.spawnWith(
         [Position, { x: dt, y: dt }],
         [Velocity, { x: 1, y: 1 }]
       )
@@ -100,8 +100,8 @@ const schedule = Game.Schedule.define({
 
 // Runtime wiring for the example, including initial resources and services.
 const runtime = Game.Runtime.make({
-  services: Runtime.services(
-    Runtime.service(Logger, {
+  services: Game.Runtime.services(
+    Game.Runtime.service(Logger, {
       log(message) {
         console.log(message)
       }

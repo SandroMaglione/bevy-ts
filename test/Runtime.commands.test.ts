@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Command, Descriptor, Fx, Query, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { Descriptor, Fx, Schema } from "../src/index.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -17,11 +17,11 @@ const schema = Schema.build(Schema.fragment({
     LastX
   }
 }))
+const Game = Schema.bind(schema)
 
 const makeRuntime = () =>
-  Runtime.makeRuntime({
-    schema,
-    services: Runtime.services(),
+  Game.Runtime.make({
+    services: Game.Runtime.services(),
     resources: {
       Count: 0,
       LastX: -1
@@ -30,14 +30,12 @@ const makeRuntime = () =>
 
 describe("Runtime commands", () => {
   it("insertMany applies entries in order with last-write-wins semantics", () => {
-    const spawn = System.define(
+    const spawn = Game.System.define(
       "RuntimeCommands/SpawnInsertMany",
-      {
-        schema
-      },
+      {},
       ({ commands }) =>
         Fx.sync(() => {
-          const id = commands.spawn(Command.spawnWith<typeof schema>(
+          const id = commands.spawn(Game.Command.spawnWith(
             [Position, { x: 0, y: 0 }] as const
           ))
           commands.insertMany(
@@ -49,21 +47,20 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = Game.System.define(
       "RuntimeCommands/ObserveLastWriteWins",
       {
-        schema,
         queries: {
-          moving: Query.define({
+          moving: Game.Query.define({
             selection: {
-              position: Query.read(Position),
-              velocity: Query.read(Velocity)
+              position: Game.Query.read(Position),
+              velocity: Game.Query.read(Velocity)
             }
           })
         },
         resources: {
-          count: System.writeResource(Count),
-          lastX: System.writeResource(LastX)
+          count: Game.System.writeResource(Count),
+          lastX: Game.System.writeResource(LastX)
         }
       },
       ({ queries, resources }) =>
@@ -76,12 +73,10 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [spawn]
       }),
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [observe]
       })
     )
@@ -91,14 +86,12 @@ describe("Runtime commands", () => {
   })
 
   it("remove causes later queries to stop matching", () => {
-    const spawn = System.define(
+    const spawn = Game.System.define(
       "RuntimeCommands/SpawnForRemove",
-      {
-        schema
-      },
+      {},
       ({ commands }) =>
         Fx.sync(() => {
-          const id = commands.spawn(Command.spawnWith<typeof schema>(
+          const id = commands.spawn(Game.Command.spawnWith(
             [Position, { x: 1, y: 1 }] as const,
             [Velocity, { x: 1, y: 1 }] as const
           ))
@@ -106,20 +99,19 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = Game.System.define(
       "RuntimeCommands/ObserveRemove",
       {
-        schema,
         queries: {
-          moving: Query.define({
+          moving: Game.Query.define({
             selection: {
-              position: Query.read(Position),
-              velocity: Query.read(Velocity)
+              position: Game.Query.read(Position),
+              velocity: Game.Query.read(Velocity)
             }
           })
         },
         resources: {
-          count: System.writeResource(Count)
+          count: Game.System.writeResource(Count)
         }
       },
       ({ queries, resources }) =>
@@ -130,12 +122,10 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [spawn]
       }),
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [observe]
       })
     )
@@ -144,16 +134,14 @@ describe("Runtime commands", () => {
   })
 
   it("despawn removes the entity and exact lookup reports MissingEntity", () => {
-    let storedId: import("../src/entity.ts").EntityId<typeof schema> | undefined
+    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined> | undefined
 
-    const spawn = System.define(
+    const spawn = Game.System.define(
       "RuntimeCommands/SpawnAndStoreId",
-      {
-        schema
-      },
+      {},
       ({ commands }) =>
         Fx.sync(() => {
-          const id = commands.spawn(Command.spawnWith<typeof schema>(
+          const id = commands.spawn(Game.Command.spawnWith(
             [Position, { x: 1, y: 2 }] as const
           ))
           storedId = id
@@ -161,12 +149,11 @@ describe("Runtime commands", () => {
         })
     )
 
-    const lookup = System.define(
+    const lookup = Game.System.define(
       "RuntimeCommands/LookupDespawned",
       {
-        schema,
         resources: {
-          count: System.writeResource(Count)
+          count: Game.System.writeResource(Count)
         }
       },
       ({ lookup, resources }) =>
@@ -176,9 +163,9 @@ describe("Runtime commands", () => {
             resources.count.set(-1)
             return
           }
-          const result = lookup.get(id, Query.define({
+          const result = lookup.get(id, Game.Query.define({
             selection: {
-              position: Query.read(Position)
+              position: Game.Query.read(Position)
             }
           }))
           resources.count.set(result.ok ? 0 : result.error._tag === "MissingEntity" ? 1 : -1)
@@ -187,12 +174,10 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [spawn]
       }),
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [lookup]
       })
     )
@@ -201,27 +186,23 @@ describe("Runtime commands", () => {
   })
 
   it("insert on an existing entity becomes visible after explicit applyDeferred in the same schedule", () => {
-    let storedId: import("../src/entity.ts").EntityId<typeof schema> | undefined
+    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined> | undefined
 
-    const spawn = System.define(
+    const spawn = Game.System.define(
       "RuntimeCommands/SpawnStoreForInsert",
-      {
-        schema
-      },
+      {},
       ({ commands }) =>
         Fx.sync(() => {
-          const id = commands.spawn(Command.spawnWith<typeof schema>(
+          const id = commands.spawn(Game.Command.spawnWith(
             [Position, { x: 0, y: 0 }] as const
           ))
           storedId = id
         })
     )
 
-    const insertVelocity = System.define(
+    const insertVelocity = Game.System.define(
       "RuntimeCommands/InsertVelocity",
-      {
-        schema
-      },
+      {},
       ({ commands }) =>
         Fx.sync(() => {
           const id = storedId
@@ -231,20 +212,19 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = Game.System.define(
       "RuntimeCommands/ObserveInsertedVelocity",
       {
-        schema,
         queries: {
-          moving: Query.define({
+          moving: Game.Query.define({
             selection: {
-              position: Query.read(Position),
-              velocity: Query.read(Velocity)
+              position: Game.Query.read(Position),
+              velocity: Game.Query.read(Velocity)
             }
           })
         },
         resources: {
-          count: System.writeResource(Count)
+          count: Game.System.writeResource(Count)
         }
       },
       ({ queries, resources }) =>
@@ -255,14 +235,12 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [spawn]
       }),
-      Schedule.define({
-        schema,
+      Game.Schedule.define({
         systems: [insertVelocity, observe],
-        steps: [insertVelocity, Schedule.applyDeferred(), observe]
+        steps: [insertVelocity, Game.Schedule.applyDeferred(), observe]
       })
     )
 

@@ -1,4 +1,6 @@
-import { Descriptor, Fx, Query, Schema, System } from "../src/index.ts"
+import { Descriptor, Fx, Schema } from "../src/index.ts"
+import * as Query from "../src/query.ts"
+import * as System from "../src/system.ts"
 import type { Query as QueryTypes } from "../src/query.ts"
 import { describe, expect, it } from "tstyche"
 

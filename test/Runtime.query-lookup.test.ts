@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { Command, Descriptor, Entity, Fx, Query, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { Descriptor, Entity, Fx, Schema } from "../src/index.ts"
+import * as Command from "../src/command.ts"
+import * as Query from "../src/query.ts"
+import * as Runtime from "../src/runtime.ts"
+import * as Schedule from "../src/schedule.ts"
+import * as System from "../src/system.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")

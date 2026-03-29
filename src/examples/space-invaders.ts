@@ -1,7 +1,7 @@
 import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
-import { App, Command, Descriptor, Entity, Fx, Query, Runtime, Schema, System } from "../index.ts"
+import { App, Descriptor, Entity, Fx, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const MAX_WIDTH = 800
@@ -16,7 +16,7 @@ const ENEMY_SPAWN_COOLDOWN = 100
 const SHOOT_COOLDOWN = 300
 const MATTER_MAX_STEP_MS = 1000 / 60
 
-type GameEntityId = Entity.EntityId<Schema.Schema.Any>
+type GameEntityId = Entity.EntityId<Schema.Schema.Any, any>
 type RenderKind = "player" | "enemy" | "bullet"
 type RenderBodyValue = {
   kind: RenderKind
@@ -115,79 +115,79 @@ const schema = Schema.build(
 )
 const Game = Schema.bind(schema)
 
-const asRuntimeEntityId = (entityId: GameEntityId): Entity.EntityId<typeof schema> =>
-  entityId as Entity.EntityId<typeof schema>
+const asRuntimeEntityId = (entityId: GameEntityId): Entity.EntityId<typeof schema, typeof schema> =>
+  entityId as Entity.EntityId<typeof schema, typeof schema>
 
-const playerVelocityQuery = Query.define({
+const playerVelocityQuery = Game.Query.define({
   selection: {
-    player: Query.read(Player),
-    velocity: Query.write(Velocity)
+    player: Game.Query.read(Player),
+    velocity: Game.Query.write(Velocity)
   }
 })
 
-const playerPositionQuery = Query.define({
+const playerPositionQuery = Game.Query.define({
   selection: {
-    player: Query.read(Player),
-    position: Query.read(Position)
+    player: Game.Query.read(Player),
+    position: Game.Query.read(Position)
   }
 })
 
-const movingQuery = Query.define({
+const movingQuery = Game.Query.define({
   selection: {
-    position: Query.write(Position),
-    velocity: Query.read(Velocity)
+    position: Game.Query.write(Position),
+    velocity: Game.Query.read(Velocity)
   }
 })
 
-const enemyDescentQuery = Query.define({
+const enemyDescentQuery = Game.Query.define({
   selection: {
-    enemy: Query.read(Enemy),
-    position: Query.write(Position),
-    descentPattern: Query.read(DescentPattern)
+    enemy: Game.Query.read(Enemy),
+    position: Game.Query.write(Position),
+    descentPattern: Game.Query.read(DescentPattern)
   }
 })
 
-const bodySyncQuery = Query.define({
+const bodySyncQuery = Game.Query.define({
   selection: {
-    position: Query.read(Position),
-    renderBody: Query.read(RenderBody)
+    position: Game.Query.read(Position),
+    renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const enemyCollisionQuery = Query.define({
+const enemyCollisionQuery = Game.Query.define({
   selection: {
-    enemy: Query.read(Enemy),
-    renderBody: Query.read(RenderBody)
+    enemy: Game.Query.read(Enemy),
+    renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const bulletCollisionQuery = Query.define({
+const bulletCollisionQuery = Game.Query.define({
   selection: {
-    bullet: Query.read(Bullet),
-    renderBody: Query.read(RenderBody)
+    bullet: Game.Query.read(Bullet),
+    renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const renderQuery = Query.define({
+const renderQuery = Game.Query.define({
   selection: {
-    position: Query.read(Position),
-    renderBody: Query.read(RenderBody)
+    position: Game.Query.read(Position),
+    renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const enemyCullingQuery = Query.define({
+const enemyCullingQuery = Game.Query.define({
   selection: {
-    enemy: Query.read(Enemy),
-    position: Query.read(Position),
-    renderBody: Query.read(RenderBody)
+    enemy: Game.Query.read(Enemy),
+    position: Game.Query.read(Position),
+    renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const bulletCullingQuery = Query.define({
+const bulletCullingQuery = Game.Query.define({
   selection: {
-    bullet: Query.read(Bullet),
-    position: Query.read(Position),
-    renderBody: Query.read(RenderBody)
+    bullet: Game.Query.read(Bullet),
+    position: Game.Query.read(Position),
+    renderBody: Game.Query.read(RenderBody)
   }
 })
 
@@ -195,7 +195,7 @@ const idleVelocity = { vx: 0, vy: 0, speed: 6 } as const
 const shootUpVelocity = { vx: 0, vy: -10, speed: 6 } as const
 
 const makePlayerDraft = () =>
-  Command.spawnWith<typeof schema>(
+  Game.Command.spawnWith(
     [Position, { x: 400, y: PLAYER_START_Y }],
     [Velocity, idleVelocity],
     [RenderBody, {
@@ -211,7 +211,7 @@ const makePlayerDraft = () =>
   )
 
 const makeBulletDraft = (position: { x: number; y: number }) =>
-  Command.spawnWith<typeof schema>(
+  Game.Command.spawnWith(
     [Position, position],
     [Velocity, shootUpVelocity],
     [RenderBody, {
@@ -227,7 +227,7 @@ const makeBulletDraft = (position: { x: number; y: number }) =>
   )
 
 const makeEnemyDraft = (position: { x: number; y: number }, pattern: DescentPatternValue) =>
-  Command.spawnWith<typeof schema>(
+  Game.Command.spawnWith(
     [Position, position],
     [RenderBody, {
       kind: "enemy",
@@ -411,12 +411,12 @@ const CaptureFrameInputSystem = Game.System.define(
   "SpaceInvaders/CaptureFrameInput",
   {
     resources: {
-      frameDelta: System.writeResource(FrameDelta),
-      deltaMilliseconds: System.writeResource(DeltaMilliseconds),
-      elapsedFrames: System.writeResource(ElapsedFrames)
+      frameDelta: Game.System.writeResource(FrameDelta),
+      deltaMilliseconds: Game.System.writeResource(DeltaMilliseconds),
+      elapsedFrames: Game.System.writeResource(ElapsedFrames)
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ resources, services }) =>
@@ -434,7 +434,7 @@ const PlayerInputSystem = Game.System.define(
       player: playerVelocityQuery
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ queries, services }) =>
@@ -471,11 +471,11 @@ const ShootingSystem = Game.System.define(
       player: playerPositionQuery
     },
     resources: {
-      deltaMilliseconds: System.readResource(DeltaMilliseconds),
-      shootCooldown: System.writeResource(ShootCooldown)
+      deltaMilliseconds: Game.System.readResource(DeltaMilliseconds),
+      shootCooldown: Game.System.writeResource(ShootCooldown)
     },
     services: {
-      input: System.service(InputManager)
+      input: Game.System.service(InputManager)
     }
   },
   ({ queries, resources, services, commands }) =>
@@ -508,8 +508,8 @@ const EnemySpawnSystem = Game.System.define(
   "SpaceInvaders/EnemySpawn",
   {
     resources: {
-      frameDelta: System.readResource(FrameDelta),
-      enemySpawnProgress: System.writeResource(EnemySpawnProgress)
+      frameDelta: Game.System.readResource(FrameDelta),
+      enemySpawnProgress: Game.System.writeResource(EnemySpawnProgress)
     }
   },
   ({ resources, commands }) =>
@@ -539,7 +539,7 @@ const MovementSystem = Game.System.define(
       moving: movingQuery
     },
     resources: {
-      frameDelta: System.readResource(FrameDelta)
+      frameDelta: Game.System.readResource(FrameDelta)
     }
   },
   ({ queries, resources }) =>
@@ -560,11 +560,11 @@ const ClampPlayerBoundsSystem = Game.System.define(
   "SpaceInvaders/ClampPlayerBounds",
   {
     queries: {
-      player: Query.define({
+      player: Game.Query.define({
         selection: {
-          player: Query.read(Player),
-          position: Query.write(Position),
-          renderBody: Query.read(RenderBody)
+          player: Game.Query.read(Player),
+          position: Game.Query.write(Position),
+          renderBody: Game.Query.read(RenderBody)
         }
       })
     }
@@ -594,8 +594,8 @@ const EnemyDescentSystem = Game.System.define(
       enemies: enemyDescentQuery
     },
     resources: {
-      frameDelta: System.readResource(FrameDelta),
-      elapsedFrames: System.readResource(ElapsedFrames)
+      frameDelta: Game.System.readResource(FrameDelta),
+      elapsedFrames: Game.System.readResource(ElapsedFrames)
     }
   },
   ({ queries, resources }) =>
@@ -620,10 +620,10 @@ const SyncMatterBodiesSystem = Game.System.define(
       colliders: bodySyncQuery
     },
     resources: {
-      deltaMilliseconds: System.readResource(DeltaMilliseconds)
+      deltaMilliseconds: Game.System.readResource(DeltaMilliseconds)
     },
     services: {
-      matter: System.service(MatterHost)
+      matter: Game.System.service(MatterHost)
     }
   },
   ({ queries, resources, services }) =>
@@ -676,10 +676,10 @@ const EnemyBulletCollisionSystem = Game.System.define(
       enemies: enemyCollisionQuery
     },
     events: {
-      destroyEnemy: System.writeEvent(DestroyEnemy)
+      destroyEnemy: Game.System.writeEvent(DestroyEnemy)
     },
     services: {
-      matter: System.service(MatterHost)
+      matter: Game.System.service(MatterHost)
     }
   },
   ({ queries, events, services }) =>
@@ -727,11 +727,11 @@ const EnemyDestroySystem = Game.System.define(
   "SpaceInvaders/EnemyDestroy",
   {
     events: {
-      destroyEnemy: System.readEvent(DestroyEnemy)
+      destroyEnemy: Game.System.readEvent(DestroyEnemy)
     },
     services: {
-      pixi: System.service(PixiHost),
-      matter: System.service(MatterHost)
+      pixi: Game.System.service(PixiHost),
+      matter: Game.System.service(MatterHost)
     }
   },
   ({ events, services, commands }) =>
@@ -764,8 +764,8 @@ const CullingSystem = Game.System.define(
       enemies: enemyCullingQuery
     },
     services: {
-      pixi: System.service(PixiHost),
-      matter: System.service(MatterHost)
+      pixi: Game.System.service(PixiHost),
+      matter: Game.System.service(MatterHost)
     }
   },
   ({ queries, services, commands }) =>
@@ -799,7 +799,7 @@ const SyncPixiSceneSystem = Game.System.define(
       renderables: renderQuery
     },
     services: {
-      pixi: System.service(PixiHost)
+      pixi: Game.System.service(PixiHost)
     }
   },
   ({ queries, services }) =>
@@ -928,14 +928,14 @@ export const startSpaceInvadersExample = async (mount: HTMLElement): Promise<Bro
   }
 
   const runtime = Game.Runtime.make({
-    services: Runtime.services(
-      Runtime.service(InputManager, {
+    services: Game.Runtime.services(
+      Game.Runtime.service(InputManager, {
         isKeyPressed(keyCode) {
           return keyStates.get(keyCode) ?? false
         }
       }),
-      Runtime.service(PixiHost, pixiHost),
-      Runtime.service(MatterHost, matterHost)
+      Game.Runtime.service(PixiHost, pixiHost),
+      Game.Runtime.service(MatterHost, matterHost)
     ),
     resources: {
       FrameDelta: pixiHost.clock.deltaFrames,

@@ -1,4 +1,5 @@
-import { Command, Descriptor, Entity, Schema } from "../src/index.ts"
+import { Descriptor, Entity, Schema } from "../src/index.ts"
+import * as Command from "../src/command.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -16,6 +17,20 @@ const schema = Schema.build(Schema.fragment({
 }))
 
 describe("Command", () => {
+  it("bound spawnWith infers the schema without an explicit generic", () => {
+    const Game = Schema.bind(schema)
+
+    const draft = Game.Command.spawnWith(
+      [Position, { x: 0, y: 0 }],
+      [Velocity, { x: 1, y: 1 }]
+    )
+
+    expect(draft).type.toBe<Entity.EntityDraft<typeof schema, {
+      readonly Position: { x: number; y: number }
+      readonly Velocity: { x: number; y: number }
+    }, typeof schema>>()
+  })
+
   it("spawn starts with an empty draft proof", () => {
     const draft = Command.spawn<typeof schema>()
 

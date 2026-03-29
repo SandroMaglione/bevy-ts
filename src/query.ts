@@ -65,7 +65,8 @@ export const write = <D extends Descriptor.Any>(descriptor: D): WriteAccess<D> =
 export interface QuerySpec<
   out Selection extends Record<string, Access<Descriptor.Any>>,
   out With extends ReadonlyArray<Descriptor.Any> = [],
-  out Without extends ReadonlyArray<Descriptor.Any> = []
+  out Without extends ReadonlyArray<Descriptor.Any> = [],
+  Root = unknown
 > {
   /**
    * Named access slots that become typed cells in query results.
@@ -79,6 +80,10 @@ export interface QuerySpec<
    * Components that must be absent for an entity to match.
    */
   readonly without: Without
+  /**
+   * Hidden schema-root brand used by schema-bound APIs.
+   */
+  readonly __schemaRoot?: Root | undefined
 }
 
 /**
@@ -103,7 +108,12 @@ export namespace Query {
   /**
    * Any supported query specification.
    */
-  export type Any = QuerySpec<Record<string, Access<Descriptor.Any>>, ReadonlyArray<Descriptor.Any>, ReadonlyArray<Descriptor.Any>>
+  export type Any<Root = unknown> = QuerySpec<Record<string, Access<Descriptor.Any>>, ReadonlyArray<Descriptor.Any>, ReadonlyArray<Descriptor.Any>, Root>
+
+  /**
+   * Extracts the schema-root brand carried by one query.
+   */
+  export type Root<T extends Any> = T extends QuerySpec<any, any, any, infer R> ? R : never
 
   /**
    * The readable proof produced by a query.
@@ -209,11 +219,11 @@ export interface WriteCell<T> extends ReadCell<T> {
 export type QueryMatch<S extends Schema.Any, Q extends Query.Any> =
   keyof Query.WriteProof<Q> extends never
     ? {
-        readonly entity: EntityRef<S, Query.ReadProof<Q>>
+        readonly entity: EntityRef<S, Query.ReadProof<Q>, Query.Root<Q>>
         readonly data: Query.Cells<Q>
       }
     : {
-        readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>>
+        readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>, Query.Root<Q>>
         readonly data: Query.Cells<Q>
       }
 
@@ -274,13 +284,15 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
 export const define = <
   const Selection extends Record<string, Access<Descriptor.Any>>,
   const With extends ReadonlyArray<Descriptor.Any> = [],
-  const Without extends ReadonlyArray<Descriptor.Any> = []
+  const Without extends ReadonlyArray<Descriptor.Any> = [],
+  Root = unknown
 >(spec: {
   readonly selection: Selection
   readonly with?: With
   readonly without?: Without
-}): QuerySpec<Selection, With, Without> => ({
+}): QuerySpec<Selection, With, Without, Root> => ({
   selection: spec.selection,
   with: (spec.with ?? []) as With,
-  without: (spec.without ?? []) as Without
+  without: (spec.without ?? []) as Without,
+  __schemaRoot: undefined as unknown as Root
 })
