@@ -211,4 +211,65 @@ describe("App", () => {
 
     expect(captured).toBe(42)
   })
+
+  it("repeated update calls accumulate world changes", () => {
+    const increment = System.define(
+      "AppTest/RepeatedIncrement",
+      {
+        schema,
+        resources: {
+          counter: System.writeResource(Counter)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.counter.update((value) => value + 1)
+        })
+    )
+
+    const runtime = Runtime.makeRuntime({
+      schema,
+      services: {},
+      resources: {
+        Counter: 0,
+        Log: []
+      }
+    })
+
+    const app = App.makeApp(runtime)
+    const schedule = Schedule.define({
+      label: UpdateLabel,
+      schema,
+      systems: [increment]
+    })
+
+    app.update(schedule)
+    app.update(schedule)
+    app.update(schedule)
+
+    const captured = readCounter(runtime)
+    expect(captured).toBe(3)
+  })
 })
+
+const readCounter = (runtime: Runtime.Runtime<typeof schema, {}>): number => {
+  let captured = -1
+  runtime.runSchedule(Schedule.define({
+    label: Label.defineScheduleLabel("AppTest/ReadCounterHelper"),
+    schema,
+    systems: [System.define(
+      "AppTest/ReadCounterHelperSystem",
+      {
+        schema,
+        resources: {
+          counter: System.readResource(Counter)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          captured = resources.counter.get()
+        })
+    )]
+  }))
+  return captured
+}

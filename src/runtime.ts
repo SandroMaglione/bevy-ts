@@ -489,8 +489,11 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
         }
         updateEvents()
       }
+      const lastStep = schedule.steps.at(-1)
       applyDeferred(deferred)
-      updateEvents()
+      if (!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") {
+        updateEvents()
+      }
     },
     tick(...schedules) {
       for (const schedule of schedules) {

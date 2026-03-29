@@ -17,10 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test-types": "tstyche",
+    "check": "pnpm typecheck && pnpm test-types && pnpm test",
     "coverage": "vitest --coverage",
-    "check": "node --experimental-strip-types src/examples/smoke.ts",
-    "check:runtime-init": "node --experimental-strip-types src/examples/runtime-init-regression.ts",
-    "smoke": "node --experimental-strip-types src/examples/smoke.ts",
     "example:pixi": "vite"
   }
 }
