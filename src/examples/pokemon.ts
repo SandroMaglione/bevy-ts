@@ -65,9 +65,6 @@ const schema = Schema.build(
 const InputPipelineSetLabel = Label.defineSystemSetLabel("Pokemon/InputPipeline")
 const ResolveMovementSetLabel = Label.defineSystemSetLabel("Pokemon/ResolveMovement")
 
-const SetupScheduleLabel = Label.defineScheduleLabel("Pokemon/Setup")
-const UpdateScheduleLabel = Label.defineScheduleLabel("Pokemon/Update")
-
 const PlayerQuery = Query.define({
   selection: {
     position: Query.write(Position),
@@ -426,20 +423,17 @@ const SyncPixiSceneSystem = System.define(
 )
 
 const setupSchedule = Schedule.define({
-  label: SetupScheduleLabel,
   schema,
   systems: [SetupSystem]
 })
 
 const browserSetupSchedule = Schedule.define({
-  label: SetupScheduleLabel,
   schema,
   systems: [SetupSystem, SyncPixiSceneSystem],
   steps: [SetupSystem, Schedule.applyDeferred(), SyncPixiSceneSystem]
 })
 
 const updateSchedule = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem],
   sets: [
@@ -456,7 +450,6 @@ const updateSchedule = Schedule.define({
 })
 
 const browserUpdateSchedule = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [CaptureFrameInputSystem, InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem, SyncPixiSceneSystem],
   sets: [

@@ -71,9 +71,6 @@ const asSnakeRuntimeEntityId = (entityId: SnakeEntityId): Entity.EntityId<typeof
 const MovementSetLabel = Label.defineSystemSetLabel("Snake/Movement")
 const GrowthSetLabel = Label.defineSystemSetLabel("Snake/Growth")
 
-const SetupScheduleLabel = Label.defineScheduleLabel("Snake/Setup")
-const UpdateScheduleLabel = Label.defineScheduleLabel("Snake/Update")
-
 const HeadQuery = Query.define({
   selection: {
     head: Query.read(SnakeHead),
@@ -451,20 +448,17 @@ const SyncSnakeSceneSystem = System.define(
 )
 
 const setupSchedule = Schedule.define({
-  label: SetupScheduleLabel,
   schema,
   systems: [SetupSystem]
 })
 
 const browserSetupSchedule = Schedule.define({
-  label: SetupScheduleLabel,
   schema,
   systems: [SetupSystem, SyncSnakeSceneSystem],
   steps: [SetupSystem, Schedule.applyDeferred(), SyncSnakeSceneSystem]
 })
 
 const updateSchedule = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [MovementSystem, CollisionSystem, GrowSystem, FollowSystem],
   sets: [
@@ -489,7 +483,6 @@ const updateSchedule = Schedule.define({
 })
 
 const browserUpdateSchedule = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [BrowserInputSystem, MovementSystem, BrowserWrapSystem, CollisionSystem, GrowSystem, FollowSystem, SyncSnakeSceneSystem],
   sets: [

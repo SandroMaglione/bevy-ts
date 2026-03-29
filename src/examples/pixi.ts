@@ -28,9 +28,6 @@ const PixiHost = Descriptor.defineService<{
   }
 }>()("PixiHost")
 
-const SetupScheduleLabel = Label.defineScheduleLabel("Setup")
-const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
-
 const pixiSchema = Schema.fragment({
   components: {
     Position,
@@ -278,13 +275,11 @@ const SyncPixiSceneSystem = System.define(
 )
 
 const setupSchedule = Schedule.define({
-  label: SetupScheduleLabel,
   schema,
   systems: [SetupSceneSystem]
 })
 
 const updateSchedule = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [CaptureFrameInputSystem, IntegrateMotionSystem, BounceWithinViewportSystem, SyncPixiSceneSystem]
 })

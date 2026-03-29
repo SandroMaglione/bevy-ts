@@ -61,19 +61,15 @@ export type ScheduleMarkerStep = ApplyDeferredStep | EventUpdateStep
 export type ScheduleStep = SystemDefinition<any, any, any> | ScheduleMarkerStep
 
 /**
- * A named collection of systems and explicit execution markers for a schema.
+ * Shared schedule shape used by both anonymous and named schedules.
  *
  * Schedules are the unit the runtime executes. They can be called from any
  * external loop in any order you choose.
  */
-export interface ScheduleDefinition<
+interface ScheduleBase<
   S extends Schema.Any,
   out Requirements extends RuntimeRequirements = RuntimeRequirements
 > {
-  /**
-   * Typed schedule label.
-   */
-  readonly label: Label.Schedule
   /**
    * Explicit execution steps for the schedule.
    */
@@ -93,9 +89,60 @@ export interface ScheduleDefinition<
 }
 
 /**
+ * A directly executable schedule value with no external typed identity.
+ *
+ * Anonymous schedules are the default form. They can be passed to the runtime
+ * and app directly, but they intentionally do not expose a schedule label.
+ */
+export interface AnonymousScheduleDefinition<
+  S extends Schema.Any,
+  out Requirements extends RuntimeRequirements = RuntimeRequirements
+> extends ScheduleBase<S, Requirements> {
+  readonly kind: "anonymous"
+}
+
+/**
+ * A directly executable schedule value with external typed identity.
+ *
+ * Named schedules are only needed when some other API must refer to the
+ * schedule by a stable typed label outside the literal value itself.
+ */
+export interface NamedScheduleDefinition<
+  S extends Schema.Any,
+  out Requirements extends RuntimeRequirements = RuntimeRequirements,
+  out L extends Label.Schedule = Label.Schedule
+> extends ScheduleBase<S, Requirements> {
+  readonly kind: "named"
+  readonly label: L
+}
+
+/**
+ * Any supported schedule definition.
+ */
+export type ScheduleDefinition<
+  S extends Schema.Any,
+  Requirements extends RuntimeRequirements = RuntimeRequirements
+> = AnonymousScheduleDefinition<S, Requirements> | NamedScheduleDefinition<S, Requirements>
+
+/**
  * Type-level and value-level helpers for schedule construction.
  */
 export namespace Schedule {
+  /**
+   * Any anonymous schedule.
+   */
+  export type Anonymous<
+    S extends Schema.Any,
+    Requirements extends RuntimeRequirements = RuntimeRequirements
+  > = AnonymousScheduleDefinition<S, Requirements>
+  /**
+   * Any named schedule.
+   */
+  export type Named<
+    S extends Schema.Any,
+    Requirements extends RuntimeRequirements = RuntimeRequirements,
+    L extends Label.Schedule = Label.Schedule
+  > = NamedScheduleDefinition<S, Requirements, L>
   /**
    * Any supported execution step.
    */
@@ -252,8 +299,19 @@ export const updateEvents = (): EventUpdateStep => ({
   kind: "eventUpdate"
 })
 
+type ScheduleOptions<
+  S extends Schema.Any,
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> = {
+  readonly schema: S
+  readonly systems: Systems
+  readonly sets?: Sets
+  readonly steps?: ReadonlyArray<ScheduleStep>
+} & ValidateScheduleOptions<Systems, Sets>
+
 /**
- * Creates a schedule value from a label and an ordered execution plan.
+ * Creates an anonymous schedule value from an ordered execution plan.
  *
  * When only `systems` are provided, the schedule uses the resolved system order
  * followed by an implicit `applyDeferred()` and `updateEvents()` pair.
@@ -262,13 +320,7 @@ export const define = <
   S extends Schema.Any,
   const Systems extends ReadonlyArray<AnySystem>,
   const Sets extends ReadonlyArray<AnySetConfig> = []
->(options: {
-  readonly label: Label.Schedule
-  readonly schema: S
-  readonly systems: Systems
-  readonly sets?: Sets
-  readonly steps?: ReadonlyArray<ScheduleStep>
-} & ValidateScheduleOptions<Systems, Sets>): ScheduleDefinition<S, ScheduleRequirements<Systems>> => {
+>(options: ScheduleOptions<S, Systems, Sets>): AnonymousScheduleDefinition<S, ScheduleRequirements<Systems>> => {
   const orderedSystems = resolveSystems(options.systems, options.sets ?? [])
   const orderedSystemMap = new Map(
     orderedSystems.map((system) => [system.spec.label.key, system] as const)
@@ -281,11 +333,34 @@ export const define = <
     : [...orderedSystems, applyDeferred(), updateEvents()]
 
   return {
-    label: options.label,
+    kind: "anonymous",
     steps,
     systems: orderedSystems,
     schema: options.schema
-  } as ScheduleDefinition<S, ScheduleRequirements<Systems>>
+  } as AnonymousScheduleDefinition<S, ScheduleRequirements<Systems>>
+}
+
+/**
+ * Creates a named schedule value from a typed label and an ordered execution plan.
+ *
+ * Use this only when some other API needs to refer to the schedule by a stable
+ * external identity.
+ */
+export const named = <
+  S extends Schema.Any,
+  const L extends Label.Schedule,
+  const Systems extends ReadonlyArray<AnySystem>,
+  const Sets extends ReadonlyArray<AnySetConfig> = []
+>(
+  label: L,
+  options: ScheduleOptions<S, Systems, Sets>
+): NamedScheduleDefinition<S, ScheduleRequirements<Systems>, L> => {
+  const anonymous = define(options)
+  return {
+    ...anonymous,
+    kind: "named",
+    label
+  } as NamedScheduleDefinition<S, ScheduleRequirements<Systems>, L>
 }
 
 /**

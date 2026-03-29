@@ -1,4 +1,4 @@
-import { App, Descriptor, Fx, Label, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { App, Descriptor, Fx, Runtime, Schedule, Schema, System } from "../src/index.ts"
 import { describe, expect, it } from "tstyche"
 
 const Time = Descriptor.defineResource<number>()("Time")
@@ -70,25 +70,21 @@ const PrefixedServiceSystem = System.define(
 )
 
 const resourceSchedule = Schedule.define({
-  label: Label.defineScheduleLabel("RuntimeTypes/ResourceSchedule"),
   schema,
   systems: [ResourceSystem]
 })
 
 const stateSchedule = Schedule.define({
-  label: Label.defineScheduleLabel("RuntimeTypes/StateSchedule"),
   schema,
   systems: [StateSystem]
 })
 
 const serviceSchedule = Schedule.define({
-  label: Label.defineScheduleLabel("RuntimeTypes/ServiceSchedule"),
   schema,
   systems: [ServiceSystem]
 })
 
 const prefixedServiceSchedule = Schedule.define({
-  label: Label.defineScheduleLabel("RuntimeTypes/PrefixedServiceSchedule"),
   schema,
   systems: [PrefixedServiceSystem]
 })

@@ -42,10 +42,17 @@ const RenderSystem = System.define(
   () => Fx.sync<undefined, {}>(() => undefined)
 )
 
+const PlainSystem = System.define(
+  "PlainSystem",
+  {
+    schema
+  },
+  () => Fx.sync<undefined, {}>(() => undefined)
+)
+
 describe("Schedule", () => {
   it("accepts valid systems and configured sets", () => {
     Schedule.define({
-      label: UpdateSchedule,
       schema,
       systems: [MovementSystem, RenderSystem],
       sets: [
@@ -69,7 +76,6 @@ describe("Schedule", () => {
 
     // @ts-expect-error!
     Schedule.define({
-      label: UpdateSchedule,
       schema,
       systems: [MovementSystem, MissingSetSystem],
       sets: [
@@ -100,7 +106,6 @@ describe("Schedule", () => {
 
     // @ts-expect-error!
     Schedule.define({
-      label: UpdateSchedule,
       schema,
       systems: [Dependent]
     })
@@ -118,7 +123,6 @@ describe("Schedule", () => {
 
     // @ts-expect-error!
     Schedule.define({
-      label: UpdateSchedule,
       schema,
       systems: [MovementSystem, NeedsRenderSet],
       sets: [
@@ -127,5 +131,24 @@ describe("Schedule", () => {
         })
       ] as const
     })
+  })
+
+  it("does not expose a label on anonymous schedules", () => {
+    const schedule = Schedule.define({
+      schema,
+      systems: [PlainSystem]
+    })
+
+    // @ts-expect-error!
+    schedule.label
+  })
+
+  it("exposes a label on named schedules", () => {
+    const schedule = Schedule.named(UpdateSchedule, {
+      schema,
+      systems: [PlainSystem]
+    })
+
+    schedule.label
   })
 })

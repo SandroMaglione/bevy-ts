@@ -110,7 +110,9 @@ type ScheduleRequirementsOf<Schedule> = Schedule extends ScheduleDefinition<any,
 /**
  * Produces a readable type-level label name.
  */
-type ScheduleName<Schedule> = Schedule extends { readonly label: { readonly name: infer Name extends string } } ? Name : never
+type ScheduleName<Schedule> = Schedule extends { readonly label: { readonly name: infer Name extends string } }
+  ? Name
+  : "(anonymous schedule)"
 
 type MissingKeys<Required extends object, Provided extends object> = Exclude<keyof Required, keyof Provided>
 

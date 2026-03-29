@@ -1,4 +1,4 @@
-import { Fx, Label, Runtime, Schedule, System } from "../../src/index.ts"
+import { Fx, Runtime, Schedule, System } from "../../src/index.ts"
 import type { Descriptor } from "../../src/descriptor.ts"
 import type { Schema } from "../../src/schema.ts"
 
@@ -36,7 +36,6 @@ export const readResourceValue = <
   )
 
   runtime.runSchedule(Schedule.define({
-    label: Label.defineScheduleLabel(`Test/ReadResourceSchedule/${descriptor.name}`),
     schema,
     systems: [readSystem]
   }) as never)
@@ -78,7 +77,6 @@ export const readStateValue = <
   )
 
   runtime.runSchedule(Schedule.define({
-    label: Label.defineScheduleLabel(`Test/ReadStateSchedule/${descriptor.name}`),
     schema,
     systems: [readSystem]
   }) as never)

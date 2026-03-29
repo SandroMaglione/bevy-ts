@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Label, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { Descriptor, Fx, Runtime, Schedule, Schema, System } from "../src/index.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Log = Descriptor.defineResource<ReadonlyArray<number>>()("Log")
@@ -59,12 +59,10 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeEvents/EmitSchedule"),
         schema,
         systems: [emit]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeEvents/ObserveSchedule"),
         schema,
         systems: [observe]
       })
@@ -107,7 +105,6 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeEvents/NoUpdateMarker"),
       schema,
       systems: [emit, readBefore],
       steps: [emit, readBefore]
@@ -150,7 +147,6 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeEvents/WithUpdateMarker"),
       schema,
       systems: [emit, readAfter],
       steps: [emit, Schedule.updateEvents(), readAfter]
@@ -195,7 +191,6 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeEvents/Ordered"),
       schema,
       systems: [emit, observe],
       steps: [emit, Schedule.updateEvents(), observe]
@@ -247,12 +242,10 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeEvents/EmitOneSchedule"),
         schema,
         systems: [emitOne]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeEvents/ObserveOneSchedule"),
         schema,
         systems: [observe]
       })
@@ -262,12 +255,10 @@ describe("Runtime events", () => {
 
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeEvents/EmitNoneSchedule"),
         schema,
         systems: [emitNone]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeEvents/ObserveNoneSchedule"),
         schema,
         systems: [observe]
       })

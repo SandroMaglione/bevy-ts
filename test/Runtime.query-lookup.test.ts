@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Command, Descriptor, Entity, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { Command, Descriptor, Entity, Fx, Query, Runtime, Schedule, Schema, System } from "../src/index.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -58,7 +58,6 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeQuery/ObserveEmptySchedule"),
       schema,
       systems: [observe]
     }))
@@ -91,7 +90,6 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeQuery/SingleNoEntitiesSchedule"),
       schema,
       systems: [observe]
     }))
@@ -137,12 +135,10 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/SpawnMultipleSchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/ObserveMultipleSchedule"),
         schema,
         systems: [observe]
       })
@@ -198,12 +194,10 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/SpawnLookupSchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/ObserveLookupSchedule"),
         schema,
         systems: [observe]
       })
@@ -256,12 +250,10 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/SpawnFilteredSchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/ObserveFiltersSchedule"),
         schema,
         systems: [observe]
       })
@@ -333,12 +325,10 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/SpawnWritableSchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeQuery/WriteThenReadSchedule"),
         schema,
         systems: [write, read]
       })

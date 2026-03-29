@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { Command, Descriptor, Fx, Query, Runtime, Schedule, Schema, System } from "../src/index.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -77,12 +77,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/SpawnInsertManySchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/ObserveLastWriteWinsSchedule"),
         schema,
         systems: [observe]
       })
@@ -133,12 +131,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/SpawnRemoveSchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/ObserveRemoveSchedule"),
         schema,
         systems: [observe]
       })
@@ -192,12 +188,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/SpawnStoreIdSchedule"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/LookupDespawnedSchedule"),
         schema,
         systems: [lookup]
       })
@@ -262,12 +256,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/SpawnBeforeInsert"),
         schema,
         systems: [spawn]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeCommands/InsertThenObserve"),
         schema,
         systems: [insertVelocity, observe],
         steps: [insertVelocity, Schedule.applyDeferred(), observe]

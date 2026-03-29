@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Label, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { Descriptor, Fx, Runtime, Schedule, Schema, System } from "../src/index.ts"
 import { readResourceValue, readStateValue } from "./utils/fixtures.ts"
 
 const Time = Descriptor.defineResource<number>()("Time")
@@ -55,7 +55,6 @@ describe("Runtime resources and states", () => {
     )
 
     const schedule = Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeResources/IncrementSchedule"),
       schema,
       systems: [increment]
     })
@@ -84,7 +83,6 @@ describe("Runtime resources and states", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeResources/SetRunningSchedule"),
       schema,
       systems: [setRunning]
     }))
@@ -140,7 +138,6 @@ describe("Runtime resources and states", () => {
     })
 
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeResources/SyncFromPhaseSchedule"),
       schema,
       systems: [syncFromPhase]
     }))
@@ -187,7 +184,6 @@ describe("Runtime resources and states", () => {
     })
 
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeResources/LogTimeSchedule"),
       schema,
       systems: [logTime]
     }))
@@ -234,7 +230,6 @@ describe("Runtime resources and states", () => {
     })
 
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeResources/LogTimePrefixedSchedule"),
       schema,
       systems: [logTime]
     }))

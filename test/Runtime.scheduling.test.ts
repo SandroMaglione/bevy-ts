@@ -54,7 +54,6 @@ describe("Runtime scheduling", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeScheduling/IncrementSchedule"),
       schema,
       systems: [increment]
     }))
@@ -62,7 +61,6 @@ describe("Runtime scheduling", () => {
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeScheduling/AppendSchedule"),
       schema,
       systems: [append]
     }))
@@ -101,12 +99,10 @@ describe("Runtime scheduling", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeScheduling/FirstSchedule"),
         schema,
         systems: [first]
       }),
       Schedule.define({
-        label: Label.defineScheduleLabel("RuntimeScheduling/SecondSchedule"),
         schema,
         systems: [second]
       })
@@ -147,7 +143,6 @@ describe("Runtime scheduling", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeScheduling/DirectOrder"),
       schema,
       systems: [second, first]
     }))
@@ -190,7 +185,6 @@ describe("Runtime scheduling", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
-      label: Label.defineScheduleLabel("RuntimeScheduling/ChainedSet"),
       schema,
       systems: [first, second],
       sets: [

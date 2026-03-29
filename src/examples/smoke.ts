@@ -5,7 +5,7 @@
  * descriptors, schemas, systems, queries, commands, schedules, runtime
  * construction, and app-style updates.
  */
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Fx, Query, Runtime, Schedule, Schema, System } from "../index.ts"
 
 // Components used by the movement example.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -18,8 +18,6 @@ const TickEvent = Descriptor.defineEvent<{ readonly dt: number }>()("TickEvent")
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
 // A host-provided logging service.
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
-const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
-
 // Feature-local schema fragment for the movement example.
 const motionSchema = Schema.fragment({
   components: {
@@ -96,7 +94,6 @@ const MoveSystem = System.define(
 
 // The schedule that runs the example system.
 const schedule = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [MoveSystem]
 })

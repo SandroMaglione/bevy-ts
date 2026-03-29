@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { App, Descriptor, Fx, Label, Runtime, Schedule, Schema, System } from "../src/index.ts"
+import { App, Descriptor, Fx, Runtime, Schedule, Schema, System } from "../src/index.ts"
 
 const Counter = Descriptor.defineResource<number>()("Counter")
 const Log = Descriptor.defineResource<ReadonlyArray<string>>()("Log")
@@ -10,10 +10,6 @@ const schema = Schema.build(Schema.fragment({
     Log
   }
 }))
-
-const UpdateLabel = Label.defineScheduleLabel("AppTest/Update")
-const ReadLabel = Label.defineScheduleLabel("AppTest/Read")
-const SetupLabel = Label.defineScheduleLabel("AppTest/Setup")
 
 describe("App", () => {
   it("runs one schedule once through update", () => {
@@ -48,13 +44,11 @@ describe("App", () => {
     )
 
     const updateSchedule = Schedule.define({
-      label: UpdateLabel,
       schema,
       systems: [increment]
     })
 
     const readSchedule = Schedule.define({
-      label: ReadLabel,
       schema,
       systems: [read]
     })
@@ -121,19 +115,16 @@ describe("App", () => {
     )
 
     const firstSchedule = Schedule.define({
-      label: Label.defineScheduleLabel("AppTest/FirstSchedule"),
       schema,
       systems: [first]
     })
 
     const secondSchedule = Schedule.define({
-      label: Label.defineScheduleLabel("AppTest/SecondSchedule"),
       schema,
       systems: [second]
     })
 
     const readSchedule = Schedule.define({
-      label: ReadLabel,
       schema,
       systems: [read]
     })
@@ -185,13 +176,11 @@ describe("App", () => {
     )
 
     const setupSchedule = Schedule.define({
-      label: SetupLabel,
       schema,
       systems: [setup]
     })
 
     const readSchedule = Schedule.define({
-      label: ReadLabel,
       schema,
       systems: [read]
     })
@@ -238,7 +227,6 @@ describe("App", () => {
 
     const app = App.makeApp(runtime)
     const schedule = Schedule.define({
-      label: UpdateLabel,
       schema,
       systems: [increment]
     })
@@ -264,7 +252,6 @@ const readCounter = (
 ): number => {
   let captured = -1
   runtime.runSchedule(Schedule.define({
-    label: Label.defineScheduleLabel("AppTest/ReadCounterHelper"),
     schema,
     systems: [System.define(
       "AppTest/ReadCounterHelperSystem",

@@ -75,12 +75,9 @@ const MoveSystem = System.define(
 Create a schedule and runtime:
 
 ```ts
-import { App, Label, Runtime, Schedule } from "./src/index.ts"
-
-const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
+import { App, Runtime, Schedule } from "./src/index.ts"
 
 const update = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [MoveSystem]
 })
@@ -137,11 +134,7 @@ const TickSystem = System.define(
     })
 )
 
-const tick = Schedule.define({
-  label: UpdateScheduleLabel,
-  schema,
-  systems: [TickSystem]
-})
+const tick = Schedule.define({ schema, systems: [TickSystem] })
 
 const runtime = Runtime.makeRuntime({
   schema,
@@ -210,7 +203,6 @@ Direct system references are the default ordering mechanism. Reusable sets stay 
 import { Label, Schedule, System } from "./src/index.ts"
 
 const MovementSet = Label.defineSystemSetLabel("Movement")
-const UpdateScheduleLabel = Label.defineScheduleLabel("Update")
 
 const InputSystem = System.define("Input", {
   schema,
@@ -224,7 +216,6 @@ const MoveSystem = System.define("Move", {
 }, ({}) => Fx.sync(() => {}))
 
 const update = Schedule.define({
-  label: UpdateScheduleLabel,
   schema,
   systems: [InputSystem, MoveSystem],
   sets: [
@@ -236,7 +227,7 @@ const update = Schedule.define({
 })
 ```
 
-No runtime-relevant references are open strings. Systems are referenced directly. Schedules and reusable sets use typed labels.
+No runtime-relevant references are open strings. Systems are referenced directly. Reusable sets use typed labels. Schedules only need labels when some other API must refer to them externally.
 
 ## Renderer integration
 
