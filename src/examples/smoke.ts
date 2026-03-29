@@ -7,18 +7,21 @@
  */
 import { App, Descriptor, Fx, Schema } from "../index.ts"
 
-// Components used by the movement example.
+// ---------------------------------------------------------------------------
+// 1. Descriptors
+// ---------------------------------------------------------------------------
+// Descriptors give nominal identities to ECS data and services.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-// A resource representing the fixed step duration.
 const Time = Descriptor.defineResource<number>()("Time")
-// An event emitted after each tick.
 const TickEvent = Descriptor.defineEvent<{ readonly dt: number }>()("TickEvent")
-// A state used to gate the movement system.
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
-// A host-provided logging service.
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
-// Feature-local schema fragment for the movement example.
+
+// ---------------------------------------------------------------------------
+// 2. Schema
+// ---------------------------------------------------------------------------
+// Fragments group related descriptors. The final schema closes the world.
 const motionSchema = Schema.fragment({
   components: {
     Position,
@@ -35,13 +38,15 @@ const motionSchema = Schema.fragment({
   }
 })
 
-// The final closed schema used by systems and the runtime.
 const schema = Schema.build(motionSchema)
-// Bind the closed schema once so every later definition stays on the same root.
+// Bind once so every later definition stays on the same typed root.
 const Game = Schema.bind(schema)
 
-// A movement system that reads velocity, writes position, emits an event, and
-// queues a spawned entity to exercise the command API.
+// ---------------------------------------------------------------------------
+// 3. Systems
+// ---------------------------------------------------------------------------
+// Systems only get the data they declare here. Nothing else is reachable in the
+// callback, so the runtime requirements stay honest.
 const MoveSystem = Game.System.define(
   "MoveSystem",
   {
@@ -68,21 +73,26 @@ const MoveSystem = Game.System.define(
   },
   ({ queries, resources, events, services, states, commands }) =>
     Fx.sync(() => {
+      // State reads can gate the rest of the system without global lookups.
       const phase = states.phase.get()
       if (phase !== "Running") {
         return
       }
 
+      // Resource reads stay explicit too.
       const dt = resources.time.get()
       for (const match of queries.moving.each()) {
         const position = match.data.position.get()
         const velocity = match.data.velocity.get()
+
+        // Query write views make mutation local and typed.
         match.data.position.set({
           x: position.x + velocity.x * dt,
           y: position.y + velocity.y * dt
         })
       }
 
+      // Commands are deferred. This queues the spawn for the schedule apply phase.
       const spawned = Game.Command.spawnWith(
         [Position, { x: dt, y: dt }],
         [Velocity, { x: 1, y: 1 }]
@@ -93,12 +103,18 @@ const MoveSystem = Game.System.define(
     })
 )
 
-// The schedule that runs the example system.
+// ---------------------------------------------------------------------------
+// 4. Schedule
+// ---------------------------------------------------------------------------
+// Schedules group systems into something the runtime can execute.
 const schedule = Game.Schedule.define({
   systems: [MoveSystem]
 })
 
-// Runtime wiring for the example, including initial resources and services.
+// ---------------------------------------------------------------------------
+// 5. Runtime
+// ---------------------------------------------------------------------------
+// The runtime has to provide exactly what the schedule requires.
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
     Game.Runtime.service(Logger, {
@@ -115,6 +131,10 @@ const runtime = Game.Runtime.make({
   }
 })
 
-// Optional Bevy-like facade over the runtime.
+// ---------------------------------------------------------------------------
+// 6. App execution
+// ---------------------------------------------------------------------------
+// `App` is a small facade over the runtime. If this compiles, the runtime
+// satisfies the schedule's declared requirements.
 const app = App.makeApp(runtime)
 app.update(schedule)

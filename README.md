@@ -6,7 +6,7 @@ It keeps Bevy-style ECS concepts, but the public API is shaped more like Effect:
 
 ## Quick start
 
-Define descriptors:
+Define descriptors first:
 
 ```ts
 import { Descriptor } from "./src/index.ts"
@@ -17,7 +17,7 @@ const Time = Descriptor.defineResource<number>()("Time")
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
 ```
 
-Build a closed schema and bind it once:
+Build one closed schema and bind it once:
 
 ```ts
 import { Schema } from "./src/index.ts"
@@ -28,10 +28,11 @@ const movement = Schema.fragment({
 })
 
 const schema = Schema.build(movement)
+// `Game` is the only authoring surface for runtime-connected code.
 const Game = Schema.bind(schema)
 ```
 
-Define a system:
+Define one system against that bound root:
 
 ```ts
 import { Fx } from "./src/index.ts"
@@ -56,6 +57,7 @@ const MoveSystem = Game.System.define(
   },
   ({ queries, resources, services }) =>
     Fx.sync(() => {
+      // Systems only see the access they declared in the spec above.
       const dt = resources.time.get()
       for (const match of queries.moving.each()) {
         const position = match.data.position.get()
@@ -72,7 +74,7 @@ const MoveSystem = Game.System.define(
 )
 ```
 
-Create a schedule and runtime:
+Run that system through a schedule and a runtime:
 
 ```ts
 import { App } from "./src/index.ts"
@@ -83,7 +85,8 @@ const update = Game.Schedule.define({
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
-    // Services are provided through their descriptors.
+    // Services are provided through their descriptors so runtime lookup
+    // uses the same identity the system declared.
     Game.Runtime.service(Logger, {
       log(message) {
         console.log(message)
@@ -91,7 +94,7 @@ const runtime = Game.Runtime.make({
     })
   ),
   resources: {
-    // Resources are initialized by schema key.
+    // Resources are initialized by schema key from the closed schema.
     Time: 1 / 60
   }
 })
@@ -161,9 +164,73 @@ Services are provisioned through descriptors so runtime lookup follows the same
 identity the system spec declared. Resources and states stay keyed by schema
 property names because they come from the closed schema registry.
 
+## Spawning entities
+
+Use `Game.Command.spawnWith(...)` as the default way to create typed drafts without nested insert chains:
+
+```ts
+import { Fx } from "./src/index.ts"
+
+const SpawnProjectileSystem = Game.System.define(
+  "SpawnProjectileSystem",
+  {
+    services: {
+      logger: Game.System.service(Logger)
+    }
+  },
+  ({ commands, services }) =>
+    Fx.sync(() => {
+      const projectile = Game.Command.spawnWith(
+        [Position, { x: 0, y: 0 }],
+        [Velocity, { x: 4, y: 0 }]
+      )
+
+      // Commands are deferred. The world changes after the schedule reaches
+      // its apply phase, not immediately in this callback.
+      commands.spawn(projectile)
+      services.logger.log("queued projectile spawn")
+    })
+)
+```
+
+`Game.Command.spawn()` and single-step `Game.Command.insert(...)` still exist, but `spawnWith(...)` is the intended authoring path.
+
+## Ordering systems
+
+Direct system references are the default ordering mechanism. Reusable sets stay explicit and typed.
+
+```ts
+import { Label } from "./src/index.ts"
+
+const MovementSet = Label.defineSystemSetLabel("Movement")
+
+const InputSystem = Game.System.define("Input", {
+  inSets: [MovementSet]
+}, ({}) => Fx.sync(() => {}))
+
+const MoveSystem = Game.System.define("Move", {
+  inSets: [MovementSet],
+  after: [InputSystem]
+}, ({}) => Fx.sync(() => {}))
+
+const update = Game.Schedule.define({
+  systems: [InputSystem, MoveSystem],
+  sets: [
+    Game.Schedule.configureSet({
+      label: MovementSet,
+      chain: true
+    })
+  ]
+})
+```
+
+No runtime-relevant references are open strings. Systems are referenced directly. Reusable sets use typed labels. Schedules only need labels when some other API must refer to them externally.
+
 ## State machines
 
-Finite state machines are a dedicated API, separate from generic `states`. They follow the useful part of Bevy's state model: systems queue the next state, the current state stays stable until an explicit transition marker runs, and enter/exit/transition schedules are registered separately.
+Finite state machines are a dedicated API, separate from generic `states`. They follow the useful part of Bevy's `States` model, but keep the transition boundary explicit in user schedules: systems queue the next state, the current state stays stable until an explicit transition marker runs, and enter/exit/transition handlers are attached locally to that marker.
+
+### Define machines
 
 Define machines from the bound schema root:
 
@@ -178,6 +245,8 @@ const ModalState = Game.StateMachine.define(
   ["None", "Inventory", "Map"] as const
 )
 ```
+
+### Read and queue state
 
 Read the current state, queue the next one, and gate systems with typed conditions:
 
@@ -211,6 +280,8 @@ const GameplaySystem = Game.System.define(
 )
 ```
 
+### Apply transitions explicitly
+
 Bundle transition handlers explicitly and attach them to the transition marker:
 
 ```ts
@@ -230,6 +301,7 @@ const update = Game.Schedule.define({
   systems: [PauseInputSystem, GameplaySystem],
   steps: [
     PauseInputSystem,
+    // Pending state only becomes committed at this exact marker.
     Game.Schedule.applyStateTransitions(appTransitions),
     GameplaySystem
   ]
@@ -275,6 +347,8 @@ The current order is:
 3. commit the new current state
 4. `onEnter(current)`
 
+### React later through transition events
+
 If code outside the transition bundle needs to react later, read the machine's committed transition events after `updateEvents()`:
 
 ```ts
@@ -305,66 +379,6 @@ const update = Game.Schedule.define({
 ```
 
 This unlocks the common orchestration cases that are awkward without a typed FSM layer: menus, pause screens, turn phases, battle phases, cutscenes, and editor vs play mode.
-
-## Spawning entities
-
-Use `Game.Command.spawnWith(...)` as the default way to create typed drafts without nested insert chains:
-
-```ts
-import { Fx } from "./src/index.ts"
-
-const SpawnProjectileSystem = Game.System.define(
-  "SpawnProjectileSystem",
-  {
-    services: {
-      logger: Game.System.service(Logger)
-    }
-  },
-  ({ commands, services }) =>
-    Fx.sync(() => {
-      const projectile = Game.Command.spawnWith(
-        [Position, { x: 0, y: 0 }],
-        [Velocity, { x: 4, y: 0 }]
-      )
-
-      commands.spawn(projectile)
-      services.logger.log("queued projectile spawn")
-    })
-)
-```
-
-`Game.Command.spawn()` and single-step `Game.Command.insert(...)` still exist, but `spawnWith(...)` is the intended authoring path.
-
-## Ordering systems
-
-Direct system references are the default ordering mechanism. Reusable sets stay explicit and typed.
-
-```ts
-import { Label } from "./src/index.ts"
-
-const MovementSet = Label.defineSystemSetLabel("Movement")
-
-const InputSystem = Game.System.define("Input", {
-  inSets: [MovementSet]
-}, ({}) => Fx.sync(() => {}))
-
-const MoveSystem = Game.System.define("Move", {
-  inSets: [MovementSet],
-  after: [InputSystem]
-}, ({}) => Fx.sync(() => {}))
-
-const update = Game.Schedule.define({
-  systems: [InputSystem, MoveSystem],
-  sets: [
-    Game.Schedule.configureSet({
-      label: MovementSet,
-      chain: true
-    })
-  ]
-})
-```
-
-No runtime-relevant references are open strings. Systems are referenced directly. Reusable sets use typed labels. Schedules only need labels when some other API must refer to them externally.
 
 ## Renderer integration
 
@@ -424,9 +438,10 @@ The important rule is simple: if TypeScript cannot prove something honestly, the
 The repo currently includes:
 
 - [`src/examples/smoke.ts`](./src/examples/smoke.ts) for the smallest end-to-end setup
+- [`src/examples/state-machine.ts`](./src/examples/state-machine.ts) for multiple machines, explicit transition bundles, and transition events
+- [`src/examples/pixi.ts`](./src/examples/pixi.ts) for renderer/service integration
 - [`src/examples/pokemon.ts`](./src/examples/pokemon.ts) for ordered movement and collision
 - [`src/examples/snake.ts`](./src/examples/snake.ts) for events, lookup, spawn, and despawn flow
-- [`src/examples/pixi.ts`](./src/examples/pixi.ts) for renderer/service integration
 - [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts) for a larger browser example with Pixi rendering and headless Matter-backed collision
 
 ## Current limits
@@ -437,31 +452,7 @@ This is still an early implementation. The public types are stricter than the ru
 
 The next meaningful additions are the ones that unlock broader classes of games, not just convenience. The order below is based on feature reach, not implementation ease.
 
-### 1. Multi-machine support and clearer transition orchestration
-
-The current FSM layer now supports multiple independent machines, such as `AppState`, `RoundState`, or `ModalState`, without weakening type safety.
-
-The next improvement here is deeper transition ergonomics around explicit bundles and marker-local orchestration. `onEnter`, `onExit`, and `onTransition` are already typed and machine-scoped, transition handlers run only when bundled into the exact `applyStateTransitions(...)` marker that should execute them, and normal schedules can react afterward through typed transition events plus `updateEvents()`. Bevy's `States` model is still the right reference space, but this runtime keeps the more explicit schedule-driven semantics.
-
-It would unlock flows like:
-
-```ts
-const AppState = Game.StateMachine.define("AppState", ["Title", "Playing", "Paused"] as const)
-const RoundState = Game.StateMachine.define("RoundState", ["Warmup", "SuddenDeath"] as const)
-
-const update = Game.Schedule.define({
-  systems: [InputSystem, CombatSystem, UiSystem],
-  steps: [InputSystem, Game.Schedule.applyStateTransitions(roundTransitions), CombatSystem, UiSystem]
-})
-
-const roundTransitions = Game.Schedule.transitions(
-  Game.Schedule.onEnter(RoundState, "SuddenDeath", {
-  systems: [FlashArenaSystem, IntensifyMusicSystem]
-  })
-)
-```
-
-### 3. Entity relationships and hierarchy
+### 1. Entity relationships and hierarchy
 
 This is the main structural gap after orchestration. It would unlock scene graphs, ownership, attachments, card zones, UI trees, equipment, and simulation-style graphs. Bevy's parent/children and newer relationship APIs are the right reference space, but this runtime would want descriptor-driven and fully typed relations.
 
@@ -480,7 +471,7 @@ commands.spawn(
 )
 ```
 
-### 4. Change detection and lifecycle signals
+### 2. Change detection and lifecycle signals
 
 Renderer sync, replication, dirty tracking, and reactive gameplay systems all get easier once systems can express added, changed, removed, or despawned data directly. Bevy's `Added`, `Changed`, removals, hooks, and observers are the reference space, though the likely starting point here would be a smaller typed query/filter surface instead of full observer parity.
 
@@ -491,7 +482,7 @@ const SpawnHealthBarSystem = Game.System.define(
   "SpawnHealthBar",
   {
     queries: {
-      spawnedEnemies: Query.define({
+      spawnedEnemies: Game.Query.define({
         selection: {
           enemy: Game.Query.read(Enemy),
           health: Game.Query.read(Health)
@@ -508,7 +499,7 @@ const SpawnHealthBarSystem = Game.System.define(
 )
 ```
 
-### 5. Richer query and filter semantics
+### 3. Richer query and filter semantics
 
 This matters even more once relationships and lifecycle signals exist. Optional component access, lifecycle-aware filters, and relation-aware queries would make strategy, sim, RPG, and tooling-heavy code much more expressive without pushing logic into custom lookup helpers.
 
@@ -528,7 +519,7 @@ const InteractableQuery = Game.Query.define({
 })
 ```
 
-### 6. Typed feature or module composition
+### 4. Typed feature or module composition
 
 This is the longer-term architectural piece. Larger games eventually need a first-class way to assemble optional gameplay features, server/client/editor variants, and reusable modules. Bevy plugins are the reference for the problem being solved, not the intended API shape.
 

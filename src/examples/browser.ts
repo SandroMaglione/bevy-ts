@@ -34,8 +34,8 @@ const examples: ReadonlyArray<ExampleDefinition> = [
     eyebrow: "Typed phase orchestration demo",
     title: "Title, countdown, play, pause, win, and lose as explicit machine states.",
     description:
-      "This example exists specifically to show the finite-state-machine API. Systems queue next states, schedules apply transitions explicitly, and enter, exit, and transition hooks drive visible game flow.",
-    meta: ["Title -> Countdown -> Playing -> Paused -> Victory/Defeat", "Explicit applyStateTransitions()", "onEnter / onExit / onTransition hooks"],
+      "This example exists specifically to show the finite-state-machine API. Systems queue next states, schedules apply transitions explicitly, transition bundles drive local orchestration, and later systems react through typed transition events.",
+    meta: ["Title -> Countdown -> Playing -> Paused -> Victory/Defeat", "Explicit applyStateTransitions() + updateEvents()", "Transition bundles and transition events"],
     start: startStateMachineExample
   },
   {
