@@ -282,6 +282,7 @@ The repo currently includes:
 - [`src/examples/pokemon.ts`](./src/examples/pokemon.ts) for ordered movement and collision
 - [`src/examples/snake.ts`](./src/examples/snake.ts) for events, lookup, spawn, and despawn flow
 - [`src/examples/pixi.ts`](./src/examples/pixi.ts) for renderer/service integration
+- [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts) for a larger browser example with Pixi rendering and headless Matter-backed collision
 
 ## Current limits
 

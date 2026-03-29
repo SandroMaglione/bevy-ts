@@ -2,8 +2,9 @@ import type { BrowserExampleHandle } from "./pixi.ts"
 import { startPixiExample } from "./pixi.ts"
 import { startPokemonExample } from "./pokemon.ts"
 import { startSnakeExample } from "./snake.ts"
+import { startSpaceInvadersExample } from "./space-invaders.ts"
 
-type ExampleId = "pixi" | "pokemon" | "snake"
+type ExampleId = "pixi" | "pokemon" | "snake" | "space-invaders"
 
 type ExampleDefinition = {
   readonly id: ExampleId
@@ -45,6 +46,16 @@ const examples: ReadonlyArray<ExampleDefinition> = [
       "This browser tab keeps the original Snake ECS logic and only adds a Pixi render bridge. It is the intermediate validation step for visible grid-based ECS rendering.",
     meta: ["Auto-advances on a fixed step", "Head, body, and food render separately", "Exercises event polling and entity lookup"],
     start: startSnakeExample
+  },
+  {
+    id: "space-invaders",
+    label: "Space Invaders",
+    eyebrow: "Arcade loop with headless Matter",
+    title: "Original Space Invaders flow, adapted to typed bevy-ts systems.",
+    description:
+      "This keeps the original player movement, bullet spawning, enemy descent patterns, and collision-driven despawn flow, but ports the world logic to schema-bound bevy-ts systems and renders it inside the shared browser host.",
+    meta: ["Arrow keys move", "Space fires with cooldown", "Matter bodies stay headless behind Pixi"],
+    start: startSpaceInvadersExample
   }
 ]
 
