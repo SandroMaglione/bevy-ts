@@ -1,4 +1,5 @@
 import type { Descriptor } from "./descriptor.ts"
+import * as Machine from "./machine.ts"
 import * as Runtime from "./runtime.ts"
 import * as Schedule from "./schedule.ts"
 import * as System from "./system.ts"
@@ -80,10 +81,15 @@ export namespace Schema {
   export type BoundSystem<
     S extends Any,
     Root,
-    Spec extends System.SystemSpec<S, any, any, any, any, any, any, any, any> = System.SystemSpec<S, any, any, any, any, any, any, any, any>,
+    Spec extends System.AnySystemSpec = System.AnySystemSpec,
     A = void,
     E = never
-  > = System.SystemDefinition<Spec, A, E, Root>
+  > = {
+    readonly name: string
+    readonly spec: Spec & { readonly schema: S }
+    readonly __schemaRoot?: Root | undefined
+    readonly run: (context: any) => Fx<A, E, any>
+  }
 
   /**
    * A schema-bound schedule definition branded to one bound schema root.
@@ -95,6 +101,15 @@ export namespace Schema {
   > = Schedule.ScheduleDefinition<S, Requirements, Root>
 
   /**
+   * A schema-bound finite-state machine.
+   */
+  export type BoundStateMachine<
+    Root,
+    Name extends string = string,
+    Values extends readonly [Machine.StateValue, ...Machine.StateValue[]] = readonly [Machine.StateValue, ...Machine.StateValue[]]
+  > = Machine.StateMachineDefinition<Name, Values, Root>
+
+  /**
    * A schema-bound runtime branded to one bound schema root.
    */
   export type BoundRuntime<
@@ -102,8 +117,9 @@ export namespace Schema {
     Root,
     Services extends Record<string, unknown>,
     Resources extends Runtime.RuntimeResources<S> = {},
-    States extends Runtime.RuntimeStates<S> = {}
-  > = Runtime.Runtime<S, Services, Resources, States, Root>
+    States extends Runtime.RuntimeStates<S> = {},
+    Machines extends Record<string, unknown> = {}
+  > = Runtime.Runtime<S, Services, Resources, States, Root, Machines>
 }
 
 /**
@@ -140,8 +156,26 @@ type BoundScheduleRequirements<Systems extends ReadonlyArray<System.SystemDefini
   >>,
   Simplify<IntersectOrEmpty<
     Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["states"] : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["machines"] : never
   >>
 >>
+
+type RebindAnonymousSchedule<ScheduleValue, Root> =
+  ScheduleValue extends Schedule.Schedule.Anonymous<infer S, infer Requirements, any>
+    ? Schedule.Schedule.Anonymous<S, Requirements, Root>
+    : never
+
+type RebindNamedSchedule<ScheduleValue, Root> =
+  ScheduleValue extends Schedule.Schedule.Named<infer S, infer Requirements, infer L, any>
+    ? Schedule.Schedule.Named<S, Requirements, L, Root>
+    : never
+
+type RebindTransitionSchedule<ScheduleValue, M extends Machine.StateMachine.Any, Root> =
+  ScheduleValue extends Schedule.Schedule.Anonymous<infer S, infer Requirements, any>
+    ? Machine.TransitionScheduleDefinition<S, M, Requirements, Root>
+    : never
 
 /**
  * Computes overlapping keys between two registries.
@@ -290,8 +324,12 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
  */
 export const bind = <S extends Schema.Any>(schema: S) => {
   type Root = S
-  type BoundOrderTarget = Schema.BoundSystem<S, Root> | Label.System | Label.SystemSet
-  type BoundScheduleStep = Schema.BoundSystem<S, Root> | Schedule.ApplyDeferredStep | Schedule.EventUpdateStep
+  type BoundAnySystem = System.SystemDefinition<any, any, any, Root>
+  type BoundOrderTarget = BoundAnySystem | Label.System | Label.SystemSet
+  type BoundMachine = Schema.BoundStateMachine<Root>
+  type BoundScheduleStep = BoundAnySystem | Schedule.ApplyDeferredStep | Schedule.EventUpdateStep | Schedule.ApplyStateTransitionsStep
+  const transitionSchedules: Array<Machine.StateMachine.AnyTransitionSchedule<S, Root>> = []
+  let definedMachine: BoundMachine | undefined
 
   const defineSystem = <
     const Queries extends Record<string, Query.Any> = {},
@@ -302,6 +340,10 @@ export const bind = <S extends Schema.Any>(schema: S) => {
     const InSets extends ReadonlyArray<Label.SystemSet> = [],
     const After extends ReadonlyArray<BoundOrderTarget> = [],
     const Before extends ReadonlyArray<BoundOrderTarget> = [],
+    const Machines extends Record<string, Machine.MachineRead<BoundMachine>> = {},
+    const NextMachines extends Record<string, Machine.NextMachineWrite<BoundMachine>> = {},
+    const When extends ReadonlyArray<Machine.Condition<Root>> = [],
+    const Transitions extends Record<string, Machine.TransitionRead<BoundMachine>> = {},
     A = void,
     E = never
   >(
@@ -315,11 +357,15 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       readonly events?: Events
       readonly services?: Services
       readonly states?: States
+      readonly machines?: Machines
+      readonly nextMachines?: NextMachines
+      readonly when?: When
+      readonly transitions?: Transitions
     },
-    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
+    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions>>) => Fx<
       A,
       E,
-      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
+      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions>>
     >
   ) => {
     const system = System.define(name, {
@@ -330,60 +376,156 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   }
 
   const defineSchedule = <
-    const Systems extends ReadonlyArray<Schema.BoundSystem<S, Root>>,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
     const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
   >(options: {
     readonly systems: Systems
     readonly sets?: Sets
     readonly steps?: ReadonlyArray<BoundScheduleStep>
   }) => {
-    const schedule = Schedule.define({
+    const schedule = Schedule.define<S, Systems, Sets>({
       schema,
       ...options
     } as never)
-    return schedule as Schedule.Schedule.Anonymous<S, BoundScheduleRequirements<Systems>, Root>
+    return schedule as RebindAnonymousSchedule<typeof schedule, Root>
   }
 
   const namedSchedule = <
     const L extends Label.Schedule,
-    const Systems extends ReadonlyArray<Schema.BoundSystem<S, Root>>,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
     const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
   >(label: L, options: {
     readonly systems: Systems
     readonly sets?: Sets
     readonly steps?: ReadonlyArray<BoundScheduleStep>
   }) => {
-    const schedule = Schedule.named(label, {
+    const schedule = Schedule.named<S, L, Systems, Sets>(label, {
       schema,
       ...options
     } as never)
-    return schedule as Schedule.Schedule.Named<S, BoundScheduleRequirements<Systems>, L, Root>
+    return schedule as RebindNamedSchedule<typeof schedule, Root>
   }
+
+  const defineMachine = <
+    const Name extends string,
+    const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
+  >(name: Name, values: Values): Schema.BoundStateMachine<Root, Name, Values> => {
+    if (definedMachine) {
+      throw new Error(`Only one state machine is supported for now. Existing machine: ${definedMachine.name}`)
+    }
+    const machine = Machine.define<Name, Values, Root>(name, values)
+    definedMachine = machine
+    return machine
+  }
+
+  const makeTransitionSchedule = <
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = [],
+    M extends BoundMachine = BoundMachine
+  >(transition: Machine.TransitionScheduleDefinition<S, M, BoundScheduleRequirements<Systems>, Root>["transition"], options: {
+    readonly systems: Systems
+    readonly sets?: Sets
+    readonly steps?: ReadonlyArray<BoundScheduleStep>
+  }) => {
+    const schedule = Schedule.define<S, Systems, Sets>({
+      schema,
+      ...options
+    } as never)
+    const transitionSchedule = {
+      ...schedule,
+      transition
+    } as RebindTransitionSchedule<typeof schedule, M, Root>
+    transitionSchedules.push(transitionSchedule)
+    return transitionSchedule
+  }
+
+  const onEnter = <
+    M extends BoundMachine,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
+  >(machine: M, state: Machine.StateMachine.Value<M>, options: {
+    readonly systems: Systems
+    readonly sets?: Sets
+    readonly steps?: ReadonlyArray<BoundScheduleStep>
+  }) => makeTransitionSchedule<Systems, Sets, M>({
+    machine,
+    phase: "enter",
+    state
+  }, options)
+
+  const onExit = <
+    M extends BoundMachine,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
+  >(machine: M, state: Machine.StateMachine.Value<M>, options: {
+    readonly systems: Systems
+    readonly sets?: Sets
+    readonly steps?: ReadonlyArray<BoundScheduleStep>
+  }) => makeTransitionSchedule<Systems, Sets, M>({
+    machine,
+    phase: "exit",
+    state
+  }, options)
+
+  const onTransition = <
+    M extends BoundMachine,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
+  >(machine: M, states: {
+    readonly from: Machine.StateMachine.Value<M>
+    readonly to: Machine.StateMachine.Value<M>
+  }, options: {
+    readonly systems: Systems
+    readonly sets?: Sets
+    readonly steps?: ReadonlyArray<BoundScheduleStep>
+  }) => makeTransitionSchedule<Systems, Sets, M>({
+    machine,
+    phase: "transition",
+    from: states.from,
+    to: states.to
+  }, options)
 
   const makeRuntime = <
     const Services extends Record<string, unknown>,
     const Resources extends Runtime.RuntimeResources<S> = {},
-    const States extends Runtime.RuntimeStates<S> = {}
+    const States extends Runtime.RuntimeStates<S> = {},
+    const Machines extends Record<string, unknown> = {}
   >(options: {
     readonly services: Runtime.RuntimeServices<Services>
     readonly resources?: Resources
     readonly states?: States
-  }) => Runtime.makeRuntime<S, Services, Resources, States, Root>({
+    readonly machines?: Runtime.RuntimeMachines<Machines>
+  }) => Runtime.makeRuntime<S, Services, Resources, States, Root, Machines>({
     schema,
-    ...options
+    ...options,
+    transitionSchedules
   })
 
   return {
     schema,
+    StateMachine: {
+      define: defineMachine
+    },
+    Condition: {
+      inState: Machine.inState,
+      stateChanged: Machine.stateChanged,
+      not: Machine.not,
+      and: Machine.and,
+      or: Machine.or
+    },
     System: {
       define: defineSystem
     },
     Schedule: {
       define: defineSchedule,
       named: namedSchedule,
+      onEnter,
+      onExit,
+      onTransition,
       configureSet: Schedule.configureSet,
       applyDeferred: Schedule.applyDeferred,
-      updateEvents: Schedule.updateEvents
+      updateEvents: Schedule.updateEvents,
+      applyStateTransitions: Schedule.applyStateTransitions
     },
     Runtime: {
       make: makeRuntime

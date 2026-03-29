@@ -1,4 +1,5 @@
 import type { Label } from "./label.ts"
+import type { StateMachine } from "./machine.ts"
 import type { Schema } from "./schema.ts"
 import type { OrderTarget, RuntimeRequirements, SystemDefinition, SystemRequirements } from "./system.ts"
 
@@ -26,6 +27,10 @@ export interface SystemSetConfig<
    */
   readonly before: Before
   /**
+   * Typed conditions that must pass for this set to run.
+   */
+  readonly when: ReadonlyArray<StateMachine.AnyCondition>
+  /**
    * Whether systems assigned to this set should run in declaration order.
    */
   readonly chain: boolean
@@ -51,9 +56,16 @@ export interface EventUpdateStep {
 }
 
 /**
+ * A typed schedule marker that applies queued finite-state-machine transitions.
+ */
+export interface ApplyStateTransitionsStep {
+  readonly kind: "applyStateTransitions"
+}
+
+/**
  * Any non-system execution step supported by the schedule runtime.
  */
-export type ScheduleMarkerStep = ApplyDeferredStep | EventUpdateStep
+export type ScheduleMarkerStep = ApplyDeferredStep | EventUpdateStep | ApplyStateTransitionsStep
 
 /**
  * One executable step in a schedule.
@@ -78,6 +90,10 @@ interface ScheduleBase<
    * Systems included in this schedule, sorted by dependency order.
    */
   readonly systems: ReadonlyArray<SystemDefinition<any, any, any>>
+  /**
+   * Typed set configurations applied to this schedule.
+   */
+  readonly sets: ReadonlyArray<SystemSetConfig>
   /**
    * The closed schema all systems in the schedule are expected to target.
    */
@@ -159,7 +175,7 @@ export namespace Schedule {
 type AnySystem = SystemDefinition<any, any, any>
 type AnySetConfig = SystemSetConfig<any, any, any>
 type AnyOrderTarget = OrderTarget
-type AnyRuntimeRequirements = RuntimeRequirements<any, any, any>
+type AnyRuntimeRequirements = RuntimeRequirements<any, any, any, any>
 
 /**
  * Flattens an inferred object type for cleaner public signatures.
@@ -201,6 +217,9 @@ type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>> = Simplify<R
   >>,
   Simplify<IntersectOrEmpty<
     ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["states"] : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["machines"] : never
   >>
 >>
 
@@ -284,11 +303,13 @@ export const configureSet = <
   readonly label: Set
   readonly after?: After
   readonly before?: Before
+  readonly when?: ReadonlyArray<StateMachine.AnyCondition>
   readonly chain?: boolean
 }): SystemSetConfig<Set, After, Before> => ({
   label: config.label,
   after: (config.after ?? []) as After,
   before: (config.before ?? []) as Before,
+  when: config.when ?? [],
   chain: config.chain ?? false
 })
 
@@ -304,6 +325,13 @@ export const applyDeferred = (): ApplyDeferredStep => ({
  */
 export const updateEvents = (): EventUpdateStep => ({
   kind: "eventUpdate"
+})
+
+/**
+ * Creates an explicit machine-transition application marker step.
+ */
+export const applyStateTransitions = (): ApplyStateTransitionsStep => ({
+  kind: "applyStateTransitions"
 })
 
 type ScheduleOptions<
@@ -343,6 +371,7 @@ export const define = <
     kind: "anonymous",
     steps,
     systems: orderedSystems,
+    sets: options.sets ?? [],
     schema: options.schema
   } as AnonymousScheduleDefinition<S, ScheduleRequirements<Systems>>
 }

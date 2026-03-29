@@ -2,6 +2,7 @@ import * as Command from "./command.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
 import * as Fx from "./fx.ts"
+import type * as Machine from "./machine.ts"
 import * as Query from "./query.ts"
 import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
 import * as Schedule from "./schedule.ts"
@@ -13,11 +14,14 @@ import type {
   QueryHandle,
   ResourceReadView,
   RuntimeRequirements,
+  MachineReadView,
+  NextMachineWriteView,
   ResourceWriteView,
   StateReadView,
   StateWriteView,
   SystemContext,
-  SystemDefinition
+  SystemDefinition,
+  TransitionReadView
 } from "./system.ts"
 
 /**
@@ -38,6 +42,17 @@ export type RuntimeServicesTypeId = "~bevy-ts/RuntimeServices"
 const runtimeServicesTypeId: RuntimeServicesTypeId = "~bevy-ts/RuntimeServices"
 
 /**
+ * String-literal type id used to brand machine initialization maps.
+ */
+export type RuntimeMachinesTypeId = "~bevy-ts/RuntimeMachines"
+
+/**
+ * Runtime value for the machine-map type id.
+ */
+const runtimeMachinesTypeId: RuntimeMachinesTypeId = "~bevy-ts/RuntimeMachines"
+const runtimeMachinesEntries = Symbol("RuntimeMachinesEntries")
+
+/**
  * The runtime-facing initialization shape for schema resources.
  */
 export type RuntimeResources<S extends Schema.Any> = Partial<{
@@ -50,6 +65,40 @@ export type RuntimeResources<S extends Schema.Any> = Partial<{
 export type RuntimeStates<S extends Schema.Any> = Partial<{
   readonly [K in keyof Schema.States<S>]: Schema.StateValue<S, K>
 }>
+
+/**
+ * One machine-backed runtime state provision.
+ */
+export interface MachineProvision<M extends Machine.StateMachine.Any = Machine.StateMachine.Any> {
+  readonly machine: M
+  readonly initial: Machine.StateMachine.Value<M>
+}
+
+/**
+ * Folds a tuple of machine provisions into the normalized runtime machine map.
+ */
+type MachineEntriesToRecord<
+  Entries extends ReadonlyArray<MachineProvision>,
+  Acc extends Record<string, unknown> = {}
+> = Entries extends readonly [infer Head, ...infer Tail]
+  ? Head extends MachineProvision<infer M>
+    ? Tail extends ReadonlyArray<MachineProvision>
+      ? MachineEntriesToRecord<Tail, Simplify<Omit<Acc, M["name"]> & {
+          readonly [K in M["name"]]: Machine.StateMachine.Value<M>
+        }>>
+      : never
+    : never
+  : Simplify<Acc>
+
+/**
+ * Branded machine initialization environment produced by `Runtime.machines(...)`.
+ */
+export type RuntimeMachines<Machines extends Record<string, unknown> = {}> = Readonly<Machines> & {
+  readonly [runtimeMachinesTypeId]: {
+    readonly _Machines: (_: never) => Machines
+  }
+  readonly [runtimeMachinesEntries]: ReadonlyArray<MachineProvision>
+}
 
 /**
  * One descriptor-backed runtime service provision.
@@ -146,25 +195,28 @@ type ScheduleRequirementErrors<
   Schedule,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object
+  States extends object,
+  Machines extends object
 > = Schedule extends ScheduleDefinition<any, infer Requirements extends RuntimeRequirements>
   ? | CategoryRequirementErrors<"Missing or incompatible services", Schedule, Requirements["services"], Services>
     | CategoryRequirementErrors<"Missing or incompatible resources", Schedule, Requirements["resources"], Resources>
     | CategoryRequirementErrors<"Missing or incompatible states", Schedule, Requirements["states"], States>
+    | CategoryRequirementErrors<"Missing or incompatible machines", Schedule, Requirements["machines"], Machines>
   : never
 
 type ValidateSchedules<
   Schedules extends ReadonlyArray<ScheduleDefinition<any, AnyRequirements>>,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object
-> = [ScheduleRequirementErrors<Schedules[number], Services, Resources, States>] extends [never]
+  States extends object,
+  Machines extends object
+> = [ScheduleRequirementErrors<Schedules[number], Services, Resources, States, Machines>] extends [never]
   ? unknown
   : {
-      readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedules[number], Services, Resources, States>
+      readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedules[number], Services, Resources, States, Machines>
     }
 
-type AnyRequirements = RuntimeRequirements<any, any, any>
+type AnyRequirements = RuntimeRequirements<any, any, any, any>
 
 /**
  * The caller-facing initialization shape for one descriptor registry.
@@ -212,7 +264,8 @@ export interface Runtime<
   Services extends Record<string, unknown>,
   Resources extends RuntimeResources<S> = {},
   States extends RuntimeStates<S> = {},
-  Root = unknown
+  Root = unknown,
+  Machines extends Record<string, unknown> = {}
 > {
   /**
    * The closed schema this runtime was built for.
@@ -231,6 +284,10 @@ export interface Runtime<
    */
   readonly stateValues: States
   /**
+   * The machine values that were initialized when the runtime was made.
+   */
+  readonly machineValues: Machines
+  /**
    * Hidden schema-root brand used by schema-bound APIs.
    */
   readonly __schemaRoot?: Root | undefined
@@ -242,7 +299,7 @@ export interface Runtime<
    */
   readonly initialize: <
     const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>
-  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States>) => void
+  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>) => void
   /**
    * Runs one schedule once.
    *
@@ -251,7 +308,7 @@ export interface Runtime<
    */
   readonly runSchedule: <
     const Selected extends ScheduleDefinition<S, AnyRequirements, Root>
-  >(schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States>) => void
+  >(schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States, Machines>) => void
   /**
    * Runs multiple schedules in sequence.
    *
@@ -261,7 +318,7 @@ export interface Runtime<
    */
   readonly tick: <
     const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>
-  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States>) => void
+  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>) => void
 }
 
 /**
@@ -278,13 +335,16 @@ export const makeRuntime = <
   const Services extends Record<string, unknown>,
   const Resources extends RuntimeResources<S> = {},
   const States extends RuntimeStates<S> = {},
-  Root = unknown
+  Root = unknown,
+  const Machines extends Record<string, unknown> = {}
 >(options: {
   readonly schema: S
   readonly services: RuntimeServices<Services>
   readonly resources?: Resources
   readonly states?: States
-}): Runtime<S, Simplify<Services>, Resources, States, Root> => {
+  readonly machines?: RuntimeMachines<Machines>
+  readonly transitionSchedules?: ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>
+}): Runtime<S, Simplify<Services>, Resources, States, Root, Machines> => {
   /**
    * Monotonic entity id counter.
    */
@@ -301,6 +361,26 @@ export const makeRuntime = <
    * Descriptor-keyed world state storage.
    */
   const states = new Map<symbol, unknown>()
+  /**
+   * Machine-keyed committed state values.
+   */
+  const currentMachines = new Map<symbol, unknown>()
+  /**
+   * Machine-keyed pending transition targets.
+   */
+  const pendingMachines = new Map<symbol, { value: unknown; skipIfSame: boolean }>()
+  /**
+   * Machine-keyed previous committed values.
+   */
+  const previousMachines = new Map<symbol, unknown>()
+  /**
+   * Machine keys changed by the last transition application in the current schedule.
+   */
+  let changedMachines = new Set<symbol>()
+  /**
+   * Active transition payloads for schedules running inside a transition phase.
+   */
+  let activeTransitions = new Map<symbol, Machine.TransitionSnapshot>()
   /**
    * Descriptor-keyed readable event buffers for the current phase.
    */
@@ -324,6 +404,15 @@ export const makeRuntime = <
    * The normalized descriptor-backed runtime service environment.
    */
   const providedServices = options.services as unknown as Simplify<Services>
+  /**
+   * The normalized machine initialization environment.
+   */
+  const providedMachines = (options.machines ?? machines()) as unknown as Simplify<Machines>
+  const machineEntries = (options.machines ?? machines())[runtimeMachinesEntries]
+
+  for (const provision of machineEntries) {
+    currentMachines.set(provision.machine.key, provision.initial)
+  }
 
   /**
    * Internal world adapter used by deferred commands.
@@ -554,6 +643,61 @@ export const makeRuntime = <
   })
 
   /**
+   * Creates a read-only machine view.
+   */
+  const makeMachineReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): MachineReadView<M> => ({
+    get: () => currentMachines.get(stateMachine.key) as Machine.StateMachine.Value<M>,
+    is: (value) => currentMachines.get(stateMachine.key) === value
+  })
+
+  /**
+   * Creates a queued-write machine transition view.
+   */
+  const makeNextMachineWriteView = <M extends Machine.StateMachine.Any>(stateMachine: M): NextMachineWriteView<M> => ({
+    getPending: () => pendingMachines.get(stateMachine.key)?.value as Machine.StateMachine.Value<M> | undefined,
+    set(value) {
+      pendingMachines.set(stateMachine.key, {
+        value,
+        skipIfSame: false
+      })
+    },
+    setIfChanged(value) {
+      pendingMachines.set(stateMachine.key, {
+        value,
+        skipIfSame: true
+      })
+    },
+    reset() {
+      pendingMachines.delete(stateMachine.key)
+    }
+  })
+
+  /**
+   * Creates a transition payload view for transition schedules.
+   */
+  const makeTransitionReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): TransitionReadView<M> => ({
+    get: () => activeTransitions.get(stateMachine.key) as Machine.TransitionSnapshot<M>
+  })
+
+  /**
+   * Evaluates one declarative machine-based run condition.
+   */
+  const evaluateCondition = (condition: Machine.Condition): boolean => {
+    switch (condition.kind) {
+      case "inState":
+        return currentMachines.get(condition.machine.key) === condition.value
+      case "stateChanged":
+        return changedMachines.has(condition.machine.key)
+      case "not":
+        return !evaluateCondition(condition.condition)
+      case "and":
+        return condition.conditions.every(evaluateCondition)
+      case "or":
+        return condition.conditions.some(evaluateCondition)
+    }
+  }
+
+  /**
    * Derives the runtime system context from the explicit system spec.
    *
    * This is the core "Effect-like" move of the runtime: the spec is the source
@@ -591,6 +735,24 @@ export const makeRuntime = <
           : makeResourceReadView(access.descriptor.key, states)
       ])
     )
+    const machineViews = Object.fromEntries(
+      Object.entries((system.spec.machines ?? {}) as Record<string, any>).map(([key, access]) => [
+        key,
+        makeMachineReadView(access.machine)
+      ])
+    )
+    const nextMachineViews = Object.fromEntries(
+      Object.entries((system.spec.nextMachines ?? {}) as Record<string, any>).map(([key, access]) => [
+        key,
+        makeNextMachineWriteView(access.machine)
+      ])
+    )
+    const transitionViews = Object.fromEntries(
+      Object.entries((system.spec.transitions ?? {}) as Record<string, any>).map(([key, access]) => [
+        key,
+        makeTransitionReadView(access.machine)
+      ])
+    )
     const serviceViews = Object.fromEntries(
       Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [key, providedServices[access.descriptor.name as keyof Services]])
     )
@@ -601,6 +763,9 @@ export const makeRuntime = <
       resources: resourceViews,
       events: eventViews,
       states: stateViews,
+      machines: machineViews,
+      nextMachines: nextMachineViews,
+      transitions: transitionViews,
       services: serviceViews,
       commands
     } as SystemContext<any>
@@ -615,6 +780,9 @@ export const makeRuntime = <
   const runSystem = (
     system: SystemDefinition<any, any, any>
   ): ReadonlyArray<Command.DeferredCommand<S>> => {
+    if ((system.spec.when as ReadonlyArray<Machine.Condition> | undefined)?.some((condition) => !evaluateCondition(condition))) {
+      return []
+    }
     const context = makeContext(system)
     const effect = system.run(context)
     Fx.runSync(Fx.provide(effect as never, context.services))
@@ -639,17 +807,109 @@ export const makeRuntime = <
   }
 
   /**
+   * Runs one internal transition schedule with an active transition snapshot.
+   */
+  const runTransitionSchedule = (
+    schedule: Machine.StateMachine.AnyTransitionSchedule<S, Root>,
+    snapshot: Machine.TransitionSnapshot
+  ): void => {
+    activeTransitions.set(schedule.transition.machine.key, snapshot)
+    runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root>, {
+      resetChangedMachines: false
+    })
+    activeTransitions.delete(schedule.transition.machine.key)
+  }
+
+  /**
+   * Applies queued machine transitions and runs matching transition schedules.
+   */
+  const applyStateTransitions = (deferred: Array<Command.DeferredCommand<S>>): void => {
+    applyDeferred(deferred)
+    changedMachines = new Set()
+
+    for (const [machineKey, pending] of pendingMachines) {
+      const current = currentMachines.get(machineKey)
+      if (current === undefined) {
+        continue
+      }
+      if (pending.skipIfSame && current === pending.value) {
+        continue
+      }
+
+      previousMachines.set(machineKey, current)
+      const snapshot = {
+        from: current as Machine.StateValue,
+        to: pending.value as Machine.StateValue
+      }
+
+      const schedules = options.transitionSchedules ?? []
+      const exitSchedules = schedules.filter((schedule) =>
+        schedule.transition.phase === "exit"
+        && schedule.transition.machine.key === machineKey
+        && schedule.transition.state === snapshot.from
+      )
+      const transitionSchedules = schedules.filter((schedule) =>
+        schedule.transition.phase === "transition"
+        && schedule.transition.machine.key === machineKey
+        && schedule.transition.from === snapshot.from
+        && schedule.transition.to === snapshot.to
+      )
+
+      for (const schedule of exitSchedules) {
+        runTransitionSchedule(schedule, snapshot)
+      }
+      for (const schedule of transitionSchedules) {
+        runTransitionSchedule(schedule, snapshot)
+      }
+
+      currentMachines.set(machineKey, pending.value)
+      changedMachines.add(machineKey)
+
+      const enterSchedules = schedules.filter((schedule) =>
+        schedule.transition.phase === "enter"
+        && schedule.transition.machine.key === machineKey
+        && schedule.transition.state === snapshot.to
+      )
+      for (const schedule of enterSchedules) {
+        runTransitionSchedule(schedule, snapshot)
+      }
+    }
+
+    pendingMachines.clear()
+  }
+
+  /**
    * The final loop-agnostic runtime value returned to users.
    */
-  const runScheduleUnsafe = (schedule: ScheduleDefinition<S, AnyRequirements, Root>): void => {
+  const runScheduleUnsafe = (
+    schedule: ScheduleDefinition<S, AnyRequirements, Root>,
+    options: {
+      readonly resetChangedMachines?: boolean
+    } = {}
+  ): void => {
     const deferred: Array<Command.DeferredCommand<S>> = []
+    if (options.resetChangedMachines ?? true) {
+      changedMachines = new Set()
+    }
+    const setConditionByKey = new Map(
+      (schedule.sets ?? []).map((set: typeof schedule.sets[number]) => [set.label.key, set.when] as const)
+    )
     for (const step of schedule.steps) {
       if (Schedule.isSystemStep(step)) {
-        deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
+        const blockedBySet = step.spec.inSets.some((set: import("./label.ts").Label.SystemSet) =>
+          (setConditionByKey.get(set.key) ?? []).some((condition) => !evaluateCondition(condition))
+        )
+        if (!blockedBySet) {
+          deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
+        }
         continue
       }
       if (step.kind === "applyDeferred") {
         applyDeferred(deferred)
+        continue
+      }
+      if (step.kind === "applyStateTransitions") {
+        applyStateTransitions(deferred)
         continue
       }
       updateEvents()
@@ -673,11 +933,12 @@ export const makeRuntime = <
   /**
    * The final loop-agnostic runtime value returned to users.
    */
-  const runtime: Runtime<S, Simplify<Services>, Resources, States, Root> = {
+  const runtime: Runtime<S, Simplify<Services>, Resources, States, Root, Machines> = {
     schema: options.schema,
     services: providedServices,
     resourceValues: (options.resources ?? {}) as Resources,
     stateValues: (options.states ?? {}) as States,
+    machineValues: providedMachines as Machines,
     initialize(...schedules) {
       tickUnsafe(schedules)
     },
@@ -724,4 +985,33 @@ export const service = <
 ): ServiceProvision<D> => ({
   descriptor,
   implementation
+})
+
+/**
+ * Builds the machine initialization environment from machine definitions.
+ */
+export const machines = <
+  const Entries extends ReadonlyArray<MachineProvision>
+>(...entries: Entries): RuntimeMachines<MachineEntriesToRecord<Entries>> => {
+  const provided: Record<string, unknown> = {}
+  for (const { machine, initial } of entries) {
+    provided[machine.name] = initial
+  }
+  return {
+    ...provided,
+    [runtimeMachinesEntries]: entries
+  } as unknown as RuntimeMachines<MachineEntriesToRecord<Entries>>
+}
+
+/**
+ * Creates one machine initialization provision.
+ */
+export const machine = <
+  M extends Machine.StateMachine.Any
+>(
+  stateMachine: M,
+  initial: Machine.StateMachine.Value<M>
+): MachineProvision<M> => ({
+  machine: stateMachine,
+  initial
 })
