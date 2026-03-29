@@ -386,29 +386,61 @@ This is still an early implementation. The public types are stricter than the ru
 
 The next meaningful additions are the ones that unlock broader classes of games, not just convenience. The order below is based on feature reach, not implementation ease.
 
-### 1. Run conditions and typed state transitions
+### 1. Bound API coherence and state-machine ergonomics
 
-This is now the dedicated state-machine layer shown above. The API keeps the useful Bevy semantics around `run_if`-style gating and `OnEnter` / `OnExit` / `OnTransition`, but uses explicit schema-bound machine definitions and an explicit `applyStateTransitions()` marker instead of engine-owned global phases.
+The new state-machine example exposed the biggest remaining surface mismatch: the schema-bound API is still only half-bound. In real code it is still too common to mix `Game.System.define(...)` with top-level helpers like `System.readResource(...)`, `System.service(...)`, `System.machine(...)`, and `Runtime.machine(...)`.
 
-It covers things like:
+The highest-value cleanup now is to make the bound path feel complete and consistent:
+
+- expose the access constructors on the bound namespace as well
+- make machine initialization less verbose
+- make transition schedule registration and execution more explicit in the public model
+
+It would make code look more like:
 
 ```ts
-const PlayingSystems = Game.Schedule.define({
-  systems: [MovementSystem, CombatSystem],
-  steps: [
-    InputSystem,
-    Game.Schedule.applyStateTransitions(),
-    MovementSystem,
-    CombatSystem
-  ]
+const PauseSystem = Game.System.define(
+  "Pause",
+  {
+    nextMachines: {
+      app: Game.System.nextState(AppState)
+    },
+    services: {
+      input: Game.System.service(InputManager)
+    }
+  },
+  ({ nextMachines, services }) =>
+    Fx.sync(() => {
+      if (services.input.consumePause()) {
+        nextMachines.app.set("Paused")
+      }
+    })
+)
+```
+
+### 2. Multi-machine support and clearer transition orchestration
+
+The current FSM layer is useful, but it is still effectively single-machine. The next real capability step here is allowing multiple independent machines, such as `AppState`, `RoundState`, or `ModalState`, without weakening type safety.
+
+That should also make the transition model more explicit. Right now `onEnter`, `onExit`, and `onTransition` are registered cleanly, but their execution is still somewhat implicit from the call site. Bevy's `States` model is the right reference space here, but this runtime should keep the more explicit schedule-driven semantics.
+
+It would unlock flows like:
+
+```ts
+const AppState = Game.StateMachine.define("AppState", ["Title", "Playing", "Paused"] as const)
+const RoundState = Game.StateMachine.define("RoundState", ["Warmup", "SuddenDeath"] as const)
+
+const update = Game.Schedule.define({
+  systems: [InputSystem, CombatSystem, UiSystem],
+  steps: [InputSystem, Game.Schedule.applyStateTransitions(), CombatSystem, UiSystem]
 })
 
-Game.Schedule.onEnter(AppState, "Paused", {
-  systems: [ShowPauseOverlaySystem]
+Game.Schedule.onEnter(RoundState, "SuddenDeath", {
+  systems: [FlashArenaSystem, IntensifyMusicSystem]
 })
 ```
 
-### 2. Entity relationships and hierarchy
+### 3. Entity relationships and hierarchy
 
 This is the main structural gap after orchestration. It would unlock scene graphs, ownership, attachments, card zones, UI trees, equipment, and simulation-style graphs. Bevy's parent/children and newer relationship APIs are the right reference space, but this runtime would want descriptor-driven and fully typed relations.
 
@@ -427,7 +459,7 @@ commands.spawn(
 )
 ```
 
-### 3. Change detection and lifecycle signals
+### 4. Change detection and lifecycle signals
 
 Renderer sync, replication, dirty tracking, and reactive gameplay systems all get easier once systems can express added, changed, removed, or despawned data directly. Bevy's `Added`, `Changed`, removals, hooks, and observers are the reference space, though the likely starting point here would be a smaller typed query/filter surface instead of full observer parity.
 
@@ -455,7 +487,7 @@ const SpawnHealthBarSystem = Game.System.define(
 )
 ```
 
-### 4. Richer query and filter semantics
+### 5. Richer query and filter semantics
 
 This matters even more once relationships and lifecycle signals exist. Optional component access, lifecycle-aware filters, and relation-aware queries would make strategy, sim, RPG, and tooling-heavy code much more expressive without pushing logic into custom lookup helpers.
 
@@ -475,7 +507,7 @@ const InteractableQuery = Query.define({
 })
 ```
 
-### 5. Typed feature or module composition
+### 6. Typed feature or module composition
 
 This is the longer-term architectural piece. Larger games eventually need a first-class way to assemble optional gameplay features, server/client/editor variants, and reusable modules. Bevy plugins are the reference for the problem being solved, not the intended API shape.
 

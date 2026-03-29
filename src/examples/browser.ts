@@ -3,8 +3,9 @@ import { startPixiExample } from "./pixi.ts"
 import { startPokemonExample } from "./pokemon.ts"
 import { startSnakeExample } from "./snake.ts"
 import { startSpaceInvadersExample } from "./space-invaders.ts"
+import { startStateMachineExample } from "./state-machine.ts"
 
-type ExampleId = "pixi" | "pokemon" | "snake" | "space-invaders"
+type ExampleId = "pixi" | "pokemon" | "snake" | "space-invaders" | "state-machine"
 
 type ExampleDefinition = {
   readonly id: ExampleId
@@ -26,6 +27,16 @@ const examples: ReadonlyArray<ExampleDefinition> = [
       "Pixi owns the canvas and ticker. The ECS side owns descriptors, schema, resources, systems, schedules, and the sync step that projects ECS state into renderer-owned sprites.",
     meta: ["Setup schedule: spawn scene", "Update: input, motion, bounce, sync", "Renderer objects live outside ECS"],
     start: startPixiExample
+  },
+  {
+    id: "state-machine",
+    label: "State Machine",
+    eyebrow: "Typed phase orchestration demo",
+    title: "Title, countdown, play, pause, win, and lose as explicit machine states.",
+    description:
+      "This example exists specifically to show the finite-state-machine API. Systems queue next states, schedules apply transitions explicitly, and enter, exit, and transition hooks drive visible game flow.",
+    meta: ["Title -> Countdown -> Playing -> Paused -> Victory/Defeat", "Explicit applyStateTransitions()", "onEnter / onExit / onTransition hooks"],
+    start: startStateMachineExample
   },
   {
     id: "pokemon",
