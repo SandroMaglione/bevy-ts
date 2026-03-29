@@ -1,0 +1,47 @@
+import { Command, Descriptor, Entity, Schema } from "../src/index.ts"
+import { describe, expect, it } from "tstyche"
+
+const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
+const Time = Descriptor.defineResource<number>()("Time")
+
+const schema = Schema.build(Schema.fragment({
+  components: {
+    Position,
+    Velocity
+  },
+  resources: {
+    Time
+  }
+}))
+
+describe("Command", () => {
+  it("spawn starts with an empty draft proof", () => {
+    const draft = Command.spawn<typeof schema>()
+
+    expect(draft).type.toBe<Entity.EntityDraft<typeof schema, {}>>()
+  })
+
+  it("insertMany widens an existing draft proof", () => {
+    const draft = Command.insertMany(
+      Command.spawn<typeof schema>(),
+      [Position, { x: 0, y: 0 }] as const,
+      [Velocity, { x: 1, y: 1 }] as const
+    )
+
+    expect(draft).type.toBe<Entity.EntityDraft<typeof schema, {
+      readonly Position: { x: number; y: number }
+      readonly Velocity: { x: number; y: number }
+    }>>()
+  })
+
+  it("rejects wrong component value types", () => {
+    // @ts-expect-error!
+    Command.spawnWith<typeof schema>([Position, { x: "0", y: 0 }])
+  })
+
+  it("rejects non-component descriptors", () => {
+    // @ts-expect-error!
+    Command.entry(Time, 1)
+  })
+})

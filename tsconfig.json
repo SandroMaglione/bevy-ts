@@ -15,5 +15,5 @@
     "emitDeclarationOnly": false,
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "dtslint/**/*.ts"]
 }
