@@ -1,10 +1,11 @@
-import { Descriptor, Schema } from "../src/index.ts"
+import { App, Descriptor, Fx, Query, Runtime, Schema, System } from "../src/index.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
 const Time = Descriptor.defineResource<number>()("Time")
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
 const TickEvent = Descriptor.defineEvent<{ dt: number }>()("TickEvent")
+const Velocity = Descriptor.defineComponent<{ dx: number; dy: number }>()("Velocity")
 
 describe("Schema", () => {
   it("preserves exact fragment registries", () => {
@@ -75,5 +76,127 @@ describe("Schema", () => {
 
     // @ts-expect-error!
     Schema.merge(left, right)
+  })
+
+  it("bind closes the schema over systems, schedules, and runtimes", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position
+      },
+      resources: {
+        DeltaTime: Time
+      },
+      states: {
+        CurrentPhase: Phase
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+
+    const MoveSystem = Game.System.define(
+      "Move",
+      {
+        queries: {
+          moving: Query.define({
+            selection: {
+              position: Query.write(Position)
+            }
+          })
+        },
+        resources: {
+          time: System.readResource(Time)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          resources.time.get()
+          for (const match of queries.moving.each()) {
+            match.data.position.get()
+          }
+        })
+    )
+
+    const update = Game.Schedule.define({
+      systems: [MoveSystem]
+    })
+
+    const runtime = Game.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: 1 / 60
+      },
+      states: {
+        CurrentPhase: "Running"
+      }
+    })
+
+    App.makeApp(runtime).update(update)
+  })
+
+  it("rejects cross-schema systems and schedules on the bound path", () => {
+    const schemaA = Schema.build(Schema.fragment({
+      components: {
+        Position
+      },
+      resources: {
+        DeltaTime: Time
+      }
+    }))
+
+    const schemaB = Schema.build(Schema.fragment({
+      components: {
+        Velocity
+      }
+    }))
+
+    const GameA = Schema.bind(schemaA)
+    const GameB = Schema.bind(schemaB)
+
+    const SystemA = GameA.System.define(
+      "A",
+      {
+        queries: {
+          moving: Query.define({
+            selection: {
+              position: Query.read(Position)
+            }
+          })
+        }
+      },
+      () => Fx.sync<undefined, any>(() => undefined)
+    )
+
+    const SystemB = GameB.System.define(
+      "B",
+      {
+        queries: {
+          moving: Query.define({
+            selection: {
+              velocity: Query.read(Velocity)
+            }
+          })
+        }
+      },
+      () => Fx.sync<undefined, any>(() => undefined)
+    )
+
+    const _invalidSchedule = GameB.Schedule.define({
+      // @ts-expect-error!
+      systems: [SystemA]
+    })
+
+    const runtimeA = GameA.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: 1 / 60
+      }
+    })
+
+    const scheduleB = GameB.Schedule.define({
+      systems: [SystemB]
+    })
+
+    // @ts-expect-error!
+    runtimeA.runSchedule(scheduleB)
   })
 })

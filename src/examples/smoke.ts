@@ -5,7 +5,7 @@
  * descriptors, schemas, systems, queries, commands, schedules, runtime
  * construction, and app-style updates.
  */
-import { App, Command, Descriptor, Fx, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Fx, Query, Runtime, Schema, System } from "../index.ts"
 
 // Components used by the movement example.
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
@@ -37,13 +37,14 @@ const motionSchema = Schema.fragment({
 
 // The final closed schema used by systems and the runtime.
 const schema = Schema.build(motionSchema)
+// Bind the closed schema once so every later definition stays on the same root.
+const Game = Schema.bind(schema)
 
 // A movement system that reads velocity, writes position, emits an event, and
 // queues a spawned entity to exercise the command API.
-const MoveSystem = System.define(
+const MoveSystem = Game.System.define(
   "MoveSystem",
   {
-    schema,
     queries: {
       moving: Query.define({
         selection: {
@@ -93,14 +94,12 @@ const MoveSystem = System.define(
 )
 
 // The schedule that runs the example system.
-const schedule = Schedule.define({
-  schema,
+const schedule = Game.Schedule.define({
   systems: [MoveSystem]
 })
 
 // Runtime wiring for the example, including initial resources and services.
-const runtime = Runtime.makeRuntime({
-  schema,
+const runtime = Game.Runtime.make({
   services: Runtime.services(
     Runtime.service(Logger, {
       log(message) {

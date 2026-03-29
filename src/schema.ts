@@ -1,4 +1,10 @@
 import type { Descriptor } from "./descriptor.ts"
+import * as Runtime from "./runtime.ts"
+import * as Schedule from "./schedule.ts"
+import * as System from "./system.ts"
+import type { Fx } from "./fx.ts"
+import type { Label } from "./label.ts"
+import type { Query } from "./query.ts"
 
 /**
  * A mapping from schema names to nominal descriptors.
@@ -67,7 +73,75 @@ export namespace Schema {
    * Looks up the value type of a state descriptor inside a schema.
    */
   export type StateValue<T extends Any, K extends keyof States<T>> = Descriptor.Value<States<T>[K]>
+
+  /**
+   * A schema-bound system definition branded to one bound schema root.
+   */
+  export type BoundSystem<
+    S extends Any,
+    Root,
+    Spec extends System.SystemSpec<S, any, any, any, any, any, any, any, any> = System.SystemSpec<S, any, any, any, any, any, any, any, any>,
+    A = void,
+    E = never
+  > = System.SystemDefinition<Spec, A, E, Root>
+
+  /**
+   * A schema-bound schedule definition branded to one bound schema root.
+   */
+  export type BoundSchedule<
+    S extends Any,
+    Root,
+    Requirements extends System.RuntimeRequirements = System.RuntimeRequirements
+  > = Schedule.ScheduleDefinition<S, Requirements, Root>
+
+  /**
+   * A schema-bound runtime branded to one bound schema root.
+   */
+  export type BoundRuntime<
+    S extends Any,
+    Root,
+    Services extends Record<string, unknown>,
+    Resources extends Runtime.RuntimeResources<S> = {},
+    States extends Runtime.RuntimeStates<S> = {}
+  > = Runtime.Runtime<S, Services, Resources, States, Root>
 }
+
+/**
+ * Flattens an inferred object type for clearer diagnostics.
+ */
+type Simplify<A> = {
+  readonly [K in keyof A]: A[K]
+}
+
+/**
+ * Converts a union of object types into one merged intersection.
+ */
+type UnionToIntersection<A> =
+  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
+
+/**
+ * Returns `{}` for empty unions before intersection folding.
+ */
+type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
+
+/**
+ * Recomputes the aggregate runtime requirements for a bound schedule.
+ *
+ * The bound API cannot rely on inference from the lower-level constructor once
+ * it wraps the options object, so it reconstructs the same requirement fold
+ * from the concrete system tuple directly.
+ */
+type BoundScheduleRequirements<Systems extends ReadonlyArray<System.SystemDefinition<any, any, any, any>>> = Simplify<System.RuntimeRequirements<
+  Simplify<IntersectOrEmpty<
+    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["services"] : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["resources"] : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["states"] : never
+  >>
+>>
 
 /**
  * Computes overlapping keys between two registries.
@@ -206,3 +280,113 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
           >
         : Head
     : never
+
+/**
+ * Binds a closed schema once and returns schema-scoped constructors.
+ *
+ * This is the canonical high-safety API. Everything created from the returned
+ * object carries the same hidden schema-root brand, so systems, schedules, and
+ * runtimes from different bound schemas cannot be connected accidentally.
+ */
+export const bind = <S extends Schema.Any>(schema: S) => {
+  type Root = S
+  type BoundOrderTarget = Schema.BoundSystem<S, Root> | Label.System | Label.SystemSet
+  type BoundScheduleStep = Schema.BoundSystem<S, Root> | Schedule.ApplyDeferredStep | Schedule.EventUpdateStep
+
+  const defineSystem = <
+    const Queries extends Record<string, Query.Any> = {},
+    const Resources extends Record<string, System.ResourceRead<Descriptor<"resource", string, any>> | System.ResourceWrite<Descriptor<"resource", string, any>>> = {},
+    const Events extends Record<string, System.EventRead<Descriptor<"event", string, any>> | System.EventWrite<Descriptor<"event", string, any>>> = {},
+    const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
+    const States extends Record<string, System.StateRead<Descriptor<"state", string, any>> | System.StateWrite<Descriptor<"state", string, any>>> = {},
+    const InSets extends ReadonlyArray<Label.SystemSet> = [],
+    const After extends ReadonlyArray<BoundOrderTarget> = [],
+    const Before extends ReadonlyArray<BoundOrderTarget> = [],
+    A = void,
+    E = never
+  >(
+    name: string,
+    spec: {
+      readonly inSets?: InSets
+      readonly after?: After
+      readonly before?: Before
+      readonly queries?: Queries
+      readonly resources?: Resources
+      readonly events?: Events
+      readonly services?: Services
+      readonly states?: States
+    },
+    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>) => Fx<
+      A,
+      E,
+      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before>>
+    >
+  ) => {
+    const system = System.define(name, {
+      schema,
+      ...spec
+    }, run)
+    return system as typeof system & Schema.BoundSystem<S, Root, typeof system.spec, A, E>
+  }
+
+  const defineSchedule = <
+    const Systems extends ReadonlyArray<Schema.BoundSystem<S, Root>>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
+  >(options: {
+    readonly systems: Systems
+    readonly sets?: Sets
+    readonly steps?: ReadonlyArray<BoundScheduleStep>
+  }) => {
+    const schedule = Schedule.define({
+      schema,
+      ...options
+    } as never)
+    return schedule as Schedule.Schedule.Anonymous<S, BoundScheduleRequirements<Systems>, Root>
+  }
+
+  const namedSchedule = <
+    const L extends Label.Schedule,
+    const Systems extends ReadonlyArray<Schema.BoundSystem<S, Root>>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
+  >(label: L, options: {
+    readonly systems: Systems
+    readonly sets?: Sets
+    readonly steps?: ReadonlyArray<BoundScheduleStep>
+  }) => {
+    const schedule = Schedule.named(label, {
+      schema,
+      ...options
+    } as never)
+    return schedule as Schedule.Schedule.Named<S, BoundScheduleRequirements<Systems>, L, Root>
+  }
+
+  const makeRuntime = <
+    const Services extends Record<string, unknown>,
+    const Resources extends Runtime.RuntimeResources<S> = {},
+    const States extends Runtime.RuntimeStates<S> = {}
+  >(options: {
+    readonly services: Runtime.RuntimeServices<Services>
+    readonly resources?: Resources
+    readonly states?: States
+  }) => Runtime.makeRuntime<S, Services, Resources, States, Root>({
+    schema,
+    ...options
+  })
+
+  return {
+    schema,
+    System: {
+      define: defineSystem
+    },
+    Schedule: {
+      define: defineSchedule,
+      named: namedSchedule,
+      configureSet: Schedule.configureSet,
+      applyDeferred: Schedule.applyDeferred,
+      updateEvents: Schedule.updateEvents
+    },
+    Runtime: {
+      make: makeRuntime
+    }
+  }
+}

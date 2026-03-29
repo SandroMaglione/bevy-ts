@@ -96,9 +96,11 @@ interface ScheduleBase<
  */
 export interface AnonymousScheduleDefinition<
   S extends Schema.Any,
-  out Requirements extends RuntimeRequirements = RuntimeRequirements
+  out Requirements extends RuntimeRequirements = RuntimeRequirements,
+  out Root = unknown
 > extends ScheduleBase<S, Requirements> {
   readonly kind: "anonymous"
+  readonly __schemaRoot?: Root | undefined
 }
 
 /**
@@ -110,10 +112,12 @@ export interface AnonymousScheduleDefinition<
 export interface NamedScheduleDefinition<
   S extends Schema.Any,
   out Requirements extends RuntimeRequirements = RuntimeRequirements,
-  out L extends Label.Schedule = Label.Schedule
+  out L extends Label.Schedule = Label.Schedule,
+  out Root = unknown
 > extends ScheduleBase<S, Requirements> {
   readonly kind: "named"
   readonly label: L
+  readonly __schemaRoot?: Root | undefined
 }
 
 /**
@@ -121,8 +125,9 @@ export interface NamedScheduleDefinition<
  */
 export type ScheduleDefinition<
   S extends Schema.Any,
-  Requirements extends RuntimeRequirements = RuntimeRequirements
-> = AnonymousScheduleDefinition<S, Requirements> | NamedScheduleDefinition<S, Requirements>
+  Requirements extends RuntimeRequirements = RuntimeRequirements,
+  Root = unknown
+> = AnonymousScheduleDefinition<S, Requirements, Root> | NamedScheduleDefinition<S, Requirements, Label.Schedule, Root>
 
 /**
  * Type-level and value-level helpers for schedule construction.
@@ -133,16 +138,18 @@ export namespace Schedule {
    */
   export type Anonymous<
     S extends Schema.Any,
-    Requirements extends RuntimeRequirements = RuntimeRequirements
-  > = AnonymousScheduleDefinition<S, Requirements>
+    Requirements extends RuntimeRequirements = RuntimeRequirements,
+    Root = unknown
+  > = AnonymousScheduleDefinition<S, Requirements, Root>
   /**
    * Any named schedule.
    */
   export type Named<
     S extends Schema.Any,
     Requirements extends RuntimeRequirements = RuntimeRequirements,
-    L extends Label.Schedule = Label.Schedule
-  > = NamedScheduleDefinition<S, Requirements, L>
+    L extends Label.Schedule = Label.Schedule,
+    Root = unknown
+  > = NamedScheduleDefinition<S, Requirements, L, Root>
   /**
    * Any supported execution step.
    */

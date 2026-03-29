@@ -211,7 +211,8 @@ export interface Runtime<
   S extends Schema.Any,
   Services extends Record<string, unknown>,
   Resources extends RuntimeResources<S> = {},
-  States extends RuntimeStates<S> = {}
+  States extends RuntimeStates<S> = {},
+  Root = unknown
 > {
   /**
    * The closed schema this runtime was built for.
@@ -230,13 +231,17 @@ export interface Runtime<
    */
   readonly stateValues: States
   /**
+   * Hidden schema-root brand used by schema-bound APIs.
+   */
+  readonly __schemaRoot?: Root | undefined
+  /**
    * Runs one or more schedules as an initialization step.
    *
    * This is a semantic alias for a one-off bootstrap phase before entering the
    * repeating outer loop.
    */
   readonly initialize: <
-    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements>>
+    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>
   >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States>) => void
   /**
    * Runs one schedule once.
@@ -245,7 +250,7 @@ export interface Runtime<
    * steps, plus one final end-of-schedule apply/update pass for safety.
    */
   readonly runSchedule: <
-    const Selected extends ScheduleDefinition<S, AnyRequirements>
+    const Selected extends ScheduleDefinition<S, AnyRequirements, Root>
   >(schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States>) => void
   /**
    * Runs multiple schedules in sequence.
@@ -255,7 +260,7 @@ export interface Runtime<
    * updates produced by earlier schedules.
    */
   readonly tick: <
-    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements>>
+    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>
   >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States>) => void
 }
 
@@ -272,13 +277,14 @@ export const makeRuntime = <
   S extends Schema.Any,
   const Services extends Record<string, unknown>,
   const Resources extends RuntimeResources<S> = {},
-  const States extends RuntimeStates<S> = {}
+  const States extends RuntimeStates<S> = {},
+  Root = unknown
 >(options: {
   readonly schema: S
   readonly services: RuntimeServices<Services>
   readonly resources?: Resources
   readonly states?: States
-}): Runtime<S, Simplify<Services>, Resources, States> => {
+}): Runtime<S, Simplify<Services>, Resources, States, Root> => {
   /**
    * Monotonic entity id counter.
    */
@@ -635,7 +641,7 @@ export const makeRuntime = <
   /**
    * The final loop-agnostic runtime value returned to users.
    */
-  const runScheduleUnsafe = (schedule: ScheduleDefinition<S, AnyRequirements>): void => {
+  const runScheduleUnsafe = (schedule: ScheduleDefinition<S, AnyRequirements, Root>): void => {
     const deferred: Array<Command.DeferredCommand<S>> = []
     for (const step of schedule.steps) {
       if (Schedule.isSystemStep(step)) {
@@ -658,7 +664,7 @@ export const makeRuntime = <
   /**
    * Executes multiple schedules after their requirement checks have passed.
    */
-  const tickUnsafe = (schedules: ReadonlyArray<ScheduleDefinition<S, AnyRequirements>>): void => {
+  const tickUnsafe = (schedules: ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>): void => {
     for (const schedule of schedules) {
       runScheduleUnsafe(schedule)
     }
@@ -667,7 +673,7 @@ export const makeRuntime = <
   /**
    * The final loop-agnostic runtime value returned to users.
    */
-  const runtime: Runtime<S, Simplify<Services>, Resources, States> = {
+  const runtime: Runtime<S, Simplify<Services>, Resources, States, Root> = {
     schema: options.schema,
     services: providedServices,
     resourceValues: (options.resources ?? {}) as Resources,

@@ -1,6 +1,6 @@
 import { Application, Sprite, Texture } from "pixi.js"
 
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -45,11 +45,11 @@ const pixiSchema = Schema.fragment({
 })
 
 const schema = Schema.build(pixiSchema)
+const Game = Schema.bind(schema)
 
-const SetupSceneSystem = System.define(
+const SetupSceneSystem = Game.System.define(
   "SetupSceneSystem",
   {
-    schema,
     states: {
       phase: System.writeState(SimulationPhase)
     },
@@ -96,10 +96,9 @@ const SetupSceneSystem = System.define(
     })
 )
 
-const CaptureFrameInputSystem = System.define(
+const CaptureFrameInputSystem = Game.System.define(
   "CaptureFrameInputSystem",
   {
-    schema,
     resources: {
       deltaTime: System.writeResource(DeltaTime),
       viewport: System.writeResource(Viewport)
@@ -118,10 +117,9 @@ const CaptureFrameInputSystem = System.define(
     })
 )
 
-const IntegrateMotionSystem = System.define(
+const IntegrateMotionSystem = Game.System.define(
   "IntegrateMotionSystem",
   {
-    schema,
     queries: {
       moving: Query.define({
         selection: {
@@ -156,10 +154,9 @@ const IntegrateMotionSystem = System.define(
     })
 )
 
-const BounceWithinViewportSystem = System.define(
+const BounceWithinViewportSystem = Game.System.define(
   "BounceWithinViewportSystem",
   {
-    schema,
     after: [IntegrateMotionSystem],
     queries: {
       moving: Query.define({
@@ -225,10 +222,9 @@ const BounceWithinViewportSystem = System.define(
     })
 )
 
-const SyncPixiSceneSystem = System.define(
+const SyncPixiSceneSystem = Game.System.define(
   "SyncPixiSceneSystem",
   {
-    schema,
     after: [BounceWithinViewportSystem],
     queries: {
       renderables: Query.define({
@@ -274,13 +270,11 @@ const SyncPixiSceneSystem = System.define(
     })
 )
 
-const setupSchedule = Schedule.define({
-  schema,
+const setupSchedule = Game.Schedule.define({
   systems: [SetupSceneSystem]
 })
 
-const updateSchedule = Schedule.define({
-  schema,
+const updateSchedule = Game.Schedule.define({
   systems: [CaptureFrameInputSystem, IntegrateMotionSystem, BounceWithinViewportSystem, SyncPixiSceneSystem]
 })
 
@@ -308,8 +302,7 @@ export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExamp
     }
   }
 
-  const runtime = Runtime.makeRuntime({
-    schema,
+  const runtime = Game.Runtime.make({
     services: Runtime.services(Runtime.service(PixiHost, host)),
     resources: {
       DeltaTime: host.clock.deltaSeconds,

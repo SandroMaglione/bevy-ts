@@ -17,7 +17,7 @@ const Time = Descriptor.defineResource<number>()("Time")
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
 ```
 
-Build a closed schema:
+Build a closed schema and bind it once:
 
 ```ts
 import { Schema } from "./src/index.ts"
@@ -28,6 +28,7 @@ const movement = Schema.fragment({
 })
 
 const schema = Schema.build(movement)
+const Game = Schema.bind(schema)
 ```
 
 Define a system:
@@ -35,10 +36,9 @@ Define a system:
 ```ts
 import { Fx, Query, System } from "./src/index.ts"
 
-const MoveSystem = System.define(
+const MoveSystem = Game.System.define(
   "MoveSystem",
   {
-    schema,
     queries: {
       moving: Query.define({
         selection: {
@@ -75,15 +75,13 @@ const MoveSystem = System.define(
 Create a schedule and runtime:
 
 ```ts
-import { App, Runtime, Schedule } from "./src/index.ts"
+import { App, Runtime } from "./src/index.ts"
 
-const update = Schedule.define({
-  schema,
+const update = Game.Schedule.define({
   systems: [MoveSystem]
 })
 
-const runtime = Runtime.makeRuntime({
-  schema,
+const runtime = Game.Runtime.make({
   services: Runtime.services(
     // Services are provided through their descriptors.
     Runtime.service(Logger, {
@@ -114,10 +112,9 @@ Systems only see what they declare. Queries describe read and write access up fr
 Schedules now carry the runtime requirements implied by their systems. A runtime records which services it provides and which resources and states it initialized. You can only run a schedule when those two sides match.
 
 ```ts
-const TickSystem = System.define(
+const TickSystem = Game.System.define(
   "TickSystem",
   {
-    schema,
     resources: {
       time: System.readResource(Time)
     },
@@ -134,10 +131,9 @@ const TickSystem = System.define(
     })
 )
 
-const tick = Schedule.define({ schema, systems: [TickSystem] })
+const tick = Game.Schedule.define({ systems: [TickSystem] })
 
-const runtime = Runtime.makeRuntime({
-  schema,
+const runtime = Game.Runtime.make({
   services: Runtime.services(
     // Services use their descriptors.
     Runtime.service(Logger, {
@@ -172,10 +168,9 @@ Use `Command.spawnWith(...)` as the default way to create typed drafts without n
 ```ts
 import { Command, Fx, System } from "./src/index.ts"
 
-const SpawnProjectileSystem = System.define(
+const SpawnProjectileSystem = Game.System.define(
   "SpawnProjectileSystem",
   {
-    schema,
     services: {
       logger: System.service(Logger)
     }
@@ -200,26 +195,23 @@ const SpawnProjectileSystem = System.define(
 Direct system references are the default ordering mechanism. Reusable sets stay explicit and typed.
 
 ```ts
-import { Label, Schedule, System } from "./src/index.ts"
+import { Label, System } from "./src/index.ts"
 
 const MovementSet = Label.defineSystemSetLabel("Movement")
 
-const InputSystem = System.define("Input", {
-  schema,
+const InputSystem = Game.System.define("Input", {
   inSets: [MovementSet]
 }, ({}) => Fx.sync(() => {}))
 
-const MoveSystem = System.define("Move", {
-  schema,
+const MoveSystem = Game.System.define("Move", {
   inSets: [MovementSet],
   after: [InputSystem]
 }, ({}) => Fx.sync(() => {}))
 
-const update = Schedule.define({
-  schema,
+const update = Game.Schedule.define({
   systems: [InputSystem, MoveSystem],
   sets: [
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: MovementSet,
       chain: true
     })
@@ -239,10 +231,9 @@ const PixiHost = Descriptor.defineService<{
   readonly sprites: Map<number, Sprite>
 }>()("PixiHost")
 
-const SyncPixiSceneSystem = System.define(
+const SyncPixiSceneSystem = Game.System.define(
   "SyncPixiSceneSystem",
   {
-    schema,
     queries: {
       renderables: Query.define({
         selection: {

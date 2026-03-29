@@ -10,7 +10,7 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Command, Descriptor, Entity, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Entity, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 /**
@@ -57,6 +57,7 @@ const schema = Schema.build(
     }
   })
 )
+const Game = Schema.bind(schema)
 
 /**
  * Narrows an opaque example entity id back to this runtime's exact schema id.
@@ -94,11 +95,9 @@ const BodyQuery = Query.define({
   }
 })
 
-const SetupSystem = System.define(
+const SetupSystem = Game.System.define(
   "Snake/Setup",
-  {
-    schema
-  },
+  {},
   ({ commands }) =>
     Fx.sync(() => {
       const headId = commands.spawn(
@@ -126,10 +125,9 @@ const SetupSystem = System.define(
     })
 )
 
-const MovementSystem = System.define(
+const MovementSystem = Game.System.define(
   "Snake/Movement",
   {
-    schema,
     inSets: [MovementSetLabel],
     queries: {
       head: HeadQuery
@@ -151,10 +149,9 @@ const MovementSystem = System.define(
     })
 )
 
-const BrowserInputSystem = System.define(
+const BrowserInputSystem = Game.System.define(
   "Snake/BrowserInput",
   {
-    schema,
     inSets: [MovementSetLabel],
     queries: {
       head: Query.define({
@@ -190,10 +187,9 @@ const BrowserInputSystem = System.define(
     })
 )
 
-const BrowserWrapSystem = System.define(
+const BrowserWrapSystem = Game.System.define(
   "Snake/BrowserWrap",
   {
-    schema,
     inSets: [MovementSetLabel],
     queries: {
       head: HeadQuery
@@ -214,10 +210,9 @@ const BrowserWrapSystem = System.define(
     })
 )
 
-const CollisionSystem = System.define(
+const CollisionSystem = Game.System.define(
   "Snake/Collision",
   {
-    schema,
     inSets: [MovementSetLabel],
     queries: {
       head: HeadQuery,
@@ -243,10 +238,9 @@ const CollisionSystem = System.define(
     })
 )
 
-const GrowSystem = System.define(
+const GrowSystem = Game.System.define(
   "Snake/Grow",
   {
-    schema,
     inSets: [GrowthSetLabel],
     queries: {
       head: HeadQuery,
@@ -315,10 +309,9 @@ const GrowSystem = System.define(
     })
 )
 
-const FollowSystem = System.define(
+const FollowSystem = Game.System.define(
   "Snake/Follow",
   {
-    schema,
     inSets: [GrowthSetLabel],
     queries: {
       body: BodyQuery
@@ -370,10 +363,9 @@ const makeSnakeNode = (kind: "head" | "body" | "food", tileSize: number): Graphi
   return node
 }
 
-const SyncSnakeSceneSystem = System.define(
+const SyncSnakeSceneSystem = Game.System.define(
   "Snake/SyncScene",
   {
-    schema,
     queries: {
       head: Query.define({
         selection: {
@@ -447,26 +439,23 @@ const SyncSnakeSceneSystem = System.define(
     })
 )
 
-const setupSchedule = Schedule.define({
-  schema,
+const setupSchedule = Game.Schedule.define({
   systems: [SetupSystem]
 })
 
-const browserSetupSchedule = Schedule.define({
-  schema,
+const browserSetupSchedule = Game.Schedule.define({
   systems: [SetupSystem, SyncSnakeSceneSystem],
-  steps: [SetupSystem, Schedule.applyDeferred(), SyncSnakeSceneSystem]
+  steps: [SetupSystem, Game.Schedule.applyDeferred(), SyncSnakeSceneSystem]
 })
 
-const updateSchedule = Schedule.define({
-  schema,
+const updateSchedule = Game.Schedule.define({
   systems: [MovementSystem, CollisionSystem, GrowSystem, FollowSystem],
   sets: [
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: MovementSetLabel,
       chain: true
     }),
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: GrowthSetLabel,
       after: [MovementSetLabel],
       chain: true
@@ -475,22 +464,21 @@ const updateSchedule = Schedule.define({
   steps: [
     MovementSystem,
     CollisionSystem,
-    Schedule.updateEvents(),
+    Game.Schedule.updateEvents(),
     GrowSystem,
-    Schedule.applyDeferred(),
+    Game.Schedule.applyDeferred(),
     FollowSystem
   ]
 })
 
-const browserUpdateSchedule = Schedule.define({
-  schema,
+const browserUpdateSchedule = Game.Schedule.define({
   systems: [BrowserInputSystem, MovementSystem, BrowserWrapSystem, CollisionSystem, GrowSystem, FollowSystem, SyncSnakeSceneSystem],
   sets: [
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: MovementSetLabel,
       chain: true
     }),
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: GrowthSetLabel,
       after: [MovementSetLabel],
       chain: true
@@ -501,17 +489,16 @@ const browserUpdateSchedule = Schedule.define({
     MovementSystem,
     BrowserWrapSystem,
     CollisionSystem,
-    Schedule.updateEvents(),
+    Game.Schedule.updateEvents(),
     GrowSystem,
-    Schedule.applyDeferred(),
+    Game.Schedule.applyDeferred(),
     FollowSystem,
     SyncSnakeSceneSystem
   ]
 })
 
 export const createSnakeExample = () => {
-  const runtime = Runtime.makeRuntime({
-    schema,
+  const runtime = Game.Runtime.make({
     services: Runtime.services()
   })
 
@@ -607,8 +594,7 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
   }
   window.addEventListener("keydown", onKeyDown)
 
-  const runtime = Runtime.makeRuntime({
-    schema,
+  const runtime = Game.Runtime.make({
     services: Runtime.services(
       Runtime.service(DirectionInput, {
         consume() {

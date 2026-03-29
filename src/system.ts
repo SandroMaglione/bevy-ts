@@ -211,7 +211,7 @@ export interface LookupApi<S extends Schema.Any> {
  * Systems can order themselves relative to other system definitions or reusable
  * typed system sets. No open string references are allowed.
  */
-export type OrderTarget = SystemDefinition<any, any, any> | Label.System | Label.SystemSet
+export type OrderTarget = SystemDefinition<any, any, any, any> | Label.System | Label.SystemSet
 
 /**
  * An explicit system specification.
@@ -407,7 +407,8 @@ export type SystemRequirements<Spec extends AnySystemSpec> = RuntimeRequirements
 export interface SystemDefinition<
   Spec extends AnySystemSpec,
   out A = void,
-  out E = never
+  out E = never,
+  out Root = unknown
 > {
   /**
    * Human-readable declaration name used to derive the internal typed label.
@@ -417,6 +418,10 @@ export interface SystemDefinition<
    * The explicit static description of the system.
    */
   readonly spec: Spec
+  /**
+   * Hidden schema-root brand used by schema-bound APIs.
+   */
+  readonly __schemaRoot?: Root | undefined
   /**
    * The executable implementation of the system.
    */

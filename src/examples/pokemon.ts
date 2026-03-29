@@ -11,7 +11,7 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schedule, Schema, System } from "../index.ts"
+import { App, Command, Descriptor, Fx, Label, Query, Runtime, Schema, System } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const GRID_COLS = 10
@@ -61,6 +61,7 @@ const schema = Schema.build(
     }
   })
 )
+const Game = Schema.bind(schema)
 
 const InputPipelineSetLabel = Label.defineSystemSetLabel("Pokemon/InputPipeline")
 const ResolveMovementSetLabel = Label.defineSystemSetLabel("Pokemon/ResolveMovement")
@@ -123,11 +124,9 @@ const nextTileFromDirection = (position: TilePosition, direction: Direction): Ti
   : direction === "left" ? { col: position.col - 1, row: position.row }
   : { col: position.col + 1, row: position.row }
 
-const SetupSystem = System.define(
+const SetupSystem = Game.System.define(
   "Pokemon/Setup",
-  {
-    schema
-  },
+  {},
   ({ commands }) =>
     Fx.sync(() => {
       commands.spawn(
@@ -162,10 +161,9 @@ const SetupSystem = System.define(
     })
 )
 
-const CaptureFrameInputSystem = System.define(
+const CaptureFrameInputSystem = Game.System.define(
   "Pokemon/CaptureFrameInput",
   {
-    schema,
     resources: {
       deltaTime: System.writeResource(DeltaTime)
     },
@@ -179,10 +177,9 @@ const CaptureFrameInputSystem = System.define(
     })
 )
 
-const InputSystem = System.define(
+const InputSystem = Game.System.define(
   "Pokemon/Input",
   {
-    schema,
     inSets: [InputPipelineSetLabel],
     queries: {
       player: PlayerQuery
@@ -214,10 +211,9 @@ const InputSystem = System.define(
     })
 )
 
-const PlanMovementSystem = System.define(
+const PlanMovementSystem = Game.System.define(
   "Pokemon/PlanMovement",
   {
-    schema,
     inSets: [InputPipelineSetLabel],
     queries: {
       player: PlayerQuery
@@ -247,10 +243,9 @@ const PlanMovementSystem = System.define(
     })
 )
 
-const CollisionSystem = System.define(
+const CollisionSystem = Game.System.define(
   "Pokemon/Collision",
   {
-    schema,
     inSets: [ResolveMovementSetLabel],
     queries: {
       player: PlayerQuery,
@@ -304,10 +299,9 @@ const CollisionSystem = System.define(
     })
 )
 
-const AdvanceMovementSystem = System.define(
+const AdvanceMovementSystem = Game.System.define(
   "Pokemon/AdvanceMovement",
   {
-    schema,
     inSets: [ResolveMovementSetLabel],
     queries: {
       player: PlayerQuery
@@ -350,10 +344,9 @@ const AdvanceMovementSystem = System.define(
     })
 )
 
-const SyncPixiSceneSystem = System.define(
+const SyncPixiSceneSystem = Game.System.define(
   "Pokemon/SyncPixiScene",
   {
-    schema,
     queries: {
       player: PlayerQuery,
       solids: Query.define({
@@ -422,26 +415,23 @@ const SyncPixiSceneSystem = System.define(
     })
 )
 
-const setupSchedule = Schedule.define({
-  schema,
+const setupSchedule = Game.Schedule.define({
   systems: [SetupSystem]
 })
 
-const browserSetupSchedule = Schedule.define({
-  schema,
+const browserSetupSchedule = Game.Schedule.define({
   systems: [SetupSystem, SyncPixiSceneSystem],
-  steps: [SetupSystem, Schedule.applyDeferred(), SyncPixiSceneSystem]
+  steps: [SetupSystem, Game.Schedule.applyDeferred(), SyncPixiSceneSystem]
 })
 
-const updateSchedule = Schedule.define({
-  schema,
+const updateSchedule = Game.Schedule.define({
   systems: [InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem],
   sets: [
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: InputPipelineSetLabel,
       chain: true
     }),
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: ResolveMovementSetLabel,
       after: [InputPipelineSetLabel],
       chain: true
@@ -449,15 +439,14 @@ const updateSchedule = Schedule.define({
   ] as const
 })
 
-const browserUpdateSchedule = Schedule.define({
-  schema,
+const browserUpdateSchedule = Game.Schedule.define({
   systems: [CaptureFrameInputSystem, InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem, SyncPixiSceneSystem],
   sets: [
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: InputPipelineSetLabel,
       chain: true
     }),
-    Schedule.configureSet({
+    Game.Schedule.configureSet({
       label: ResolveMovementSetLabel,
       after: [InputPipelineSetLabel],
       chain: true
@@ -476,8 +465,7 @@ const browserUpdateSchedule = Schedule.define({
 export const createPokemonExample = (input: {
   readonly direction: () => Direction | null
 }) => {
-  const runtime = Runtime.makeRuntime({
-    schema,
+  const runtime = Game.Runtime.make({
     services: Runtime.services(Runtime.service(InputManager, input)),
     resources: {
       GridSize: {
@@ -567,8 +555,7 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
     }
   }
 
-  const runtime = Runtime.makeRuntime({
-    schema,
+  const runtime = Game.Runtime.make({
     services: Runtime.services(
       Runtime.service(InputManager, {
         direction() {
