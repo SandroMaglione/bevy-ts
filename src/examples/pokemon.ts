@@ -485,7 +485,7 @@ export const createPokemonExample = (input: {
 }) => {
   const runtime = Runtime.makeRuntime({
     schema,
-    services: Runtime.services([InputManager, input]),
+    services: Runtime.services(Runtime.service(InputManager, input)),
     resources: {
       GridSize: {
         cols: GRID_COLS,
@@ -577,14 +577,14 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
   const runtime = Runtime.makeRuntime({
     schema,
     services: Runtime.services(
-      [InputManager, {
+      Runtime.service(InputManager, {
         direction() {
           const next = pendingDirection
           pendingDirection = null
           return next
         }
-      }],
-      [PixiHost, host]
+      }),
+      Runtime.service(PixiHost, host)
     ),
     resources: {
       GridSize: {

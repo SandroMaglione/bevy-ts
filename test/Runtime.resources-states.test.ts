@@ -171,11 +171,11 @@ describe("Runtime resources and states", () => {
     const runtime = Runtime.makeRuntime({
       schema,
       services: Runtime.services(
-        [Logger, {
-          log(message: string) {
+        Runtime.service(Logger, {
+          log(message) {
             seen.push(message)
           }
-        }]
+        })
       ),
       resources: {
         DeltaTime: 0.25,
@@ -218,11 +218,11 @@ describe("Runtime resources and states", () => {
     const runtime = Runtime.makeRuntime({
       schema,
       services: Runtime.services(
-        [PrefixedLogger, {
-          log(message: string) {
+        Runtime.service(PrefixedLogger, {
+          log(message) {
             seen.push(message)
           }
-        }]
+        })
       ),
       resources: {
         DeltaTime: 0.125,

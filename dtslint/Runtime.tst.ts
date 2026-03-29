@@ -206,9 +206,11 @@ describe("Runtime", () => {
     const runtime = Runtime.makeRuntime({
       schema,
       services: Runtime.services(
-        [Logger, {
-          log(_message: string) {}
-        }]
+        Runtime.service(Logger, {
+          log(message) {
+            expect(message).type.toBe<string>()
+          }
+        })
       ),
       resources: {
         DeltaTime: 1 / 60,
@@ -226,9 +228,11 @@ describe("Runtime", () => {
     const runtime = Runtime.makeRuntime({
       schema,
       services: Runtime.services(
-        [PrefixedLogger, {
-          log(_message: string) {}
-        }]
+        Runtime.service(PrefixedLogger, {
+          log(message) {
+            expect(message).type.toBe<string>()
+          }
+        })
       ),
       resources: {
         DeltaTime: 1 / 60,
@@ -255,9 +259,19 @@ describe("Runtime", () => {
   })
 
   it("rejects non-service descriptors in Runtime.services", () => {
+    Runtime.service(
+      // @ts-expect-error!
+      Time,
+      1 / 60
+    )
+  })
+
+  it("rejects the old tuple entry syntax", () => {
     Runtime.services(
       // @ts-expect-error!
-      [Time, 1 / 60]
+      [Logger, {
+        log(_message: string) {}
+      }]
     )
   })
 })

@@ -617,18 +617,18 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
   const runtime = Runtime.makeRuntime({
     schema,
     services: Runtime.services(
-      [DirectionInput, {
+      Runtime.service(DirectionInput, {
         consume() {
           const next = pendingVelocity
           pendingVelocity = null
           return next
         }
-      }],
-      [PixiHost, {
+      }),
+      Runtime.service(PixiHost, {
         scene,
         nodes: new Map<number, Graphics>(),
         tileSize
-      }]
+      })
     )
   })
 

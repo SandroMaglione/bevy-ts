@@ -89,11 +89,11 @@ const runtime = Runtime.makeRuntime({
   schema,
   services: Runtime.services(
     // Services are provided through their descriptors.
-    [Logger, {
-      log(message: string) {
+    Runtime.service(Logger, {
+      log(message) {
         console.log(message)
       }
-    }]
+    })
   ),
   resources: {
     // Resources are initialized by schema key.
@@ -147,11 +147,11 @@ const runtime = Runtime.makeRuntime({
   schema,
   services: Runtime.services(
     // Services use their descriptors.
-    [Logger, {
-      log(message: string) {
+    Runtime.service(Logger, {
+      log(message) {
         console.log(message)
       }
-    }]
+    })
   ),
   resources: {
     // Resources use schema keys.

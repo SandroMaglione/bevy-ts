@@ -52,16 +52,16 @@ export type RuntimeStates<S extends Schema.Any> = Partial<{
 }>
 
 /**
- * One descriptor-backed runtime service entry.
+ * One descriptor-backed runtime service provision.
  *
- * Consumers provide services through descriptor/value pairs so the runtime can
- * normalize them with the exact descriptor identity instead of repeating a
- * potentially mismatched string key manually.
+ * `Runtime.service(...)` creates these entries with contextual typing for the
+ * implementation object, so callback parameters are inferred from the service
+ * descriptor instead of requiring repeated annotations at the call site.
  */
-export type ServiceEntry<D extends Descriptor<"service", string, any> = Descriptor<"service", string, any>> = readonly [
-  descriptor: D,
-  implementation: Descriptor.Value<D>
-]
+export interface ServiceProvision<D extends Descriptor<"service", string, any> = Descriptor<"service", string, any>> {
+  readonly descriptor: D
+  readonly implementation: Descriptor.Value<D>
+}
 
 /**
  * Folds a tuple of service entries into the normalized runtime service record.
@@ -70,11 +70,11 @@ export type ServiceEntry<D extends Descriptor<"service", string, any> = Descript
  * normal object assignment semantics at runtime.
  */
 type ServiceEntriesToRecord<
-  Entries extends ReadonlyArray<ServiceEntry>,
+  Entries extends ReadonlyArray<ServiceProvision>,
   Acc extends Record<string, unknown> = {}
 > = Entries extends readonly [infer Head, ...infer Tail]
-  ? Head extends ServiceEntry<infer D>
-    ? Tail extends ReadonlyArray<ServiceEntry>
+  ? Head extends ServiceProvision<infer D>
+    ? Tail extends ReadonlyArray<ServiceProvision>
       ? ServiceEntriesToRecord<Tail, Simplify<Omit<Acc, Descriptor.Name<D>> & {
           readonly [K in Descriptor.Name<D>]: Descriptor.Value<D>
         }>>
@@ -692,11 +692,28 @@ export const makeRuntime = <
  * used at runtime can never drift from the declared service identity.
  */
 export const services = <
-  const Entries extends ReadonlyArray<ServiceEntry>
+  const Entries extends ReadonlyArray<ServiceProvision>
 >(...entries: Entries): RuntimeServices<ServiceEntriesToRecord<Entries>> => {
   const provided: Record<string, unknown> = {}
-  for (const [descriptor, implementation] of entries) {
+  for (const { descriptor, implementation } of entries) {
     provided[descriptor.name] = implementation
   }
   return provided as RuntimeServices<ServiceEntriesToRecord<Entries>>
 }
+
+/**
+ * Creates one service provision for `Runtime.services(...)`.
+ *
+ * This is the canonical user-facing entry constructor because passing the
+ * descriptor directly gives TypeScript a contextual type for the implementation
+ * object.
+ */
+export const service = <
+  D extends Descriptor<"service", string, any>
+>(
+  descriptor: D,
+  implementation: Descriptor.Value<D>
+): ServiceProvision<D> => ({
+  descriptor,
+  implementation
+})

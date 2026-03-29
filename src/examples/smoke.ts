@@ -105,11 +105,11 @@ const schedule = Schedule.define({
 const runtime = Runtime.makeRuntime({
   schema,
   services: Runtime.services(
-    [Logger, {
-      log(message: string) {
+    Runtime.service(Logger, {
+      log(message) {
         console.log(message)
       }
-    }]
+    })
   ),
   resources: {
     Time: 0.5
