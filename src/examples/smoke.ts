@@ -104,13 +104,13 @@ const schedule = Schedule.define({
 // Runtime wiring for the example, including initial resources and services.
 const runtime = Runtime.makeRuntime({
   schema,
-  services: {
-    [Logger.name]: {
+  services: Runtime.services(
+    [Logger, {
       log(message: string) {
         console.log(message)
       }
-    }
-  },
+    }]
+  ),
   resources: {
     Time: 0.5
   },

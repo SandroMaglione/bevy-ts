@@ -257,6 +257,26 @@ type AnySystemSpec = SystemSpec<
   ReadonlyArray<OrderTarget>
 >
 
+/**
+ * Flattens an inferred object type for clearer public signatures.
+ */
+type Simplify<A> = {
+  readonly [K in keyof A]: A[K]
+}
+
+/**
+ * Finds the schema registry key associated with one descriptor.
+ */
+type RegistryKeyForDescriptor<
+  R extends Record<string, Descriptor.Any>,
+  D extends Descriptor.Any
+> = {
+  readonly [K in keyof R]:
+    [R[K]] extends [D] ? K
+    : [D] extends [R[K]] ? K
+    : never
+}[keyof R]
+
 type ResourceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["resources"]]:
     Spec["resources"][K] extends ResourceRead<infer D> ? ResourceReadView<Descriptor.Value<D>>
@@ -319,6 +339,67 @@ export interface SystemContext<Spec extends AnySystemSpec> {
  * The service environment required by a system.
  */
 export type SystemDependencies<Spec extends AnySystemSpec> = ServiceContext<Spec>
+
+/**
+ * The runtime requirement contract derived from one system or schedule.
+ *
+ * Services are keyed by service descriptor names because runtimes provide them
+ * through the public `services` map. Resources and states are keyed by schema
+ * property names because runtime initialization is schema-keyed.
+ */
+export interface RuntimeRequirements<
+  out Services extends Record<string, unknown> = {},
+  out Resources extends Record<string, unknown> = {},
+  out States extends Record<string, unknown> = {}
+> {
+  readonly services: Services
+  readonly resources: Resources
+  readonly states: States
+}
+
+/**
+ * Derives the runtime service requirements from a system spec.
+ */
+export type SystemServiceRequirements<Spec extends AnySystemSpec> = Simplify<{
+  readonly [K in keyof Spec["services"] as
+    Spec["services"][K] extends ServiceRead<infer D> ? Descriptor.Name<D> : never]:
+      Spec["services"][K] extends ServiceRead<infer D> ? Descriptor.Value<D> : never
+}>
+
+/**
+ * Derives the runtime resource initialization requirements from a system spec.
+ */
+export type SystemResourceRequirements<Spec extends AnySystemSpec> = Simplify<{
+  readonly [K in keyof Spec["resources"] as
+    Spec["resources"][K] extends { readonly descriptor: infer D extends Descriptor<"resource", string, any> }
+      ? RegistryKeyForDescriptor<Schema.Resources<Spec["schema"]>, D>
+      : never]:
+        Spec["resources"][K] extends { readonly descriptor: infer D extends Descriptor<"resource", string, any> }
+          ? Descriptor.Value<D>
+          : never
+}>
+
+/**
+ * Derives the runtime state initialization requirements from a system spec.
+ */
+export type SystemStateRequirements<Spec extends AnySystemSpec> = Simplify<{
+  readonly [K in keyof Spec["states"] as
+    Spec["states"][K] extends { readonly descriptor: infer D extends Descriptor<"state", string, any> }
+      ? RegistryKeyForDescriptor<Schema.States<Spec["schema"]>, D>
+      : never]:
+        Spec["states"][K] extends { readonly descriptor: infer D extends Descriptor<"state", string, any> }
+          ? Descriptor.Value<D>
+          : never
+}>
+
+/**
+ * Aggregates every runtime requirement implied by a system spec.
+ */
+export type SystemRequirements<Spec extends AnySystemSpec> = RuntimeRequirements<
+  SystemServiceRequirements<Spec>,
+  SystemResourceRequirements<Spec>,
+  SystemStateRequirements<Spec>
+>
 
 /**
  * A fully defined system value ready to be placed into a schedule.

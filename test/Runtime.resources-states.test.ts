@@ -5,6 +5,8 @@ import { readResourceValue, readStateValue } from "./utils/fixtures.ts"
 const Time = Descriptor.defineResource<number>()("Time")
 const Counter = Descriptor.defineResource<number>()("Counter")
 const Phase = Descriptor.defineState<"Boot" | "Running">()("Phase")
+const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
+const PrefixedLogger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("RuntimeResources/Logger")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -19,7 +21,7 @@ const schema = Schema.build(Schema.fragment({
 const makeRuntime = () =>
   Runtime.makeRuntime({
     schema,
-    services: {},
+    services: Runtime.services(),
     resources: {
       DeltaTime: 0.5,
       Counter: 0
@@ -93,7 +95,7 @@ describe("Runtime resources and states", () => {
   it("supports schema-key initialization when the descriptor name differs from the schema key", () => {
     const runtime = Runtime.makeRuntime({
       schema,
-      services: {},
+      services: Runtime.services(),
       resources: {
         DeltaTime: 0.25,
         Counter: 3
@@ -127,7 +129,7 @@ describe("Runtime resources and states", () => {
 
     const runtime = Runtime.makeRuntime({
       schema,
-      services: {},
+      services: Runtime.services(),
       resources: {
         DeltaTime: 0.5,
         Counter: 0
@@ -144,5 +146,99 @@ describe("Runtime resources and states", () => {
     }))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
+  })
+
+  it("reads a provided service during schedule execution", () => {
+    const seen: Array<string> = []
+
+    const logTime = System.define(
+      "RuntimeResources/LogTime",
+      {
+        schema,
+        resources: {
+          time: System.readResource(Time)
+        },
+        services: {
+          logger: System.service(Logger)
+        }
+      },
+      ({ resources, services }) =>
+        Fx.sync(() => {
+          services.logger.log(`dt=${resources.time.get()}`)
+        })
+    )
+
+    const runtime = Runtime.makeRuntime({
+      schema,
+      services: Runtime.services(
+        [Logger, {
+          log(message: string) {
+            seen.push(message)
+          }
+        }]
+      ),
+      resources: {
+        DeltaTime: 0.25,
+        Counter: 0
+      },
+      states: {
+        CurrentPhase: "Boot"
+      }
+    })
+
+    runtime.runSchedule(Schedule.define({
+      label: Label.defineScheduleLabel("RuntimeResources/LogTimeSchedule"),
+      schema,
+      systems: [logTime]
+    }))
+
+    expect(seen).toEqual(["dt=0.25"])
+  })
+
+  it("resolves provided services from descriptor identity even when the service name is prefixed", () => {
+    const seen: Array<string> = []
+
+    const logTime = System.define(
+      "RuntimeResources/LogTimePrefixed",
+      {
+        schema,
+        resources: {
+          time: System.readResource(Time)
+        },
+        services: {
+          logger: System.service(PrefixedLogger)
+        }
+      },
+      ({ resources, services }) =>
+        Fx.sync(() => {
+          services.logger.log(`dt=${resources.time.get()}`)
+        })
+    )
+
+    const runtime = Runtime.makeRuntime({
+      schema,
+      services: Runtime.services(
+        [PrefixedLogger, {
+          log(message: string) {
+            seen.push(message)
+          }
+        }]
+      ),
+      resources: {
+        DeltaTime: 0.125,
+        Counter: 0
+      },
+      states: {
+        CurrentPhase: "Boot"
+      }
+    })
+
+    runtime.runSchedule(Schedule.define({
+      label: Label.defineScheduleLabel("RuntimeResources/LogTimePrefixedSchedule"),
+      schema,
+      systems: [logTime]
+    }))
+
+    expect(seen).toEqual(["dt=0.125"])
   })
 })

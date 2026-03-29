@@ -25,7 +25,7 @@ const schema = Schema.build(Schema.fragment({
 const makeRuntime = () =>
   Runtime.makeRuntime({
     schema,
-    services: {},
+    services: Runtime.services(),
     resources: {
       Count: 0,
       LastX: -1,

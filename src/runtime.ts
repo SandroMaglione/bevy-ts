@@ -12,6 +12,7 @@ import type {
   EventWriteView,
   QueryHandle,
   ResourceReadView,
+  RuntimeRequirements,
   ResourceWriteView,
   StateReadView,
   StateWriteView,
@@ -25,6 +26,143 @@ import type {
  * Each entity id maps to descriptor-keyed component storage.
  */
 type EntityStore = Map<number, Map<symbol, unknown>>
+
+/**
+ * String-literal type id used to brand descriptor-based runtime service maps.
+ */
+export type RuntimeServicesTypeId = "~bevy-ts/RuntimeServices"
+
+/**
+ * Runtime value for the service-map type id.
+ */
+const runtimeServicesTypeId: RuntimeServicesTypeId = "~bevy-ts/RuntimeServices"
+
+/**
+ * The runtime-facing initialization shape for schema resources.
+ */
+export type RuntimeResources<S extends Schema.Any> = Partial<{
+  readonly [K in keyof Schema.Resources<S>]: Schema.ResourceValue<S, K>
+}>
+
+/**
+ * The runtime-facing initialization shape for schema states.
+ */
+export type RuntimeStates<S extends Schema.Any> = Partial<{
+  readonly [K in keyof Schema.States<S>]: Schema.StateValue<S, K>
+}>
+
+/**
+ * One descriptor-backed runtime service entry.
+ *
+ * Consumers provide services through descriptor/value pairs so the runtime can
+ * normalize them with the exact descriptor identity instead of repeating a
+ * potentially mismatched string key manually.
+ */
+export type ServiceEntry<D extends Descriptor<"service", string, any> = Descriptor<"service", string, any>> = readonly [
+  descriptor: D,
+  implementation: Descriptor.Value<D>
+]
+
+/**
+ * Folds a tuple of service entries into the normalized runtime service record.
+ *
+ * Later entries for the same descriptor name replace earlier ones, matching
+ * normal object assignment semantics at runtime.
+ */
+type ServiceEntriesToRecord<
+  Entries extends ReadonlyArray<ServiceEntry>,
+  Acc extends Record<string, unknown> = {}
+> = Entries extends readonly [infer Head, ...infer Tail]
+  ? Head extends ServiceEntry<infer D>
+    ? Tail extends ReadonlyArray<ServiceEntry>
+      ? ServiceEntriesToRecord<Tail, Simplify<Omit<Acc, Descriptor.Name<D>> & {
+          readonly [K in Descriptor.Name<D>]: Descriptor.Value<D>
+        }>>
+      : never
+    : never
+  : Simplify<Acc>
+
+/**
+ * Branded service environment produced by `Runtime.services(...)`.
+ *
+ * The brand ensures callers provide services through descriptors rather than
+ * raw string keys, which prevents runtime mismatches between descriptor names
+ * and manually repeated object properties.
+ */
+export type RuntimeServices<Services extends Record<string, unknown> = {}> = Readonly<Services> & {
+  readonly [runtimeServicesTypeId]: {
+    readonly _Services: (_: never) => Services
+  }
+}
+
+/**
+ * Flattens an inferred object type for clearer diagnostics.
+ */
+type Simplify<A> = {
+  readonly [K in keyof A]: A[K]
+}
+
+/**
+ * Extracts the requirements carried by one schedule definition.
+ */
+type ScheduleRequirementsOf<Schedule> = Schedule extends ScheduleDefinition<any, infer Requirements> ? Requirements : never
+
+/**
+ * Produces a readable type-level label name.
+ */
+type ScheduleName<Schedule> = Schedule extends { readonly label: { readonly name: infer Name extends string } } ? Name : never
+
+type MissingKeys<Required extends object, Provided extends object> = Exclude<keyof Required, keyof Provided>
+
+type IncompatibleKeys<Required extends object, Provided extends object> = {
+  readonly [K in Extract<keyof Required, keyof Provided>]:
+    [Provided[K]] extends [Required[K]] ? never : K
+}[Extract<keyof Required, keyof Provided>]
+
+type CategoryRequirementErrors<
+  Kind extends string,
+  Schedule,
+  Required extends object,
+  Provided extends object
+> =
+  | ([MissingKeys<Required, Provided>] extends [never]
+    ? never
+    : {
+        readonly __runtimeRequirementError__: Kind
+        readonly __schedule__: ScheduleName<Schedule>
+        readonly __missing__: MissingKeys<Required, Provided>
+      })
+  | ([IncompatibleKeys<Required, Provided>] extends [never]
+    ? never
+    : {
+        readonly __runtimeRequirementError__: `${Kind} (incompatible)`
+        readonly __schedule__: ScheduleName<Schedule>
+        readonly __missing__: IncompatibleKeys<Required, Provided>
+      })
+
+type ScheduleRequirementErrors<
+  Schedule,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object
+> = Schedule extends ScheduleDefinition<any, infer Requirements extends RuntimeRequirements>
+  ? | CategoryRequirementErrors<"Missing or incompatible services", Schedule, Requirements["services"], Services>
+    | CategoryRequirementErrors<"Missing or incompatible resources", Schedule, Requirements["resources"], Resources>
+    | CategoryRequirementErrors<"Missing or incompatible states", Schedule, Requirements["states"], States>
+  : never
+
+type ValidateSchedules<
+  Schedules extends ReadonlyArray<ScheduleDefinition<any, AnyRequirements>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object
+> = [ScheduleRequirementErrors<Schedules[number], Services, Resources, States>] extends [never]
+  ? unknown
+  : {
+      readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedules[number], Services, Resources, States>
+    }
+
+type AnyRequirements = RuntimeRequirements<any, any, any>
 
 /**
  * The caller-facing initialization shape for one descriptor registry.
@@ -67,7 +205,12 @@ const seedRegistryStore = <R extends Registry>(
  * The runtime owns world state and services, but it does not own the outer game
  * loop. Call `runSchedule` or `tick` from any host you want.
  */
-export interface Runtime<S extends Schema.Any, Services extends Record<string, unknown>> {
+export interface Runtime<
+  S extends Schema.Any,
+  Services extends Record<string, unknown>,
+  Resources extends RuntimeResources<S> = {},
+  States extends RuntimeStates<S> = {}
+> {
   /**
    * The closed schema this runtime was built for.
    */
@@ -77,19 +220,31 @@ export interface Runtime<S extends Schema.Any, Services extends Record<string, u
    */
   readonly services: Services
   /**
+   * The schema-keyed resources that were initialized when the runtime was made.
+   */
+  readonly resourceValues: Resources
+  /**
+   * The schema-keyed states that were initialized when the runtime was made.
+   */
+  readonly stateValues: States
+  /**
    * Runs one or more schedules as an initialization step.
    *
    * This is a semantic alias for a one-off bootstrap phase before entering the
    * repeating outer loop.
    */
-  readonly initialize: (...schedules: ReadonlyArray<ScheduleDefinition<S>>) => void
+  readonly initialize: <
+    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements>>
+  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States>) => void
   /**
    * Runs one schedule once.
    *
    * Deferred commands and events advance only at explicit schedule marker
    * steps, plus one final end-of-schedule apply/update pass for safety.
    */
-  readonly runSchedule: (schedule: ScheduleDefinition<S>) => void
+  readonly runSchedule: <
+    const Selected extends ScheduleDefinition<S, AnyRequirements>
+  >(schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States>) => void
   /**
    * Runs multiple schedules in sequence.
    *
@@ -97,7 +252,9 @@ export interface Runtime<S extends Schema.Any, Services extends Record<string, u
    * same `tick(...)` call can observe the fully applied world changes and event
    * updates produced by earlier schedules.
    */
-  readonly tick: (...schedules: ReadonlyArray<ScheduleDefinition<S>>) => void
+  readonly tick: <
+    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements>>
+  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States>) => void
 }
 
 /**
@@ -109,16 +266,17 @@ export interface Runtime<S extends Schema.Any, Services extends Record<string, u
  * The runtime does not own the outer frame loop. It only owns ECS state plus
  * the host-provided services that systems are allowed to depend on.
  */
-export const makeRuntime = <S extends Schema.Any, Services extends Record<string, unknown>>(options: {
+export const makeRuntime = <
+  S extends Schema.Any,
+  const Services extends Record<string, unknown>,
+  const Resources extends RuntimeResources<S> = {},
+  const States extends RuntimeStates<S> = {}
+>(options: {
   readonly schema: S
-  readonly services: Services
-  readonly resources?: Partial<{
-    readonly [K in keyof Schema.Resources<S>]: Schema.ResourceValue<S, K>
-  }>
-  readonly states?: Partial<{
-    readonly [K in keyof Schema.States<S>]: Schema.StateValue<S, K>
-  }>
-}): Runtime<S, Services> => {
+  readonly services: RuntimeServices<Services>
+  readonly resources?: Resources
+  readonly states?: States
+}): Runtime<S, Simplify<Services>, Resources, States> => {
   /**
    * Monotonic entity id counter.
    */
@@ -153,6 +311,11 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
    * Seeds runtime states from the host-provided initial values.
    */
   seedRegistryStore(options.schema.states, options.states, states)
+
+  /**
+   * The normalized descriptor-backed runtime service environment.
+   */
+  const providedServices = options.services as unknown as Simplify<Services>
 
   /**
    * Internal world adapter used by deferred commands.
@@ -421,7 +584,7 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
       ])
     )
     const serviceViews = Object.fromEntries(
-      Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [key, options.services[access.descriptor.name as keyof Services]])
+      Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [key, providedServices[access.descriptor.name as keyof Services]])
     )
 
     return {
@@ -470,37 +633,70 @@ export const makeRuntime = <S extends Schema.Any, Services extends Record<string
   /**
    * The final loop-agnostic runtime value returned to users.
    */
-  const runtime: Runtime<S, Services> = {
+  const runScheduleUnsafe = (schedule: ScheduleDefinition<S, AnyRequirements>): void => {
+    const deferred: Array<Command.DeferredCommand<S>> = []
+    for (const step of schedule.steps) {
+      if (Schedule.isSystemStep(step)) {
+        deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
+        continue
+      }
+      if (step.kind === "applyDeferred") {
+        applyDeferred(deferred)
+        continue
+      }
+      updateEvents()
+    }
+    const lastStep = schedule.steps.at(-1)
+    applyDeferred(deferred)
+    if (!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") {
+      updateEvents()
+    }
+  }
+
+  /**
+   * Executes multiple schedules after their requirement checks have passed.
+   */
+  const tickUnsafe = (schedules: ReadonlyArray<ScheduleDefinition<S, AnyRequirements>>): void => {
+    for (const schedule of schedules) {
+      runScheduleUnsafe(schedule)
+    }
+  }
+
+  /**
+   * The final loop-agnostic runtime value returned to users.
+   */
+  const runtime: Runtime<S, Simplify<Services>, Resources, States> = {
     schema: options.schema,
-    services: options.services,
+    services: providedServices,
+    resourceValues: (options.resources ?? {}) as Resources,
+    stateValues: (options.states ?? {}) as States,
     initialize(...schedules) {
-      runtime.tick(...schedules)
+      tickUnsafe(schedules)
     },
     runSchedule(schedule) {
-      const deferred: Array<Command.DeferredCommand<S>> = []
-      for (const step of schedule.steps) {
-        if (Schedule.isSystemStep(step)) {
-          deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
-          continue
-        }
-        if (step.kind === "applyDeferred") {
-          applyDeferred(deferred)
-          continue
-        }
-        updateEvents()
-      }
-      const lastStep = schedule.steps.at(-1)
-      applyDeferred(deferred)
-      if (!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") {
-        updateEvents()
-      }
+      runScheduleUnsafe(schedule)
     },
     tick(...schedules) {
-      for (const schedule of schedules) {
-        runtime.runSchedule(schedule)
-      }
+      tickUnsafe(schedules)
     }
   }
 
   return runtime
+}
+
+/**
+ * Builds the descriptor-backed runtime service environment.
+ *
+ * Use this instead of writing service objects keyed by strings manually. The
+ * helper derives the runtime map directly from service descriptors, so the key
+ * used at runtime can never drift from the declared service identity.
+ */
+export const services = <
+  const Entries extends ReadonlyArray<ServiceEntry>
+>(...entries: Entries): RuntimeServices<ServiceEntriesToRecord<Entries>> => {
+  const provided: Record<string, unknown> = {}
+  for (const [descriptor, implementation] of entries) {
+    provided[descriptor.name] = implementation
+  }
+  return provided as RuntimeServices<ServiceEntriesToRecord<Entries>>
 }

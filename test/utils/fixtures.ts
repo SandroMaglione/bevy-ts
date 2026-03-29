@@ -8,9 +8,14 @@ import type { Schema } from "../../src/schema.ts"
 export const readResourceValue = <
   S extends Schema.Any,
   Services extends Record<string, unknown>,
-  D extends Extract<Schema.Resources<S>[keyof Schema.Resources<S>], Descriptor<"resource", string, any>>
+  K extends keyof Schema.Resources<S>,
+  Resources extends Runtime.RuntimeResources<S> & {
+    readonly [P in K]: Schema.ResourceValue<S, P>
+  },
+  States extends Runtime.RuntimeStates<S>,
+  D extends Extract<Schema.Resources<S>[K], Descriptor<"resource", string, any>>
 >(
-  runtime: Runtime.Runtime<S, Services>,
+  runtime: Runtime.Runtime<S, Services, Resources, States>,
   schema: S,
   descriptor: D
 ): Descriptor.Value<D> => {
@@ -34,7 +39,7 @@ export const readResourceValue = <
     label: Label.defineScheduleLabel(`Test/ReadResourceSchedule/${descriptor.name}`),
     schema,
     systems: [readSystem]
-  }))
+  }) as never)
 
   return captured
 }
@@ -45,9 +50,14 @@ export const readResourceValue = <
 export const readStateValue = <
   S extends Schema.Any,
   Services extends Record<string, unknown>,
-  D extends Extract<Schema.States<S>[keyof Schema.States<S>], Descriptor<"state", string, any>>
+  Resources extends Runtime.RuntimeResources<S>,
+  K extends keyof Schema.States<S>,
+  States extends Runtime.RuntimeStates<S> & {
+    readonly [P in K]: Schema.StateValue<S, P>
+  },
+  D extends Extract<Schema.States<S>[K], Descriptor<"state", string, any>>
 >(
-  runtime: Runtime.Runtime<S, Services>,
+  runtime: Runtime.Runtime<S, Services, Resources, States>,
   schema: S,
   descriptor: D
 ): Descriptor.Value<D> => {
@@ -71,7 +81,7 @@ export const readStateValue = <
     label: Label.defineScheduleLabel(`Test/ReadStateSchedule/${descriptor.name}`),
     schema,
     systems: [readSystem]
-  }))
+  }) as never)
 
   return captured
 }

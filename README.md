@@ -87,19 +87,22 @@ const update = Schedule.define({
 
 const runtime = Runtime.makeRuntime({
   schema,
-  services: {
-    [Logger.name]: {
+  services: Runtime.services(
+    // Services are provided through their descriptors.
+    [Logger, {
       log(message: string) {
         console.log(message)
       }
-    }
-  },
+    }]
+  ),
   resources: {
+    // Resources are initialized by schema key.
     Time: 1 / 60
   }
 })
 
 const app = App.makeApp(runtime)
+// This only type-checks if the runtime satisfies everything `update` requires.
 app.update(update)
 ```
 
@@ -108,6 +111,66 @@ app.update(update)
 The normal flow is simple: define descriptors, group them into schema fragments, build one final schema, define systems against that schema, group systems into schedules, then run those schedules from your own loop. Rendering, input, physics, and timing stay outside the runtime unless you explicitly model them as resources or services.
 
 Systems only see what they declare. Queries describe read and write access up front. Resources, events, states, and services are exposed as typed views. Mutation goes through deferred commands instead of direct world writes.
+
+## Runtime requirements
+
+Schedules now carry the runtime requirements implied by their systems. A runtime records which services it provides and which resources and states it initialized. You can only run a schedule when those two sides match.
+
+```ts
+const TickSystem = System.define(
+  "TickSystem",
+  {
+    schema,
+    resources: {
+      time: System.readResource(Time)
+    },
+    states: {
+      phase: System.readState(Phase)
+    },
+    services: {
+      logger: System.service(Logger)
+    }
+  },
+  ({ resources, states, services }) =>
+    Fx.sync(() => {
+      services.logger.log(`${states.phase.get()}: ${resources.time.get()}`)
+    })
+)
+
+const tick = Schedule.define({
+  label: UpdateScheduleLabel,
+  schema,
+  systems: [TickSystem]
+})
+
+const runtime = Runtime.makeRuntime({
+  schema,
+  services: Runtime.services(
+    // Services use their descriptors.
+    [Logger, {
+      log(message: string) {
+        console.log(message)
+      }
+    }]
+  ),
+  resources: {
+    // Resources use schema keys.
+    Time: 1 / 60
+  },
+  states: {
+    // States also use schema keys.
+    Phase: "Running"
+  }
+})
+
+App.makeApp(runtime).update(tick)
+```
+
+If one of those inputs is missing, the schedule should fail in typecheck before it can fail at runtime.
+
+Services are provisioned through descriptors so runtime lookup follows the same
+identity the system spec declared. Resources and states stay keyed by schema
+property names because they come from the closed schema registry.
 
 ## Spawning entities
 
@@ -206,6 +269,7 @@ const SyncPixiSceneSystem = System.define(
       for (const match of queries.renderables.each()) {
         const entityId = match.entity.id.value
 
+        // The Pixi host has to be present in the runtime before this schedule can run.
         let sprite = services.pixi.sprites.get(entityId)
         if (!sprite) {
           sprite = new Sprite(Texture.WHITE)
@@ -224,7 +288,7 @@ This is the same pattern used in [`src/examples/pixi.ts`](./src/examples/pixi.ts
 
 ## Architecture
 
-Descriptors define nominal identities for components, resources, events, states, and services. Schemas close the world. Systems declare ECS access and service dependencies explicitly. Schedules order execution and define apply/event phases. The runtime owns world state, but not the outer loop.
+Descriptors define nominal identities for components, resources, events, states, and services. Schemas close the world. Systems declare ECS access and service dependencies explicitly. Schedules order execution, define apply/event phases, and carry their runtime requirements. The runtime owns world state, but not the outer loop, and the app/runtime execution boundary is where those requirements are checked.
 
 The important rule is simple: if TypeScript cannot prove something honestly, the public API should not pretend it can. Internals may erase types when needed, but that should not leak through the external surface.
 
@@ -239,4 +303,4 @@ The repo currently includes:
 
 ## Current limits
 
-This is still an early implementation. The public types are stricter than the runtime internals, and the project is not aiming for full Bevy parity yet. Performance-oriented storage, observers, richer state transitions, and parallel scheduling are not the current focus.
+This is still an early implementation. The public types are stricter than the runtime internals, and the project is not aiming for full Bevy parity yet. Dependency closure happens at the runtime and app execution boundary, not through Effect-style local `provide` or layer graphs. Performance-oriented storage, observers, richer state transitions, and parallel scheduling are not the current focus.

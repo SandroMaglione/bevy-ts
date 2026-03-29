@@ -315,9 +315,7 @@ export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExamp
 
   const runtime = Runtime.makeRuntime({
     schema,
-    services: {
-      [PixiHost.name]: host
-    },
+    services: Runtime.services([PixiHost, host]),
     resources: {
       DeltaTime: host.clock.deltaSeconds,
       Viewport: {

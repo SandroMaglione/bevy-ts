@@ -519,7 +519,7 @@ const browserUpdateSchedule = Schedule.define({
 export const createSnakeExample = () => {
   const runtime = Runtime.makeRuntime({
     schema,
-    services: {}
+    services: Runtime.services()
   })
 
   const app = App.makeApp(runtime)
@@ -616,20 +616,20 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
 
   const runtime = Runtime.makeRuntime({
     schema,
-    services: {
-      [DirectionInput.name]: {
+    services: Runtime.services(
+      [DirectionInput, {
         consume() {
           const next = pendingVelocity
           pendingVelocity = null
           return next
         }
-      },
-      [PixiHost.name]: {
+      }],
+      [PixiHost, {
         scene,
         nodes: new Map<number, Graphics>(),
         tileSize
-      }
-    }
+      }]
+    )
   })
 
   const app = App.makeApp(runtime)

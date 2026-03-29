@@ -61,7 +61,7 @@ describe("App", () => {
 
     const runtime = Runtime.makeRuntime({
       schema,
-      services: {},
+      services: Runtime.services(),
       resources: {
         Counter: 0,
         Log: []
@@ -140,7 +140,7 @@ describe("App", () => {
 
     const runtime = Runtime.makeRuntime({
       schema,
-      services: {},
+      services: Runtime.services(),
       resources: {
         Counter: 0,
         Log: []
@@ -198,7 +198,7 @@ describe("App", () => {
 
     const runtime = Runtime.makeRuntime({
       schema,
-      services: {},
+      services: Runtime.services(),
       resources: {
         Counter: 0,
         Log: []
@@ -229,7 +229,7 @@ describe("App", () => {
 
     const runtime = Runtime.makeRuntime({
       schema,
-      services: {},
+      services: Runtime.services(),
       resources: {
         Counter: 0,
         Log: []
@@ -252,7 +252,16 @@ describe("App", () => {
   })
 })
 
-const readCounter = (runtime: Runtime.Runtime<typeof schema, {}>): number => {
+const readCounter = (
+  runtime: Runtime.Runtime<
+    typeof schema,
+    {},
+    {
+      readonly Counter: number
+      readonly Log: ReadonlyArray<string>
+    }
+  >
+): number => {
   let captured = -1
   runtime.runSchedule(Schedule.define({
     label: Label.defineScheduleLabel("AppTest/ReadCounterHelper"),

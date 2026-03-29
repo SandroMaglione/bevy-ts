@@ -1,6 +1,6 @@
 import type { Label } from "./label.ts"
 import type { Schema } from "./schema.ts"
-import type { OrderTarget, SystemDefinition } from "./system.ts"
+import type { OrderTarget, RuntimeRequirements, SystemDefinition, SystemRequirements } from "./system.ts"
 
 /**
  * A typed set-level ordering configuration.
@@ -66,7 +66,10 @@ export type ScheduleStep = SystemDefinition<any, any, any> | ScheduleMarkerStep
  * Schedules are the unit the runtime executes. They can be called from any
  * external loop in any order you choose.
  */
-export interface ScheduleDefinition<S extends Schema.Any> {
+export interface ScheduleDefinition<
+  S extends Schema.Any,
+  out Requirements extends RuntimeRequirements = RuntimeRequirements
+> {
   /**
    * Typed schedule label.
    */
@@ -83,6 +86,10 @@ export interface ScheduleDefinition<S extends Schema.Any> {
    * The closed schema all systems in the schedule are expected to target.
    */
   readonly schema: S
+  /**
+   * Type-only aggregate requirements needed to execute this schedule safely.
+   */
+  readonly requirements?: Requirements | undefined
 }
 
 /**
@@ -98,6 +105,25 @@ export namespace Schedule {
 type AnySystem = SystemDefinition<any, any, any>
 type AnySetConfig = SystemSetConfig<any, any, any>
 type AnyOrderTarget = OrderTarget
+type AnyRuntimeRequirements = RuntimeRequirements<any, any, any>
+
+/**
+ * Flattens an inferred object type for cleaner public signatures.
+ */
+type Simplify<A> = {
+  readonly [K in keyof A]: A[K]
+}
+
+/**
+ * Converts a union of object types into one merged intersection.
+ */
+type UnionToIntersection<A> =
+  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
+
+/**
+ * Returns `{}` for empty unions before intersection folding.
+ */
+type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
 
 /**
  * Extracts the union of system-set labels configured in one schedule.
@@ -108,6 +134,21 @@ type ScheduleSetLabels<Sets extends ReadonlyArray<AnySetConfig>> = Sets[number][
  * Extracts the union of systems included in one schedule.
  */
 type ScheduleSystems<Systems extends ReadonlyArray<AnySystem>> = Systems[number]
+
+/**
+ * Derives the aggregate runtime requirements from the systems in one schedule.
+ */
+type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>> = Simplify<RuntimeRequirements<
+  Simplify<IntersectOrEmpty<
+    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["services"] : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["resources"] : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["states"] : never
+  >>
+>>
 
 /**
  * Extracts the union of internal system labels included in one schedule.
@@ -227,7 +268,7 @@ export const define = <
   readonly systems: Systems
   readonly sets?: Sets
   readonly steps?: ReadonlyArray<ScheduleStep>
-} & ValidateScheduleOptions<Systems, Sets>): ScheduleDefinition<S> => {
+} & ValidateScheduleOptions<Systems, Sets>): ScheduleDefinition<S, ScheduleRequirements<Systems>> => {
   const orderedSystems = resolveSystems(options.systems, options.sets ?? [])
   const orderedSystemMap = new Map(
     orderedSystems.map((system) => [system.spec.label.key, system] as const)
@@ -244,7 +285,7 @@ export const define = <
     steps,
     systems: orderedSystems,
     schema: options.schema
-  }
+  } as ScheduleDefinition<S, ScheduleRequirements<Systems>>
 }
 
 /**

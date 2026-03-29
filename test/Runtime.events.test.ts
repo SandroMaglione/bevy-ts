@@ -17,7 +17,7 @@ const schema = Schema.build(Schema.fragment({
 const makeRuntime = () =>
   Runtime.makeRuntime({
     schema,
-    services: {},
+    services: Runtime.services(),
     resources: {
       Log: []
     }
