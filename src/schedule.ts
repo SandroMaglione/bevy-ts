@@ -260,6 +260,24 @@ export type TransitionBundleRequirements<Entries extends ReadonlyArray<StateMach
   Simplify<IntersectOrEmpty<TransitionRequirementPart<Entries[number], "machines">>>
 >>
 
+export type TransitionBundleInput<S extends Schema.Any = Schema.Any, Root = unknown> =
+  | StateMachine.AnyTransitionSchedule<S, Root>
+  | TransitionBundleDefinition<S, ReadonlyArray<StateMachine.AnyTransitionSchedule<S, Root>>, any, Root>
+
+export type FlattenTransitionEntries<
+  Entries extends ReadonlyArray<TransitionBundleInput<any, any>>
+> = Entries extends readonly [infer Head, ...infer Tail]
+  ? Head extends TransitionBundleDefinition<any, infer InnerEntries, any, any>
+    ? Tail extends ReadonlyArray<TransitionBundleInput<any, any>>
+      ? readonly [...InnerEntries, ...FlattenTransitionEntries<Tail>]
+      : readonly [...InnerEntries]
+    : Head extends StateMachine.AnyTransitionSchedule<any, any>
+      ? Tail extends ReadonlyArray<TransitionBundleInput<any, any>>
+        ? readonly [Head, ...FlattenTransitionEntries<Tail>]
+        : readonly [Head]
+      : readonly []
+  : readonly []
+
 type StepRequirementsExact<Steps extends ReadonlyArray<ScheduleStep>> = Simplify<RuntimeRequirements<
   Simplify<IntersectOrEmpty<
     Steps[number] extends ApplyStateTransitionsStep<infer Bundle, any>
@@ -421,12 +439,12 @@ export const updateEvents = (): EventUpdateStep => ({
  */
 export const transitions = <
   S extends Schema.Any,
-  const Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>>
->(...entries: Entries): TransitionBundleDefinition<S, Entries, TransitionBundleRequirements<Entries>> => ({
+  const Entries extends ReadonlyArray<TransitionBundleInput<S, any>>
+>(...entries: Entries): TransitionBundleDefinition<S, FlattenTransitionEntries<Entries>, TransitionBundleRequirements<FlattenTransitionEntries<Entries>>> => ({
   kind: "transitionBundle",
-  entries,
-  requirements: undefined as unknown as TransitionBundleRequirements<Entries>
-}) as TransitionBundleDefinition<S, Entries, TransitionBundleRequirements<Entries>>
+  entries: entries.flatMap((entry) => "entries" in entry ? [...entry.entries] : [entry]) as unknown as FlattenTransitionEntries<Entries>,
+  requirements: undefined as unknown as TransitionBundleRequirements<FlattenTransitionEntries<Entries>>
+}) as TransitionBundleDefinition<S, FlattenTransitionEntries<Entries>, TransitionBundleRequirements<FlattenTransitionEntries<Entries>>>
 
 /**
  * Creates an explicit machine-transition application marker step.

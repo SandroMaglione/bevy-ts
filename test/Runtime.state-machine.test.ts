@@ -600,4 +600,224 @@ describe("Runtime state machine", () => {
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["entered:Playing"])
   })
+
+  it("emits transition events that become readable after updateEvents", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueuePlayingForTransitionEvents",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const readTransitionEvents = Game.System.define(
+      "StateMachineRuntime/ReadTransitionEvents",
+      {
+        transitionEvents: {
+          app: Game.System.readTransitionEvent(AppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitionEvents, resources }) =>
+        Fx.sync(() => {
+          for (const event of transitionEvents.app.all()) {
+            resources.log.update((entries) => [...entries, `event:${event.from}->${event.to}`])
+          }
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [queuePlaying, readTransitionEvents],
+      steps: [
+        queuePlaying,
+        Game.Schedule.applyStateTransitions(),
+        readTransitionEvents,
+        Game.Schedule.updateEvents(),
+        readTransitionEvents
+      ]
+    }))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["event:Menu->Playing"])
+  })
+
+  it("emits transition events in machine definition order", () => {
+    const LocalGame = Schema.bind(schema)
+    const LocalAppState = LocalGame.StateMachine.define("LocalAppStateEvents", ["Menu", "Playing", "Paused"] as const)
+    const LocalRoundState = LocalGame.StateMachine.define("LocalRoundStateEvents", ["Warmup", "Live", "SuddenDeath"] as const)
+
+    const queueStates = LocalGame.System.define(
+      "StateMachineRuntime/QueueEventOrderStates",
+      {
+        nextMachines: {
+          round: System.nextState(LocalRoundState),
+          app: System.nextState(LocalAppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.round.set("Live")
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const readAppEvents = LocalGame.System.define(
+      "StateMachineRuntime/ReadAppTransitionEvents",
+      {
+        transitionEvents: {
+          app: LocalGame.System.readTransitionEvent(LocalAppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitionEvents, resources }) =>
+        Fx.sync(() => {
+          for (const event of transitionEvents.app.all()) {
+            resources.log.update((entries) => [...entries, `app:${event.from}->${event.to}`])
+          }
+        })
+    )
+
+    const readRoundEvents = LocalGame.System.define(
+      "StateMachineRuntime/ReadRoundTransitionEvents",
+      {
+        transitionEvents: {
+          round: LocalGame.System.readTransitionEvent(LocalRoundState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitionEvents, resources }) =>
+        Fx.sync(() => {
+          for (const event of transitionEvents.round.all()) {
+            resources.log.update((entries) => [...entries, `round:${event.from}->${event.to}`])
+          }
+        })
+    )
+
+    const runtime = LocalGame.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        Counter: 0,
+        Log: []
+      },
+      machines: Runtime.machines(
+        Runtime.machine(LocalAppState, "Menu"),
+        Runtime.machine(LocalRoundState, "Warmup")
+      )
+    })
+
+    runtime.runSchedule(LocalGame.Schedule.define({
+      systems: [queueStates, readAppEvents, readRoundEvents],
+      steps: [
+        queueStates,
+        LocalGame.Schedule.applyStateTransitions(),
+        LocalGame.Schedule.updateEvents(),
+        readAppEvents,
+        readRoundEvents
+      ]
+    }))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual([
+      "app:Menu->Playing",
+      "round:Warmup->Live"
+    ])
+  })
+
+  it("supports flattened transition bundles", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueuePlayingForFlattenedBundle",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const logEnterPlaying = Game.System.define(
+      "StateMachineRuntime/FlattenedBundleEnterPlaying",
+      {
+        transitions: {
+          app: System.transition(AppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitions, resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, `enter:${transitions.app.get().to}`])
+        })
+    )
+
+    const nested = Game.Schedule.transitions(
+      Game.Schedule.onEnter(AppState, "Playing", {
+        systems: [logEnterPlaying]
+      })
+    )
+
+    const flattened = Game.Schedule.transitions(nested)
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [queuePlaying],
+      steps: [queuePlaying, Game.Schedule.applyStateTransitions(flattened)]
+    }))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["enter:Playing"])
+  })
+
+  it("suppresses identity-transition events when setIfChanged keeps the same value", () => {
+    const queueSame = Game.System.define(
+      "StateMachineRuntime/QueueSameStateIfChanged",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.setIfChanged("Menu")
+        })
+    )
+
+    const readTransitionEvents = Game.System.define(
+      "StateMachineRuntime/ReadIdentitySuppressedEvents",
+      {
+        transitionEvents: {
+          app: Game.System.readTransitionEvent(AppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitionEvents, resources }) =>
+        Fx.sync(() => {
+          for (const event of transitionEvents.app.all()) {
+            resources.log.update((entries) => [...entries, `event:${event.from}->${event.to}`])
+          }
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [queueSame, readTransitionEvents],
+      steps: [queueSame, Game.Schedule.applyStateTransitions(), Game.Schedule.updateEvents(), readTransitionEvents]
+    }))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual([])
+  })
 })

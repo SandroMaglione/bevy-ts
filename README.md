@@ -275,6 +275,35 @@ The current order is:
 3. commit the new current state
 4. `onEnter(current)`
 
+If code outside the transition bundle needs to react later, read the machine's committed transition events after `updateEvents()`:
+
+```ts
+const ObserveTransitions = Game.System.define(
+  "ObserveTransitions",
+  {
+    transitionEvents: {
+      app: Game.System.readTransitionEvent(AppState)
+    }
+  },
+  ({ transitionEvents }) =>
+    Fx.sync(() => {
+      for (const event of transitionEvents.app.all()) {
+        console.log(`${event.from} -> ${event.to}`)
+      }
+    })
+)
+
+const update = Game.Schedule.define({
+  systems: [PauseInputSystem, ObserveTransitions],
+  steps: [
+    PauseInputSystem,
+    Game.Schedule.applyStateTransitions(appTransitions),
+    Game.Schedule.updateEvents(),
+    ObserveTransitions
+  ]
+})
+```
+
 This unlocks the common orchestration cases that are awkward without a typed FSM layer: menus, pause screens, turn phases, battle phases, cutscenes, and editor vs play mode.
 
 ## Spawning entities
@@ -412,7 +441,7 @@ The next meaningful additions are the ones that unlock broader classes of games,
 
 The current FSM layer now supports multiple independent machines, such as `AppState`, `RoundState`, or `ModalState`, without weakening type safety.
 
-The next improvement here is deeper transition ergonomics around explicit bundles and marker-local orchestration. `onEnter`, `onExit`, and `onTransition` are already typed and machine-scoped, and transition handlers now run only when bundled into the exact `applyStateTransitions(...)` marker that should execute them. Bevy's `States` model is still the right reference space, but this runtime keeps the more explicit schedule-driven semantics.
+The next improvement here is deeper transition ergonomics around explicit bundles and marker-local orchestration. `onEnter`, `onExit`, and `onTransition` are already typed and machine-scoped, transition handlers run only when bundled into the exact `applyStateTransitions(...)` marker that should execute them, and normal schedules can react afterward through typed transition events plus `updateEvents()`. Bevy's `States` model is still the right reference space, but this runtime keeps the more explicit schedule-driven semantics.
 
 It would unlock flows like:
 

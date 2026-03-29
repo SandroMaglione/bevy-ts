@@ -61,6 +61,17 @@ export interface TransitionView<M extends StateMachineDefinition = StateMachineD
 }
 
 /**
+ * A typed read-only stream of committed machine transition events.
+ *
+ * These snapshots are emitted by `applyStateTransitions(...)` and become
+ * readable only after the normal `updateEvents()` marker advances event
+ * visibility for the current schedule.
+ */
+export interface TransitionEventView<M extends StateMachineDefinition = StateMachineDefinition> {
+  all(): ReadonlyArray<TransitionSnapshot<M>>
+}
+
+/**
  * Read access to the current committed state in a system spec.
  */
 export interface MachineRead<M extends StateMachineDefinition = StateMachineDefinition> {
@@ -78,6 +89,13 @@ export interface NextMachineWrite<M extends StateMachineDefinition = StateMachin
  * Read access to transition metadata in a system spec.
  */
 export interface TransitionRead<M extends StateMachineDefinition = StateMachineDefinition> {
+  readonly machine: M
+}
+
+/**
+ * Read access to committed transition events in a system spec.
+ */
+export interface TransitionEventRead<M extends StateMachineDefinition = StateMachineDefinition> {
   readonly machine: M
 }
 
@@ -226,6 +244,13 @@ export const write = <M extends StateMachine.Any>(machine: M): NextMachineWrite<
  * Declares that a system wants access to the last applied transition payload.
  */
 export const transition = <M extends StateMachine.Any>(machine: M): TransitionRead<M> => ({
+  machine
+})
+
+/**
+ * Declares that a system wants to read committed transition events for one machine.
+ */
+export const readTransitionEvent = <M extends StateMachine.Any>(machine: M): TransitionEventRead<M> => ({
   machine
 })
 

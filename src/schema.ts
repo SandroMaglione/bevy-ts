@@ -429,8 +429,14 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   type BoundOrderTarget = BoundAnySystem | Label.System | Label.SystemSet
   type BoundMachine = Schema.BoundStateMachine<Root>
   type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root>
-  type BoundTransitionBundleFor<Entries extends ReadonlyArray<BoundTransitionSchedule>> =
-    Schedule.TransitionBundleDefinition<S, Entries, Schedule.TransitionBundleRequirements<Entries>, Root>
+  type BoundTransitionBundleInput = BoundTransitionSchedule | Schema.BoundTransitionBundle<S, Root>
+  type BoundTransitionBundleFor<Entries extends ReadonlyArray<BoundTransitionBundleInput>> =
+    Schedule.TransitionBundleDefinition<
+      S,
+      Schedule.FlattenTransitionEntries<Entries>,
+      Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
+      Root
+    >
   type BoundTransitionBundle = Schema.BoundTransitionBundle<S, Root>
   type BoundScheduleStep =
     | BoundAnySystem
@@ -485,6 +491,7 @@ export const bind = <S extends Schema.Any>(schema: S) => {
     const Before extends ReadonlyArray<BoundOrderTarget> = [],
     const Machines extends Record<string, Machine.MachineRead<BoundMachine>> = {},
     const NextMachines extends Record<string, Machine.NextMachineWrite<BoundMachine>> = {},
+    const TransitionEvents extends Record<string, Machine.TransitionEventRead<BoundMachine>> = {},
     const When extends ReadonlyArray<Machine.Condition<Root>> = [],
     const Transitions extends Record<string, Machine.TransitionRead<BoundMachine>> = {},
     A = void,
@@ -502,16 +509,17 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       readonly states?: States
       readonly machines?: Machines
       readonly nextMachines?: NextMachines
+      readonly transitionEvents?: TransitionEvents
       readonly when?: When
       readonly transitions?: Transitions
     },
-    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root>>) => Fx<
+    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>) => Fx<
       A,
       E,
-      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root>>
+      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>
     >
   ) => {
-    const system = System.define<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root, A, E>(name, {
+    const system = System.define<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root, A, E>(name, {
       schema,
       ...spec
     }, run)
@@ -572,6 +580,7 @@ export const bind = <S extends Schema.Any>(schema: S) => {
 
   const systemMachine = <M extends BoundMachine>(machine: M) => System.machine(machine)
   const systemNextState = <M extends BoundMachine>(machine: M) => System.nextState(machine)
+  const systemReadTransitionEvent = <M extends BoundMachine>(machine: M) => System.readTransitionEvent(machine)
   const systemTransition = <M extends BoundMachine>(machine: M) => System.transition(machine)
 
   function defineSchedule<
@@ -710,7 +719,7 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   }
 
   const makeTransitionBundle = <
-    const Entries extends ReadonlyArray<BoundTransitionSchedule>
+    const Entries extends ReadonlyArray<BoundTransitionBundleInput>
   >(...entries: Entries): BoundTransitionBundleFor<Entries> => {
     const bundle = Schedule.transitions<S, Entries>(...entries)
     return bundle as unknown as BoundTransitionBundleFor<Entries>
@@ -818,6 +827,7 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       service: System.service,
       machine: systemMachine,
       nextState: systemNextState,
+      readTransitionEvent: systemReadTransitionEvent,
       transition: systemTransition
     },
     Schedule: {

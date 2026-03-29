@@ -70,6 +70,20 @@ const TransitionSystem = Game.System.define(
     })
 )
 
+const TransitionEventSystem = Game.System.define(
+  "StateMachine/TransitionEventReader",
+  {
+    transitionEvents: {
+      app: Game.System.readTransitionEvent(AppState)
+    }
+  },
+  ({ transitionEvents }) =>
+    Fx.sync(() => {
+      const events = transitionEvents.app.all()
+      expect(events).type.toBe<ReadonlyArray<{ readonly from: "Menu" | "Playing" | "Paused"; readonly to: "Menu" | "Playing" | "Paused" }>>()
+    })
+)
+
 const PlayingOnlySystem = Game.System.define(
   "StateMachine/PlayingOnly",
   {
@@ -95,6 +109,7 @@ describe("StateMachine", () => {
     MachineSchedule
     EnterPlaying
     TransitionBundle
+    TransitionEventSystem
   })
 
   it("supports multiple machines with exact unions in one system", () => {
@@ -149,6 +164,17 @@ describe("StateMachine", () => {
         machines: {
           // @ts-expect-error!
           other: System.machine(OtherState)
+        }
+      },
+      () => Fx.sync<undefined, {}>(() => undefined)
+    )
+
+    Game.System.define(
+      "StateMachine/CrossSchemaTransitionEvents",
+      {
+        transitionEvents: {
+          // @ts-expect-error!
+          other: Game.System.readTransitionEvent(OtherState)
         }
       },
       () => Fx.sync<undefined, {}>(() => undefined)
@@ -291,6 +317,31 @@ describe("StateMachine", () => {
     })
 
     runtime.runSchedule(schedule)
+  })
+
+  it("keeps transition event unions exact and allows bundle flattening", () => {
+    const nested = Game.Schedule.transitions(
+      Game.Schedule.onEnter(AppState, "Playing", {
+        systems: [TransitionSystem]
+      })
+    )
+
+    const flattened = Game.Schedule.transitions(
+      nested,
+      Game.Schedule.onExit(AppState, "Paused", {
+        systems: [TransitionSystem]
+      })
+    )
+
+    const schedule = Game.Schedule.define({
+      systems: [WriterSystem, TransitionEventSystem],
+      steps: [
+        WriterSystem,
+        Game.Schedule.applyStateTransitions(flattened)
+      ]
+    })
+
+    schedule
   })
 
   it("rejects nested transition-application markers in transition schedules", () => {

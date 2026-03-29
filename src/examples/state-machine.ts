@@ -600,19 +600,23 @@ const ResetRoundOnCountdownEnterSystem = Game.System.define(
     })
 )
 
-const WriteTransitionNoticeSystem = Game.System.define(
-  "StateMachineExample/WriteTransitionNotice",
+const WriteTransitionNoticeFromEventsSystem = Game.System.define(
+  "StateMachineExample/WriteTransitionNoticeFromEvents",
   {
-    transitions: {
-      app: Game.System.transition(AppState)
+    transitionEvents: {
+      app: Game.System.readTransitionEvent(AppState)
     },
     resources: {
       notice: Game.System.writeResource(TransitionNotice)
     }
   },
-  ({ transitions, resources }) =>
+  ({ transitionEvents, resources }) =>
     Fx.sync(() => {
-      const { from, to } = transitions.app.get()
+      const last = transitionEvents.app.all().at(-1)
+      if (!last) {
+        return
+      }
+      const { from, to } = last
       resources.notice.set({
         text: `${from} -> ${to}`,
         ttl: NOTICE_DURATION_SECONDS
@@ -769,19 +773,7 @@ const bootstrapSchedule = Game.Schedule.define({
 
 const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(AppState, "Countdown", {
-    systems: [ResetRoundOnCountdownEnterSystem, WriteTransitionNoticeSystem]
-  }),
-  Game.Schedule.onEnter(AppState, "Paused", {
-    systems: [WriteTransitionNoticeSystem]
-  }),
-  Game.Schedule.onExit(AppState, "Paused", {
-    systems: [WriteTransitionNoticeSystem]
-  }),
-  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Victory" }, {
-    systems: [WriteTransitionNoticeSystem]
-  }),
-  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Defeat" }, {
-    systems: [WriteTransitionNoticeSystem]
+    systems: [ResetRoundOnCountdownEnterSystem]
   })
 )
 
@@ -797,6 +789,7 @@ const updateSchedule = Game.Schedule.define({
     CollectPickupsSystem,
     TickRoundClockSystem,
     QueueOutcomeSystem,
+    WriteTransitionNoticeFromEventsSystem,
     FadeTransitionNoticeSystem,
     SyncSceneSystem,
     SyncHudSystem
@@ -819,6 +812,8 @@ const updateSchedule = Game.Schedule.define({
     TickRoundClockSystem,
     QueueOutcomeSystem,
     Game.Schedule.applyStateTransitions(stateTransitions),
+    Game.Schedule.updateEvents(),
+    WriteTransitionNoticeFromEventsSystem,
     FadeTransitionNoticeSystem,
     SyncSceneSystem,
     SyncHudSystem

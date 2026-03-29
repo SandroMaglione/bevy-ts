@@ -14,6 +14,7 @@ import type {
   QueryHandle,
   ResourceReadView,
   RuntimeRequirements,
+  TransitionEventReadView,
   MachineReadView,
   NextMachineWriteView,
   ResourceWriteView,
@@ -417,6 +418,14 @@ export const makeRuntime = <
    * Descriptor-keyed pending event buffers written before the next event update.
    */
   let pendingEvents = new Map<symbol, Array<unknown>>()
+  /**
+   * Machine-keyed readable transition-event buffers for the current phase.
+   */
+  let readableTransitionEvents = new Map<symbol, Array<Machine.TransitionSnapshot>>()
+  /**
+   * Machine-keyed pending transition-event buffers written before the next event update.
+   */
+  let pendingTransitionEvents = new Map<symbol, Array<Machine.TransitionSnapshot>>()
 
   /**
    * Seeds runtime resources from the host-provided initial values.
@@ -675,6 +684,15 @@ export const makeRuntime = <
   })
 
   /**
+   * Creates a read-only machine transition-event stream view.
+   */
+  const makeTransitionEventReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): TransitionEventReadView<M> => ({
+    all() {
+      return (readableTransitionEvents.get(stateMachine.key) ?? []) as unknown as ReadonlyArray<Machine.TransitionSnapshot<M>>
+    }
+  })
+
+  /**
    * Creates a read-only machine view.
    */
   const makeMachineReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): MachineReadView<M> => ({
@@ -779,6 +797,12 @@ export const makeRuntime = <
         makeNextMachineWriteView(access.machine)
       ])
     )
+    const transitionEventViews = Object.fromEntries(
+      Object.entries((system.spec.transitionEvents ?? {}) as Record<string, any>).map(([key, access]) => [
+        key,
+        makeTransitionEventReadView(access.machine)
+      ])
+    )
     const transitionViews = Object.fromEntries(
       Object.entries((system.spec.transitions ?? {}) as Record<string, any>).map(([key, access]) => [
         key,
@@ -797,6 +821,7 @@ export const makeRuntime = <
       states: stateViews,
       machines: machineViews,
       nextMachines: nextMachineViews,
+      transitionEvents: transitionEventViews,
       transitions: transitionViews,
       services: serviceViews,
       commands
@@ -836,6 +861,8 @@ export const makeRuntime = <
   const updateEvents = (): void => {
     readableEvents = pendingEvents
     pendingEvents = new Map()
+    readableTransitionEvents = pendingTransitionEvents
+    pendingTransitionEvents = new Map()
   }
 
   /**
@@ -911,6 +938,9 @@ export const makeRuntime = <
 
       currentMachines.set(machineKey, pending.value)
       changedMachines.add(machineKey)
+      const transitionEvents = pendingTransitionEvents.get(machineKey) ?? []
+      transitionEvents.push(snapshot)
+      pendingTransitionEvents.set(machineKey, transitionEvents)
 
       const enterSchedules = schedules.filter((schedule) =>
         schedule.transition.phase === "enter"
