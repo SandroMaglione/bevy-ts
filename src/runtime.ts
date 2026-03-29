@@ -154,7 +154,16 @@ type Simplify<A> = {
 /**
  * Extracts the requirements carried by one schedule definition.
  */
-type ScheduleRequirementsOf<Schedule> = Schedule extends ScheduleDefinition<any, infer Requirements> ? Requirements : never
+type RequirementsOfSchedule<Schedule> =
+  Schedule extends { readonly requirements: infer Requirements extends RuntimeRequirements }
+    ? Requirements
+    : never
+
+type UnionToIntersection<A> =
+  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
+
+type NormalizeRequirementObject<Required extends object> =
+  [Required] extends [never] ? {} : Simplify<UnionToIntersection<Required>>
 
 /**
  * Produces a readable type-level label name.
@@ -197,15 +206,15 @@ type ScheduleRequirementErrors<
   Resources extends object,
   States extends object,
   Machines extends object
-> = Schedule extends ScheduleDefinition<any, infer Requirements extends RuntimeRequirements>
-  ? | CategoryRequirementErrors<"Missing or incompatible services", Schedule, Requirements["services"], Services>
-    | CategoryRequirementErrors<"Missing or incompatible resources", Schedule, Requirements["resources"], Resources>
-    | CategoryRequirementErrors<"Missing or incompatible states", Schedule, Requirements["states"], States>
-    | CategoryRequirementErrors<"Missing or incompatible machines", Schedule, Requirements["machines"], Machines>
+> = RequirementsOfSchedule<Schedule> extends infer Requirements extends RuntimeRequirements
+  ? | CategoryRequirementErrors<"Missing or incompatible services", Schedule, NormalizeRequirementObject<Requirements["services"]>, Services>
+    | CategoryRequirementErrors<"Missing or incompatible resources", Schedule, NormalizeRequirementObject<Requirements["resources"]>, Resources>
+    | CategoryRequirementErrors<"Missing or incompatible states", Schedule, NormalizeRequirementObject<Requirements["states"]>, States>
+    | CategoryRequirementErrors<"Missing or incompatible machines", Schedule, NormalizeRequirementObject<Requirements["machines"]>, Machines>
   : never
 
-type ValidateSchedules<
-  Schedules extends ReadonlyArray<ScheduleDefinition<any, AnyRequirements>>,
+export type ValidateSchedules<
+  Schedules extends ReadonlyArray<ExecutableSchedule<any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -216,7 +225,20 @@ type ValidateSchedules<
       readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedules[number], Services, Resources, States, Machines>
     }
 
-type AnyRequirements = RuntimeRequirements<any, any, any, any>
+export type AnyRequirements = RuntimeRequirements<any, any, any, any>
+
+type ExecutableSchedule<
+  S extends Schema.Any,
+  Root
+> = {
+  readonly kind: "anonymous" | "named"
+  readonly schema: S
+  readonly steps: ReadonlyArray<Schedule.ScheduleStep>
+  readonly systems: ReadonlyArray<SystemDefinition<any, any, any>>
+  readonly sets: ReadonlyArray<Schedule.SystemSetConfig>
+  readonly requirements: RuntimeRequirements
+  readonly __schemaRoot?: Root | undefined
+}
 
 /**
  * The caller-facing initialization shape for one descriptor registry.
@@ -297,18 +319,22 @@ export interface Runtime<
    * This is a semantic alias for a one-off bootstrap phase before entering the
    * repeating outer loop.
    */
-  readonly initialize: <
-    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>
-  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>) => void
+  readonly initialize: {
+    <const Schedules extends ReadonlyArray<ExecutableSchedule<S, Root>>>(
+      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
+    ): void
+  }
   /**
    * Runs one schedule once.
    *
    * Deferred commands and events advance only at explicit schedule marker
    * steps, plus one final end-of-schedule apply/update pass for safety.
    */
-  readonly runSchedule: <
-    const Selected extends ScheduleDefinition<S, AnyRequirements, Root>
-  >(schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States, Machines>) => void
+  readonly runSchedule: {
+    <const Selected extends ExecutableSchedule<S, Root>>(
+      schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States, Machines>
+    ): void
+  }
   /**
    * Runs multiple schedules in sequence.
    *
@@ -316,9 +342,11 @@ export interface Runtime<
    * same `tick(...)` call can observe the fully applied world changes and event
    * updates produced by earlier schedules.
    */
-  readonly tick: <
-    const Schedules extends ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>
-  >(...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>) => void
+  readonly tick: {
+    <const Schedules extends ReadonlyArray<ExecutableSchedule<S, Root>>>(
+      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
+    ): void
+  }
 }
 
 /**
@@ -343,7 +371,7 @@ export const makeRuntime = <
   readonly resources?: Resources
   readonly states?: States
   readonly machines?: RuntimeMachines<Machines>
-  readonly transitionSchedules?: ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>
+  readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
 }): Runtime<S, Simplify<Services>, Resources, States, Root, Machines> => {
   /**
    * Monotonic entity id counter.
@@ -409,6 +437,10 @@ export const makeRuntime = <
    */
   const providedMachines = (options.machines ?? machines()) as unknown as Simplify<Machines>
   const machineEntries = (options.machines ?? machines())[runtimeMachinesEntries]
+  const machineDefinitions = options.machineDefinitions ?? []
+  const machineDefinitionOrder = new Map(
+    machineDefinitions.map((machine, index) => [machine.key, index] as const)
+  )
 
   for (const provision of machineEntries) {
     currentMachines.set(provision.machine.key, provision.initial)
@@ -813,6 +845,9 @@ export const makeRuntime = <
     schedule: Machine.StateMachine.AnyTransitionSchedule<S, Root>,
     snapshot: Machine.TransitionSnapshot
   ): void => {
+    if (schedule.steps.some((step) => !Schedule.isSystemStep(step) && step.kind === "applyStateTransitions")) {
+      throw new Error("Transition schedules cannot contain applyStateTransitions() steps")
+    }
     activeTransitions.set(schedule.transition.machine.key, snapshot)
     runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root>, {
       resetChangedMachines: false
@@ -823,11 +858,23 @@ export const makeRuntime = <
   /**
    * Applies queued machine transitions and runs matching transition schedules.
    */
-  const applyStateTransitions = (deferred: Array<Command.DeferredCommand<S>>): void => {
+  const applyStateTransitions = (
+    deferred: Array<Command.DeferredCommand<S>>,
+    bundle?: Schedule.TransitionBundleDefinition<S, ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>, any, Root>
+  ): void => {
     applyDeferred(deferred)
     changedMachines = new Set()
+    const scheduledTransitions = Array.from(pendingMachines.entries())
+      .sort(([leftKey], [rightKey]) =>
+        (machineDefinitionOrder.get(leftKey) ?? Number.MAX_SAFE_INTEGER)
+        - (machineDefinitionOrder.get(rightKey) ?? Number.MAX_SAFE_INTEGER)
+      )
 
-    for (const [machineKey, pending] of pendingMachines) {
+    for (const [machineKey] of scheduledTransitions) {
+      pendingMachines.delete(machineKey)
+    }
+
+    for (const [machineKey, pending] of scheduledTransitions) {
       const current = currentMachines.get(machineKey)
       if (current === undefined) {
         continue
@@ -842,7 +889,7 @@ export const makeRuntime = <
         to: pending.value as Machine.StateValue
       }
 
-      const schedules = options.transitionSchedules ?? []
+      const schedules = bundle?.entries ?? []
       const exitSchedules = schedules.filter((schedule) =>
         schedule.transition.phase === "exit"
         && schedule.transition.machine.key === machineKey
@@ -874,8 +921,6 @@ export const makeRuntime = <
         runTransitionSchedule(schedule, snapshot)
       }
     }
-
-    pendingMachines.clear()
   }
 
   /**
@@ -909,7 +954,7 @@ export const makeRuntime = <
         continue
       }
       if (step.kind === "applyStateTransitions") {
-        applyStateTransitions(deferred)
+        applyStateTransitions(deferred, step.bundle as never)
         continue
       }
       updateEvents()
@@ -924,9 +969,9 @@ export const makeRuntime = <
   /**
    * Executes multiple schedules after their requirement checks have passed.
    */
-  const tickUnsafe = (schedules: ReadonlyArray<ScheduleDefinition<S, AnyRequirements, Root>>): void => {
+  const tickUnsafe = (schedules: ReadonlyArray<ExecutableSchedule<S, Root>>): void => {
     for (const schedule of schedules) {
-      runScheduleUnsafe(schedule)
+      runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
     }
   }
 
@@ -943,7 +988,7 @@ export const makeRuntime = <
       tickUnsafe(schedules)
     },
     runSchedule(schedule) {
-      runScheduleUnsafe(schedule)
+      runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
     },
     tick(...schedules) {
       tickUnsafe(schedules)

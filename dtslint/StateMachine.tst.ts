@@ -25,6 +25,7 @@ const Game = Schema.bind(schema)
 const OtherGame = Schema.bind(otherSchema)
 
 const AppState = Game.StateMachine.define("AppState", ["Menu", "Playing", "Paused"] as const)
+const RoundState = Game.StateMachine.define("RoundState", ["Warmup", "Live", "SuddenDeath"] as const)
 const OtherState = OtherGame.StateMachine.define("OtherState", ["Idle", "Running"] as const)
 
 const ReaderSystem = Game.System.define(
@@ -85,11 +86,38 @@ const EnterPlaying = Game.Schedule.onEnter(AppState, "Playing", {
   systems: [TransitionSystem]
 })
 
+const TransitionBundle = Game.Schedule.transitions(EnterPlaying)
+
 describe("StateMachine", () => {
   it("keeps the machine value union exact across readers and writers", () => {
     AppState
+    RoundState
     MachineSchedule
     EnterPlaying
+    TransitionBundle
+  })
+
+  it("supports multiple machines with exact unions in one system", () => {
+    Game.System.define(
+      "StateMachine/MultiMachineReader",
+      {
+        machines: {
+          app: System.machine(AppState),
+          round: System.machine(RoundState)
+        },
+        nextMachines: {
+          round: System.nextState(RoundState)
+        }
+      },
+      ({ machines, nextMachines }) =>
+        Fx.sync(() => {
+          expect(machines.app.get()).type.toBe<"Menu" | "Playing" | "Paused">()
+          expect(machines.round.get()).type.toBe<"Warmup" | "Live" | "SuddenDeath">()
+          nextMachines.round.set("Live")
+          // @ts-expect-error!
+          nextMachines.round.set("Paused")
+        })
+    )
   })
 
   it("rejects invalid machine values in conditions and queued writes", () => {
@@ -130,6 +158,20 @@ describe("StateMachine", () => {
     Game.Schedule.onEnter(OtherState, "Idle", {
       systems: [ReaderSystem]
     })
+
+    const OtherBundle = OtherGame.Schedule.transitions(
+      OtherGame.Schedule.onEnter(OtherState, "Idle", {
+        systems: []
+      })
+    )
+
+    Game.Schedule.define({
+      systems: [ReaderSystem],
+      steps: [
+        // @ts-expect-error!
+        Game.Schedule.applyStateTransitions(OtherBundle)
+      ]
+    })
   })
 
   it("rejects runtimes that omit required machine initialization", () => {
@@ -150,11 +192,29 @@ describe("StateMachine", () => {
         Counter: 0
       },
       machines: Runtime.machines(
-        Runtime.machine(AppState, "Menu")
+        Runtime.machine(AppState, "Menu"),
+        Runtime.machine(RoundState, "Warmup")
       )
     })
 
     runtime.runSchedule(MachineSchedule)
+  })
+
+  it("rejects invalid multi-machine runtime initialization values", () => {
+    Game.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        Counter: 0
+      },
+      machines: Runtime.machines(
+        Runtime.machine(AppState, "Menu"),
+        Runtime.machine(
+          RoundState,
+          // @ts-expect-error!
+          "Playing"
+        )
+      )
+    })
   })
 
   it("does not expose transition context on normal schedules", () => {
@@ -189,5 +249,57 @@ describe("StateMachine", () => {
         systems: [TransitionSystem]
       }
     )
+  })
+
+  it("includes transition bundle requirements in the parent schedule", () => {
+    const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("StateMachine/Logger")
+
+    const TransitionWithService = Game.Schedule.onEnter(AppState, "Playing", {
+      systems: [
+        Game.System.define(
+          "StateMachine/TransitionServiceRequirement",
+          {
+            transitions: {
+              app: System.transition(AppState)
+            },
+            services: {
+              logger: System.service(Logger)
+            }
+          },
+          ({ services }) =>
+            Fx.sync(() => {
+              services.logger.log("ok")
+            })
+        )
+      ]
+    })
+
+    const schedule = Game.Schedule.define({
+      systems: [WriterSystem],
+      steps: [WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService))]
+    })
+
+    const runtime = Game.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        Counter: 0
+      },
+      machines: Runtime.machines(
+        Runtime.machine(AppState, "Menu"),
+        Runtime.machine(RoundState, "Warmup")
+      )
+    })
+
+    runtime.runSchedule(schedule)
+  })
+
+  it("rejects nested transition-application markers in transition schedules", () => {
+    Game.Schedule.onEnter(AppState, "Playing", {
+      systems: [TransitionSystem],
+      steps: [
+        // @ts-expect-error!
+        Game.Schedule.applyStateTransitions()
+      ]
+    })
   })
 })

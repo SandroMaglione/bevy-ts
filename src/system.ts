@@ -326,6 +326,11 @@ type Simplify<A> = {
   readonly [K in keyof A]: A[K]
 }
 
+type UnionToIntersection<A> =
+  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
+
+type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
+
 /**
  * Finds the schema registry key associated with one descriptor.
  */
@@ -487,10 +492,12 @@ export type SystemStateRequirements<Spec extends AnySystemSpec> = Simplify<{
  * Derives the runtime machine initialization requirements from one system spec.
  */
 export type SystemMachineRequirements<Spec extends AnySystemSpec> = Simplify<
-  Machine.MachineRequirementsFromRecord<Spec["machines"]>
-  & Machine.MachineRequirementsFromRecord<Spec["nextMachines"]>
-  & Machine.MachineRequirementsFromRecord<Spec["transitions"]>
-  & Machine.MachineRequirementsFromConditions<Spec["when"]>
+  IntersectOrEmpty<
+    | Machine.MachineRequirementsFromRecord<Spec["machines"]>
+    | Machine.MachineRequirementsFromRecord<Spec["nextMachines"]>
+    | Machine.MachineRequirementsFromRecord<Spec["transitions"]>
+    | Machine.MachineRequirementsFromConditions<Spec["when"]>
+  >
 >
 
 /**
@@ -520,6 +527,14 @@ export interface SystemDefinition<
    * The explicit static description of the system.
    */
   readonly spec: Spec
+  /**
+   * Cached static runtime requirements for this system.
+   *
+   * Carrying this directly on the value avoids having later schedule-level
+   * type folds re-infer the full spec repeatedly, which keeps the bound API
+   * both stricter and cheaper for the compiler.
+   */
+  readonly requirements: SystemRequirements<Spec>
   /**
    * Hidden schema-root brand used by schema-bound APIs.
    */
@@ -712,6 +727,7 @@ export function define<
 
   return {
     name,
+    requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, When, Transitions, Root>>,
     spec: {
       label: spec.label ?? LabelModule.defineSystemLabel(name),
       schema: spec.schema,

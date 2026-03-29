@@ -112,6 +112,20 @@ export namespace Schema {
     Values extends readonly [Machine.StateValue, ...Machine.StateValue[]] = readonly [Machine.StateValue, ...Machine.StateValue[]]
   > = Machine.StateMachineDefinition<Name, Values, Root>
 
+  export type BoundTransitionSchedule<
+    S extends Any,
+    Root,
+    M extends BoundStateMachine<Root> = BoundStateMachine<Root>,
+    Requirements extends System.RuntimeRequirements<any, any, any, any> = System.RuntimeRequirements<any, any, any, any>
+  > = Machine.TransitionScheduleDefinition<S, M, Requirements, Root>
+
+  export type BoundTransitionBundle<
+    S extends Any,
+    Root,
+    Entries extends ReadonlyArray<BoundTransitionSchedule<S, Root, any, any>> = ReadonlyArray<BoundTransitionSchedule<S, Root, any, any>>,
+    Requirements extends System.RuntimeRequirements<any, any, any, any> = System.RuntimeRequirements<any, any, any, any>
+  > = Schedule.TransitionBundleDefinition<S, Entries, Requirements, Root>
+
   /**
    * A schema-bound runtime branded to one bound schema root.
    */
@@ -193,18 +207,56 @@ type StateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Sche
  */
 type BoundScheduleRequirements<Systems extends ReadonlyArray<System.SystemDefinition<any, any, any, any>>> = Simplify<System.RuntimeRequirements<
   Simplify<IntersectOrEmpty<
-    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["services"] : never
+    Systems[number] extends { readonly requirements: infer Requirements extends System.RuntimeRequirements } ? Requirements["services"] : never
   >>,
   Simplify<IntersectOrEmpty<
-    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["resources"] : never
+    Systems[number] extends { readonly requirements: infer Requirements extends System.RuntimeRequirements } ? Requirements["resources"] : never
   >>,
   Simplify<IntersectOrEmpty<
-    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["states"] : never
+    Systems[number] extends { readonly requirements: infer Requirements extends System.RuntimeRequirements } ? Requirements["states"] : never
   >>,
   Simplify<IntersectOrEmpty<
-    Systems[number] extends System.SystemDefinition<infer Spec, any, any, any> ? System.SystemRequirements<Spec>["machines"] : never
+    Systems[number] extends { readonly requirements: infer Requirements extends System.RuntimeRequirements } ? Requirements["machines"] : never
   >>
 >>
+
+type BoundStepRequirements<Steps extends ReadonlyArray<Schedule.Schedule.Step>> = Simplify<System.RuntimeRequirements<
+  Simplify<IntersectOrEmpty<
+    Steps[number] extends Schedule.ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends { readonly requirements: infer Requirements extends System.RuntimeRequirements }
+        ? Requirements["services"]
+        : never
+      : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    Steps[number] extends Schedule.ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends { readonly requirements: infer Requirements extends System.RuntimeRequirements }
+        ? Requirements["resources"]
+        : never
+      : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    Steps[number] extends Schedule.ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends { readonly requirements: infer Requirements extends System.RuntimeRequirements }
+        ? Requirements["states"]
+        : never
+      : never
+  >>,
+  Simplify<IntersectOrEmpty<
+    Steps[number] extends Schedule.ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends { readonly requirements: infer Requirements extends System.RuntimeRequirements }
+        ? Requirements["machines"]
+        : never
+      : never
+  >>
+>>
+
+type BoundScheduleRequirementsWithSteps<
+  Systems extends ReadonlyArray<System.SystemDefinition<any, any, any, any>>,
+  Steps extends ReadonlyArray<Schedule.Schedule.Step> | undefined
+> = Steps extends undefined
+  ? BoundScheduleRequirements<Systems>
+  : Simplify<BoundScheduleRequirements<Systems> & BoundStepRequirements<Extract<Steps, ReadonlyArray<Schedule.Schedule.Step>>>>
 
 type RebindAnonymousSchedule<ScheduleValue, Root> =
   ScheduleValue extends Schedule.Schedule.Anonymous<infer S, infer Requirements, any>
@@ -219,6 +271,11 @@ type RebindNamedSchedule<ScheduleValue, Root> =
 type RebindTransitionSchedule<ScheduleValue, M extends Machine.StateMachine.Any, Root> =
   ScheduleValue extends Schedule.Schedule.Anonymous<infer S, infer Requirements, any>
     ? Machine.TransitionScheduleDefinition<S, M, Requirements, Root>
+    : never
+
+type RebindTransitionBundle<BundleValue, Root> =
+  BundleValue extends Schedule.TransitionBundleDefinition<infer S, infer Entries, infer Requirements, any>
+    ? Schedule.TransitionBundleDefinition<S, Entries, Requirements, Root>
     : never
 
 /**
@@ -371,9 +428,51 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   type BoundAnySystem = System.SystemDefinition<any, any, any, Root>
   type BoundOrderTarget = BoundAnySystem | Label.System | Label.SystemSet
   type BoundMachine = Schema.BoundStateMachine<Root>
-  type BoundScheduleStep = BoundAnySystem | Schedule.ApplyDeferredStep | Schedule.EventUpdateStep | Schedule.ApplyStateTransitionsStep
-  const transitionSchedules: Array<Machine.StateMachine.AnyTransitionSchedule<S, Root>> = []
-  let definedMachine: BoundMachine | undefined
+  type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root>
+  type BoundTransitionBundleFor<Entries extends ReadonlyArray<BoundTransitionSchedule>> =
+    Schedule.TransitionBundleDefinition<S, Entries, Schedule.TransitionBundleRequirements<Entries>, Root>
+  type BoundTransitionBundle = Schema.BoundTransitionBundle<S, Root>
+  type BoundScheduleStep =
+    | BoundAnySystem
+    | Schedule.ApplyDeferredStep
+    | Schedule.EventUpdateStep
+    | Schedule.ApplyStateTransitionsStep<BoundTransitionBundle | undefined, Root>
+  type BoundTransitionStep = BoundAnySystem | Schedule.ApplyDeferredStep | Schedule.EventUpdateStep
+  type BoundScheduleOptions<
+    Systems extends ReadonlyArray<BoundAnySystem>,
+    Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>>
+  > = {
+    readonly systems: Systems
+    readonly sets?: Sets
+  }
+  type BoundScheduleOptionsWithSteps<
+    Systems extends ReadonlyArray<BoundAnySystem>,
+    Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>>,
+    Steps extends ReadonlyArray<BoundScheduleStep>
+  > = BoundScheduleOptions<Systems, Sets> & {
+    readonly steps: Steps
+  }
+  type BoundScheduleOptionsWithoutSteps<
+    Systems extends ReadonlyArray<BoundAnySystem>,
+    Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>>
+  > = BoundScheduleOptions<Systems, Sets> & {
+    readonly steps?: undefined
+  }
+  type BoundAnonymousScheduleFor<
+    Systems extends ReadonlyArray<BoundAnySystem>,
+    Steps extends ReadonlyArray<BoundScheduleStep> | undefined
+  > = Schedule.AnonymousScheduleDefinition<S, BoundScheduleRequirementsWithSteps<Systems, Steps>, Root>
+  type BoundNamedScheduleFor<
+    L extends Label.Schedule,
+    Systems extends ReadonlyArray<BoundAnySystem>,
+    Steps extends ReadonlyArray<BoundScheduleStep> | undefined
+  > = Schedule.NamedScheduleDefinition<S, BoundScheduleRequirementsWithSteps<Systems, Steps>, L, Root>
+  type BoundTransitionScheduleFor<
+    M extends BoundMachine,
+    Systems extends ReadonlyArray<BoundAnySystem>
+  > = Machine.TransitionScheduleDefinition<S, M, BoundScheduleRequirements<Systems>, Root>
+  const definedMachines: Array<BoundMachine> = []
+  const definedMachineNames = new Set<string>()
 
   const defineSystem = <
     const Queries extends Record<string, Query.Any<Root>> = {},
@@ -475,46 +574,99 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   const systemNextState = <M extends BoundMachine>(machine: M) => System.nextState(machine)
   const systemTransition = <M extends BoundMachine>(machine: M) => System.transition(machine)
 
-  const defineSchedule = <
+  function defineSchedule<
     const Systems extends ReadonlyArray<BoundAnySystem>,
     const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
-  >(options: {
-    readonly systems: Systems
-    readonly sets?: Sets
-    readonly steps?: ReadonlyArray<BoundScheduleStep>
-  }) => {
-    const schedule = Schedule.define<S, Systems, Sets>({
-      schema,
-      ...options
-    } as never)
-    return schedule as RebindAnonymousSchedule<typeof schedule, Root>
+  >(options: BoundScheduleOptionsWithoutSteps<Systems, Sets>): BoundAnonymousScheduleFor<Systems, undefined>
+  function defineSchedule<
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = [],
+    const Steps extends ReadonlyArray<BoundScheduleStep> = []
+  >(options: BoundScheduleOptionsWithSteps<Systems, Sets, Steps>): BoundAnonymousScheduleFor<Systems, Steps>
+  function defineSchedule<
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = [],
+    const Steps extends ReadonlyArray<BoundScheduleStep> | undefined = undefined
+  >(options: BoundScheduleOptions<Systems, Sets> & { readonly steps?: Steps }) {
+    const schedule = options.sets === undefined
+      ? options.steps === undefined
+        ? Schedule.define({
+            schema,
+            systems: options.systems
+          } as never)
+        : Schedule.define({
+            schema,
+            systems: options.systems,
+            steps: options.steps
+          } as never)
+      : options.steps === undefined
+        ? Schedule.define({
+            schema,
+            systems: options.systems,
+            sets: options.sets
+          } as never)
+        : Schedule.define({
+            schema,
+            systems: options.systems,
+            sets: options.sets,
+            steps: options.steps
+          } as never)
+    return schedule as unknown as BoundAnonymousScheduleFor<Systems, Steps>
   }
 
-  const namedSchedule = <
+  function namedSchedule<
     const L extends Label.Schedule,
     const Systems extends ReadonlyArray<BoundAnySystem>,
     const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = []
-  >(label: L, options: {
-    readonly systems: Systems
-    readonly sets?: Sets
-    readonly steps?: ReadonlyArray<BoundScheduleStep>
-  }) => {
-    const schedule = Schedule.named<S, L, Systems, Sets>(label, {
-      schema,
-      ...options
-    } as never)
-    return schedule as RebindNamedSchedule<typeof schedule, Root>
+  >(label: L, options: BoundScheduleOptionsWithoutSteps<Systems, Sets>): BoundNamedScheduleFor<L, Systems, undefined>
+  function namedSchedule<
+    const L extends Label.Schedule,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = [],
+    const Steps extends ReadonlyArray<BoundScheduleStep> = []
+  >(label: L, options: BoundScheduleOptionsWithSteps<Systems, Sets, Steps>): BoundNamedScheduleFor<L, Systems, Steps>
+  function namedSchedule<
+    const L extends Label.Schedule,
+    const Systems extends ReadonlyArray<BoundAnySystem>,
+    const Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>> = [],
+    const Steps extends ReadonlyArray<BoundScheduleStep> | undefined = undefined
+  >(label: L, options: BoundScheduleOptions<Systems, Sets> & { readonly steps?: Steps }) {
+    const schedule = options.sets === undefined
+      ? options.steps === undefined
+        ? Schedule.named(label, {
+            schema,
+            systems: options.systems
+          } as never)
+        : Schedule.named(label, {
+            schema,
+            systems: options.systems,
+            steps: options.steps
+          } as never)
+      : options.steps === undefined
+        ? Schedule.named(label, {
+            schema,
+            systems: options.systems,
+            sets: options.sets
+          } as never)
+        : Schedule.named(label, {
+            schema,
+            systems: options.systems,
+            sets: options.sets,
+            steps: options.steps
+          } as never)
+    return schedule as unknown as BoundNamedScheduleFor<L, Systems, Steps>
   }
 
   const defineMachine = <
     const Name extends string,
     const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
   >(name: Name, values: Values): Schema.BoundStateMachine<Root, Name, Values> => {
-    if (definedMachine) {
-      throw new Error(`Only one state machine is supported for now. Existing machine: ${definedMachine.name}`)
+    if (definedMachineNames.has(name)) {
+      throw new Error(`Duplicate state machine name: ${name}`)
     }
     const machine = Machine.define<Name, Values, Root>(name, values)
-    definedMachine = machine
+    definedMachines.push(machine)
+    definedMachineNames.add(name)
     return machine
   }
 
@@ -525,18 +677,43 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   >(transition: Machine.TransitionScheduleDefinition<S, M, BoundScheduleRequirements<Systems>, Root>["transition"], options: {
     readonly systems: Systems
     readonly sets?: Sets
-    readonly steps?: ReadonlyArray<BoundScheduleStep>
-  }) => {
-    const schedule = Schedule.define<S, Systems, Sets>({
-      schema,
-      ...options
-    } as never)
+    readonly steps?: ReadonlyArray<BoundTransitionStep>
+  }): BoundTransitionScheduleFor<M, Systems> => {
+    const schedule = options.sets === undefined
+      ? options.steps === undefined
+        ? Schedule.define({
+            schema,
+            systems: options.systems
+          } as never)
+        : Schedule.define({
+            schema,
+            systems: options.systems,
+            steps: options.steps
+          } as never)
+      : options.steps === undefined
+        ? Schedule.define({
+            schema,
+            systems: options.systems,
+            sets: options.sets
+          } as never)
+        : Schedule.define({
+            schema,
+            systems: options.systems,
+            sets: options.sets,
+            steps: options.steps
+          } as never)
     const transitionSchedule = {
       ...schedule,
       transition
-    } as RebindTransitionSchedule<typeof schedule, M, Root>
-    transitionSchedules.push(transitionSchedule)
+    } as unknown as BoundTransitionScheduleFor<M, Systems>
     return transitionSchedule
+  }
+
+  const makeTransitionBundle = <
+    const Entries extends ReadonlyArray<BoundTransitionSchedule>
+  >(...entries: Entries): BoundTransitionBundleFor<Entries> => {
+    const bundle = Schedule.transitions<S, Entries>(...entries)
+    return bundle as unknown as BoundTransitionBundleFor<Entries>
   }
 
   const onEnter = <
@@ -546,8 +723,8 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   >(machine: M, state: Machine.StateMachine.Value<M>, options: {
     readonly systems: Systems
     readonly sets?: Sets
-    readonly steps?: ReadonlyArray<BoundScheduleStep>
-  }) => makeTransitionSchedule<Systems, Sets, M>({
+    readonly steps?: ReadonlyArray<BoundTransitionStep>
+  }): BoundTransitionScheduleFor<M, Systems> => makeTransitionSchedule<Systems, Sets, M>({
     machine,
     phase: "enter",
     state
@@ -560,8 +737,8 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   >(machine: M, state: Machine.StateMachine.Value<M>, options: {
     readonly systems: Systems
     readonly sets?: Sets
-    readonly steps?: ReadonlyArray<BoundScheduleStep>
-  }) => makeTransitionSchedule<Systems, Sets, M>({
+    readonly steps?: ReadonlyArray<BoundTransitionStep>
+  }): BoundTransitionScheduleFor<M, Systems> => makeTransitionSchedule<Systems, Sets, M>({
     machine,
     phase: "exit",
     state
@@ -577,8 +754,8 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   }, options: {
     readonly systems: Systems
     readonly sets?: Sets
-    readonly steps?: ReadonlyArray<BoundScheduleStep>
-  }) => makeTransitionSchedule<Systems, Sets, M>({
+    readonly steps?: ReadonlyArray<BoundTransitionStep>
+  }): BoundTransitionScheduleFor<M, Systems> => makeTransitionSchedule<Systems, Sets, M>({
     machine,
     phase: "transition",
     from: states.from,
@@ -598,7 +775,7 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   }) => Runtime.makeRuntime<S, Services, Resources, States, Root, Machines>({
     schema,
     ...options,
-    transitionSchedules
+    machineDefinitions: definedMachines
   })
 
   const runtimeMachine = <M extends BoundMachine>(
@@ -646,13 +823,15 @@ export const bind = <S extends Schema.Any>(schema: S) => {
     Schedule: {
       define: defineSchedule,
       named: namedSchedule,
+      transitions: makeTransitionBundle,
       onEnter,
       onExit,
       onTransition,
       configureSet: Schedule.configureSet,
       applyDeferred: Schedule.applyDeferred,
       updateEvents: Schedule.updateEvents,
-      applyStateTransitions: Schedule.applyStateTransitions
+      applyStateTransitions: <Bundle extends BoundTransitionBundle | undefined = undefined>(bundle?: Bundle) =>
+        Schedule.applyStateTransitions(bundle) as Schedule.ApplyStateTransitionsStep<Bundle, Root>
     },
     Runtime: {
       make: makeRuntime,

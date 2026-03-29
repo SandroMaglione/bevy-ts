@@ -130,7 +130,7 @@ export interface TransitionScheduleDefinition<
   readonly systems: ReadonlyArray<unknown>
   readonly sets: ReadonlyArray<unknown>
   readonly schema: S
-  readonly requirements?: Requirements | undefined
+  readonly requirements: Requirements
   readonly __schemaRoot?: Root | undefined
   readonly transition: {
     readonly machine: M
@@ -172,12 +172,15 @@ type ConditionRequirements<C> =
 type UnionToIntersection<A> =
   (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
 
+type RecordAccessUnion<R extends Record<string, unknown>> =
+  R extends Record<string, unknown> ? R[keyof R] : never
+
 /**
  * Derives machine requirements from declared machine access slots.
  */
 export type MachineRequirementsFromRecord<R extends Record<string, unknown>> = {
-  readonly [K in keyof UnionToIntersection<RequirementForAccess<R[keyof R]>>]:
-    UnionToIntersection<RequirementForAccess<R[keyof R]>>[K]
+  readonly [K in keyof UnionToIntersection<RequirementForAccess<RecordAccessUnion<R>>>]:
+    UnionToIntersection<RequirementForAccess<RecordAccessUnion<R>>>[K]
 }
 
 /**

@@ -767,25 +767,23 @@ const bootstrapSchedule = Game.Schedule.define({
   systems: [SpawnPlayerSystem]
 })
 
-Game.Schedule.onEnter(AppState, "Countdown", {
-  systems: [ResetRoundOnCountdownEnterSystem, WriteTransitionNoticeSystem]
-})
-
-Game.Schedule.onEnter(AppState, "Paused", {
-  systems: [WriteTransitionNoticeSystem]
-})
-
-Game.Schedule.onExit(AppState, "Paused", {
-  systems: [WriteTransitionNoticeSystem]
-})
-
-Game.Schedule.onTransition(AppState, { from: "Playing", to: "Victory" }, {
-  systems: [WriteTransitionNoticeSystem]
-})
-
-Game.Schedule.onTransition(AppState, { from: "Playing", to: "Defeat" }, {
-  systems: [WriteTransitionNoticeSystem]
-})
+const stateTransitions = Game.Schedule.transitions(
+  Game.Schedule.onEnter(AppState, "Countdown", {
+    systems: [ResetRoundOnCountdownEnterSystem, WriteTransitionNoticeSystem]
+  }),
+  Game.Schedule.onEnter(AppState, "Paused", {
+    systems: [WriteTransitionNoticeSystem]
+  }),
+  Game.Schedule.onExit(AppState, "Paused", {
+    systems: [WriteTransitionNoticeSystem]
+  }),
+  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Victory" }, {
+    systems: [WriteTransitionNoticeSystem]
+  }),
+  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Defeat" }, {
+    systems: [WriteTransitionNoticeSystem]
+  })
+)
 
 const updateSchedule = Game.Schedule.define({
   systems: [
@@ -820,7 +818,7 @@ const updateSchedule = Game.Schedule.define({
     CollectPickupsSystem,
     TickRoundClockSystem,
     QueueOutcomeSystem,
-    Game.Schedule.applyStateTransitions(),
+    Game.Schedule.applyStateTransitions(stateTransitions),
     FadeTransitionNoticeSystem,
     SyncSceneSystem,
     SyncHudSystem

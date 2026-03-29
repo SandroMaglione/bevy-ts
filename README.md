@@ -165,12 +165,17 @@ property names because they come from the closed schema registry.
 
 Finite state machines are a dedicated API, separate from generic `states`. They follow the useful part of Bevy's state model: systems queue the next state, the current state stays stable until an explicit transition marker runs, and enter/exit/transition schedules are registered separately.
 
-Define one machine from the bound schema root:
+Define machines from the bound schema root:
 
 ```ts
 const AppState = Game.StateMachine.define(
   "AppState",
   ["Menu", "Playing", "Paused"] as const
+)
+
+const ModalState = Game.StateMachine.define(
+  "ModalState",
+  ["None", "Inventory", "Map"] as const
 )
 ```
 
@@ -193,7 +198,12 @@ const PauseInputSystem = Game.System.define(
 const GameplaySystem = Game.System.define(
   "Gameplay",
   {
-    when: [Game.Condition.inState(AppState, "Playing")]
+    when: [
+      Game.Condition.and(
+        Game.Condition.inState(AppState, "Playing"),
+        Game.Condition.inState(ModalState, "None")
+      )
+    ]
   },
   () => Fx.sync(() => {
     // Runs only while the committed state is "Playing".
@@ -201,14 +211,26 @@ const GameplaySystem = Game.System.define(
 )
 ```
 
-Apply transitions explicitly inside the schedule:
+Bundle transition handlers explicitly and attach them to the transition marker:
 
 ```ts
+const appTransitions = Game.Schedule.transitions(
+  Game.Schedule.onExit(AppState, "Playing", {
+    systems: [StopGameplayAudioSystem]
+  }),
+  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
+    systems: [PersistCheckpointSystem]
+  }),
+  Game.Schedule.onEnter(AppState, "Paused", {
+    systems: [ShowPauseOverlaySystem]
+  })
+)
+
 const update = Game.Schedule.define({
   systems: [PauseInputSystem, GameplaySystem],
   steps: [
     PauseInputSystem,
-    Game.Schedule.applyStateTransitions(),
+    Game.Schedule.applyStateTransitions(appTransitions),
     GameplaySystem
   ]
 })
@@ -216,7 +238,7 @@ const update = Game.Schedule.define({
 
 This means a queued `set("Paused")` is invisible before `applyStateTransitions()`, and visible after it. That makes same-schedule behavior predictable.
 
-You can also attach explicit transition schedules:
+Transition schedules are pure values. They only run when bundled into the exact marker that should execute them:
 
 ```ts
 const OnEnterPaused = Game.System.define(
@@ -233,17 +255,17 @@ const OnEnterPaused = Game.System.define(
     })
 )
 
-Game.Schedule.onExit(AppState, "Playing", {
-  systems: [StopGameplayAudioSystem]
-})
-
-Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
-  systems: [PersistCheckpointSystem]
-})
-
-Game.Schedule.onEnter(AppState, "Paused", {
-  systems: [OnEnterPaused]
-})
+const pauseTransitions = Game.Schedule.transitions(
+  Game.Schedule.onExit(AppState, "Playing", {
+    systems: [StopGameplayAudioSystem]
+  }),
+  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
+    systems: [PersistCheckpointSystem]
+  }),
+  Game.Schedule.onEnter(AppState, "Paused", {
+    systems: [OnEnterPaused]
+  })
+)
 ```
 
 The current order is:
@@ -388,9 +410,9 @@ The next meaningful additions are the ones that unlock broader classes of games,
 
 ### 1. Multi-machine support and clearer transition orchestration
 
-The current FSM layer is useful, but it is still effectively single-machine. The next real capability step here is allowing multiple independent machines, such as `AppState`, `RoundState`, or `ModalState`, without weakening type safety.
+The current FSM layer now supports multiple independent machines, such as `AppState`, `RoundState`, or `ModalState`, without weakening type safety.
 
-That should also make the transition model more explicit. Right now `onEnter`, `onExit`, and `onTransition` are registered cleanly, but their execution is still somewhat implicit from the call site. Bevy's `States` model is the right reference space here, but this runtime should keep the more explicit schedule-driven semantics.
+The next improvement here is deeper transition ergonomics around explicit bundles and marker-local orchestration. `onEnter`, `onExit`, and `onTransition` are already typed and machine-scoped, and transition handlers now run only when bundled into the exact `applyStateTransitions(...)` marker that should execute them. Bevy's `States` model is still the right reference space, but this runtime keeps the more explicit schedule-driven semantics.
 
 It would unlock flows like:
 
@@ -400,12 +422,14 @@ const RoundState = Game.StateMachine.define("RoundState", ["Warmup", "SuddenDeat
 
 const update = Game.Schedule.define({
   systems: [InputSystem, CombatSystem, UiSystem],
-  steps: [InputSystem, Game.Schedule.applyStateTransitions(), CombatSystem, UiSystem]
+  steps: [InputSystem, Game.Schedule.applyStateTransitions(roundTransitions), CombatSystem, UiSystem]
 })
 
-Game.Schedule.onEnter(RoundState, "SuddenDeath", {
+const roundTransitions = Game.Schedule.transitions(
+  Game.Schedule.onEnter(RoundState, "SuddenDeath", {
   systems: [FlashArenaSystem, IntensifyMusicSystem]
-})
+  })
+)
 ```
 
 ### 3. Entity relationships and hierarchy

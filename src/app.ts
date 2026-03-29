@@ -1,8 +1,7 @@
-import type { Runtime, RuntimeResources, RuntimeStates } from "./runtime.ts"
-import type { Schema } from "./schema.ts"
+import type { Runtime } from "./runtime.ts"
 
 export interface App<
-  R extends Runtime<any, any, any, any, any>
+  R extends Runtime<any, any, any, any, any, any>
 > {
   /**
    * The underlying runtime that owns world state and service provisioning.
@@ -18,7 +17,7 @@ export interface App<
    * Use this from an external loop, test, or host integration whenever you
    * want one ECS update step.
    */
-  readonly update: R["tick"]
+  readonly update: R["runSchedule"] & R["tick"]
 }
 
 /**
@@ -28,13 +27,15 @@ export interface App<
  * still keeping the runtime reusable from any external loop or host.
  */
 export const makeApp = <
-  R extends Runtime<any, any, any, any, any>
+  R extends Runtime<any, any, any, any, any, any>
 >(
   runtime: R
 ): App<R> => ({
   runtime,
   bootstrap: ((...schedules: ReadonlyArray<never>) =>
     runtime.initialize(...schedules as never)) as App<R>["bootstrap"],
-  update: ((...schedules: ReadonlyArray<never>) =>
-    runtime.tick(...schedules as never)) as App<R>["update"]
+  update: ((first: never, ...rest: ReadonlyArray<never>) =>
+    rest.length === 0
+      ? runtime.runSchedule(first as never)
+      : runtime.tick(first as never, ...(rest as never))) as App<R>["update"]
 })

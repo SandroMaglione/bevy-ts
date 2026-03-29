@@ -58,14 +58,38 @@ export interface EventUpdateStep {
 /**
  * A typed schedule marker that applies queued finite-state-machine transitions.
  */
-export interface ApplyStateTransitionsStep {
+export interface ApplyStateTransitionsStep<
+  out Bundle extends TransitionBundleDefinition<any, any, any, any> | undefined = undefined,
+  out Root = unknown
+> {
   readonly kind: "applyStateTransitions"
+  readonly bundle?: Bundle
+  readonly __schemaRoot?: Root | undefined
 }
 
 /**
  * Any non-system execution step supported by the schedule runtime.
  */
-export type ScheduleMarkerStep = ApplyDeferredStep | EventUpdateStep | ApplyStateTransitionsStep
+export type ScheduleMarkerStep =
+  | ApplyDeferredStep
+  | EventUpdateStep
+  | ApplyStateTransitionsStep<any, any>
+
+/**
+ * A typed collection of transition schedules that can be attached to one
+ * explicit `applyStateTransitions(...)` marker.
+ */
+export interface TransitionBundleDefinition<
+  S extends Schema.Any = Schema.Any,
+  out Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>> = ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>>,
+  out Requirements extends RuntimeRequirements<any, any, any, any> = RuntimeRequirements<any, any, any, any>,
+  out Root = unknown
+> {
+  readonly kind: "transitionBundle"
+  readonly entries: Entries
+  readonly requirements: Requirements
+  readonly __schemaRoot?: Root | undefined
+}
 
 /**
  * One executable step in a schedule.
@@ -101,7 +125,7 @@ interface ScheduleBase<
   /**
    * Type-only aggregate requirements needed to execute this schedule safely.
    */
-  readonly requirements?: Requirements | undefined
+  readonly requirements: Requirements
 }
 
 /**
@@ -170,12 +194,18 @@ export namespace Schedule {
    * Any supported execution step.
    */
   export type Step = ScheduleStep
+  export type TransitionBundle<
+    S extends Schema.Any,
+    Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>> = ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>>,
+    Requirements extends RuntimeRequirements<any, any, any, any> = RuntimeRequirements<any, any, any, any>,
+    Root = unknown
+  > = TransitionBundleDefinition<S, Entries, Requirements, Root>
 }
 
 type AnySystem = SystemDefinition<any, any, any>
 type AnySetConfig = SystemSetConfig<any, any, any>
 type AnyOrderTarget = OrderTarget
-type AnyRuntimeRequirements = RuntimeRequirements<any, any, any, any>
+export type AnyRuntimeRequirements = RuntimeRequirements<any, any, any, any>
 
 /**
  * Flattens an inferred object type for cleaner public signatures.
@@ -194,6 +224,7 @@ type UnionToIntersection<A> =
  * Returns `{}` for empty unions before intersection folding.
  */
 type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
+type EmptyRequirements = RuntimeRequirements<{}, {}, {}, {}>
 
 /**
  * Extracts the union of system-set labels configured in one schedule.
@@ -205,23 +236,81 @@ type ScheduleSetLabels<Sets extends ReadonlyArray<AnySetConfig>> = Sets[number][
  */
 type ScheduleSystems<Systems extends ReadonlyArray<AnySystem>> = Systems[number]
 
+type SystemRequirementPart<SystemValue, Category extends keyof RuntimeRequirements> =
+  SystemValue extends { readonly requirements: infer Requirements }
+    ? Requirements extends RuntimeRequirements
+      ? Requirements[Category]
+      : never
+    : never
+
 /**
  * Derives the aggregate runtime requirements from the systems in one schedule.
  */
-type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>> = Simplify<RuntimeRequirements<
+type TransitionRequirementPart<Entry, Category extends keyof RuntimeRequirements> =
+  Entry extends { readonly requirements: infer Requirements }
+    ? Requirements extends RuntimeRequirements
+      ? Requirements[Category]
+      : {}
+    : {}
+
+export type TransitionBundleRequirements<Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<any, any>>> = Simplify<RuntimeRequirements<
+  Simplify<IntersectOrEmpty<TransitionRequirementPart<Entries[number], "services">>>,
+  Simplify<IntersectOrEmpty<TransitionRequirementPart<Entries[number], "resources">>>,
+  Simplify<IntersectOrEmpty<TransitionRequirementPart<Entries[number], "states">>>,
+  Simplify<IntersectOrEmpty<TransitionRequirementPart<Entries[number], "machines">>>
+>>
+
+type StepRequirementsExact<Steps extends ReadonlyArray<ScheduleStep>> = Simplify<RuntimeRequirements<
   Simplify<IntersectOrEmpty<
-    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["services"] : never
+    Steps[number] extends ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends TransitionBundleDefinition<any, any, infer Requirements, any>
+        ? Requirements["services"]
+        : never
+      : never
   >>,
   Simplify<IntersectOrEmpty<
-    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["resources"] : never
+    Steps[number] extends ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends TransitionBundleDefinition<any, any, infer Requirements, any>
+        ? Requirements["resources"]
+        : never
+      : never
   >>,
   Simplify<IntersectOrEmpty<
-    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["states"] : never
+    Steps[number] extends ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends TransitionBundleDefinition<any, any, infer Requirements, any>
+        ? Requirements["states"]
+        : never
+      : never
   >>,
   Simplify<IntersectOrEmpty<
-    ScheduleSystems<Systems> extends SystemDefinition<infer Spec, any, any> ? SystemRequirements<Spec>["machines"] : never
+    Steps[number] extends ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends TransitionBundleDefinition<any, any, infer Requirements, any>
+        ? Requirements["machines"]
+        : never
+      : never
   >>
 >>
+
+type StepRequirements<Steps extends ReadonlyArray<ScheduleStep>> =
+  number extends Steps["length"] ? EmptyRequirements : StepRequirementsExact<Steps>
+
+export type SystemRequirementsForSchedule<Systems extends ReadonlyArray<AnySystem>> = Simplify<RuntimeRequirements<
+  Simplify<IntersectOrEmpty<
+    SystemRequirementPart<ScheduleSystems<Systems>, "services">
+  >>,
+  Simplify<IntersectOrEmpty<
+    SystemRequirementPart<ScheduleSystems<Systems>, "resources">
+  >>,
+  Simplify<IntersectOrEmpty<
+    SystemRequirementPart<ScheduleSystems<Systems>, "states">
+  >>,
+  Simplify<IntersectOrEmpty<
+    SystemRequirementPart<ScheduleSystems<Systems>, "machines">
+  >>
+>>
+
+export type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>, Steps extends ReadonlyArray<ScheduleStep> = []> =
+  Simplify<SystemRequirementsForSchedule<Systems> & StepRequirements<Steps>>
 
 /**
  * Extracts the union of internal system labels included in one schedule.
@@ -328,13 +417,28 @@ export const updateEvents = (): EventUpdateStep => ({
 })
 
 /**
+ * Creates a typed reusable transition bundle.
+ */
+export const transitions = <
+  S extends Schema.Any,
+  const Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>>
+>(...entries: Entries): TransitionBundleDefinition<S, Entries, TransitionBundleRequirements<Entries>> => ({
+  kind: "transitionBundle",
+  entries,
+  requirements: undefined as unknown as TransitionBundleRequirements<Entries>
+}) as TransitionBundleDefinition<S, Entries, TransitionBundleRequirements<Entries>>
+
+/**
  * Creates an explicit machine-transition application marker step.
  */
-export const applyStateTransitions = (): ApplyStateTransitionsStep => ({
-  kind: "applyStateTransitions"
-})
+export const applyStateTransitions = <
+  const Bundle extends TransitionBundleDefinition<any, any, any, any> | undefined = undefined
+>(bundle?: Bundle): ApplyStateTransitionsStep<Bundle> => ({
+  kind: "applyStateTransitions",
+  bundle
+}) as ApplyStateTransitionsStep<Bundle>
 
-type ScheduleOptions<
+type BaseScheduleOptions<
   S extends Schema.Any,
   Systems extends ReadonlyArray<AnySystem>,
   Sets extends ReadonlyArray<AnySetConfig>
@@ -342,8 +446,48 @@ type ScheduleOptions<
   readonly schema: S
   readonly systems: Systems
   readonly sets?: Sets
-  readonly steps?: ReadonlyArray<ScheduleStep>
 } & ValidateScheduleOptions<Systems, Sets>
+
+type ScheduleOptionsWithSteps<
+  S extends Schema.Any,
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>,
+  Steps extends ReadonlyArray<ScheduleStep>
+> = BaseScheduleOptions<S, Systems, Sets> & {
+  readonly steps: Steps
+}
+
+type ScheduleOptionsWithoutSteps<
+  S extends Schema.Any,
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> = BaseScheduleOptions<S, Systems, Sets> & {
+  readonly steps?: undefined
+}
+
+type AnonymousScheduleFor<
+  S extends Schema.Any,
+  Systems extends ReadonlyArray<AnySystem>,
+  Steps extends ReadonlyArray<ScheduleStep> | undefined
+> = AnonymousScheduleDefinition<
+  S,
+  [Steps] extends [undefined]
+    ? SystemRequirementsForSchedule<Systems>
+    : ScheduleRequirements<Systems, Extract<Steps, ReadonlyArray<ScheduleStep>>>
+>
+
+type NamedScheduleFor<
+  S extends Schema.Any,
+  L extends Label.Schedule,
+  Systems extends ReadonlyArray<AnySystem>,
+  Steps extends ReadonlyArray<ScheduleStep> | undefined
+> = NamedScheduleDefinition<
+  S,
+  [Steps] extends [undefined]
+    ? SystemRequirementsForSchedule<Systems>
+    : ScheduleRequirements<Systems, Extract<Steps, ReadonlyArray<ScheduleStep>>>,
+  L
+>
 
 /**
  * Creates an anonymous schedule value from an ordered execution plan.
@@ -351,11 +495,12 @@ type ScheduleOptions<
  * When only `systems` are provided, the schedule uses the resolved system order
  * followed by an implicit `applyDeferred()` and `updateEvents()` pair.
  */
-export const define = <
+export function define<
   S extends Schema.Any,
   const Systems extends ReadonlyArray<AnySystem>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
->(options: ScheduleOptions<S, Systems, Sets>): AnonymousScheduleDefinition<S, ScheduleRequirements<Systems>> => {
+  const Sets extends ReadonlyArray<AnySetConfig> = [],
+  const Steps extends ReadonlyArray<ScheduleStep> | undefined = undefined
+>(options: BaseScheduleOptions<S, Systems, Sets> & { readonly steps?: Steps }): AnonymousScheduleFor<S, Systems, Steps> {
   const orderedSystems = resolveSystems(options.systems, options.sets ?? [])
   const orderedSystemMap = new Map(
     orderedSystems.map((system) => [system.spec.label.key, system] as const)
@@ -372,8 +517,9 @@ export const define = <
     steps,
     systems: orderedSystems,
     sets: options.sets ?? [],
-    schema: options.schema
-  } as AnonymousScheduleDefinition<S, ScheduleRequirements<Systems>>
+    schema: options.schema,
+    requirements: undefined as unknown as AnonymousScheduleFor<S, Systems, Steps>["requirements"]
+  } as AnonymousScheduleFor<S, Systems, Steps>
 }
 
 /**
@@ -382,21 +528,22 @@ export const define = <
  * Use this only when some other API needs to refer to the schedule by a stable
  * external identity.
  */
-export const named = <
+export function named<
   S extends Schema.Any,
   const L extends Label.Schedule,
   const Systems extends ReadonlyArray<AnySystem>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
+  const Sets extends ReadonlyArray<AnySetConfig> = [],
+  const Steps extends ReadonlyArray<ScheduleStep> | undefined = undefined
 >(
   label: L,
-  options: ScheduleOptions<S, Systems, Sets>
-): NamedScheduleDefinition<S, ScheduleRequirements<Systems>, L> => {
+  options: BaseScheduleOptions<S, Systems, Sets> & { readonly steps?: Steps }
+): NamedScheduleFor<S, L, Systems, Steps> {
   const anonymous = define(options)
   return {
     ...anonymous,
     kind: "named",
     label
-  } as NamedScheduleDefinition<S, ScheduleRequirements<Systems>, L>
+  } as NamedScheduleFor<S, L, Systems, Steps>
 }
 
 /**

@@ -196,10 +196,9 @@ describe("Schema", () => {
       () => Fx.sync<undefined, any>(() => undefined)
     )
 
-    const _invalidSchedule = GameB.Schedule.define({
-      // @ts-expect-error!
-      systems: [SystemA]
-    })
+    type GameBSystem = Parameters<typeof GameB.Schedule.define>[0]["systems"][number]
+    // @ts-expect-error!
+    const _invalidSystem: GameBSystem = SystemA
 
     const runtimeA = GameA.Runtime.make({
       services: GameA.Runtime.services(),
