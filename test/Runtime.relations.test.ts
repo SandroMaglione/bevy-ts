@@ -198,4 +198,93 @@ describe("Runtime relationships", () => {
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingEntity/MissingRelation")
   })
+
+  it("allows general relation cycles and keeps optional relation slots non-matching-safe", () => {
+    let alphaId: Entity.EntityId<typeof schema, any> | undefined
+    let betaId: Entity.EntityId<typeof schema, any> | undefined
+
+    const spawn = Game.System.define(
+      "SpawnGeneralCycle",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          alphaId = commands.spawn(Game.Command.spawnWith([Name, { value: "alpha" }] as const))
+          betaId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "beta" }] as const),
+              Targeting,
+              alphaId
+            )
+          )
+          commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "gamma" }] as const),
+              Targeting,
+              betaId
+            )
+          )
+        })
+    )
+
+    const observe = Game.System.define(
+      "ObserveOptionalRelations",
+      {
+        queries: {
+          optionalTargets: Game.Query.define({
+            selection: {
+              name: Game.Query.read(Name),
+              target: Game.Query.optionalRelation(Targeting),
+              sources: Game.Query.optionalRelated(Targeting)
+            }
+          })
+        },
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ queries, lookup, resources }) =>
+        Fx.sync(() => {
+          if (!alphaId || !betaId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+
+          const betaTarget = lookup.related(betaId, Targeting)
+          const alphaSources = lookup.relatedSources(alphaId, Targeting)
+
+          const optionalSummary = queries.optionalTargets.each()
+            .map((match) => {
+              const target = match.data.target.present
+                ? match.data.target.get().value.toString()
+                : "none"
+              const sources = match.data.sources.present
+                ? match.data.sources.get().length.toString()
+                : "none"
+              return `${match.data.name.get().value}:${target}:${sources}`
+            })
+            .sort()
+            .join("|")
+
+          resources.summary.set([
+            betaTarget.ok ? betaTarget.value.value : -1,
+            alphaSources.ok ? alphaSources.value.length : -1,
+            optionalSummary
+          ].join("/"))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [spawn]
+      }),
+      Game.Schedule.define({
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Summary)).toBe(
+      "1/1/alpha:none:1|beta:1:1|gamma:2:none"
+    )
+  })
 })

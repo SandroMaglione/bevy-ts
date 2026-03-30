@@ -475,8 +475,23 @@ describe("Schema", () => {
             const unqualified = Game.Entity.handle(match.entity.id)
             expect(unqualified).type.toBe<Entity.Handle<typeof Root>>()
 
+            const fromRef = Game.Entity.handleFrom(match.entity)
+            expect(fromRef).type.toBe<Entity.Handle<typeof Root>>()
+
             const qualified = Game.Entity.handleAs(Position, match.entity.id)
             expect(qualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
+
+            const fromRefQualified = Game.Entity.handleAsFrom(Position, match.entity)
+            expect(fromRefQualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
+
+            const WithQuery = Game.Query.define({
+              selection: {
+                target: Game.Query.read(Target)
+              },
+              with: [Position] as const
+            })
+
+            lookup.getHandle(current, WithQuery)
 
             // @ts-expect-error!
             lookup.get(current, PositionQuery)
@@ -489,6 +504,16 @@ describe("Schema", () => {
 
             // @ts-expect-error!
             lookup.getHandle(current, WrongQuery)
+
+            const OptionalOnlyQuery = Game.Query.define({
+              selection: {
+                target: Game.Query.read(Target),
+                position: Game.Query.optional(Position)
+              }
+            })
+
+            // @ts-expect-error!
+            lookup.getHandle(current, OptionalOnlyQuery)
           }
         })
     )

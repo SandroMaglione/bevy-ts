@@ -200,4 +200,58 @@ describe("Runtime scheduling", () => {
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
+
+  it("throws a descriptive error for circular system dependencies", () => {
+    const First = System.define(
+      "RuntimeScheduling/CycleFirst",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "first"])
+        })
+    )
+
+    const Second = System.define(
+      "RuntimeScheduling/CycleSecond",
+      {
+        schema,
+        after: [First],
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "second"])
+        })
+    )
+
+    const CyclicFirst = System.define(
+      "RuntimeScheduling/CycleFirst",
+      {
+        schema,
+        after: [Second],
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "cycle"])
+        })
+    )
+
+    const runtime = makeRuntime()
+    expect(() =>
+      runtime.runSchedule(Schedule.define({
+        schema,
+        systems: [CyclicFirst, Second]
+      } as never) as never)
+    ).toThrow("Circular system dependency detected")
+  })
 })

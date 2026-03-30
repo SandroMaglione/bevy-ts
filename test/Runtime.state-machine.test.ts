@@ -354,6 +354,34 @@ describe("Runtime state machine", () => {
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
   })
 
+  it("supports disjunctive machine conditions at runtime", () => {
+    const increment = Game.System.define(
+      "StateMachineRuntime/OrCondition",
+      {
+        when: [
+          Game.Condition.or(
+            Game.Condition.inState(AppState, "Menu"),
+            Game.Condition.inState(RoundState, "Live")
+          )
+        ],
+        resources: {
+          counter: System.writeResource(Counter)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.counter.update((value) => value + 1)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [increment]
+    }))
+
+    expect(readResourceValue(runtime, schema, Counter)).toBe(1)
+  })
+
   it("applies multiple machine transitions in definition order", () => {
     const LocalGame = Schema.bind(schema)
     const LocalAppState = LocalGame.StateMachine.define("LocalAppState", ["Menu", "Playing", "Paused"] as const)
@@ -601,6 +629,45 @@ describe("Runtime state machine", () => {
     expect(readResourceValue(runtime, schema, Log)).toEqual(["entered:Playing"])
   })
 
+  it("commits queued transitions even when no transition bundle is attached", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueueWithoutHandlers",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const observe = Game.System.define(
+      "StateMachineRuntime/ObserveCommittedWithoutBundle",
+      {
+        machines: {
+          app: System.machine(AppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ machines, resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, machines.app.get()])
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [queuePlaying, observe],
+      steps: [queuePlaying, Game.Schedule.applyStateTransitions(), observe]
+    }))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["Playing"])
+  })
+
   it("emits transition events that become readable after updateEvents", () => {
     const queuePlaying = Game.System.define(
       "StateMachineRuntime/QueuePlayingForTransitionEvents",
@@ -778,6 +845,49 @@ describe("Runtime state machine", () => {
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["enter:Playing"])
+  })
+
+  it("throws when transition schedules contain nested applyStateTransitions markers at runtime", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueueNestedInvalid",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const noop = Game.System.define(
+      "StateMachineRuntime/NestedInvalidNoop",
+      {},
+      () => Fx.sync<undefined, {}>(() => undefined)
+    )
+
+    const invalidEnter = Game.Schedule.onEnter(AppState, "Playing", {
+      systems: [noop],
+      steps: [Game.Schedule.applyStateTransitions()] as never
+    })
+
+    const runtime = makeRuntime()
+    expect(() =>
+      runtime.runSchedule(Game.Schedule.define({
+        systems: [queuePlaying],
+        steps: [queuePlaying, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(invalidEnter))]
+      }))
+    ).toThrow("Transition schedules cannot contain applyStateTransitions() steps")
+  })
+
+  it("rejects duplicate machine names on one bound game", () => {
+    const LocalGame = Schema.bind(schema)
+    LocalGame.StateMachine.define("DuplicateMachine", ["A", "B"] as const)
+
+    expect(() =>
+      LocalGame.StateMachine.define("DuplicateMachine", ["X", "Y"] as const)
+    ).toThrow("Duplicate state machine name")
   })
 
   it("suppresses identity-transition events when setIfChanged keeps the same value", () => {

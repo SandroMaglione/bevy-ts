@@ -236,4 +236,164 @@ describe("Runtime lifecycle", () => {
     expect(readResourceValue(runtime, schema, RemovedAfter)).toBe(2)
     expect(readResourceValue(runtime, schema, DespawnedAfter)).toBe(1)
   })
+
+  it("refreshes readable lifecycle buffers instead of accumulating stale entries", () => {
+    const SpawnSystem = Game.System.define(
+      "Lifecycle/SpawnRefresh",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          commands.spawn(Game.Command.spawnWith(
+            [Position, { x: 3, y: 4 }]
+          ))
+        })
+    )
+
+    const ObserveChanged = Game.System.define(
+      "Lifecycle/ObserveRefresh",
+      {
+        queries: {
+          added: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            },
+            filters: [Game.Query.added(Position)] as const
+          }),
+          changed: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            },
+            filters: [Game.Query.changed(Position)] as const
+          })
+        },
+        resources: {
+          addedAfter: Game.System.writeResource(AddedAfter),
+          changedAfter: Game.System.writeResource(ChangedAfter)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          resources.addedAfter.set(queries.added.each().length)
+          resources.changedAfter.set(queries.changed.each().length)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [SpawnSystem],
+        steps: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
+      }),
+      Game.Schedule.define({
+        systems: [ObserveChanged],
+        steps: [ObserveChanged]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, AddedAfter)).toBe(1)
+    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
+
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [ObserveChanged],
+      steps: [Game.Schedule.updateLifecycle(), ObserveChanged]
+    }))
+
+    expect(readResourceValue(runtime, schema, AddedAfter)).toBe(0)
+    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(0)
+  })
+
+  it("treats overwrite inserts on existing components as changed after updateLifecycle()", () => {
+    let existingId: number | undefined
+
+    const SpawnSystem = Game.System.define(
+      "Lifecycle/SpawnForOverwrite",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          existingId = commands.spawn(Game.Command.spawnWith(
+            [Position, { x: 1, y: 1 }]
+          )).value
+        })
+    )
+
+    const OverwriteSystem = Game.System.define(
+      "Lifecycle/OverwriteExisting",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          if (!existingId) {
+            return
+          }
+          commands.insert(
+            Entity.makeEntityId<typeof schema, typeof schema>(existingId),
+            Position,
+            { x: 9, y: 9 }
+          )
+        })
+    )
+
+    const ObserveBeforeSystem = Game.System.define(
+      "Lifecycle/ObserveOverwriteBefore",
+      {
+        queries: {
+          changed: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            },
+            filters: [Game.Query.changed(Position)] as const
+          })
+        },
+        resources: {
+          changedBefore: Game.System.writeResource(ChangedBefore)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          resources.changedBefore.set(queries.changed.each().length)
+        })
+    )
+
+    const ObserveAfterSystem = Game.System.define(
+      "Lifecycle/ObserveOverwriteAfter",
+      {
+        queries: {
+          changed: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            },
+            filters: [Game.Query.changed(Position)] as const
+          })
+        },
+        resources: {
+          changedAfter: Game.System.writeResource(ChangedAfter)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          resources.changedAfter.set(queries.changed.each().length)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [SpawnSystem],
+        steps: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
+      }),
+      Game.Schedule.define({
+        systems: [OverwriteSystem, ObserveBeforeSystem, ObserveAfterSystem],
+        steps: [
+          Game.Schedule.updateLifecycle(),
+          OverwriteSystem,
+          Game.Schedule.applyDeferred(),
+          ObserveBeforeSystem,
+          Game.Schedule.updateLifecycle(),
+          ObserveAfterSystem
+        ]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)
+    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
+  })
 })
