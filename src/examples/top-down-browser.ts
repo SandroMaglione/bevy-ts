@@ -1,4 +1,4 @@
-import { startTopDownExample } from "./top-down.ts"
+import { startTopDownExample } from "./top-down/main.ts"
 
 const mount = document.querySelector<HTMLElement>("[data-top-down-root]")
 

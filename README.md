@@ -110,6 +110,13 @@ The normal flow is simple: define descriptors, group them into schema fragments,
 
 Systems only see what they declare. Queries describe read and write access up front. Resources, events, states, and services are exposed as typed views. Mutation goes through deferred commands instead of direct world writes.
 
+When choosing between the main ECS surfaces, the intended split is:
+
+- resources for continuous world values such as delta time, counters, or animation clocks
+- state machines for discrete phases where the transition boundary itself matters
+- events for transient cross-system messages
+- lifecycle reads for structural world changes that become visible only after `updateLifecycle()`
+
 ## Runtime requirements
 
 Schedules now carry the runtime requirements implied by their systems. A runtime records which services it provides and which resources and states it initialized. You can only run a schedule when those two sides match.
@@ -230,6 +237,8 @@ No runtime-relevant references are open strings. Systems are referenced directly
 
 Finite state machines are a dedicated API, separate from generic `states`. They follow the useful part of Bevy's `States` model, but keep the transition boundary explicit in user schedules: systems queue the next state, the current state stays stable until an explicit transition marker runs, and enter/exit/transition handlers are attached locally to that marker.
 
+Use machines when the discrete state itself is meaningful and should change only at an explicit boundary. Continuous progression such as timers, cooldown values, or animation elapsed time should still stay in resources.
+
 ### Define machines
 
 Define machines from the bound schema root:
@@ -309,6 +318,12 @@ const update = Game.Schedule.define({
 ```
 
 This means a queued `set("Paused")` is invisible before `applyStateTransitions()`, and visible after it. That makes same-schedule behavior predictable.
+
+The three main explicit schedule boundaries are:
+
+- `applyStateTransitions()` for queued machine state
+- `updateEvents()` for emitted events
+- `updateLifecycle()` for added / changed / removed / despawned visibility
 
 Transition schedules are pure values. They only run when bundled into the exact marker that should execute them:
 
@@ -427,6 +442,12 @@ const SyncPixiSceneSystem = Game.System.define(
 
 This is the same pattern used in [`src/examples/pixi.ts`](./src/examples/pixi.ts).
 
+For richer browser examples, the preferred pattern is still the same:
+
+- keep host objects like Pixi sprites, textures, and containers outside ECS
+- use `Game.Query.optional(...)` to keep mixed render queries compact when several renderable kinds share one sync loop
+- use lifecycle reads to create and destroy host-owned objects incrementally when that produces a clearer sync boundary
+
 ## Architecture
 
 Descriptors define nominal identities for components, resources, events, states, and services. Schemas close the world. Systems declare ECS access and service dependencies explicitly. Schedules order execution, define apply/event phases, and carry their runtime requirements. The runtime owns world state, but not the outer loop, and the app/runtime execution boundary is where those requirements are checked.
@@ -444,6 +465,19 @@ The repo currently includes:
 - [`src/examples/pokemon.ts`](./src/examples/pokemon.ts) for ordered movement and collision
 - [`src/examples/snake.ts`](./src/examples/snake.ts) for events, lookup, spawn, and despawn flow
 - [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts) for a larger browser example with Pixi rendering and headless Matter-backed collision
+
+## Project organization
+
+For a larger game, the most readable structure so far is the same one used by [`src/examples/top-down/`](./src/examples/top-down/):
+
+- keep `schema.ts` as the single place for descriptors, bound `Game`, and state machines
+- keep authored content and constants separate from systems, for example in `content.ts` and `constants.ts`
+- group systems by behavior such as input, movement, interaction, animation, camera, and HUD instead of keeping one large file
+- keep queries in one module when several systems share them, so query semantics stay easy to inspect
+- keep renderer and browser host code outside ECS in dedicated modules like `host.ts` and `render/*`
+- keep `main.ts` thin: create the host, create the runtime, boot schedules, connect the outer loop
+
+This keeps the ECS side focused on simulation and orchestration, and the host side focused on rendering, input, assets, and browser lifecycle.
 
 ## Relationships and hierarchy
 
@@ -485,9 +519,13 @@ if (result.ok) {
 }
 ```
 
+Relationships express current world structure and ownership. They are not a substitute for durable handles: relations model structural links in the world, while handles are for storing long-lived targets across frames and resolving them later through checked lookup.
+
 ## Current limits
 
 This is still an early implementation. The public types are stricter than the runtime internals, and the project is not aiming for full Bevy parity yet. Dependency closure happens at the runtime and app execution boundary, not through Effect-style local `provide` or layer graphs. Performance-oriented storage, observers, richer state transitions, and parallel scheduling are not the current focus.
+
+At this point the main pressure is less "missing ECS capability" and more "choosing the right existing abstraction clearly" as the public API grows.
 
 ## Roadmap
 
@@ -524,6 +562,8 @@ Durable handles are now part of the public model:
 - store long-lived references as `Entity.Handle<typeof Root, Intent?>`
 - create them explicitly through `Game.Entity.handle(...)` and `Game.Entity.handleAs(...)`
 - resolve them only through `lookup.getHandle(...)`
+
+The intended current practice is simple: if a target has to survive across frames, store a handle instead of a raw numeric id, and treat resolution as an explicit fallible step rather than as proof that the entity is still live.
 
 That closes the original `Schema.Any` widening problem in examples like [`src/examples/snake.ts`](./src/examples/snake.ts) and [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts). The current guarantees are intentionally strict:
 
