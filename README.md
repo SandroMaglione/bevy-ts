@@ -445,6 +445,46 @@ The repo currently includes:
 - [`src/examples/snake.ts`](./src/examples/snake.ts) for events, lookup, spawn, and despawn flow
 - [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts) for a larger browser example with Pixi rendering and headless Matter-backed collision
 
+## Relationships and hierarchy
+
+Relationships are explicit schema entries. General relations and hierarchy use separate paired constructors so the relation kind stays typed through commands, queries, and lookup.
+
+```ts
+const { relation: ChildOf } = Descriptor.defineHierarchy("ChildOf", "Children")
+const { relation: Targeting } = Descriptor.defineRelation("Targeting", "TargetedBy")
+
+const schema = Schema.build(Schema.fragment({
+  components: {
+    Position,
+    Unit
+  },
+  relations: {
+    ChildOf,
+    Targeting
+  }
+}))
+
+const Game = Schema.bind(schema)
+
+const RelationQuery = Game.Query.define({
+  selection: {
+    parent: Game.Query.optionalRelation(ChildOf),
+    children: Game.Query.optionalRelated(ChildOf)
+  }
+})
+```
+
+Hierarchy traversal is only available for hierarchy relations and stays explicit through `lookup`:
+
+```ts
+const result = lookup.descendants(rootId, ChildOf, { order: "depth" })
+if (result.ok) {
+  for (const childId of result.value) {
+    // ...
+  }
+}
+```
+
 ## Current limits
 
 This is still an early implementation. The public types are stricter than the runtime internals, and the project is not aiming for full Bevy parity yet. Dependency closure happens at the runtime and app execution boundary, not through Effect-style local `provide` or layer graphs. Performance-oriented storage, observers, richer state transitions, and parallel scheduling are not the current focus.
@@ -457,43 +497,7 @@ The browser examples, especially the top-down proof of concept, confirmed that t
 
 The order below is based on how much each addition strengthens the ECS authoring model, not on implementation ease.
 
-### 1. Entity relationships and hierarchy
-
-Queries now cover required reads and writes, maybe-present component slots, structural matching, and explicit lifecycle-facing reads. The next real structural gap is relationships. This would unlock scene graphs, ownership, attachments, card zones, equipment, UI trees, and simulation-style graphs without pulling renderer trees or engine concerns into the ECS itself.
-
-The important constraint is that relations should stay descriptor-driven, explicit, and fully typed. The ECS may model that one entity follows or owns another; Pixi or another host library would still own the actual render tree.
-
-It would unlock things like:
-
-```ts
-const EquippedBy = Descriptor.defineRelation<Entity.EntityId<typeof schema>>("EquippedBy")
-const ChildOf = Descriptor.defineRelation<Entity.EntityId<typeof schema>>("ChildOf")
-
-commands.spawn(
-  Game.Command.spawnWith(
-    [Sword, {}],
-    [EquippedBy, playerId],
-    [ChildOf, playerId]
-  )
-)
-```
-
-Or more explicit gameplay ownership:
-
-```ts
-const PromptFor = Descriptor.defineRelation<Entity.EntityId<typeof schema>>("PromptFor")
-
-commands.spawn(
-  Game.Command.spawnWith(
-    [InteractionPrompt, { text: "Press E" }],
-    [PromptFor, focusedEntity]
-  )
-)
-```
-
-Once relationships exist, relation-aware query filters should build on top of them rather than arriving as a separate ad hoc filter language. That is the natural place to support things conceptually similar to Bevy's richer relationship-driven query patterns while keeping everything explicit and descriptor-bound.
-
-### 2. Safer long-lived entity references
+### 1. Safer long-lived entity references
 
 Current `EntityId` values are intentionally honest: they prove schema identity, not liveness or component shape, as documented in [`src/entity.ts`](./src/entity.ts). That part is correct and should not change. The missing piece is a clearer, safer story for references that live in resources, events, or components across multiple frames.
 
@@ -608,7 +612,7 @@ Non-goals for this milestone:
 - not automatic cross-world remapping or scene cloning support
 - not a substitute for relationships or hierarchy
 
-### 3. Typed feature or module composition
+### 2. Typed feature or module composition
 
 This is the longer-term architectural piece. Larger games eventually need a first-class way to assemble optional gameplay features, server/client/editor variants, and reusable modules. Bevy plugins are the reference for the problem being solved, not the intended API shape.
 
@@ -625,6 +629,34 @@ const app = Game.App.make({
   features: [Core, Combat, Dialogue]
 })
 ```
+
+### Relationship follow-ups
+
+The first relationship milestone is now in place: explicit paired relation definitions, relation-aware queries, reverse reads, hierarchy traversal, and linked hierarchy despawn. That is enough to cover trees, ownership, attachments, and targeting safely. The remaining work in this area is useful, but it is follow-up work rather than the next highest-priority capability gap.
+
+The clearest missing piece is live relation mutation for already-spawned entities. Today the strongest path is draft-time relation staging through `Game.Command.relate(...)`, which keeps the initial model explicit and safe. Real gameplay code will still eventually need to reparent, retarget, equip, unequip, attach, and detach at runtime. When that lands, it should preserve the same assumptions as the current relationship API:
+
+- relation mutation should stay on dedicated relation commands, not component insert/remove overloads
+- dynamic invalidity must remain explicit in the type surface
+- missing entities, invalid targets, and hierarchy-cycle attempts must not surface as accidental runtime exceptions
+
+That means the runtime-facing form should look more like:
+
+```ts
+const result = commands.tryRelate(swordId, EquippedBy, playerId)
+if (!result.ok) {
+  // handle missing entity, invalid target, or hierarchy constraint failure
+}
+```
+
+Another likely follow-up is explicit hierarchy child reordering. The current hierarchy model already preserves child order on reads, which is enough for many gameplay and UI uses. If later examples need deterministic reordering, it should still be exposed through a separate hierarchy-specific API rather than a generic mutable collection surface, so the type system can keep “ordered tree only” behavior distinct from general relations.
+
+These follow-ups fit the same explicit, type-safe, runtime-safe model that defines the current relationship feature:
+
+- relations stay separate from components in the public API
+- hierarchy-only behavior stays restricted to hierarchy relations
+- all relation values remain schema-bound and root-bound
+- if a guarantee depends on current world state, it must be reflected in a result type rather than hidden behind an exception
 
 ### Out of scope for now
 

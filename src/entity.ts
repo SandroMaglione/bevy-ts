@@ -1,4 +1,5 @@
 import type { Brand } from "./internal/brand.ts"
+import type { StagedRelation } from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
 /**
@@ -59,6 +60,10 @@ export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof,
    * Exact staged component proof.
    */
   readonly proof: P
+  /**
+   * Staged relationship edges attached to the entity before spawn.
+   */
+  readonly relations: ReadonlyArray<StagedRelation<S, Root>>
 }
 
 /**
@@ -133,12 +138,14 @@ export const makeEntityId = <S extends Schema.Any, Root = unknown>(value: number
  */
 export const draft = <S extends Schema.Any, P extends ComponentProof, Root = unknown>(
   id: EntityId<S, Root>,
-  proof: P
+  proof: P,
+  relations: ReadonlyArray<StagedRelation<S, Root>> = []
 ): EntityDraft<S, P, Root> => ({
   kind: "EntityDraft",
   id,
   __schemaRoot: undefined as unknown as Root,
-  proof
+  proof,
+  relations
 })
 
 /**

@@ -118,3 +118,17 @@ export const defineState = <Value>() => <const Name extends string>(
 export const defineService = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"service", Name, Value> => makeDescriptor("service", name)
+
+/**
+ * Defines the canonical parent/children relationship pair.
+ *
+ * The returned `relation` is the source-of-truth edge component, while
+ * `related` is the reverse collection maintained by the runtime.
+ */
+export const defineHierarchy = Relation.defineHierarchy
+
+/**
+ * Defines a general relationship pair with direct edges and reverse lookups.
+ */
+export const defineRelation = Relation.defineRelation
+import * as Relation from "./relation.ts"

@@ -5,6 +5,7 @@ import * as Fx from "./fx.ts"
 import type * as Machine from "./machine.ts"
 import * as Query from "./query.ts"
 import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
+import * as Relation from "./relation.ts"
 import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
 import type { Registry, Schema } from "./schema.ts"
@@ -33,6 +34,8 @@ import type {
  * Each entity id maps to descriptor-keyed component storage.
  */
 type EntityStore = Map<number, Map<symbol, unknown>>
+type RelationSourceStore = Map<symbol, Map<number, number>>
+type RelationReverseStore = Map<symbol, Map<number, Array<number>>>
 
 /**
  * String-literal type id used to brand descriptor-based runtime service maps.
@@ -393,6 +396,14 @@ export const makeRuntime = <
    */
   const states = new Map<symbol, unknown>()
   /**
+   * Relation-keyed source edge stores.
+   */
+  const relationTargets: RelationSourceStore = new Map()
+  /**
+   * Relation-keyed reverse-source collections.
+   */
+  const relatedSources: RelationReverseStore = new Map()
+  /**
    * Machine-keyed committed state values.
    */
   const currentMachines = new Map<symbol, unknown>()
@@ -484,9 +495,121 @@ export const makeRuntime = <
   const machineDefinitionOrder = new Map(
     machineDefinitions.map((machine, index) => [machine.key, index] as const)
   )
+  const relationDefinitions = Object.values(options.schema.relations)
 
   for (const provision of machineEntries) {
     currentMachines.set(provision.machine.key, provision.initial)
+  }
+
+  const entityExists = (entityId: number): boolean => entities.has(entityId)
+
+  const ensureRelationTargetStore = (descriptorKey: symbol): Map<number, number> => {
+    const store = relationTargets.get(descriptorKey)
+    if (store) {
+      return store
+    }
+    const fresh = new Map<number, number>()
+    relationTargets.set(descriptorKey, fresh)
+    return fresh
+  }
+
+  const ensureRelatedSourcesStore = (descriptorKey: symbol): Map<number, Array<number>> => {
+    const store = relatedSources.get(descriptorKey)
+    if (store) {
+      return store
+    }
+    const fresh = new Map<number, Array<number>>()
+    relatedSources.set(descriptorKey, fresh)
+    return fresh
+  }
+
+  const getRelatedSourceIds = (relation: Relation.Relation.Any, targetId: number): ReadonlyArray<number> =>
+    relatedSources.get(relation.key)?.get(targetId) ?? []
+
+  const hasRelatedSources = (relation: Relation.Relation.Any, targetId: number): boolean =>
+    getRelatedSourceIds(relation, targetId).length > 0
+
+  const addRelatedSource = (relation: Relation.Relation.Any, targetId: number, sourceId: number): void => {
+    const store = ensureRelatedSourcesStore(relation.key)
+    const entries = store.get(targetId) ?? []
+    if (entries.includes(sourceId)) {
+      return
+    }
+    entries.push(sourceId)
+    store.set(targetId, entries)
+  }
+
+  const removeRelatedSource = (relation: Relation.Relation.Any, targetId: number, sourceId: number): void => {
+    const store = relatedSources.get(relation.key)
+    const entries = store?.get(targetId)
+    if (!entries) {
+      return
+    }
+    const next = entries.filter((entry) => entry !== sourceId)
+    if (next.length === 0) {
+      store?.delete(targetId)
+      return
+    }
+    store?.set(targetId, next)
+  }
+
+  const wouldCreateHierarchyCycle = (
+    relation: Relation.Relation.Hierarchy,
+    sourceId: number,
+    targetId: number
+  ): boolean => {
+    let current: number | undefined = targetId
+    while (current !== undefined) {
+      if (current === sourceId) {
+        return true
+      }
+      current = relationTargets.get(relation.key)?.get(current)
+    }
+    return false
+  }
+
+  const unrelateEntity = (
+    entityId: number,
+    relation: Relation.Relation.Any
+  ): void => {
+    const targets = relationTargets.get(relation.key)
+    const previousTarget = targets?.get(entityId)
+    if (previousTarget === undefined) {
+      return
+    }
+    targets?.delete(entityId)
+    removeRelatedSource(relation, previousTarget, entityId)
+  }
+
+  const tryRelateEntity = (
+    entityId: number,
+    relation: Relation.Relation.Any,
+    targetId: number
+  ): Relation.Relation.Result<void, Relation.Relation.MutationError> => {
+    if (!entityExists(entityId)) {
+      return Relation.failure(Relation.missingEntityError(entityId))
+    }
+    if (!entityExists(targetId)) {
+      return Relation.failure(Relation.missingTargetEntityError(entityId, targetId, relation.name))
+    }
+    if (!relation.allowSelf && entityId === targetId) {
+      return Relation.failure(Relation.selfRelationNotAllowedError(entityId, relation.name))
+    }
+    if (
+      relation.relationKind === "hierarchy"
+      && wouldCreateHierarchyCycle(relation as Relation.Relation.Hierarchy, entityId, targetId)
+    ) {
+      return Relation.failure(Relation.hierarchyCycleError(entityId, targetId, relation.name))
+    }
+
+    const targets = ensureRelationTargetStore(relation.key)
+    const previousTarget = targets.get(entityId)
+    if (previousTarget !== undefined && previousTarget !== targetId) {
+      removeRelatedSource(relation, previousTarget, entityId)
+    }
+    targets.set(entityId, targetId)
+    addRelatedSource(relation, targetId, entityId)
+    return Relation.success(undefined)
   }
 
   /**
@@ -511,6 +634,21 @@ export const makeRuntime = <
       const store = entities.get(id.value)
       if (!store) {
         return
+      }
+      for (const relation of relationDefinitions) {
+        const sources = [...getRelatedSourceIds(relation, id.value)]
+        if (sources.length > 0) {
+          if (relation.linkedDespawn) {
+            for (const sourceId of sources) {
+              internalWorld.destroyEntity(Entity.makeEntityId<S, Root>(sourceId))
+            }
+          } else {
+            for (const sourceId of sources) {
+              unrelateEntity(sourceId, relation)
+            }
+          }
+        }
+        unrelateEntity(id.value, relation)
       }
       for (const descriptorKey of store.keys()) {
         recordRemovedComponent(descriptorKey, id.value)
@@ -549,6 +687,12 @@ export const makeRuntime = <
       const queue = pendingEvents.get(descriptor.key) ?? []
       queue.push(value)
       pendingEvents.set(descriptor.key, queue)
+    },
+    tryRelate(id, relation, target) {
+      return tryRelateEntity(id.value, relation, target.value)
+    },
+    unrelate(id, relation) {
+      unrelateEntity(id.value, relation)
     }
   }
 
@@ -625,6 +769,30 @@ export const makeRuntime = <
     return true
   }
 
+  const matchesRelationFilters = (entityId: number, query: Query.Query.Any<Root>): boolean => {
+    for (const relation of query.withRelations) {
+      if (!relationTargets.get(relation.key)?.has(entityId)) {
+        return false
+      }
+    }
+    for (const relation of query.withoutRelations) {
+      if (relationTargets.get(relation.key)?.has(entityId)) {
+        return false
+      }
+    }
+    for (const relation of query.withRelated) {
+      if (!hasRelatedSources(relation, entityId)) {
+        return false
+      }
+    }
+    for (const relation of query.withoutRelated) {
+      if (hasRelatedSources(relation, entityId)) {
+        return false
+      }
+    }
+    return true
+  }
+
   /**
    * Compiles a query spec into a runtime query handle.
    *
@@ -657,28 +825,66 @@ export const makeRuntime = <
         if (!matchesLifecycleFilters(idValue, store, query)) {
           continue
         }
+        if (!matchesRelationFilters(idValue, query)) {
+          continue
+        }
 
         const data = {} as Record<string, unknown>
         for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
-          const descriptor = access.descriptor
           if (access.mode === "optional") {
-            data[slot] = store.has(descriptor.key)
-              ? makePresentOptionalReadCell(() => store.get(descriptor.key) as never)
+            data[slot] = store.has(access.descriptor.key)
+              ? makePresentOptionalReadCell(() => store.get(access.descriptor.key) as never)
               : makeAbsentOptionalReadCell()
             continue
           }
-          if (!store.has(descriptor.key)) {
+          if (access.mode === "readRelation") {
+            const targetId = relationTargets.get(access.descriptor.key)?.get(idValue)
+            if (targetId === undefined) {
+              include = false
+              break
+            }
+            data[slot] = makeReadCell(() => Entity.makeEntityId<S, Root>(targetId) as never)
+            continue
+          }
+          if (access.mode === "optionalRelation") {
+            const targetId = relationTargets.get(access.descriptor.key)?.get(idValue)
+            data[slot] = targetId === undefined
+              ? makeAbsentOptionalReadCell()
+              : makePresentOptionalReadCell(() => Entity.makeEntityId<S, Root>(targetId) as never)
+            continue
+          }
+          if (access.mode === "readRelated") {
+            const sourceIds = getRelatedSourceIds(access.descriptor, idValue)
+            if (sourceIds.length === 0) {
+              include = false
+              break
+            }
+            data[slot] = makeReadCell(
+              () => sourceIds.map((sourceId) => Entity.makeEntityId<S, Root>(sourceId)) as never
+            )
+            continue
+          }
+          if (access.mode === "optionalRelated") {
+            const sourceIds = getRelatedSourceIds(access.descriptor, idValue)
+            data[slot] = sourceIds.length === 0
+              ? makeAbsentOptionalReadCell()
+              : makePresentOptionalReadCell(
+                  () => sourceIds.map((sourceId) => Entity.makeEntityId<S, Root>(sourceId)) as never
+                )
+            continue
+          }
+          if (!store.has(access.descriptor.key)) {
             include = false
             break
           }
           if (access.mode === "read") {
-            data[slot] = makeReadCell(() => store.get(descriptor.key) as never)
+            data[slot] = makeReadCell(() => store.get(access.descriptor.key) as never)
           } else {
             data[slot] = makeWriteCell(
-              () => store.get(descriptor.key) as never,
+              () => store.get(access.descriptor.key) as never,
               (value) => {
-                store.set(descriptor.key, value)
-                recordChangedComponent(descriptor.key, idValue)
+                store.set(access.descriptor.key, value)
+                recordChangedComponent(access.descriptor.key, idValue)
               }
             )
           }
@@ -689,7 +895,7 @@ export const makeRuntime = <
 
         const readProof = Object.fromEntries(
           (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
-            .filter(([, access]) => access.mode !== "optional")
+            .filter(([, access]) => access.mode === "read" || access.mode === "write")
             .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
         )
         const writeProof = Object.fromEntries(
@@ -742,12 +948,49 @@ export const makeRuntime = <
       if (!matchesLifecycleFilters(entityId.value, store, query)) {
         return Query.failure(Query.queryMismatchError(entityId.value))
       }
+      if (!matchesRelationFilters(entityId.value, query)) {
+        return Query.failure(Query.queryMismatchError(entityId.value))
+      }
       const data = {} as Record<string, unknown>
       for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
         if (access.mode === "optional") {
           data[slot] = store.has(access.descriptor.key)
             ? makePresentOptionalReadCell(() => store.get(access.descriptor.key) as never)
             : makeAbsentOptionalReadCell()
+          continue
+        }
+        if (access.mode === "readRelation") {
+          const targetId = relationTargets.get(access.descriptor.key)?.get(entityId.value)
+          if (targetId === undefined) {
+            return Query.failure(Query.queryMismatchError(entityId.value))
+          }
+          data[slot] = makeReadCell(() => Entity.makeEntityId<S, Root>(targetId) as never)
+          continue
+        }
+        if (access.mode === "optionalRelation") {
+          const targetId = relationTargets.get(access.descriptor.key)?.get(entityId.value)
+          data[slot] = targetId === undefined
+            ? makeAbsentOptionalReadCell()
+            : makePresentOptionalReadCell(() => Entity.makeEntityId<S, Root>(targetId) as never)
+          continue
+        }
+        if (access.mode === "readRelated") {
+          const sourceIds = getRelatedSourceIds(access.descriptor, entityId.value)
+          if (sourceIds.length === 0) {
+            return Query.failure(Query.queryMismatchError(entityId.value))
+          }
+          data[slot] = makeReadCell(
+            () => sourceIds.map((sourceId) => Entity.makeEntityId<S, Root>(sourceId)) as never
+          )
+          continue
+        }
+        if (access.mode === "optionalRelated") {
+          const sourceIds = getRelatedSourceIds(access.descriptor, entityId.value)
+          data[slot] = sourceIds.length === 0
+            ? makeAbsentOptionalReadCell()
+            : makePresentOptionalReadCell(
+                () => sourceIds.map((sourceId) => Entity.makeEntityId<S, Root>(sourceId)) as never
+              )
           continue
         }
         if (!store.has(access.descriptor.key)) {
@@ -765,7 +1008,7 @@ export const makeRuntime = <
       }
       const readProof = Object.fromEntries(
         (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
-          .filter(([, access]) => access.mode !== "optional")
+          .filter(([, access]) => access.mode === "read" || access.mode === "write")
           .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
       )
       const writeProof = Object.fromEntries(
@@ -779,6 +1022,77 @@ export const makeRuntime = <
           : Entity.ref(entityId, readProof),
         data
       } as QueryMatch<S, Q>)
+    },
+    related(entityId, relation) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      const targetId = relationTargets.get(relation.key)?.get(entityId.value)
+      if (targetId === undefined) {
+        return Relation.failure(Relation.missingRelationError(entityId.value, relation.name))
+      }
+      return Relation.success(Entity.makeEntityId<S, Root>(targetId))
+    },
+    relatedSources(entityId, relation) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      return Relation.success(
+        getRelatedSourceIds(relation, entityId.value).map((sourceId) => Entity.makeEntityId<S, Root>(sourceId))
+      )
+    },
+    parent(entityId, relation) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      const targetId = relationTargets.get(relation.key)?.get(entityId.value)
+      if (targetId === undefined) {
+        return Relation.failure(Relation.missingRelationError(entityId.value, relation.name))
+      }
+      return Relation.success(Entity.makeEntityId<S, Root>(targetId))
+    },
+    ancestors(entityId, relation) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      const ancestors: Array<Entity.EntityId<S, Root>> = []
+      let current = relationTargets.get(relation.key)?.get(entityId.value)
+      while (current !== undefined) {
+        ancestors.push(Entity.makeEntityId<S, Root>(current))
+        current = relationTargets.get(relation.key)?.get(current)
+      }
+      return Relation.success(ancestors)
+    },
+    descendants(entityId, relation, options) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      const order = options?.order ?? "depth"
+      const descendants: Array<Entity.EntityId<S, Root>> = []
+      const pending = [...getRelatedSourceIds(relation, entityId.value)]
+      while (pending.length > 0) {
+        const nextId = order === "breadth" ? pending.shift()! : pending.pop()!
+        descendants.push(Entity.makeEntityId<S, Root>(nextId))
+        const children = [...getRelatedSourceIds(relation, nextId)]
+        if (order === "breadth") {
+          pending.push(...children)
+        } else {
+          pending.push(...children.reverse())
+        }
+      }
+      return Relation.success(descendants)
+    },
+    root(entityId, relation) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      let current = entityId.value
+      let parentId = relationTargets.get(relation.key)?.get(current)
+      while (parentId !== undefined) {
+        current = parentId
+        parentId = relationTargets.get(relation.key)?.get(current)
+      }
+      return Relation.success(Entity.makeEntityId<S, Root>(current))
     }
   } satisfies import("./system.ts").LookupApi<S, Root>
 

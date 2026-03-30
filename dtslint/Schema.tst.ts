@@ -1,4 +1,4 @@
-import { App, Descriptor, Fx, Schema } from "../src/index.ts"
+import { App, Descriptor, Entity, Fx, Schema } from "../src/index.ts"
 import * as Public from "../src/index.ts"
 import { describe, expect, it } from "tstyche"
 
@@ -7,6 +7,8 @@ const Time = Descriptor.defineResource<number>()("Time")
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
 const TickEvent = Descriptor.defineEvent<{ dt: number }>()("TickEvent")
 const Velocity = Descriptor.defineComponent<{ dx: number; dy: number }>()("Velocity")
+const { relation: ChildOf } = Descriptor.defineHierarchy("ChildOf", "Children")
+const { relation: Targeting } = Descriptor.defineRelation("Targeting", "TargetedBy")
 
 describe("Schema", () => {
   it("does not export top-level runtime authoring namespaces from the public barrel", () => {
@@ -375,5 +377,53 @@ describe("Schema", () => {
 
     // @ts-expect-error!
     runtimeA.runSchedule(scheduleB)
+  })
+
+  it("supports explicit relation query access and hierarchy-only lookup helpers", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position
+      },
+      relations: {
+        ChildOf,
+        Targeting
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+    const entityId = Entity.makeEntityId<typeof schema, typeof Game.schema>(1)
+
+    const query = Game.Query.define({
+      selection: {
+        parent: Game.Query.readRelation(ChildOf),
+        children: Game.Query.optionalRelated(ChildOf),
+        target: Game.Query.optionalRelation(Targeting)
+      },
+      withRelations: [ChildOf]
+    })
+
+    expect(query).type.toBeAssignableTo<import("../src/query.ts").QuerySpec<{
+      readonly parent: import("../src/relation.ts").RelationReadAccess<typeof ChildOf, typeof schema, typeof Game.schema>
+      readonly children: import("../src/relation.ts").OptionalRelatedReadAccess<typeof ChildOf, typeof schema, typeof Game.schema>
+      readonly target: import("../src/relation.ts").OptionalRelationReadAccess<typeof Targeting, typeof schema, typeof Game.schema>
+    }, readonly [], readonly [], readonly [], readonly [typeof ChildOf], readonly [], readonly [], readonly [], typeof Game.schema>>()
+
+    const ObserveSystem = Game.System.define(
+      "ObserveRelations",
+      {},
+      ({ lookup }) =>
+        Fx.sync(() => {
+          lookup.parent(entityId, ChildOf)
+          lookup.ancestors(entityId, ChildOf)
+          lookup.related(entityId, Targeting)
+
+          // @ts-expect-error!
+          Game.Query.readRelation(Position)
+          // @ts-expect-error!
+          Game.Query.readRelated(Position)
+          // @ts-expect-error!
+          lookup.parent(entityId, Targeting)
+        })
+    )
   })
 })

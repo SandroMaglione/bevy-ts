@@ -1,5 +1,6 @@
 import type { Descriptor } from "./descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./entity.ts"
+import type * as Relation from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
 type ComponentDescriptor = Descriptor<"component", string, unknown>
@@ -55,6 +56,11 @@ export type Access<D extends ComponentDescriptor> =
   | ReadAccess<D>
   | WriteAccess<D>
   | OptionalReadAccess<D>
+
+export type SelectionAccess<
+  S extends Schema.Any = Schema.Any,
+  Root = unknown
+> = Access<ComponentDescriptor> | Relation.SelectionAccess<S, Root>
 
 /**
  * A filter that matches entities whose component became present since the last
@@ -127,10 +133,14 @@ export const changed = <D extends ComponentDescriptor>(descriptor: D): ChangedFi
  * `with` and `without` filters. They are the source of typed entity proofs.
  */
 export interface QuerySpec<
-  out Selection extends Record<string, Access<ComponentDescriptor>>,
+  out Selection extends Record<string, SelectionAccess<any, Root>>,
   out With extends ReadonlyArray<ComponentDescriptor> = [],
   out Without extends ReadonlyArray<ComponentDescriptor> = [],
   out Filters extends ReadonlyArray<Filter<ComponentDescriptor>> = [],
+  out WithRelations extends ReadonlyArray<Relation.Relation.Any> = [],
+  out WithoutRelations extends ReadonlyArray<Relation.Relation.Any> = [],
+  out WithRelated extends ReadonlyArray<Relation.Relation.Any> = [],
+  out WithoutRelated extends ReadonlyArray<Relation.Relation.Any> = [],
   Root = unknown
 > {
   /**
@@ -149,6 +159,22 @@ export interface QuerySpec<
    * Lifecycle-aware filters that refine matching over the current world.
    */
   readonly filters: Filters
+  /**
+   * Relations that must be present on the entity as outgoing edges.
+   */
+  readonly withRelations: WithRelations
+  /**
+   * Relations that must be absent on the entity as outgoing edges.
+   */
+  readonly withoutRelations: WithoutRelations
+  /**
+   * Reverse relation collections that must be present and non-empty.
+   */
+  readonly withRelated: WithRelated
+  /**
+   * Reverse relation collections that must be absent or empty.
+   */
+  readonly withoutRelated: WithoutRelated
   /**
    * Hidden schema-root brand used by schema-bound APIs.
    */
@@ -178,24 +204,30 @@ export namespace Query {
    * Any supported query specification.
    */
   export type Any<Root = unknown> = QuerySpec<
-    Record<string, Access<ComponentDescriptor>>,
+    Record<string, SelectionAccess<any, Root>>,
     ReadonlyArray<ComponentDescriptor>,
     ReadonlyArray<ComponentDescriptor>,
     ReadonlyArray<Filter<ComponentDescriptor>>,
+    ReadonlyArray<Relation.Relation.Any>,
+    ReadonlyArray<Relation.Relation.Any>,
+    ReadonlyArray<Relation.Relation.Any>,
+    ReadonlyArray<Relation.Relation.Any>,
     Root
   >
 
   /**
    * Extracts the schema-root brand carried by one query.
    */
-  export type Root<T extends Any> = T extends QuerySpec<any, any, any, any, infer R> ? R : never
+  export type Root<T extends Any> = T extends QuerySpec<any, any, any, any, any, any, any, any, infer R> ? R : never
 
   /**
    * The readable proof produced by a query.
    */
   export type ReadProof<T extends Any> = {
     readonly [K in keyof T["selection"] as
-      T["selection"][K] extends OptionalReadAccess<any> ? never : K]:
+      T["selection"][K] extends OptionalReadAccess<any> | Relation.SelectionAccess<any, any> ? never
+      : T["selection"][K] extends Access<any> ? K
+      : never]:
       T["selection"][K] extends Access<infer D> ? Descriptor.Value<D> : never
   }
 
@@ -216,6 +248,10 @@ export namespace Query {
       T["selection"][K] extends ReadAccess<infer D> ? ReadCell<Descriptor.Value<D>>
       : T["selection"][K] extends OptionalReadAccess<infer D> ? OptionalReadCell<Descriptor.Value<D>>
       : T["selection"][K] extends WriteAccess<infer D> ? WriteCell<Descriptor.Value<D>>
+      : T["selection"][K] extends Relation.RelationReadAccess<any, infer S extends Schema.Any, infer Root> ? ReadCell<EntityId<S, Root>>
+      : T["selection"][K] extends Relation.OptionalRelationReadAccess<any, infer S extends Schema.Any, infer Root> ? OptionalReadCell<EntityId<S, Root>>
+      : T["selection"][K] extends Relation.RelatedReadAccess<any, infer S extends Schema.Any, infer Root> ? ReadCell<ReadonlyArray<EntityId<S, Root>>>
+      : T["selection"][K] extends Relation.OptionalRelatedReadAccess<any, infer S extends Schema.Any, infer Root> ? OptionalReadCell<ReadonlyArray<EntityId<S, Root>>>
       : never
   }
 
@@ -380,20 +416,32 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * query result type.
  */
 export const define = <
-  const Selection extends Record<string, Access<ComponentDescriptor>>,
+  const Selection extends Record<string, SelectionAccess<any, Root>>,
   const With extends ReadonlyArray<ComponentDescriptor> = [],
   const Without extends ReadonlyArray<ComponentDescriptor> = [],
   const Filters extends ReadonlyArray<Filter<ComponentDescriptor>> = [],
+  const WithRelations extends ReadonlyArray<Relation.Relation.Any> = [],
+  const WithoutRelations extends ReadonlyArray<Relation.Relation.Any> = [],
+  const WithRelated extends ReadonlyArray<Relation.Relation.Any> = [],
+  const WithoutRelated extends ReadonlyArray<Relation.Relation.Any> = [],
   Root = unknown
 >(spec: {
   readonly selection: Selection
   readonly with?: With
   readonly without?: Without
   readonly filters?: Filters
-}): QuerySpec<Selection, With, Without, Filters, Root> => ({
+  readonly withRelations?: WithRelations
+  readonly withoutRelations?: WithoutRelations
+  readonly withRelated?: WithRelated
+  readonly withoutRelated?: WithoutRelated
+}): QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root> => ({
   selection: spec.selection,
   with: (spec.with ?? []) as With,
   without: (spec.without ?? []) as Without,
   filters: (spec.filters ?? []) as Filters,
+  withRelations: (spec.withRelations ?? []) as WithRelations,
+  withoutRelations: (spec.withoutRelations ?? []) as WithoutRelations,
+  withRelated: (spec.withRelated ?? []) as WithRelated,
+  withoutRelated: (spec.withoutRelated ?? []) as WithoutRelated,
   __schemaRoot: undefined as unknown as Root
 })

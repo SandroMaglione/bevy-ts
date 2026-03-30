@@ -3,6 +3,7 @@ import type { Descriptor } from "./descriptor.ts"
 import type * as Entity from "./entity.ts"
 import * as Machine from "./machine.ts"
 import * as QueryModule from "./query.ts"
+import * as Relation from "./relation.ts"
 import * as Runtime from "./runtime.ts"
 import * as Schedule from "./schedule.ts"
 import * as System from "./system.ts"
@@ -27,12 +28,14 @@ export interface SchemaDefinition<
   out Components extends Registry = {},
   out Resources extends Registry = {},
   out Events extends Registry = {},
-  out States extends Registry = {}
+  out States extends Registry = {},
+  out Relations extends Record<string, Relation.Relation.Any> = {}
 > {
   readonly components: Components
   readonly resources: Resources
   readonly events: Events
   readonly states: States
+  readonly relations: Relations
 }
 
 /**
@@ -42,7 +45,7 @@ export namespace Schema {
   /**
    * Any complete schema definition.
    */
-  export type Any = SchemaDefinition<Registry, Registry, Registry, Registry>
+  export type Any = SchemaDefinition<Registry, Registry, Registry, Registry, Record<string, Relation.Relation.Any>>
 
   /**
    * Extracts the component registry from a schema.
@@ -60,6 +63,10 @@ export namespace Schema {
    * Extracts the state registry from a schema.
    */
   export type States<T extends Any> = T["states"]
+  /**
+   * Extracts the relation registry from a schema.
+   */
+  export type Relations<T extends Any> = T["relations"]
 
   /**
    * Looks up the value type of a component descriptor inside a schema.
@@ -145,21 +152,33 @@ export namespace Schema {
     readonly schema: S
     readonly Query: {
       define: <
-        const Selection extends Record<string, QueryModule.Access<ComponentDescriptor<S>>>,
+        const Selection extends Record<string, QuerySelectionAccess<S, Root>>,
         const With extends ReadonlyArray<ComponentDescriptor<S>> = [],
         const Without extends ReadonlyArray<ComponentDescriptor<S>> = [],
-        const Filters extends ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>> = []
+        const Filters extends ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>> = [],
+        const WithRelations extends ReadonlyArray<RelationDescriptor<S>> = [],
+        const WithoutRelations extends ReadonlyArray<RelationDescriptor<S>> = [],
+        const WithRelated extends ReadonlyArray<RelationDescriptor<S>> = [],
+        const WithoutRelated extends ReadonlyArray<RelationDescriptor<S>> = []
       >(spec: {
         readonly selection: Selection
         readonly with?: With
         readonly without?: Without
         readonly filters?: Filters
-      }) => QueryModule.QuerySpec<Selection, With, Without, Filters, Root>
+        readonly withRelations?: WithRelations
+        readonly withoutRelations?: WithoutRelations
+        readonly withRelated?: WithRelated
+        readonly withoutRelated?: WithoutRelated
+      }) => QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
       read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
       write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
       optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
       added: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.AddedFilter<D>
       changed: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ChangedFilter<D>
+      readRelation: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.RelationReadAccess<R, S, Root>
+      optionalRelation: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.OptionalRelationReadAccess<R, S, Root>
+      readRelated: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.RelatedReadAccess<R, S, Root>
+      optionalRelated: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.OptionalRelatedReadAccess<R, S, Root>
     }
     readonly Command: {
       spawn: () => Entity.EntityDraft<S, {}, Root>
@@ -176,6 +195,11 @@ export namespace Schema {
       spawnWith: <const Entries extends ReadonlyArray<Command.SchemaEntry<S>>>(
         ...entries: Entries
       ) => Entity.EntityDraft<S, Command.Draft.FoldEntries<Entries>, Root>
+      relate: <P extends Entity.ComponentProof, R extends RelationDescriptor<S>>(
+        draft: Entity.EntityDraft<S, P, Root>,
+        relation: R,
+        target: Entity.EntityId<S, Root>
+      ) => Entity.EntityDraft<S, P, Root>
     }
   }
 }
@@ -202,6 +226,10 @@ type ComponentDescriptor<S extends Schema.Any> = Extract<Schema.Components<S>[ke
 type ResourceDescriptor<S extends Schema.Any> = Extract<Schema.Resources<S>[keyof Schema.Resources<S>], Descriptor<"resource", string, any>>
 type EventDescriptor<S extends Schema.Any> = Extract<Schema.Events<S>[keyof Schema.Events<S>], Descriptor<"event", string, any>>
 type StateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Schema.States<S>], Descriptor<"state", string, any>>
+type RelationDescriptor<S extends Schema.Any> = Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>
+type QuerySelectionAccess<S extends Schema.Any, Root> =
+  | QueryModule.Access<ComponentDescriptor<S>>
+  | Relation.SelectionAccess<S, Root>
 
 /**
  * Recomputes the aggregate runtime requirements for a bound schedule.
@@ -321,6 +349,24 @@ const mergeRegistry = <A extends Registry, B extends Registry>(
   } as A & B
 }
 
+const mergeRelations = <
+  A extends Record<string, Relation.Relation.Any>,
+  B extends Record<string, Relation.Relation.Any>
+>(
+  left: A,
+  right: B
+): A & B => {
+  for (const key of Object.keys(right)) {
+    if (key in left) {
+      throw new Error(`Duplicate schema key: ${key}`)
+    }
+  }
+  return {
+    ...left,
+    ...right
+  } as A & B
+}
+
 /**
  * Creates an empty schema.
  *
@@ -331,7 +377,8 @@ export const empty = (): SchemaDefinition => ({
   components: {},
   resources: {},
   events: {},
-  states: {}
+  states: {},
+  relations: {}
 })
 
 /**
@@ -344,17 +391,20 @@ export const fragment = <
   const Components extends Registry = {},
   const Resources extends Registry = {},
   const Events extends Registry = {},
-  const States extends Registry = {}
+  const States extends Registry = {},
+  const Relations extends Record<string, Relation.Relation.Any> = {}
 >(definition: {
   readonly components?: Components
   readonly resources?: Resources
   readonly events?: Events
   readonly states?: States
-}): SchemaDefinition<Components, Resources, Events, States> => ({
+  readonly relations?: Relations
+}): SchemaDefinition<Components, Resources, Events, States, Relations> => ({
   components: (definition.components ?? {}) as Components,
   resources: (definition.resources ?? {}) as Resources,
   events: (definition.events ?? {}) as Events,
-  states: (definition.states ?? {}) as States
+  states: (definition.states ?? {}) as States,
+  relations: (definition.relations ?? {}) as Relations
 })
 
 /**
@@ -373,16 +423,19 @@ export const merge = <
     & Distinct<Schema.Resources<A>, Schema.Resources<B>>
     & Distinct<Schema.Events<A>, Schema.Events<B>>
     & Distinct<Schema.States<A>, Schema.States<B>>
+    & Distinct<Schema.Relations<A>, Schema.Relations<B>>
 ): SchemaDefinition<
   Schema.Components<A> & Schema.Components<B>,
   Schema.Resources<A> & Schema.Resources<B>,
   Schema.Events<A> & Schema.Events<B>,
-  Schema.States<A> & Schema.States<B>
+  Schema.States<A> & Schema.States<B>,
+  Schema.Relations<A> & Schema.Relations<B>
 > => ({
   components: mergeRegistry(left.components, right.components),
   resources: mergeRegistry(left.resources, right.resources),
   events: mergeRegistry(left.events, right.events),
-  states: mergeRegistry(left.states, right.states)
+  states: mergeRegistry(left.states, right.states),
+  relations: mergeRelations(left.relations, right.relations)
 })
 
 /**
@@ -416,7 +469,8 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
             Schema.Components<Head> & Schema.Components<BuildFragments<Tail>>,
             Schema.Resources<Head> & Schema.Resources<BuildFragments<Tail>>,
             Schema.Events<Head> & Schema.Events<BuildFragments<Tail>>,
-            Schema.States<Head> & Schema.States<BuildFragments<Tail>>
+            Schema.States<Head> & Schema.States<BuildFragments<Tail>>,
+            Schema.Relations<Head> & Schema.Relations<BuildFragments<Tail>>
           >
         : Head
     : never
@@ -568,23 +622,44 @@ export const bind = <S extends Schema.Any>(schema: S) => {
     ...entries: Entries
   ) => Command.spawnWith<S, Root, Entries>(...entries)
 
+  const commandRelate = <
+    P extends Entity.ComponentProof,
+    R extends RelationDescriptor<S>
+  >(
+    draft: Entity.EntityDraft<S, P, Root>,
+    relation: R,
+    target: Entity.EntityId<S, Root>
+  ) => Command.relate(draft, relation, target)
+
   const queryDefine = <
-    const Selection extends Record<string, QueryModule.Access<ComponentDescriptor<S>>>,
+    const Selection extends Record<string, QuerySelectionAccess<S, Root>>,
     const With extends ReadonlyArray<ComponentDescriptor<S>> = [],
     const Without extends ReadonlyArray<ComponentDescriptor<S>> = [],
-    const Filters extends ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>> = []
+    const Filters extends ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>> = [],
+    const WithRelations extends ReadonlyArray<RelationDescriptor<S>> = [],
+    const WithoutRelations extends ReadonlyArray<RelationDescriptor<S>> = [],
+    const WithRelated extends ReadonlyArray<RelationDescriptor<S>> = [],
+    const WithoutRelated extends ReadonlyArray<RelationDescriptor<S>> = []
   >(spec: {
     readonly selection: Selection
     readonly with?: With
     readonly without?: Without
     readonly filters?: Filters
-  }) => QueryModule.define<Selection, With, Without, Filters, Root>(spec)
+    readonly withRelations?: WithRelations
+    readonly withoutRelations?: WithoutRelations
+    readonly withRelated?: WithRelated
+    readonly withoutRelated?: WithoutRelated
+  }) => QueryModule.define<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>(spec)
 
   const queryRead = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.read(descriptor)
   const queryWrite = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.write(descriptor)
   const queryOptional = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.optional(descriptor)
   const queryAdded = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.added(descriptor)
   const queryChanged = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.changed(descriptor)
+  const queryReadRelation = <R extends RelationDescriptor<S>>(descriptor: R) => Relation.read<R, S, Root>(descriptor)
+  const queryOptionalRelation = <R extends RelationDescriptor<S>>(descriptor: R) => Relation.optional<R, S, Root>(descriptor)
+  const queryReadRelated = <R extends RelationDescriptor<S>>(descriptor: R) => Relation.readRelated<R, S, Root>(descriptor)
+  const queryOptionalRelated = <R extends RelationDescriptor<S>>(descriptor: R) => Relation.optionalRelated<R, S, Root>(descriptor)
 
   const readResource = <D extends ResourceDescriptor<S>>(descriptor: D) => System.readResource(descriptor)
   const writeResource = <D extends ResourceDescriptor<S>>(descriptor: D) => System.writeResource(descriptor)
@@ -817,14 +892,19 @@ export const bind = <S extends Schema.Any>(schema: S) => {
       write: queryWrite,
       optional: queryOptional,
       added: queryAdded,
-      changed: queryChanged
+      changed: queryChanged,
+      readRelation: queryReadRelation,
+      optionalRelation: queryOptionalRelation,
+      readRelated: queryReadRelated,
+      optionalRelated: queryOptionalRelated
     },
     Command: {
       spawn: commandSpawn,
       entry: commandEntry,
       insert: commandInsert,
       insertMany: commandInsertMany,
-      spawnWith: commandSpawnWith
+      spawnWith: commandSpawnWith,
+      relate: commandRelate
     },
     StateMachine: {
       define: defineMachine

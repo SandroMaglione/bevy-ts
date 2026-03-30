@@ -1,5 +1,6 @@
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
+import type * as Relation from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
 /**
@@ -115,6 +116,21 @@ export interface InternalWorld<S extends Schema.Any> {
    * Appends an event payload to the event queue for a descriptor.
    */
   readonly appendEvent: (descriptor: Descriptor.Any, value: unknown) => void
+  /**
+   * Attempts to attach one relation edge between two live entities.
+   */
+  readonly tryRelate: (
+    id: Entity.EntityId<S, any>,
+    relation: Relation.Relation.Any,
+    target: Entity.EntityId<S, any>
+  ) => Relation.Relation.Result<void, Relation.Relation.MutationError>
+  /**
+   * Removes one outgoing relation from an entity when present.
+   */
+  readonly unrelate: (
+    id: Entity.EntityId<S, any>,
+    relation: Relation.Relation.Any
+  ) => void
 }
 
 /**
@@ -180,6 +196,30 @@ export const insertMany = <
   }
   return current as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root>
 }
+
+/**
+ * Stages one outgoing relation edge on an entity draft.
+ *
+ * Drafts stay pure: this only records intent so the runtime can attempt to
+ * attach the relation when the spawn command is flushed.
+ */
+export const relate = <
+  S extends Schema.Any,
+  P extends Entity.ComponentProof,
+  R extends Relation.Relation.Any,
+  Root = unknown
+>(
+  draft: Entity.EntityDraft<S, P, Root>,
+  relation: R,
+  target: Entity.EntityId<S, Root>
+): Entity.EntityDraft<S, P, Root> =>
+  Entity.draft(draft.id, draft.proof, [
+    ...draft.relations,
+    {
+      relation,
+      target
+    }
+  ])
 
 /**
  * Starts a staged entity definition and inserts multiple components at once.
@@ -286,6 +326,9 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
               key: Symbol.for(`bevy-ts/component/${key}`)
             } as Descriptor<"component", string, unknown>
             world.writeComponent(id, descriptor, value)
+          }
+          for (const stagedRelation of draft.relations) {
+            world.tryRelate(id, stagedRelation.relation, stagedRelation.target)
           }
         }
       })

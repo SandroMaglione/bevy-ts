@@ -1,6 +1,7 @@
 import type { Descriptor } from "./descriptor.ts"
 import type { Fx } from "./fx.ts"
 import * as Machine from "./machine.ts"
+import type * as Relation from "./relation.ts"
 import type { Query, QueryMatch } from "./query.ts"
 import type { ReadCell, WriteCell } from "./query.ts"
 import type { Schema } from "./schema.ts"
@@ -305,6 +306,33 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     entityId: import("./entity.ts").EntityId<S, Root>,
     query: Q
   ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  related<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
+    entityId: import("./entity.ts").EntityId<S, Root>,
+    relation: R
+  ): Relation.Relation.Result<import("./entity.ts").EntityId<S, Root>, Relation.Relation.LookupError>
+  relatedSources<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
+    entityId: import("./entity.ts").EntityId<S, Root>,
+    relation: R
+  ): Relation.Relation.Result<ReadonlyArray<import("./entity.ts").EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  parent<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: import("./entity.ts").EntityId<S, Root>,
+    relation: R
+  ): Relation.Relation.Result<import("./entity.ts").EntityId<S, Root>, Relation.Relation.LookupError>
+  ancestors<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: import("./entity.ts").EntityId<S, Root>,
+    relation: R
+  ): Relation.Relation.Result<ReadonlyArray<import("./entity.ts").EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  descendants<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: import("./entity.ts").EntityId<S, Root>,
+    relation: R,
+    options?: {
+      readonly order?: "breadth" | "depth"
+    }
+  ): Relation.Relation.Result<ReadonlyArray<import("./entity.ts").EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  root<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: import("./entity.ts").EntityId<S, Root>,
+    relation: R
+  ): Relation.Relation.Result<import("./entity.ts").EntityId<S, Root>, Relation.Relation.MissingEntityError>
 }
 
 /**
