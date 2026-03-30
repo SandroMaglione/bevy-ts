@@ -22,6 +22,7 @@
     "test-types": "tstyche",
     "check": "pnpm typecheck && pnpm test-types && vitest run",
     "coverage": "vitest --coverage",
-    "example:pixi": "vite"
+    "example:pixi": "vite --open /pixi.html",
+    "example:top-down": "vite --open /top-down.html"
   }
 }
