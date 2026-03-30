@@ -236,6 +236,47 @@ export interface TransitionEventReadView<M extends Machine.StateMachine.Any = Ma
 }
 
 /**
+ * Declares read access to removed-component lifecycle records.
+ */
+export interface RemovedRead<D extends Descriptor<"component", string, any>> {
+  readonly descriptor: D
+}
+
+/**
+ * Declares read access to despawned-entity lifecycle records.
+ */
+export interface DespawnedRead {
+  readonly kind: "despawned"
+}
+
+export const readRemoved = <D extends Descriptor<"component", string, any>>(
+  descriptor: D
+): RemovedRead<D> => ({
+  descriptor
+})
+
+/**
+ * Declares read access to despawned-entity lifecycle records.
+ */
+export const readDespawned = (): DespawnedRead => ({
+  kind: "despawned"
+})
+
+/**
+ * A read-only lifecycle stream of entity ids for one removed component.
+ */
+export interface RemovedReadView<S extends Schema.Any, Root = unknown> {
+  all(): ReadonlyArray<import("./entity.ts").EntityId<S, Root>>
+}
+
+/**
+ * A read-only lifecycle stream of despawned entity ids.
+ */
+export interface DespawnedReadView<S extends Schema.Any, Root = unknown> {
+  all(): ReadonlyArray<import("./entity.ts").EntityId<S, Root>>
+}
+
+/**
  * A runtime query handle exposed to system implementations.
  *
  * The handle is already typed from the query spec, so iterating it returns
@@ -293,6 +334,8 @@ export interface SystemSpec<
   out Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   out NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   out TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
+  out Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
+  out Despawned extends Record<string, DespawnedRead> = {},
   out When extends ReadonlyArray<Machine.Condition> = readonly [],
   out Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown
@@ -309,6 +352,8 @@ export interface SystemSpec<
   readonly machines: Machines
   readonly nextMachines: NextMachines
   readonly transitionEvents: TransitionEvents
+  readonly removed: Removed
+  readonly despawned: Despawned
   readonly when: When
   readonly transitions: Transitions
   readonly schema: S
@@ -328,6 +373,8 @@ export type AnySystemSpec = SystemSpec<
   ReadonlyArray<Label.SystemSet>,
   ReadonlyArray<OrderTarget>,
   ReadonlyArray<OrderTarget>,
+  any,
+  any,
   any,
   any,
   any,
@@ -420,6 +467,16 @@ type TransitionEventContext<Spec extends AnySystemSpec> = {
     Spec["transitionEvents"][K] extends Machine.TransitionEventRead<infer M> ? TransitionEventReadView<M> : never
 }
 
+type RemovedContext<Spec extends AnySystemSpec> = {
+  readonly [K in keyof Spec["removed"]]:
+    Spec["removed"][K] extends RemovedRead<any> ? RemovedReadView<Spec["schema"], Spec["__schemaRoot"]> : never
+}
+
+type DespawnedContext<Spec extends AnySystemSpec> = {
+  readonly [K in keyof Spec["despawned"]]:
+    Spec["despawned"][K] extends DespawnedRead ? DespawnedReadView<Spec["schema"], Spec["__schemaRoot"]> : never
+}
+
 /**
  * Derives the transition view context from a system spec.
  */
@@ -450,6 +507,8 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly machines: MachineContext<Spec>
   readonly nextMachines: NextMachineContext<Spec>
   readonly transitionEvents: TransitionEventContext<Spec>
+  readonly removed: RemovedContext<Spec>
+  readonly despawned: DespawnedContext<Spec>
   readonly transitions: TransitionContext<Spec>
   readonly services: ServiceContext<Spec>
   readonly commands: CommandsApi<Spec["schema"], Spec["__schemaRoot"]>
@@ -592,6 +651,8 @@ export function define<
   const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
+  const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
+  const Despawned extends Record<string, DespawnedRead> = {},
   const When extends ReadonlyArray<Machine.Condition> = [],
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown,
@@ -612,15 +673,17 @@ export function define<
     readonly machines?: Machines
     readonly nextMachines?: NextMachines
     readonly transitionEvents?: TransitionEvents
+    readonly removed?: Removed
+    readonly despawned?: Despawned
     readonly when?: When
     readonly transitions?: Transitions
   },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>) => Fx<
+  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>, A, E, Root>
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>, A, E, Root>
 
 /**
  * Legacy low-level overload that accepts an explicit system label.
@@ -641,6 +704,8 @@ export function define<
   const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
+  const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
+  const Despawned extends Record<string, DespawnedRead> = {},
   const When extends ReadonlyArray<Machine.Condition> = [],
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown,
@@ -661,15 +726,17 @@ export function define<
     readonly machines?: Machines
     readonly nextMachines?: NextMachines
     readonly transitionEvents?: TransitionEvents
+    readonly removed?: Removed
+    readonly despawned?: Despawned
     readonly when?: When
     readonly transitions?: Transitions
   },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>) => Fx<
+  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>, A, E, Root>
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>, A, E, Root>
 
 export function define<
   S extends Schema.Any,
@@ -684,6 +751,8 @@ export function define<
   const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
+  const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
+  const Despawned extends Record<string, DespawnedRead> = {},
   const When extends ReadonlyArray<Machine.Condition> = [],
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown,
@@ -720,20 +789,23 @@ export function define<
         readonly states?: States
         readonly machines?: Machines
         readonly nextMachines?: NextMachines
+        readonly transitionEvents?: TransitionEvents
+        readonly removed?: Removed
+        readonly despawned?: Despawned
         readonly when?: When
         readonly transitions?: Transitions
       }
-      | ((context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions>>) => Fx<
+      | ((context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions>>) => Fx<
         A,
         E,
-        ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions>>
+        ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions>>
       >),
-  maybeRun?: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>) => Fx<
+  maybeRun?: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>, A, E, Root> {
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>, A, E, Root> {
   const named = typeof nameOrSpec === "string"
   const name = named ? nameOrSpec : nameOrSpec.label.name
   const spec = (named ? specOrRun : nameOrSpec) as {
@@ -750,18 +822,20 @@ export function define<
     readonly machines?: Machines
     readonly nextMachines?: NextMachines
     readonly transitionEvents?: TransitionEvents
+    readonly removed?: Removed
+    readonly despawned?: Despawned
     readonly when?: When
     readonly transitions?: Transitions
   }
-  const run = (named ? maybeRun : specOrRun) as (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>) => Fx<
+  const run = (named ? maybeRun : specOrRun) as (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>
   >
 
   return {
     name,
-    requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, When, Transitions, Root>>,
+    requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>,
     spec: {
       label: spec.label ?? LabelModule.defineSystemLabel(name),
       schema: spec.schema,
@@ -776,6 +850,8 @@ export function define<
       machines: (spec.machines ?? {}) as Machines,
       nextMachines: (spec.nextMachines ?? {}) as NextMachines,
       transitionEvents: (spec.transitionEvents ?? {}) as TransitionEvents,
+      removed: (spec.removed ?? {}) as Removed,
+      despawned: (spec.despawned ?? {}) as Despawned,
       when: (spec.when ?? []) as When,
       transitions: (spec.transitions ?? {}) as Transitions,
       __schemaRoot: undefined as Root | undefined

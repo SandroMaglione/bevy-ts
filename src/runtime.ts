@@ -9,9 +9,11 @@ import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
 import type { Registry, Schema } from "./schema.ts"
 import type {
+  DespawnedReadView,
   EventReadView,
   EventWriteView,
   QueryHandle,
+  RemovedReadView,
   ResourceReadView,
   RuntimeRequirements,
   TransitionEventReadView,
@@ -426,6 +428,38 @@ export const makeRuntime = <
    * Machine-keyed pending transition-event buffers written before the next event update.
    */
   let pendingTransitionEvents = new Map<symbol, Array<Machine.TransitionSnapshot>>()
+  /**
+   * Component-keyed readable added-lifecycle buffers for the current phase.
+   */
+  let readableAddedComponents = new Map<symbol, Set<number>>()
+  /**
+   * Component-keyed pending added-lifecycle buffers written before the next lifecycle update.
+   */
+  let pendingAddedComponents = new Map<symbol, Set<number>>()
+  /**
+   * Component-keyed readable changed-lifecycle buffers for the current phase.
+   */
+  let readableChangedComponents = new Map<symbol, Set<number>>()
+  /**
+   * Component-keyed pending changed-lifecycle buffers written before the next lifecycle update.
+   */
+  let pendingChangedComponents = new Map<symbol, Set<number>>()
+  /**
+   * Component-keyed readable removed-lifecycle buffers for the current phase.
+   */
+  let readableRemovedComponents = new Map<symbol, Set<number>>()
+  /**
+   * Component-keyed pending removed-lifecycle buffers written before the next lifecycle update.
+   */
+  let pendingRemovedComponents = new Map<symbol, Set<number>>()
+  /**
+   * Readable despawned-entity ids for the current phase.
+   */
+  let readableDespawnedEntities = new Set<number>()
+  /**
+   * Pending despawned-entity ids written before the next lifecycle update.
+   */
+  let pendingDespawnedEntities = new Set<number>()
 
   /**
    * Seeds runtime resources from the host-provided initial values.
@@ -474,10 +508,35 @@ export const makeRuntime = <
       return fresh
     },
     destroyEntity(id) {
+      const store = entities.get(id.value)
+      if (!store) {
+        return
+      }
+      for (const descriptorKey of store.keys()) {
+        recordRemovedComponent(descriptorKey, id.value)
+      }
+      recordDespawnedEntity(id.value)
       entities.delete(id.value)
     },
     removeComponent(id, descriptor) {
-      entities.get(id.value)?.delete(descriptor.key)
+      const store = entities.get(id.value)
+      if (!store?.has(descriptor.key)) {
+        return
+      }
+      store.delete(descriptor.key)
+      recordRemovedComponent(descriptor.key, id.value)
+    },
+    writeComponent(id, descriptor, value) {
+      const store = entities.get(id.value)
+      if (!store) {
+        return
+      }
+      const existed = store.has(descriptor.key)
+      store.set(descriptor.key, value)
+      if (!existed) {
+        recordAddedComponent(descriptor.key, id.value)
+      }
+      recordChangedComponent(descriptor.key, id.value)
     },
     writeResource(descriptor, value) {
       if (descriptor.kind === "state") {
@@ -526,6 +585,46 @@ export const makeRuntime = <
     }
   })
 
+  const pushLifecycleEntity = (buffer: Map<symbol, Set<number>>, descriptorKey: symbol, entityId: number): void => {
+    const entries = buffer.get(descriptorKey) ?? new Set<number>()
+    entries.add(entityId)
+    buffer.set(descriptorKey, entries)
+  }
+
+  const recordAddedComponent = (descriptorKey: symbol, entityId: number): void => {
+    pushLifecycleEntity(pendingAddedComponents, descriptorKey, entityId)
+  }
+
+  const recordChangedComponent = (descriptorKey: symbol, entityId: number): void => {
+    pushLifecycleEntity(pendingChangedComponents, descriptorKey, entityId)
+  }
+
+  const recordRemovedComponent = (descriptorKey: symbol, entityId: number): void => {
+    pushLifecycleEntity(pendingRemovedComponents, descriptorKey, entityId)
+  }
+
+  const recordDespawnedEntity = (entityId: number): void => {
+    pendingDespawnedEntities.add(entityId)
+  }
+
+  const matchesLifecycleFilters = (entityId: number, store: Map<symbol, unknown>, query: Query.Query.Any<Root>): boolean => {
+    for (const filter of query.filters) {
+      if (!store.has(filter.descriptor.key)) {
+        return false
+      }
+      if (filter.kind === "added") {
+        if (!readableAddedComponents.get(filter.descriptor.key)?.has(entityId)) {
+          return false
+        }
+        continue
+      }
+      if (!readableChangedComponents.get(filter.descriptor.key)?.has(entityId)) {
+        return false
+      }
+    }
+    return true
+  }
+
   /**
    * Compiles a query spec into a runtime query handle.
    *
@@ -546,13 +645,16 @@ export const makeRuntime = <
         if (!include) {
           continue
         }
-        for (const descriptor of query.without) {
-          if (store.has(descriptor.key)) {
-            include = false
-            break
-          }
+      for (const descriptor of query.without) {
+        if (store.has(descriptor.key)) {
+          include = false
+          break
+        }
         }
         if (!include) {
+          continue
+        }
+        if (!matchesLifecycleFilters(idValue, store, query)) {
           continue
         }
 
@@ -576,6 +678,7 @@ export const makeRuntime = <
               () => store.get(descriptor.key) as never,
               (value) => {
                 store.set(descriptor.key, value)
+                recordChangedComponent(descriptor.key, idValue)
               }
             )
           }
@@ -636,6 +739,9 @@ export const makeRuntime = <
           return Query.failure(Query.queryMismatchError(entityId.value))
         }
       }
+      if (!matchesLifecycleFilters(entityId.value, store, query)) {
+        return Query.failure(Query.queryMismatchError(entityId.value))
+      }
       const data = {} as Record<string, unknown>
       for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
         if (access.mode === "optional") {
@@ -653,6 +759,7 @@ export const makeRuntime = <
               () => store.get(access.descriptor.key) as never,
               (value) => {
                 store.set(access.descriptor.key, value)
+                recordChangedComponent(access.descriptor.key, entityId.value)
               }
             )
       }
@@ -718,6 +825,25 @@ export const makeRuntime = <
   const makeTransitionEventReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): TransitionEventReadView<M> => ({
     all() {
       return (readableTransitionEvents.get(stateMachine.key) ?? []) as unknown as ReadonlyArray<Machine.TransitionSnapshot<M>>
+    }
+  })
+
+  /**
+   * Creates a read-only removed-component lifecycle stream view.
+   */
+  const makeRemovedReadView = (descriptorKey: symbol): RemovedReadView<S, Root> => ({
+    all() {
+      return [...(readableRemovedComponents.get(descriptorKey) ?? new Set<number>())]
+        .map((entityId) => Entity.makeEntityId<S, Root>(entityId))
+    }
+  })
+
+  /**
+   * Creates a read-only despawned-entity lifecycle stream view.
+   */
+  const makeDespawnedReadView = (): DespawnedReadView<S, Root> => ({
+    all() {
+      return [...readableDespawnedEntities].map((entityId) => Entity.makeEntityId<S, Root>(entityId))
     }
   })
 
@@ -838,6 +964,18 @@ export const makeRuntime = <
         makeTransitionReadView(access.machine)
       ])
     )
+    const removedViews = Object.fromEntries(
+      Object.entries((system.spec.removed ?? {}) as Record<string, any>).map(([key, access]) => [
+        key,
+        makeRemovedReadView(access.descriptor.key)
+      ])
+    )
+    const despawnedViews = Object.fromEntries(
+      Object.entries((system.spec.despawned ?? {}) as Record<string, any>).map(([key]) => [
+        key,
+        makeDespawnedReadView()
+      ])
+    )
     const serviceViews = Object.fromEntries(
       Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [key, providedServices[access.descriptor.name as keyof Services]])
     )
@@ -851,6 +989,8 @@ export const makeRuntime = <
       machines: machineViews,
       nextMachines: nextMachineViews,
       transitionEvents: transitionEventViews,
+      removed: removedViews,
+      despawned: despawnedViews,
       transitions: transitionViews,
       services: serviceViews,
       commands
@@ -893,6 +1033,29 @@ export const makeRuntime = <
     readableTransitionEvents = pendingTransitionEvents
     pendingTransitionEvents = new Map()
   }
+
+  /**
+   * Advances readable lifecycle buffers to the latest pending writes.
+   */
+  const updateLifecycle = (): void => {
+    readableAddedComponents = pendingAddedComponents
+    pendingAddedComponents = new Map()
+    readableChangedComponents = pendingChangedComponents
+    pendingChangedComponents = new Map()
+    readableRemovedComponents = pendingRemovedComponents
+    pendingRemovedComponents = new Map()
+    readableDespawnedEntities = pendingDespawnedEntities
+    pendingDespawnedEntities = new Set()
+  }
+
+  const hasPendingEvents = (): boolean =>
+    pendingEvents.size > 0 || pendingTransitionEvents.size > 0
+
+  const hasPendingLifecycle = (): boolean =>
+    pendingAddedComponents.size > 0
+    || pendingChangedComponents.size > 0
+    || pendingRemovedComponents.size > 0
+    || pendingDespawnedEntities.size > 0
 
   /**
    * Runs one internal transition schedule with an active transition snapshot.
@@ -1016,12 +1179,19 @@ export const makeRuntime = <
         applyStateTransitions(deferred, step.bundle as never)
         continue
       }
-      updateEvents()
+      if (step.kind === "eventUpdate") {
+        updateEvents()
+        continue
+      }
+      updateLifecycle()
     }
     const lastStep = schedule.steps.at(-1)
     applyDeferred(deferred)
-    if (!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") {
+    if ((!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") && hasPendingEvents()) {
       updateEvents()
+    }
+    if ((!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "lifecycleUpdate") && hasPendingLifecycle()) {
+      updateLifecycle()
     }
   }
 

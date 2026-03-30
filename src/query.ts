@@ -57,6 +57,28 @@ export type Access<D extends ComponentDescriptor> =
   | OptionalReadAccess<D>
 
 /**
+ * A filter that matches entities whose component became present since the last
+ * lifecycle update boundary.
+ */
+export interface AddedFilter<D extends ComponentDescriptor> {
+  readonly kind: "added"
+  readonly descriptor: D
+}
+
+/**
+ * A filter that matches entities whose component was written since the last
+ * lifecycle update boundary.
+ */
+export interface ChangedFilter<D extends ComponentDescriptor> {
+  readonly kind: "changed"
+  readonly descriptor: D
+}
+
+export type Filter<D extends ComponentDescriptor> =
+  | AddedFilter<D>
+  | ChangedFilter<D>
+
+/**
  * Declares read-only access to a descriptor in a query specification.
  */
 export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D> => ({
@@ -82,6 +104,23 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
 })
 
 /**
+ * Declares a lifecycle filter that matches newly added components.
+ */
+export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter<D> => ({
+  kind: "added",
+  descriptor
+})
+
+/**
+ * Declares a lifecycle filter that matches components written since the last
+ * lifecycle boundary.
+ */
+export const changed = <D extends ComponentDescriptor>(descriptor: D): ChangedFilter<D> => ({
+  kind: "changed",
+  descriptor
+})
+
+/**
  * A fully explicit query specification.
  *
  * Queries describe exactly which components are read or written, plus optional
@@ -91,6 +130,7 @@ export interface QuerySpec<
   out Selection extends Record<string, Access<ComponentDescriptor>>,
   out With extends ReadonlyArray<ComponentDescriptor> = [],
   out Without extends ReadonlyArray<ComponentDescriptor> = [],
+  out Filters extends ReadonlyArray<Filter<ComponentDescriptor>> = [],
   Root = unknown
 > {
   /**
@@ -105,6 +145,10 @@ export interface QuerySpec<
    * Components that must be absent for an entity to match.
    */
   readonly without: Without
+  /**
+   * Lifecycle-aware filters that refine matching over the current world.
+   */
+  readonly filters: Filters
   /**
    * Hidden schema-root brand used by schema-bound APIs.
    */
@@ -133,12 +177,18 @@ export namespace Query {
   /**
    * Any supported query specification.
    */
-  export type Any<Root = unknown> = QuerySpec<Record<string, Access<ComponentDescriptor>>, ReadonlyArray<ComponentDescriptor>, ReadonlyArray<ComponentDescriptor>, Root>
+  export type Any<Root = unknown> = QuerySpec<
+    Record<string, Access<ComponentDescriptor>>,
+    ReadonlyArray<ComponentDescriptor>,
+    ReadonlyArray<ComponentDescriptor>,
+    ReadonlyArray<Filter<ComponentDescriptor>>,
+    Root
+  >
 
   /**
    * Extracts the schema-root brand carried by one query.
    */
-  export type Root<T extends Any> = T extends QuerySpec<any, any, any, infer R> ? R : never
+  export type Root<T extends Any> = T extends QuerySpec<any, any, any, any, infer R> ? R : never
 
   /**
    * The readable proof produced by a query.
@@ -333,14 +383,17 @@ export const define = <
   const Selection extends Record<string, Access<ComponentDescriptor>>,
   const With extends ReadonlyArray<ComponentDescriptor> = [],
   const Without extends ReadonlyArray<ComponentDescriptor> = [],
+  const Filters extends ReadonlyArray<Filter<ComponentDescriptor>> = [],
   Root = unknown
 >(spec: {
   readonly selection: Selection
   readonly with?: With
   readonly without?: Without
-}): QuerySpec<Selection, With, Without, Root> => ({
+  readonly filters?: Filters
+}): QuerySpec<Selection, With, Without, Filters, Root> => ({
   selection: spec.selection,
   with: (spec.with ?? []) as With,
   without: (spec.without ?? []) as Without,
+  filters: (spec.filters ?? []) as Filters,
   __schemaRoot: undefined as unknown as Root
 })

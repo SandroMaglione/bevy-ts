@@ -234,6 +234,83 @@ describe("Schema", () => {
     })
   })
 
+  it("supports explicit lifecycle query filters and lifecycle readers", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position,
+        Velocity
+      },
+      resources: {
+        DeltaTime: Time
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+
+    const ObserveLifecycleSystem = Game.System.define(
+      "ObserveLifecycle",
+      {
+        queries: {
+          moved: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position),
+              velocity: Game.Query.optional(Velocity)
+            },
+            filters: [Game.Query.changed(Position)] as const
+          })
+        },
+        removed: {
+          positions: Game.System.readRemoved(Position)
+        },
+        despawned: {
+          entities: Game.System.readDespawned()
+        }
+      },
+      ({ queries, removed, despawned }) =>
+        Fx.sync(() => {
+          for (const match of queries.moved.each()) {
+            expect(match.data.velocity).type.toBe<import("../src/query.ts").OptionalReadCell<{ dx: number; dy: number }>>()
+          }
+
+          expect(removed.positions.all()).type.toBe<
+            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined>>
+          >()
+          expect(despawned.entities.all()).type.toBe<
+            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined>>
+          >()
+        })
+    )
+
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services()
+    })
+
+    App.makeApp(runtime).update(Game.Schedule.define({
+      systems: [ObserveLifecycleSystem],
+      steps: [Game.Schedule.updateLifecycle(), ObserveLifecycleSystem]
+    }))
+  })
+
+  it("rejects non-component descriptors in lifecycle query APIs", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position
+      },
+      resources: {
+        DeltaTime: Time
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+
+    // @ts-expect-error!
+    Game.Query.added(Time)
+    // @ts-expect-error!
+    Game.Query.changed(Time)
+    // @ts-expect-error!
+    Game.System.readRemoved(Time)
+  })
+
   it("rejects cross-schema systems and schedules on the bound path", () => {
     const schemaA = Schema.build(Schema.fragment({
       components: {

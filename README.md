@@ -453,126 +453,13 @@ This is still an early implementation. The public types are stricter than the ru
 
 The next meaningful additions are the ones that improve type safety, explicitness, and feature reach without turning the runtime into an engine. If TypeScript cannot prove a behavior honestly, the public API should not pretend it can.
 
-The browser examples, especially the top-down proof of concept, confirmed that the current ECS core is already enough to drive real gameplay loops. They also exposed the next pressure points clearly: query ergonomics, lifecycle-aware sync, and safer ways to carry entity references across frames while still forcing honest revalidation.
+The browser examples, especially the top-down proof of concept, confirmed that the current ECS core is already enough to drive real gameplay loops. They also exposed the next pressure points clearly: relationships, safer long-lived entity references, and higher-level feature composition.
 
 The order below is based on how much each addition strengthens the ECS authoring model, not on implementation ease.
 
-### 1. Richer query and filter semantics
+### 1. Entity relationships and hierarchy
 
-The structural part of this is now in place: queries can express required reads and writes, maybe-present component slots through `Game.Query.optional(...)`, and explicit structural matching through `with` and `without`.
-
-The next step here is broadening the filter language without weakening type safety. Optional access already removed some duplicated render-sync queries in the top-down example, but lifecycle-aware filters and later relation-aware filters still belong here as the remaining gap.
-
-Concretely, this roadmap item should include:
-
-- lifecycle-aware filters like `added`, `changed`, `removed`, and `despawned` as typed query/filter semantics, not generic observers
-- later relation-aware filters only once relationships exist
-
-The intended semantics should stay explicit:
-
-- `read(Component)` means the entity must match that component and the system only gets read access
-- `write(Component)` means the entity must match that component and the system gets explicit write access
-- `optional(Component)` does not affect whether the entity matches; it only changes the result shape so the system must branch explicitly before using that component
-- `with(Component)` and `without(Component)` change matching only; they do not add selected data slots
-- lifecycle filters should describe what changed since an explicit readable boundary, similar in spirit to `updateEvents()`, rather than behaving like hidden reactive magic
-- the intended query shape is one explicit selection plus separate matching clauses: structural matching through `with` / `without`, and lifecycle-oriented matching through a dedicated `filters` surface
-
-For optional access specifically, the query result should not pretend that the entity definitely has the component. The slot should stay explicitly uncertain in the result type, whether that ends up as a small result object or another equally explicit representation. The important invariant is that optional access must not silently widen entity proofs.
-
-The remaining work would unlock things like:
-
-```ts
-const InteractableQuery = Game.Query.define({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable),
-    npc: Game.Query.optional(Npc),
-    item: Game.Query.optional(Item)
-  },
-  with: [Interactable],
-  without: [Hidden]
-})
-```
-
-Or renderer sync that does not need one query per specialized subtype:
-
-```ts
-const RenderQuery = Game.Query.define({
-  selection: {
-    position: Game.Query.read(Position),
-    sprite: Game.Query.read(SpriteView),
-    pickup: Game.Query.optional(Pickup),
-    player: Game.Query.optional(Player)
-  }
-})
-```
-
-That is the specific pressure point in the top-down example's render sync loop in [`SyncSceneSystem`](./src/examples/top-down.ts#L697), which currently has to iterate separate player, wall, and collectable queries and then merge the results manually.
-
-This feature should stay scoped to ECS query semantics. It should not try to absorb engine-specific concerns such as camera-visible queries, sprite-layer filters, arbitrary callback predicates, or geometric matching like distance/radius checks. For example, the nearest-pickup selection logic in [`UpdateFocusedCollectableSystem`](./src/examples/top-down.ts#L435) should remain normal system logic even after query/filter semantics improve.
-
-### 2. Change detection and lifecycle signals
-
-Renderer sync, replication, dirty tracking, and reactive gameplay systems all get easier once systems can express added, changed, removed, or despawned data directly. The main goal is not reactive magic; it is a more explicit and type-safe way to say which entities a system should care about right now.
-
-The top-down example currently has to rescan the whole visible ECS world and maintain an `alive` set manually to keep Pixi nodes in sync in [`SyncSceneSystem`](./src/examples/top-down.ts#L697). Typed lifecycle signals would make that integration smaller, clearer, and harder to get wrong while still keeping rendering itself outside ECS.
-
-The intended semantics here should be precise:
-
-- `added(Component)` means the component became present since the last lifecycle-readable boundary, including spawn-with-component and insert
-- `changed(Component)` should be write-based, not deep-equality-based: if a system performed an explicit write, the component changed
-- `removed(Component)` and `despawned()` likely need a dedicated lifecycle-facing read shape rather than pretending the entity still matches a normal current-world query
-- these signals should be explicit schedule-visible data, not always-on background observers
-
-It would unlock things like:
-
-```ts
-const SpawnSpritesSystem = Game.System.define(
-  "SpawnSprites",
-  {
-    queries: {
-      addedRenderables: Game.Query.define({
-        selection: {
-          position: Game.Query.read(Position),
-          renderable: Game.Query.read(Renderable)
-        },
-        with: [Renderable],
-        filters: [Game.Query.added(Renderable)]
-      })
-    }
-  },
-  ({ queries }) => Fx.sync(() => {
-    for (const entity of queries.addedRenderables.each()) {
-      // Create host-owned nodes only for newly visible entities.
-    }
-  })
-)
-
-const SyncMovedSpritesSystem = Game.System.define(
-  "SyncMovedSprites",
-  {
-    queries: {
-      moved: Game.Query.define({
-        selection: {
-          position: Game.Query.read(Position),
-          renderable: Game.Query.read(Renderable)
-        },
-        with: [Renderable],
-        filters: [Game.Query.changed(Position)]
-      })
-    }
-  },
-  ({ queries }) => Fx.sync(() => {
-    for (const entity of queries.moved.each()) {
-      // Update only host objects whose transform actually changed.
-    }
-  })
-)
-```
-
-### 3. Entity relationships and hierarchy
-
-This remains the main structural gap once query and lifecycle ergonomics improve. It would unlock scene graphs, ownership, attachments, card zones, equipment, UI trees, and simulation-style graphs without pulling renderer trees or engine concerns into the ECS itself.
+Queries now cover required reads and writes, maybe-present component slots, structural matching, and explicit lifecycle-facing reads. The next real structural gap is relationships. This would unlock scene graphs, ownership, attachments, card zones, equipment, UI trees, and simulation-style graphs without pulling renderer trees or engine concerns into the ECS itself.
 
 The important constraint is that relations should stay descriptor-driven, explicit, and fully typed. The ECS may model that one entity follows or owns another; Pixi or another host library would still own the actual render tree.
 
@@ -604,13 +491,29 @@ commands.spawn(
 )
 ```
 
-### 4. Safer long-lived entity references
+Once relationships exist, relation-aware query filters should build on top of them rather than arriving as a separate ad hoc filter language. That is the natural place to support things conceptually similar to Bevy's richer relationship-driven query patterns while keeping everything explicit and descriptor-bound.
 
-Current `EntityId` values are intentionally honest: they prove schema identity, not liveness or component shape. That part is correct. The missing piece is a clearer, safer story for references that live in resources, events, or components across multiple frames.
+### 2. Safer long-lived entity references
 
-The top-down example stores the currently focused collectable as a numeric id inside a resource because there is no more expressive durable reference shape yet. Other examples widen and narrow ids manually when they need to carry them through events or example-owned components. A future addition here should improve safety and intent without pretending that dynamic world membership is statically knowable.
+Current `EntityId` values are intentionally honest: they prove schema identity, not liveness or component shape, as documented in [`src/entity.ts`](./src/entity.ts). That part is correct and should not change. The missing piece is a clearer, safer story for references that live in resources, events, or components across multiple frames.
 
-That likely means a typed reference or handle API that remains schema-bound and still forces checked lookup before a system can rely on the target's current component set.
+This pressure already shows up in the current examples:
+
+- the top-down example stores the focused collectable as `targetId: number | null` in [`src/examples/top-down.ts`](./src/examples/top-down.ts#L22) and later reuses that id during collection flow in [`src/examples/top-down.ts`](./src/examples/top-down.ts#L487)
+- `snake` widens entity ids into schema-agnostic component and event payloads in [`src/examples/snake.ts`](./src/examples/snake.ts#L22) and narrows them back through a local cast helper in [`src/examples/snake.ts`](./src/examples/snake.ts#L69)
+- `space-invaders` does the same for event payloads in [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts#L19) and [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts#L118)
+
+A future addition here should improve safety and intent without pretending that dynamic world membership is statically knowable. The immediate target is same-runtime gameplay orchestration: resources, events, and components should be able to carry entity targets in a form that stays schema-bound and meaningful without widening to `Schema.Any`.
+
+That likely means a typed handle API that remains schema-bound and still forces checked lookup before a system can rely on the target's current component set.
+
+The key requirements are:
+
+- durable references must remain schema-bound
+- durable references must be storable in resources, events, and components without widening away useful type information
+- a durable reference may carry expected intent such as a target descriptor or role, but that intent must not be treated as proof
+- resolving a durable reference into current-world access must still go through checked lookup
+- failed resolution must stay explicit in the type surface
 
 It would unlock things like:
 
@@ -646,9 +549,66 @@ const ResolveFocusedTargetSystem = Game.System.define(
 )
 ```
 
-The exact API shape is still open, but the invariant should stay fixed: long-lived references can become stale, and the type system should make that revalidation boundary explicit.
+Or durable component payloads that encode intent more clearly than raw ids:
 
-### 5. Typed feature or module composition
+```ts
+const Follows = Descriptor.defineComponent<{
+  target: Game.Entity.handle(Player)
+}>()("Follows")
+
+const FollowTargetSystem = Game.System.define(
+  "FollowTarget",
+  {
+    queries: {
+      followers: Game.Query.define({
+        selection: {
+          follows: Game.Query.read(Follows),
+          position: Game.Query.write(Position)
+        }
+      })
+    }
+  },
+  ({ queries, lookup }) => Fx.sync(() => {
+    for (const match of queries.followers.each()) {
+      const result = lookup.get(match.data.follows.get().target.entityId, Game.Query.define({
+        selection: {
+          player: Game.Query.read(Player),
+          targetPosition: Game.Query.read(Position)
+        }
+      }))
+
+      if (!result.ok) {
+        continue
+      }
+
+      match.data.position.set(result.value.data.targetPosition.get())
+    }
+  })
+)
+```
+
+Initial type-safety considerations matter here. In the context of the current implementation, the strongest honest first version would separate two truths clearly:
+
+- compile-time guarantee: "this handle belongs to schema `S` and is intended to target entities that satisfy descriptor `D`"
+- runtime check: "this entity currently exists and still satisfies the query being requested"
+
+That means a durable handle should be storage-safe, not access-capable. It should not expose component values directly, and it should never implicitly convert into `EntityRef`, `EntityMut`, or a successful query match. The only honest path from durable storage to current-world access is still explicit checked lookup.
+
+There is one more hard limit worth stating directly: the current runtime uses stable numeric ids for the lifetime of the runtime, but it does not model generation-aware identity. That means a wrapper type alone cannot honestly prove "this is still the same living entity across arbitrary time" if stronger stale-reference protection is needed later. A first milestone can still be highly type-safe at the schema and intent level, but complete stale-id safety would likely require stronger runtime identity, not just better surface types.
+
+The exact API shape is still open, but the invariant should stay fixed: long-lived references can become stale, and the type system should make that revalidation boundary explicit rather than hiding it.
+
+Bevy is a useful reference space for this problem, but mostly in what not to fake. It treats entity identity as opaque and handles remapping explicitly through APIs like `EntityMapper`, instead of pretending stored references are always live. That is the right lesson to carry over here: explicit remapping and explicit revalidation, not magical long-lived proof objects.
+
+Non-goals for this milestone:
+
+- not a replacement for `lookup.get(...)`
+- not a live borrow into world storage
+- not a guarantee that an entity still exists
+- not automatic cross-world remapping or scene cloning support
+- not a substitute for relationships or hierarchy
+
+### 3. Typed feature or module composition
 
 This is the longer-term architectural piece. Larger games eventually need a first-class way to assemble optional gameplay features, server/client/editor variants, and reusable modules. Bevy plugins are the reference for the problem being solved, not the intended API shape.
 

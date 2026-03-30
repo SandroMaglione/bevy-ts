@@ -104,6 +104,10 @@ export interface InternalWorld<S extends Schema.Any> {
    */
   readonly removeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor.Any) => void
   /**
+   * Writes a component on an entity, recording lifecycle semantics precisely.
+   */
+  readonly writeComponent: (id: Entity.EntityId<S, any>, descriptorKey: Descriptor<"component", string, any>, value: unknown) => void
+  /**
    * Writes a world-level resource or state value.
    */
   readonly writeResource: (descriptor: Descriptor.Any, value: unknown) => void
@@ -208,7 +212,7 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
   /**
    * Queues a component insert on an existing entity.
    */
-  readonly insert: <D extends Schema.Components<S>[keyof Schema.Components<S>]>(
+  readonly insert: <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>>(
     entity: Entity.EntityId<S, Root>,
     descriptor: D,
     value: Descriptor.Value<D>
@@ -227,7 +231,7 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
   /**
    * Queues a component removal on an existing entity.
    */
-  readonly remove: <D extends Schema.Components<S>[keyof Schema.Components<S>]>(
+  readonly remove: <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>>(
     entity: Entity.EntityId<S, Root>,
     descriptor: D
   ) => Entity.EntityId<S, Root>
@@ -274,9 +278,14 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "spawn",
         apply(world) {
-          const store = world.ensureEntityStore(id)
+          world.ensureEntityStore(id)
           for (const [key, value] of Object.entries(draft.proof)) {
-            store.set(Symbol.for(`bevy-ts/component/${key}`), value)
+            const descriptor = {
+              kind: "component",
+              name: key,
+              key: Symbol.for(`bevy-ts/component/${key}`)
+            } as Descriptor<"component", string, unknown>
+            world.writeComponent(id, descriptor, value)
           }
         }
       })
@@ -286,7 +295,8 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "insert",
         apply(world) {
-          world.ensureEntityStore(entity).set(descriptor.key, value)
+          world.ensureEntityStore(entity)
+          world.writeComponent(entity, descriptor, value)
         }
       })
       return entity
@@ -295,9 +305,9 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "insertMany",
         apply(world) {
-          const store = world.ensureEntityStore(entity)
+          world.ensureEntityStore(entity)
           for (const [descriptor, value] of entries) {
-            store.set(descriptor.key, value)
+            world.writeComponent(entity, descriptor, value)
           }
         }
       })

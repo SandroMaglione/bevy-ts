@@ -56,6 +56,13 @@ export interface EventUpdateStep {
 }
 
 /**
+ * A typed schedule marker that updates readable lifecycle buffers.
+ */
+export interface LifecycleUpdateStep {
+  readonly kind: "lifecycleUpdate"
+}
+
+/**
  * A typed schedule marker that applies queued finite-state-machine transitions.
  */
 export interface ApplyStateTransitionsStep<
@@ -73,6 +80,7 @@ export interface ApplyStateTransitionsStep<
 export type ScheduleMarkerStep =
   | ApplyDeferredStep
   | EventUpdateStep
+  | LifecycleUpdateStep
   | ApplyStateTransitionsStep<any, any>
 
 /**
@@ -435,6 +443,13 @@ export const updateEvents = (): EventUpdateStep => ({
 })
 
 /**
+ * Creates an explicit lifecycle update marker step.
+ */
+export const updateLifecycle = (): LifecycleUpdateStep => ({
+  kind: "lifecycleUpdate"
+})
+
+/**
  * Creates a typed reusable transition bundle.
  */
 export const transitions = <
@@ -511,7 +526,8 @@ type NamedScheduleFor<
  * Creates an anonymous schedule value from an ordered execution plan.
  *
  * When only `systems` are provided, the schedule uses the resolved system order
- * followed by an implicit `applyDeferred()` and `updateEvents()` pair.
+ * followed by an implicit `applyDeferred()`, `updateEvents()`, and
+ * `updateLifecycle()` trio.
  */
 export function define<
   S extends Schema.Any,
@@ -528,7 +544,7 @@ export function define<
     ? options.steps.map((step) => isSystemStep(step)
       ? orderedSystemMap.get(step.spec.label.key) ?? step
       : step)
-    : [...orderedSystems, applyDeferred(), updateEvents()]
+    : [...orderedSystems, applyDeferred(), updateEvents(), updateLifecycle()]
 
   return {
     kind: "anonymous",

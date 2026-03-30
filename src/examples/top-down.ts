@@ -138,6 +138,14 @@ const RenderQuery = Game.Query.define({
   }
 })
 
+const AddedRenderableQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    renderable: Game.Query.read(Renderable)
+  },
+  filters: [Game.Query.added(Renderable)] as const
+})
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
 
@@ -690,7 +698,14 @@ const SyncSceneSystem = Game.System.define(
   "TopDown/SyncScene",
   {
     queries: {
-      renderables: RenderQuery
+      renderables: RenderQuery,
+      addedRenderables: AddedRenderableQuery
+    },
+    removed: {
+      renderables: Game.System.readRemoved(Renderable)
+    },
+    despawned: {
+      entities: Game.System.readDespawned()
     },
     resources: {
       viewport: Game.System.readResource(Viewport),
@@ -701,16 +716,43 @@ const SyncSceneSystem = Game.System.define(
       host: Game.System.service(TopDownHost)
     }
   },
-  ({ queries, resources, services }) =>
+  ({ queries, removed, despawned, resources, services }) =>
     Fx.sync(() => {
       const host = services.host
-      const alive = new Set<number>()
       const focusedId = resources.focused.get().targetId
 
       host.world.position.set(
         resources.viewport.get().width * 0.5 - resources.camera.get().x,
         resources.viewport.get().height * 0.5 - resources.camera.get().y
       )
+
+      for (const entityId of removed.renderables.all()) {
+        const node = host.nodes.get(entityId.value)
+        if (!node) {
+          continue
+        }
+        host.actorLayer.removeChild(node)
+        node.destroy({
+          children: true
+        })
+        host.nodes.delete(entityId.value)
+      }
+
+      for (const entityId of despawned.entities.all()) {
+        const node = host.nodes.get(entityId.value)
+        if (!node) {
+          continue
+        }
+        host.actorLayer.removeChild(node)
+        node.destroy({
+          children: true
+        })
+        host.nodes.delete(entityId.value)
+      }
+
+      for (const match of queries.addedRenderables.each()) {
+        ensureNode(host, match.entity.id.value, match.data.renderable.get())
+      }
 
       for (const match of queries.renderables.each()) {
         const entityId = match.entity.id.value
@@ -735,20 +777,6 @@ const SyncSceneSystem = Game.System.define(
             node.rotation = Math.atan2(velocity.y, velocity.x) + Math.PI * 0.5
           }
         }
-
-        alive.add(entityId)
-      }
-
-      for (const [entityId, node] of host.nodes) {
-        if (alive.has(entityId)) {
-          continue
-        }
-
-        host.actorLayer.removeChild(node)
-        node.destroy({
-          children: true
-        })
-        host.nodes.delete(entityId)
       }
     })
 )
@@ -789,6 +817,7 @@ const setupSchedule = Game.Schedule.define({
   steps: [
     SetupWorldSystem,
     Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
     SyncCameraSystem,
     SyncSceneSystem,
     SyncHudSystem
@@ -813,6 +842,7 @@ const updateSchedule = Game.Schedule.define({
     UpdateFocusedCollectableSystem,
     CollectFocusedCollectableSystem,
     Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
     SyncCameraSystem,
     SyncSceneSystem,
     SyncHudSystem
