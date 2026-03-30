@@ -275,10 +275,10 @@ describe("Schema", () => {
           }
 
           expect(removed.positions.all()).type.toBe<
-            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined>>
+            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema>>
           >()
           expect(despawned.entities.all()).type.toBe<
-            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined>>
+            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema>>
           >()
         })
     )
@@ -425,5 +425,74 @@ describe("Schema", () => {
           lookup.parent(entityId, Targeting)
         })
     )
+  })
+
+  it("supports durable handles with explicit roots and checked lookup resolution", () => {
+    const Root = Schema.defineRoot("HandleRoot")
+    const Target = Descriptor.defineComponent<{
+      target: Entity.Handle<typeof Root, typeof Position> | null
+    }>()("Target")
+
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position,
+        Target
+      }
+    }))
+
+    const Game = Schema.bind(schema, Root)
+
+    const PositionQuery = Game.Query.define({
+      selection: {
+        position: Game.Query.read(Position)
+      }
+    })
+
+    const TargetQuery = Game.Query.define({
+      selection: {
+        target: Game.Query.read(Target),
+        position: Game.Query.read(Position)
+      }
+    })
+
+    const ObserveSystem = Game.System.define(
+      "ObserveHandles",
+      {
+        queries: {
+          targets: TargetQuery
+        }
+      },
+      ({ queries, lookup }) =>
+        Fx.sync(() => {
+          for (const match of queries.targets.each()) {
+            const current = match.data.target.get().target
+            if (!current) {
+              continue
+            }
+
+            lookup.getHandle(current, PositionQuery)
+
+            const unqualified = Game.Entity.handle(match.entity.id)
+            expect(unqualified).type.toBe<Entity.Handle<typeof Root>>()
+
+            const qualified = Game.Entity.handleAs(Position, match.entity.id)
+            expect(qualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
+
+            // @ts-expect-error!
+            lookup.get(current, PositionQuery)
+
+            const WrongQuery = Game.Query.define({
+              selection: {
+                target: Game.Query.read(Target)
+              }
+            })
+
+            // @ts-expect-error!
+            lookup.getHandle(current, WrongQuery)
+          }
+        })
+    )
+
+    expect(ObserveSystem).type.toBeAssignableTo<import("../src/system.ts").SystemDefinition<any, void, never>>()
   })
 })

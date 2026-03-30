@@ -162,11 +162,11 @@ describe("Runtime lifecycle", () => {
             return
           }
           commands.remove(
-            Entity.makeEntityId<typeof schema, typeof schema | undefined>(removableId),
+            Entity.makeEntityId<typeof schema, typeof schema>(removableId),
             Position
           )
           commands.despawn(
-            Entity.makeEntityId<typeof schema, typeof schema | undefined>(doomedId)
+            Entity.makeEntityId<typeof schema, typeof schema>(doomedId)
           )
         })
     )

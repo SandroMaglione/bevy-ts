@@ -13,12 +13,17 @@ const Hidden = Descriptor.defineComponent<{ hidden: true }>()("Hidden")
 const Count = Descriptor.defineResource<number>()("Count")
 const LastX = Descriptor.defineResource<number>()("LastX")
 const LastError = Descriptor.defineResource<string>()("LastError")
+const HandleRoot = Schema.defineRoot("RuntimeQueryHandle")
+const Followed = Descriptor.defineComponent<{
+  target: Entity.Handle<typeof HandleRoot, typeof Position> | null
+}>()("Followed")
 
 const schema = Schema.build(Schema.fragment({
   components: {
     Position,
     Velocity,
-    Hidden
+    Hidden,
+    Followed
   },
   resources: {
     Count,
@@ -470,5 +475,102 @@ describe("Runtime query and lookup", () => {
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(9)
+  })
+
+  it("getHandle resolves durable handles explicitly and reports stale handles safely", () => {
+    const Game = Schema.bind(schema, HandleRoot)
+    let currentHandle: Entity.Handle<typeof HandleRoot, typeof Position> | null = null
+
+    const spawn = Game.System.define(
+      "RuntimeQuery/SpawnHandle",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          const target = commands.spawn(Game.Command.spawnWith([Position, { x: 5, y: 9 }] as const))
+          currentHandle = Game.Entity.handleAs(Position, target)
+        })
+    )
+
+    const observe = Game.System.define(
+      "RuntimeQuery/ObserveHandle",
+      {
+        resources: {
+          lastX: Game.System.writeResource(LastX),
+          lastError: Game.System.writeResource(LastError)
+        }
+      },
+      ({ lookup, resources }) =>
+        Fx.sync(() => {
+          if (!currentHandle) {
+            resources.lastError.set("MissingSetup")
+            return
+          }
+
+          const result = lookup.getHandle(currentHandle, Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          }))
+
+          if (!result.ok) {
+            resources.lastError.set(result.error._tag)
+            return
+          }
+
+          resources.lastX.set(result.value.data.position.get().x)
+          resources.lastError.set("")
+        })
+    )
+
+    const destroy = Game.System.define(
+      "RuntimeQuery/DestroyHandleTarget",
+      {},
+      ({ lookup, commands }) =>
+        Fx.sync(() => {
+          if (!currentHandle) {
+            return
+          }
+          const result = lookup.getHandle(currentHandle, Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          }))
+          if (result.ok) {
+            commands.despawn(result.value.entity.id)
+          }
+        })
+    )
+
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(),
+      resources: {
+        Count: 0,
+        LastX: -1,
+        LastError: ""
+      }
+    })
+
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [spawn]
+      }),
+      Game.Schedule.define({
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastX)).toBe(5)
+    expect(readResourceValue(runtime, schema, LastError)).toBe("")
+
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [destroy]
+      }),
+      Game.Schedule.define({
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity")
   })
 })

@@ -16,7 +16,7 @@ const ENEMY_SPAWN_COOLDOWN = 100
 const SHOOT_COOLDOWN = 300
 const MATTER_MAX_STEP_MS = 1000 / 60
 
-type GameEntityId = Entity.EntityId<Schema.Schema.Any, any>
+const Root = Schema.defineRoot("SpaceInvaders")
 type RenderKind = "player" | "enemy" | "bullet"
 type RenderBodyValue = {
   kind: RenderKind
@@ -69,8 +69,8 @@ const EnemySpawnProgress = Descriptor.defineResource<number>()("SpaceInvaders/En
 const ShootCooldown = Descriptor.defineResource<number>()("SpaceInvaders/ShootCooldown")
 
 const DestroyEnemy = Descriptor.defineEvent<{
-  bulletId: GameEntityId
-  enemyId: GameEntityId
+  bullet: Entity.Handle<typeof Root, typeof Bullet>
+  enemy: Entity.Handle<typeof Root, typeof Enemy>
 }>()("SpaceInvaders/DestroyEnemy")
 
 const InputManager = Descriptor.defineService<{
@@ -113,10 +113,7 @@ const schema = Schema.build(
     }
   })
 )
-const Game = Schema.bind(schema)
-
-const asRuntimeEntityId = (entityId: GameEntityId): Entity.EntityId<typeof schema, typeof schema> =>
-  entityId as Entity.EntityId<typeof schema, typeof schema>
+const Game = Schema.bind(schema, Root)
 
 const playerVelocityQuery = Game.Query.define({
   selection: {
@@ -188,6 +185,18 @@ const bulletCullingQuery = Game.Query.define({
     bullet: Game.Query.read(Bullet),
     position: Game.Query.read(Position),
     renderBody: Game.Query.read(RenderBody)
+  }
+})
+
+const bulletEntityQuery = Game.Query.define({
+  selection: {
+    bullet: Game.Query.read(Bullet)
+  }
+})
+
+const enemyEntityQuery = Game.Query.define({
+  selection: {
+    enemy: Game.Query.read(Enemy)
   }
 })
 
@@ -713,8 +722,8 @@ const EnemyBulletCollisionSystem = Game.System.define(
             consumedBullets.add(bulletId)
             consumedEnemies.add(enemyId)
             events.destroyEnemy.emit({
-              bulletId: bullet.entity.id,
-              enemyId: enemy.entity.id
+              bullet: Game.Entity.handleAs(Bullet, bullet.entity.id),
+              enemy: Game.Entity.handleAs(Enemy, enemy.entity.id)
             })
             break
           }
@@ -734,12 +743,19 @@ const EnemyDestroySystem = Game.System.define(
       matter: Game.System.service(MatterHost)
     }
   },
-  ({ events, services, commands }) =>
+  ({ events, services, commands, lookup }) =>
     Fx.sync(() => {
       const despawned = new Set<number>()
       for (const event of events.destroyEnemy.all()) {
-        const bulletId = asRuntimeEntityId(event.bulletId)
-        const enemyId = asRuntimeEntityId(event.enemyId)
+        const bulletEntity = lookup.getHandle(event.bullet, bulletEntityQuery)
+        const enemyEntity = lookup.getHandle(event.enemy, enemyEntityQuery)
+
+        if (!bulletEntity.ok || !enemyEntity.ok) {
+          continue
+        }
+
+        const bulletId = bulletEntity.value.entity.id
+        const enemyId = enemyEntity.value.entity.id
 
         if (!despawned.has(bulletId.value)) {
           removeEntityArtifacts(bulletId, services.pixi, services.matter)

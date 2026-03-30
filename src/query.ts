@@ -220,6 +220,24 @@ export namespace Query {
    */
   export type Root<T extends Any> = T extends QuerySpec<any, any, any, any, any, any, any, any, infer R> ? R : never
 
+  type RequiredSelectionDescriptors<T extends Any> = {
+    readonly [K in keyof T["selection"]]:
+      T["selection"][K] extends ReadAccess<infer D> | WriteAccess<infer D> ? D : never
+  }[keyof T["selection"]]
+
+  /**
+   * Whether one query statically proves the presence of a component descriptor.
+   *
+   * This is used by durable-handle resolution so intent-qualified handles can
+   * only be resolved with queries that actually prove the intended role.
+   */
+  export type ProvesComponent<
+    T extends Any,
+    D extends ComponentDescriptor
+  > = [Extract<RequiredSelectionDescriptors<T> | T["with"][number], D>] extends [never]
+    ? false
+    : true
+
   /**
    * The readable proof produced by a query.
    */

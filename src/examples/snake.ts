@@ -13,22 +13,16 @@ import { Application, Container, Graphics } from "pixi.js"
 import { App, Descriptor, Entity, Fx, Label, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
-/**
- * Opaque entity identity used inside the example's component and event payloads.
- *
- * Using `Schema.Any` here avoids a recursive type cycle during schema
- * construction while still preserving the stronger "typed entity id" model.
- */
-type SnakeEntityId = Entity.EntityId<Schema.Schema.Any, any>
+const Root = Schema.defineRoot("Snake")
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Snake/Position")
 const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Snake/Velocity")
 const SnakeHead = Descriptor.defineComponent<{}>()("Snake/Head")
-const SnakeBody = Descriptor.defineComponent<{ parent: SnakeEntityId; isTail: boolean }>()("Snake/Body")
+const SnakeBody = Descriptor.defineComponent<{ parent: Entity.Handle<typeof Root>; isTail: boolean }>()("Snake/Body")
 const Food = Descriptor.defineComponent<{}>()("Snake/Food")
 const FollowTarget = Descriptor.defineComponent<{ x: number; y: number }>()("Snake/FollowTarget")
 
-const FoodEaten = Descriptor.defineEvent<{ entityId: SnakeEntityId }>()("Snake/FoodEaten")
+const FoodEaten = Descriptor.defineEvent<{ entity: Entity.Handle<typeof Root, typeof Food> }>()("Snake/FoodEaten")
 const DirectionInput = Descriptor.defineService<{
   readonly consume: () => { x: number; y: number } | null
 }>()("Snake/DirectionInput")
@@ -57,17 +51,7 @@ const schema = Schema.build(
     }
   })
 )
-const Game = Schema.bind(schema)
-
-/**
- * Narrows an opaque example entity id back to this runtime's exact schema id.
- *
- * The example stores entity ids in components and events using a widened schema
- * to avoid recursive type construction. Those ids are still produced only by
- * this schema's runtime, so narrowing them at the lookup boundary is sound.
- */
-const asSnakeRuntimeEntityId = (entityId: SnakeEntityId): Entity.EntityId<typeof schema, typeof schema> =>
-  entityId as Entity.EntityId<typeof schema, typeof schema>
+const Game = Schema.bind(schema, Root)
 
 const MovementSetLabel = Label.defineSystemSetLabel("Snake/Movement")
 const GrowthSetLabel = Label.defineSystemSetLabel("Snake/Growth")
@@ -232,7 +216,7 @@ const CollisionSystem = Game.System.define(
       for (const match of queries.food.each()) {
         const foodPosition = match.data.position.get()
         if (foodPosition.x === headPosition.x && foodPosition.y === headPosition.y) {
-          events.foodEaten.emit({ entityId: match.entity.id })
+          events.foodEaten.emit({ entity: Game.Entity.handleAs(Food, match.entity.id) })
         }
       }
     })
@@ -271,7 +255,7 @@ const GrowSystem = Game.System.define(
       }
 
       for (const event of eaten) {
-        const foodEntity = lookup.get(asSnakeRuntimeEntityId(event.entityId), FoodQuery)
+        const foodEntity = lookup.getHandle(event.entity, FoodQuery)
         if (!foodEntity.ok) {
           continue
         }
@@ -292,7 +276,7 @@ const GrowSystem = Game.System.define(
       commands.spawn(
         Game.Command.spawnWith(
           [Position, { x: parentPosition.x - 1, y: parentPosition.y }],
-          [SnakeBody, { parent, isTail: true }],
+          [SnakeBody, { parent: Game.Entity.handle(parent), isTail: true }],
           [FollowTarget, { x: parentPosition.x, y: parentPosition.y }]
         )
       )
@@ -321,8 +305,8 @@ const FollowSystem = Game.System.define(
     Fx.sync(() => {
       for (const match of queries.body.each()) {
         const body = match.data.body.get()
-        const parentLookup = lookup.get(
-          asSnakeRuntimeEntityId(body.parent),
+        const parentLookup = lookup.getHandle(
+          body.parent,
           Game.Query.define({
             selection: {
               position: Game.Query.read(Position)

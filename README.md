@@ -493,126 +493,11 @@ This is still an early implementation. The public types are stricter than the ru
 
 The next meaningful additions are the ones that improve type safety, explicitness, and feature reach without turning the runtime into an engine. If TypeScript cannot prove a behavior honestly, the public API should not pretend it can.
 
-The browser examples, especially the top-down proof of concept, confirmed that the current ECS core is already enough to drive real gameplay loops. They also exposed the next pressure points clearly: relationships, safer long-lived entity references, and higher-level feature composition.
+The browser examples, especially the top-down proof of concept, confirmed that the current ECS core is already enough to drive real gameplay loops. They also exposed the next pressure points clearly: long-lived entity references, relationships, and higher-level feature composition.
 
 The order below is based on how much each addition strengthens the ECS authoring model, not on implementation ease.
 
-### 1. Safer long-lived entity references
-
-Current `EntityId` values are intentionally honest: they prove schema identity, not liveness or component shape, as documented in [`src/entity.ts`](./src/entity.ts). That part is correct and should not change. The missing piece is a clearer, safer story for references that live in resources, events, or components across multiple frames.
-
-This pressure already shows up in the current examples:
-
-- the top-down example stores the focused collectable as `targetId: number | null` in [`src/examples/top-down.ts`](./src/examples/top-down.ts#L22) and later reuses that id during collection flow in [`src/examples/top-down.ts`](./src/examples/top-down.ts#L487)
-- `snake` widens entity ids into schema-agnostic component and event payloads in [`src/examples/snake.ts`](./src/examples/snake.ts#L22) and narrows them back through a local cast helper in [`src/examples/snake.ts`](./src/examples/snake.ts#L69)
-- `space-invaders` does the same for event payloads in [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts#L19) and [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts#L118)
-
-A future addition here should improve safety and intent without pretending that dynamic world membership is statically knowable. The immediate target is same-runtime gameplay orchestration: resources, events, and components should be able to carry entity targets in a form that stays schema-bound and meaningful without widening to `Schema.Any`.
-
-That likely means a typed handle API that remains schema-bound and still forces checked lookup before a system can rely on the target's current component set.
-
-The key requirements are:
-
-- durable references must remain schema-bound
-- durable references must be storable in resources, events, and components without widening away useful type information
-- a durable reference may carry expected intent such as a target descriptor or role, but that intent must not be treated as proof
-- resolving a durable reference into current-world access must still go through checked lookup
-- failed resolution must stay explicit in the type surface
-
-It would unlock things like:
-
-```ts
-const FocusedTarget = Descriptor.defineResource<{
-  current: Game.Entity.handle(Pickup) | null
-}>()("FocusedTarget")
-
-const ResolveFocusedTargetSystem = Game.System.define(
-  "ResolveFocusedTarget",
-  {
-    resources: {
-      focused: Game.System.readResource(FocusedTarget)
-    }
-  },
-  ({ resources, lookup }) => Fx.sync(() => {
-    const current = resources.focused.get().current
-    if (!current) {
-      return
-    }
-
-    const result = lookup.get(current.entityId, Game.Query.define({
-      selection: {
-        pickup: Game.Query.read(Pickup),
-        position: Game.Query.read(Position)
-      }
-    }))
-
-    if (!result.ok) {
-      // The target disappeared or no longer satisfies the expected shape.
-    }
-  })
-)
-```
-
-Or durable component payloads that encode intent more clearly than raw ids:
-
-```ts
-const Follows = Descriptor.defineComponent<{
-  target: Game.Entity.handle(Player)
-}>()("Follows")
-
-const FollowTargetSystem = Game.System.define(
-  "FollowTarget",
-  {
-    queries: {
-      followers: Game.Query.define({
-        selection: {
-          follows: Game.Query.read(Follows),
-          position: Game.Query.write(Position)
-        }
-      })
-    }
-  },
-  ({ queries, lookup }) => Fx.sync(() => {
-    for (const match of queries.followers.each()) {
-      const result = lookup.get(match.data.follows.get().target.entityId, Game.Query.define({
-        selection: {
-          player: Game.Query.read(Player),
-          targetPosition: Game.Query.read(Position)
-        }
-      }))
-
-      if (!result.ok) {
-        continue
-      }
-
-      match.data.position.set(result.value.data.targetPosition.get())
-    }
-  })
-)
-```
-
-Initial type-safety considerations matter here. In the context of the current implementation, the strongest honest first version would separate two truths clearly:
-
-- compile-time guarantee: "this handle belongs to schema `S` and is intended to target entities that satisfy descriptor `D`"
-- runtime check: "this entity currently exists and still satisfies the query being requested"
-
-That means a durable handle should be storage-safe, not access-capable. It should not expose component values directly, and it should never implicitly convert into `EntityRef`, `EntityMut`, or a successful query match. The only honest path from durable storage to current-world access is still explicit checked lookup.
-
-There is one more hard limit worth stating directly: the current runtime uses stable numeric ids for the lifetime of the runtime, but it does not model generation-aware identity. That means a wrapper type alone cannot honestly prove "this is still the same living entity across arbitrary time" if stronger stale-reference protection is needed later. A first milestone can still be highly type-safe at the schema and intent level, but complete stale-id safety would likely require stronger runtime identity, not just better surface types.
-
-The exact API shape is still open, but the invariant should stay fixed: long-lived references can become stale, and the type system should make that revalidation boundary explicit rather than hiding it.
-
-Bevy is a useful reference space for this problem, but mostly in what not to fake. It treats entity identity as opaque and handles remapping explicitly through APIs like `EntityMapper`, instead of pretending stored references are always live. That is the right lesson to carry over here: explicit remapping and explicit revalidation, not magical long-lived proof objects.
-
-Non-goals for this milestone:
-
-- not a replacement for `lookup.get(...)`
-- not a live borrow into world storage
-- not a guarantee that an entity still exists
-- not automatic cross-world remapping or scene cloning support
-- not a substitute for relationships or hierarchy
-
-### 2. Typed feature or module composition
+### 1. Typed feature or module composition
 
 This is the longer-term architectural piece. Larger games eventually need a first-class way to assemble optional gameplay features, server/client/editor variants, and reusable modules. Bevy plugins are the reference for the problem being solved, not the intended API shape.
 
@@ -629,6 +514,31 @@ const app = Game.App.make({
   features: [Core, Combat, Dialogue]
 })
 ```
+
+### Durable handle follow-ups
+
+Durable handles are now part of the public model:
+
+- define an explicit root token with `Schema.defineRoot(...)`
+- bind the runtime with `Schema.bind(schema, Root)`
+- store long-lived references as `Entity.Handle<typeof Root, Intent?>`
+- create them explicitly through `Game.Entity.handle(...)` and `Game.Entity.handleAs(...)`
+- resolve them only through `lookup.getHandle(...)`
+
+That closes the original `Schema.Any` widening problem in examples like [`src/examples/snake.ts`](./src/examples/snake.ts) and [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts). The current guarantees are intentionally strict:
+
+- a durable handle is not an `EntityId`
+- a durable handle is storage-safe, not access-capable
+- handle resolution is always explicit and always fallible
+- intent like `Entity.Handle<typeof Root, typeof Player>` does not count as live proof and still requires a query that proves `Player`
+
+The current first milestone still leaves a few useful follow-ups.
+
+One is broader migration of long-lived numeric ids in examples like [`src/examples/top-down.ts`](./src/examples/top-down.ts), where durable handles would further reduce ad hoc target bookkeeping.
+
+Another is a possible future upgrade of runtime identity if entity ids ever become reusable. The current durable-handle model is honest because ids are monotonic and not reused within one runtime. If that changes later, handle soundness would need generation-aware identity before the public API could keep the same guarantees.
+
+Bevy is still the useful reference here, but mainly for the principle that long-lived references must be remapped or revalidated explicitly rather than pretending to stay live forever.
 
 ### Relationship follow-ups
 

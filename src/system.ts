@@ -1,4 +1,5 @@
 import type { Descriptor } from "./descriptor.ts"
+import type * as Entity from "./entity.ts"
 import type { Fx } from "./fx.ts"
 import * as Machine from "./machine.ts"
 import type * as Relation from "./relation.ts"
@@ -303,36 +304,47 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
  */
 export interface LookupApi<S extends Schema.Any, Root = unknown> {
   get<Q extends Query.Any<Root>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
+    query: Q
+  ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  getHandle<
+    H extends Entity.Handle<Root, any>,
+    Q extends Query.Any<Root>
+  >(
+    handle: [Entity.Handle.Intent<H>] extends [undefined]
+      ? H
+      : Query.ProvesComponent<Q, Entity.Handle.Intent<H> & Descriptor<"component", string, any>> extends true
+        ? H
+        : never,
     query: Q
   ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
   related<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<import("./entity.ts").EntityId<S, Root>, Relation.Relation.LookupError>
+  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError>
   relatedSources<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<ReadonlyArray<import("./entity.ts").EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
   parent<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<import("./entity.ts").EntityId<S, Root>, Relation.Relation.LookupError>
+  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError>
   ancestors<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<ReadonlyArray<import("./entity.ts").EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
   descendants<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
     relation: R,
     options?: {
       readonly order?: "breadth" | "depth"
     }
-  ): Relation.Relation.Result<ReadonlyArray<import("./entity.ts").EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
   root<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
-    entityId: import("./entity.ts").EntityId<S, Root>,
+    entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<import("./entity.ts").EntityId<S, Root>, Relation.Relation.MissingEntityError>
+  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.MissingEntityError>
 }
 
 /**
@@ -385,7 +397,7 @@ export interface SystemSpec<
   readonly when: When
   readonly transitions: Transitions
   readonly schema: S
-  readonly __schemaRoot?: Root | undefined
+  readonly __schemaRoot: Root
 }
 
 /**
@@ -652,7 +664,7 @@ export interface SystemDefinition<
   /**
    * Hidden schema-root brand used by schema-bound APIs.
    */
-  readonly __schemaRoot?: Root | undefined
+  readonly __schemaRoot: Root
   /**
    * The executable implementation of the system.
    */
@@ -864,6 +876,7 @@ export function define<
   return {
     name,
     requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>,
+    __schemaRoot: undefined as unknown as Root,
     spec: {
       label: spec.label ?? LabelModule.defineSystemLabel(name),
       schema: spec.schema,
@@ -882,7 +895,7 @@ export function define<
       despawned: (spec.despawned ?? {}) as Despawned,
       when: (spec.when ?? []) as When,
       transitions: (spec.transitions ?? {}) as Transitions,
-      __schemaRoot: undefined as Root | undefined
+      __schemaRoot: undefined as unknown as Root
     },
     run
   }

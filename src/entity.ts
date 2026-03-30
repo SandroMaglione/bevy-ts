@@ -1,4 +1,5 @@
 import type { Brand } from "./internal/brand.ts"
+import type { Descriptor } from "./descriptor.ts"
 import type { StagedRelation } from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
@@ -11,6 +12,7 @@ export type EntityTypeId = "~bevy-ts/Entity"
  * Runtime value for the entity type id.
  */
 const entityTypeId: EntityTypeId = "~bevy-ts/Entity"
+const entityHandleTypeId = "~bevy-ts/EntityHandle" as const
 
 /**
  * A structural proof describing which components are known to be present.
@@ -39,6 +41,31 @@ export type EntityId<S extends Schema.Any, Root = unknown> = Brand<
     readonly value: number
   }
 >
+
+/**
+ * A durable, long-lived entity reference intended for storage.
+ *
+ * Unlike `EntityId`, this is explicitly a cross-frame reference that must be
+ * resolved back into current-world access through checked lookup APIs.
+ */
+export type Handle<
+  Root,
+  Intent extends Descriptor<"component", string, any> | undefined = undefined
+> = Brand<
+  typeof entityHandleTypeId,
+  {
+    readonly root: Root
+    readonly intent: Intent
+    readonly kind: "EntityHandle"
+    readonly value: number
+  }
+>
+
+export namespace Handle {
+  export type Root<T extends import("./entity.ts").Handle<any, any>> = T extends import("./entity.ts").Handle<infer R, any> ? R : never
+  export type Intent<T extends import("./entity.ts").Handle<any, any>> =
+    T extends import("./entity.ts").Handle<any, infer I extends Descriptor<"component", string, any> | undefined> ? I : never
+}
 
 /**
  * A staged entity with an exact compile-time component proof.
@@ -132,6 +159,42 @@ export const makeEntityId = <S extends Schema.Any, Root = unknown>(value: number
     kind: "EntityId",
     value
   }) as EntityId<S, Root>
+
+/**
+ * Creates a durable handle from a runtime entity id.
+ *
+ * This is a low-level constructor used by the bound `Game.Entity` helpers and
+ * by runtime lookup resolution.
+ */
+export const makeHandle = <
+  Root,
+  Intent extends Descriptor<"component", string, any> | undefined = undefined
+>(value: number): Handle<Root, Intent> =>
+  ({
+    root: undefined as unknown as Root,
+    intent: undefined as unknown as Intent,
+    kind: "EntityHandle",
+    value
+  }) as Handle<Root, Intent>
+
+/**
+ * Converts a current runtime id into an unqualified durable handle.
+ */
+export const handle = <S extends Schema.Any, Root = unknown>(
+  entityId: EntityId<S, Root>
+): Handle<Root> => makeHandle<Root>(entityId.value)
+
+/**
+ * Converts a current runtime id into an intent-qualified durable handle.
+ */
+export const handleAs = <
+  S extends Schema.Any,
+  Root,
+  D extends Descriptor<"component", string, any>
+>(
+  _intent: D,
+  entityId: EntityId<S, Root>
+): Handle<Root, D> => makeHandle<Root, D>(entityId.value)
 
 /**
  * Creates a typed entity draft from an id and a proof.

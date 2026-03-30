@@ -1,6 +1,6 @@
 import * as Command from "./command.ts"
 import type { Descriptor } from "./descriptor.ts"
-import type * as Entity from "./entity.ts"
+import * as Entity from "./entity.ts"
 import * as Machine from "./machine.ts"
 import * as QueryModule from "./query.ts"
 import * as Relation from "./relation.ts"
@@ -36,6 +36,16 @@ export interface SchemaDefinition<
   readonly events: Events
   readonly states: States
   readonly relations: Relations
+}
+
+const schemaRootTypeId = "~bevy-ts/SchemaRoot" as const
+
+export type RootToken<Name extends string = string> = {
+  readonly kind: "SchemaRoot"
+  readonly name: Name
+  readonly [schemaRootTypeId]: {
+    readonly _Name: (_: never) => Name
+  }
 }
 
 /**
@@ -150,6 +160,17 @@ export namespace Schema {
    */
   export interface Game<S extends Any, Root = S> {
     readonly schema: S
+    readonly Entity: {
+      handle: (entityId: Entity.EntityId<S, Root>) => Entity.Handle<Root>
+      handleFrom: <P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
+        entity: Entity.EntityRef<S, P, Root> | Entity.EntityMut<S, P, W, Root>
+      ) => Entity.Handle<Root>
+      handleAs: <D extends ComponentDescriptor<S>>(descriptor: D, entityId: Entity.EntityId<S, Root>) => Entity.Handle<Root, D>
+      handleAsFrom: <D extends ComponentDescriptor<S>, P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
+        descriptor: D,
+        entity: Entity.EntityRef<S, P, Root> | Entity.EntityMut<S, P, W, Root>
+      ) => Entity.Handle<Root, D>
+    }
     readonly Query: {
       define: <
         const Selection extends Record<string, QuerySelectionAccess<S, Root>>,
@@ -368,6 +389,20 @@ const mergeRelations = <
 }
 
 /**
+ * Creates one explicit root token for schema-bound long-lived references.
+ *
+ * Root tokens exist before schema construction so durable entity handles can be
+ * stored in descriptor payload types without widening to `Schema.Any`.
+ */
+export const defineRoot = <const Name extends string>(name: Name): RootToken<Name> => ({
+  kind: "SchemaRoot",
+  name,
+  [schemaRootTypeId]: {
+    _Name: (_: never) => undefined as unknown as Name
+  }
+}) as RootToken<Name>
+
+/**
  * Creates an empty schema.
  *
  * This is mostly useful as an implementation detail when folding fragments
@@ -482,8 +517,10 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
  * object carries the same hidden schema-root brand, so systems, schedules, and
  * runtimes from different bound schemas cannot be connected accidentally.
  */
-export const bind = <S extends Schema.Any>(schema: S) => {
-  type Root = S
+export const bind = <S extends Schema.Any, Root = S>(
+  schema: S,
+  _root: Root = schema as unknown as Root
+) => {
   type BoundAnySystem = System.SystemDefinition<any, any, any, Root>
   type BoundOrderTarget = BoundAnySystem | Label.System | Label.SystemSet
   type BoundMachine = Schema.BoundStateMachine<Root>
@@ -539,6 +576,19 @@ export const bind = <S extends Schema.Any>(schema: S) => {
   > = Machine.TransitionScheduleDefinition<S, M, BoundScheduleRequirements<Systems>, Root>
   const definedMachines: Array<BoundMachine> = []
   const definedMachineNames = new Set<string>()
+
+  const entityHandle = (entityId: Entity.EntityId<S, Root>): Entity.Handle<Root> => Entity.handle(entityId)
+  const entityHandleFrom = <P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
+    entity: Entity.EntityRef<S, P, Root> | Entity.EntityMut<S, P, W, Root>
+  ): Entity.Handle<Root> => Entity.handle(entity.id)
+  const entityHandleAs = <D extends ComponentDescriptor<S>>(
+    descriptor: D,
+    entityId: Entity.EntityId<S, Root>
+  ): Entity.Handle<Root, D> => Entity.handleAs(descriptor, entityId)
+  const entityHandleAsFrom = <D extends ComponentDescriptor<S>, P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
+    descriptor: D,
+    entity: Entity.EntityRef<S, P, Root> | Entity.EntityMut<S, P, W, Root>
+  ): Entity.Handle<Root, D> => Entity.handleAs(descriptor, entity.id)
 
   const defineSystem = <
     const Queries extends Record<string, Query.Any<Root>> = {},
@@ -886,6 +936,12 @@ export const bind = <S extends Schema.Any>(schema: S) => {
 
   return {
     schema,
+    Entity: {
+      handle: entityHandle,
+      handleFrom: entityHandleFrom,
+      handleAs: entityHandleAs,
+      handleAsFrom: entityHandleAsFrom
+    },
     Query: {
       define: queryDefine,
       read: queryRead,

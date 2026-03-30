@@ -1023,6 +1023,9 @@ export const makeRuntime = <
         data
       } as QueryMatch<S, Q>)
     },
+    getHandle(handle, query) {
+      return this.get(Entity.makeEntityId<S, Root>(handle.value), query)
+    },
     related(entityId, relation) {
       if (!entityExists(entityId.value)) {
         return Relation.failure(Relation.missingEntityError(entityId.value))

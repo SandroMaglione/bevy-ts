@@ -134,7 +134,7 @@ describe("Runtime commands", () => {
   })
 
   it("despawn removes the entity and exact lookup reports MissingEntity", () => {
-    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined> | undefined
+    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema> | undefined
 
     const spawn = Game.System.define(
       "RuntimeCommands/SpawnAndStoreId",
@@ -186,7 +186,7 @@ describe("Runtime commands", () => {
   })
 
   it("insert on an existing entity becomes visible after explicit applyDeferred in the same schedule", () => {
-    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema | undefined> | undefined
+    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema> | undefined
 
     const spawn = Game.System.define(
       "RuntimeCommands/SpawnStoreForInsert",
