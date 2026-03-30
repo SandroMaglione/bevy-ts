@@ -127,22 +127,14 @@ const CollectableQuery = Game.Query.define({
   }
 })
 
-const WallRenderQuery = Game.Query.define({
+const RenderQuery = Game.Query.define({
   selection: {
     position: Game.Query.read(Position),
-    collider: Game.Query.read(Collider),
     renderable: Game.Query.read(Renderable),
-    wall: Game.Query.read(Wall)
-  }
-})
-
-const PlayerRenderQuery = Game.Query.define({
-  selection: {
-    position: Game.Query.read(Position),
-    velocity: Game.Query.read(Velocity),
-    collider: Game.Query.read(Collider),
-    renderable: Game.Query.read(Renderable),
-    player: Game.Query.read(Player)
+    velocity: Game.Query.optional(Velocity),
+    player: Game.Query.optional(Player),
+    wall: Game.Query.optional(Wall),
+    collectable: Game.Query.optional(Collectable)
   }
 })
 
@@ -698,9 +690,7 @@ const SyncSceneSystem = Game.System.define(
   "TopDown/SyncScene",
   {
     queries: {
-      player: PlayerRenderQuery,
-      walls: WallRenderQuery,
-      collectables: CollectableQuery
+      renderables: RenderQuery
     },
     resources: {
       viewport: Game.System.readResource(Viewport),
@@ -722,43 +712,28 @@ const SyncSceneSystem = Game.System.define(
         resources.viewport.get().height * 0.5 - resources.camera.get().y
       )
 
-      for (const match of queries.walls.each()) {
+      for (const match of queries.renderables.each()) {
         const entityId = match.entity.id.value
         const renderable = match.data.renderable.get()
         const position = match.data.position.get()
         const node = ensureNode(host, entityId, renderable)
         node.position.set(position.x, position.y)
+        node.alpha = 1
+        node.scale.set(1)
         node.rotation = 0
-        node.scale.set(1)
-        node.alpha = 1
-        alive.add(entityId)
-      }
 
-      for (const match of queries.collectables.each()) {
-        const entityId = match.entity.id.value
-        const renderable = match.data.renderable.get()
-        const position = match.data.position.get()
-        const node = ensureNode(host, entityId, renderable)
-        const isFocused = entityId === focusedId
-        node.position.set(position.x, position.y)
-        node.rotation += 0.01
-        node.scale.set(isFocused ? 1.12 : 1)
-        node.alpha = isFocused ? 1 : 0.86
-        alive.add(entityId)
-      }
+        if (match.data.collectable.present) {
+          const isFocused = entityId === focusedId
+          node.rotation += 0.01
+          node.scale.set(isFocused ? 1.12 : 1)
+          node.alpha = isFocused ? 1 : 0.86
+        }
 
-      for (const match of queries.player.each()) {
-        const entityId = match.entity.id.value
-        const renderable = match.data.renderable.get()
-        const position = match.data.position.get()
-        const velocity = match.data.velocity.get()
-        const node = ensureNode(host, entityId, renderable)
-        node.position.set(position.x, position.y)
-        node.alpha = 1
-        node.scale.set(1)
-
-        if (lengthSquared(velocity) > 1) {
-          node.rotation = Math.atan2(velocity.y, velocity.x) + Math.PI * 0.5
+        if (match.data.player.present && match.data.velocity.present) {
+          const velocity = match.data.velocity.get()
+          if (lengthSquared(velocity) > 1) {
+            node.rotation = Math.atan2(velocity.y, velocity.x) + Math.PI * 0.5
+          }
         }
 
         alive.add(entityId)

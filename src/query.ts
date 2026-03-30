@@ -2,13 +2,15 @@ import type { Descriptor } from "./descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./entity.ts"
 import type { Schema } from "./schema.ts"
 
+type ComponentDescriptor = Descriptor<"component", string, unknown>
+
 /**
  * A read access declaration for a descriptor.
  *
  * Read accesses allow systems to observe data without gaining mutation
  * capability in the resulting query or view type.
  */
-export interface ReadAccess<D extends Descriptor.Any> {
+export interface ReadAccess<D extends ComponentDescriptor> {
   /**
    * Distinguishes read access from write access at both type and runtime level.
    */
@@ -24,7 +26,7 @@ export interface ReadAccess<D extends Descriptor.Any> {
  *
  * Write accesses produce writable cells and mutable entity proofs.
  */
-export interface WriteAccess<D extends Descriptor.Any> {
+export interface WriteAccess<D extends ComponentDescriptor> {
   /**
    * Distinguishes write access from read access at both type and runtime level.
    */
@@ -38,12 +40,26 @@ export interface WriteAccess<D extends Descriptor.Any> {
 /**
  * Any supported query access declaration.
  */
-export type Access<D extends Descriptor.Any> = ReadAccess<D> | WriteAccess<D>
+export interface OptionalReadAccess<D extends ComponentDescriptor> {
+  /**
+   * Distinguishes maybe-present reads from required reads.
+   */
+  readonly mode: "optional"
+  /**
+   * The component descriptor being accessed.
+   */
+  readonly descriptor: D
+}
+
+export type Access<D extends ComponentDescriptor> =
+  | ReadAccess<D>
+  | WriteAccess<D>
+  | OptionalReadAccess<D>
 
 /**
  * Declares read-only access to a descriptor in a query specification.
  */
-export const read = <D extends Descriptor.Any>(descriptor: D): ReadAccess<D> => ({
+export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D> => ({
   mode: "read",
   descriptor
 })
@@ -51,8 +67,17 @@ export const read = <D extends Descriptor.Any>(descriptor: D): ReadAccess<D> => 
 /**
  * Declares writable access to a descriptor in a query specification.
  */
-export const write = <D extends Descriptor.Any>(descriptor: D): WriteAccess<D> => ({
+export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess<D> => ({
   mode: "write",
+  descriptor
+})
+
+/**
+ * Declares maybe-present read-only access to a component in a query
+ * specification.
+ */
+export const optional = <D extends ComponentDescriptor>(descriptor: D): OptionalReadAccess<D> => ({
+  mode: "optional",
   descriptor
 })
 
@@ -63,9 +88,9 @@ export const write = <D extends Descriptor.Any>(descriptor: D): WriteAccess<D> =
  * `with` and `without` filters. They are the source of typed entity proofs.
  */
 export interface QuerySpec<
-  out Selection extends Record<string, Access<Descriptor.Any>>,
-  out With extends ReadonlyArray<Descriptor.Any> = [],
-  out Without extends ReadonlyArray<Descriptor.Any> = [],
+  out Selection extends Record<string, Access<ComponentDescriptor>>,
+  out With extends ReadonlyArray<ComponentDescriptor> = [],
+  out Without extends ReadonlyArray<ComponentDescriptor> = [],
   Root = unknown
 > {
   /**
@@ -108,7 +133,7 @@ export namespace Query {
   /**
    * Any supported query specification.
    */
-  export type Any<Root = unknown> = QuerySpec<Record<string, Access<Descriptor.Any>>, ReadonlyArray<Descriptor.Any>, ReadonlyArray<Descriptor.Any>, Root>
+  export type Any<Root = unknown> = QuerySpec<Record<string, Access<ComponentDescriptor>>, ReadonlyArray<ComponentDescriptor>, ReadonlyArray<ComponentDescriptor>, Root>
 
   /**
    * Extracts the schema-root brand carried by one query.
@@ -119,7 +144,8 @@ export namespace Query {
    * The readable proof produced by a query.
    */
   export type ReadProof<T extends Any> = {
-    readonly [K in keyof T["selection"]]:
+    readonly [K in keyof T["selection"] as
+      T["selection"][K] extends OptionalReadAccess<any> ? never : K]:
       T["selection"][K] extends Access<infer D> ? Descriptor.Value<D> : never
   }
 
@@ -138,6 +164,7 @@ export namespace Query {
   export type Cells<T extends Any> = {
     readonly [K in keyof T["selection"]]:
       T["selection"][K] extends ReadAccess<infer D> ? ReadCell<Descriptor.Value<D>>
+      : T["selection"][K] extends OptionalReadAccess<infer D> ? OptionalReadCell<Descriptor.Value<D>>
       : T["selection"][K] extends WriteAccess<infer D> ? WriteCell<Descriptor.Value<D>>
       : never
   }
@@ -211,6 +238,27 @@ export interface WriteCell<T> extends ReadCell<T> {
 }
 
 /**
+ * Present branch for a maybe-present query slot.
+ */
+export interface PresentOptionalReadCell<T> extends ReadCell<T> {
+  readonly present: true
+}
+
+/**
+ * Absent branch for a maybe-present query slot.
+ */
+export interface AbsentOptionalReadCell {
+  readonly present: false
+}
+
+/**
+ * A query slot that may or may not be present on the matched entity.
+ *
+ * Callers must narrow on `present` before reading the value.
+ */
+export type OptionalReadCell<T> = PresentOptionalReadCell<T> | AbsentOptionalReadCell
+
+/**
  * The typed item returned by iterating a query handle.
  *
  * If the query contains at least one write access, the entity proof is mutable.
@@ -282,9 +330,9 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * query result type.
  */
 export const define = <
-  const Selection extends Record<string, Access<Descriptor.Any>>,
-  const With extends ReadonlyArray<Descriptor.Any> = [],
-  const Without extends ReadonlyArray<Descriptor.Any> = [],
+  const Selection extends Record<string, Access<ComponentDescriptor>>,
+  const With extends ReadonlyArray<ComponentDescriptor> = [],
+  const Without extends ReadonlyArray<ComponentDescriptor> = [],
   Root = unknown
 >(spec: {
   readonly selection: Selection

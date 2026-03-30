@@ -155,6 +155,7 @@ export namespace Schema {
       }) => QueryModule.QuerySpec<Selection, With, Without, Root>
       read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
       write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
+      optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
     }
     readonly Command: {
       spawn: () => Entity.EntityDraft<S, {}, Root>
@@ -570,6 +571,7 @@ export const bind = <S extends Schema.Any>(schema: S) => {
 
   const queryRead = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.read(descriptor)
   const queryWrite = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.write(descriptor)
+  const queryOptional = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.optional(descriptor)
 
   const readResource = <D extends ResourceDescriptor<S>>(descriptor: D) => System.readResource(descriptor)
   const writeResource = <D extends ResourceDescriptor<S>>(descriptor: D) => System.writeResource(descriptor)
@@ -797,7 +799,8 @@ export const bind = <S extends Schema.Any>(schema: S) => {
     Query: {
       define: queryDefine,
       read: queryRead,
-      write: queryWrite
+      write: queryWrite,
+      optional: queryOptional
     },
     Command: {
       spawn: commandSpawn,

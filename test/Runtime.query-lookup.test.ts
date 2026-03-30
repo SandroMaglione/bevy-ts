@@ -267,6 +267,136 @@ describe("Runtime query and lookup", () => {
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })
 
+  it("optional component slots do not affect matching and stay explicit in results", () => {
+    const spawn = System.define(
+      "RuntimeQuery/SpawnOptional",
+      {
+        schema
+      },
+      ({ commands }) =>
+        Fx.sync(() => {
+          commands.spawn(Command.spawnWith<typeof schema>(
+            [Position, { x: 1, y: 1 }] as const
+          ))
+          commands.spawn(Command.spawnWith<typeof schema>(
+            [Position, { x: 2, y: 2 }] as const,
+            [Velocity, { x: 4, y: 0 }] as const
+          ))
+        })
+    )
+
+    const observe = System.define(
+      "RuntimeQuery/ObserveOptional",
+      {
+        schema,
+        queries: {
+          moving: Query.define({
+            selection: {
+              position: Query.read(Position),
+              velocity: Query.optional(Velocity)
+            }
+          })
+        },
+        resources: {
+          count: System.writeResource(Count),
+          lastX: System.writeResource(LastX)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          let totalX = 0
+          for (const match of queries.moving.each()) {
+            if (match.data.velocity.present) {
+              totalX += match.data.velocity.get().x
+            }
+          }
+
+          resources.count.set(queries.moving.each().length)
+          resources.lastX.set(totalX)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Schedule.define({
+        schema,
+        systems: [spawn]
+      }),
+      Schedule.define({
+        schema,
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Count)).toBe(2)
+    expect(readResourceValue(runtime, schema, LastX)).toBe(4)
+  })
+
+  it("lookup does not fail when only optional components are missing", () => {
+    let existingId: import("../src/entity.ts").EntityId<typeof schema> | undefined
+
+    const spawn = System.define(
+      "RuntimeQuery/SpawnLookupOptional",
+      {
+        schema
+      },
+      ({ commands }) =>
+        Fx.sync(() => {
+          existingId = commands.spawn(Command.spawnWith<typeof schema>(
+            [Position, { x: 3, y: 7 }] as const
+          ))
+        })
+    )
+
+    const observe = System.define(
+      "RuntimeQuery/ObserveLookupOptional",
+      {
+        schema,
+        resources: {
+          lastX: System.writeResource(LastX),
+          lastError: System.writeResource(LastError)
+        }
+      },
+      ({ lookup, resources }) =>
+        Fx.sync(() => {
+          if (!existingId) {
+            resources.lastError.set("MissingSetup")
+            return
+          }
+
+          const result = lookup.get(existingId, Query.define({
+            selection: {
+              position: Query.read(Position),
+              velocity: Query.optional(Velocity)
+            }
+          }))
+
+          if (!result.ok) {
+            resources.lastError.set(result.error._tag)
+            return
+          }
+
+          resources.lastError.set(result.value.data.velocity.present ? "Present" : "Missing")
+          resources.lastX.set(result.value.data.position.get().x)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Schedule.define({
+        schema,
+        systems: [spawn]
+      }),
+      Schedule.define({
+        schema,
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastError)).toBe("Missing")
+    expect(readResourceValue(runtime, schema, LastX)).toBe(3)
+  })
+
   it("writable query cells update component values", () => {
     const spawn = System.define(
       "RuntimeQuery/SpawnWritable",

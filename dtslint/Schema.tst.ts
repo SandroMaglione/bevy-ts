@@ -149,6 +149,91 @@ describe("Schema", () => {
     App.makeApp(runtime).update(update)
   })
 
+  it("supports explicit optional component access without widening entity proofs", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position,
+        Velocity
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+
+    const ObserveSystem = Game.System.define(
+      "ObserveOptional",
+      {
+        queries: {
+          moving: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position),
+              velocity: Game.Query.optional(Velocity)
+            }
+          })
+        }
+      },
+      ({ queries }) =>
+        Fx.sync(() => {
+          for (const match of queries.moving.each()) {
+            expect(match.data.velocity).type.toBe<import("../src/query.ts").OptionalReadCell<{ dx: number; dy: number }>>()
+            expect(match.entity.proof).type.toBe<{
+              readonly position: { x: number; y: number }
+            }>()
+
+            // @ts-expect-error!
+            match.data.velocity.get()
+
+            if (match.data.velocity.present) {
+              expect(match.data.velocity.get()).type.toBe<{ dx: number; dy: number }>()
+            }
+          }
+        })
+    )
+
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services()
+    })
+
+    App.makeApp(runtime).update(Game.Schedule.define({
+      systems: [ObserveSystem]
+    }))
+  })
+
+  it("rejects non-component descriptors in query selection and structural filters", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position
+      },
+      resources: {
+        DeltaTime: Time
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+
+    // @ts-expect-error!
+    Game.Query.read(Time)
+    // @ts-expect-error!
+    Game.Query.optional(Time)
+    Game.Query.define({
+      selection: {
+        position: Game.Query.read(Position)
+      },
+      with: [
+        // @ts-expect-error!
+        Time
+      ]
+    })
+    Game.Query.define({
+      selection: {
+        position: Game.Query.read(Position)
+      },
+      without: [
+        // @ts-expect-error!
+        Time
+      ]
+    })
+  })
+
   it("rejects cross-schema systems and schedules on the bound path", () => {
     const schemaA = Schema.build(Schema.fragment({
       components: {

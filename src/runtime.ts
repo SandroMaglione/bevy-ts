@@ -501,6 +501,21 @@ export const makeRuntime = <
   })
 
   /**
+   * Creates the present branch for an optional query slot.
+   */
+  const makePresentOptionalReadCell = <T>(readValue: () => T): import("./query.ts").PresentOptionalReadCell<T> => ({
+    present: true,
+    get: readValue
+  })
+
+  /**
+   * Creates the absent branch for an optional query slot.
+   */
+  const makeAbsentOptionalReadCell = (): import("./query.ts").AbsentOptionalReadCell => ({
+    present: false
+  })
+
+  /**
    * Creates a writable cell view over an arbitrary storage source.
    */
   const makeWriteCell = <T>(readValue: () => T, writeValue: (value: T) => void): WriteCell<T> => ({
@@ -544,6 +559,12 @@ export const makeRuntime = <
         const data = {} as Record<string, unknown>
         for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
           const descriptor = access.descriptor
+          if (access.mode === "optional") {
+            data[slot] = store.has(descriptor.key)
+              ? makePresentOptionalReadCell(() => store.get(descriptor.key) as never)
+              : makeAbsentOptionalReadCell()
+            continue
+          }
           if (!store.has(descriptor.key)) {
             include = false
             break
@@ -565,6 +586,7 @@ export const makeRuntime = <
 
         const readProof = Object.fromEntries(
           (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
+            .filter(([, access]) => access.mode !== "optional")
             .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
         )
         const writeProof = Object.fromEntries(
@@ -616,6 +638,12 @@ export const makeRuntime = <
       }
       const data = {} as Record<string, unknown>
       for (const [slot, access] of Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>) {
+        if (access.mode === "optional") {
+          data[slot] = store.has(access.descriptor.key)
+            ? makePresentOptionalReadCell(() => store.get(access.descriptor.key) as never)
+            : makeAbsentOptionalReadCell()
+          continue
+        }
         if (!store.has(access.descriptor.key)) {
           return Query.failure(Query.queryMismatchError(entityId.value))
         }
@@ -630,6 +658,7 @@ export const makeRuntime = <
       }
       const readProof = Object.fromEntries(
         (Object.entries(query.selection) as Array<[string, Q["selection"][keyof Q["selection"]]]>)
+          .filter(([, access]) => access.mode !== "optional")
           .map(([slot, access]) => [slot, store.get(access.descriptor.key)])
       )
       const writeProof = Object.fromEntries(

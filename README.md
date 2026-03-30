@@ -459,14 +459,12 @@ The order below is based on how much each addition strengthens the ECS authoring
 
 ### 1. Richer query and filter semantics
 
-This is now the highest-leverage addition. The top-down example worked, but it had to duplicate several queries only because optional access does not exist yet. Better query semantics would reduce boilerplate, make intent more explicit, and keep more gameplay and host-sync logic inside one statically checked surface.
+The structural part of this is now in place: queries can express required reads and writes, maybe-present component slots through `Game.Query.optional(...)`, and explicit structural matching through `with` and `without`.
 
-The first high-value step is optional component access. In the current top-down example, render sync and interaction logic had to split into separate queries such as [`PlayerMovementQuery`](./src/examples/top-down.ts#L97), [`CollectableQuery`](./src/examples/top-down.ts#L121), [`WallRenderQuery`](./src/examples/top-down.ts#L130), and [`PlayerRenderQuery`](./src/examples/top-down.ts#L139) because one query cannot currently say "these components are always present, these others are maybe present". The result is more boilerplate and less direct expression of system intent.
+The next step here is broadening the filter language without weakening type safety. Optional access already removed some duplicated render-sync queries in the top-down example, but lifecycle-aware filters and later relation-aware filters still belong here as the remaining gap.
 
 Concretely, this roadmap item should include:
 
-- `Game.Query.optional(Component)` for maybe-present component access
-- structural match fields like `with` and `without` as the baseline matching surface
 - lifecycle-aware filters like `added`, `changed`, `removed`, and `despawned` as typed query/filter semantics, not generic observers
 - later relation-aware filters only once relationships exist
 
@@ -481,7 +479,7 @@ The intended semantics should stay explicit:
 
 For optional access specifically, the query result should not pretend that the entity definitely has the component. The slot should stay explicitly uncertain in the result type, whether that ends up as a small result object or another equally explicit representation. The important invariant is that optional access must not silently widen entity proofs.
 
-It would unlock things like:
+The remaining work would unlock things like:
 
 ```ts
 const InteractableQuery = Game.Query.define({
