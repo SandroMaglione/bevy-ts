@@ -1,7 +1,7 @@
 import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
-import { App, Descriptor, Entity, Fx, Schema } from "../index.ts"
+import { Descriptor, Entity, Fx, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const MAX_WIDTH = 800
@@ -15,8 +15,11 @@ const BULLET_HEIGHT = 10
 const ENEMY_SPAWN_COOLDOWN = 100
 const SHOOT_COOLDOWN = 300
 const MATTER_MAX_STEP_MS = 1000 / 60
+
 const Root = Schema.defineRoot("SpaceInvaders")
+
 type RenderKind = "player" | "enemy" | "bullet"
+
 type RenderBodyValue = {
   kind: RenderKind
   width: number
@@ -26,9 +29,11 @@ type RenderBodyValue = {
   anchorX: number
   anchorY: number
 }
+
 type DescentPatternValue = {
   pattern: (time: number) => { dx: number; dy: number }
 }
+
 type PixiHostValue = {
   application: Application
   scene: Container
@@ -38,6 +43,7 @@ type PixiHostValue = {
     deltaMilliseconds: number
   }
 }
+
 type MatterHostValue = {
   engine: Matter.Engine
   bodies: Map<number, Matter.Body>
@@ -45,21 +51,11 @@ type MatterHostValue = {
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("SpaceInvaders/Position")
 const Velocity = Descriptor.defineComponent<{ vx: number; vy: number; speed: number }>()("SpaceInvaders/Velocity")
-const RenderBody = Descriptor.defineComponent<{
-  kind: RenderKind
-  width: number
-  height: number
-  color: number
-  stroke: number
-  anchorX: number
-  anchorY: number
-}>()("SpaceInvaders/RenderBody")
+const RenderBody = Descriptor.defineComponent<RenderBodyValue>()("SpaceInvaders/RenderBody")
 const Player = Descriptor.defineComponent<{}>()("SpaceInvaders/Player")
 const Enemy = Descriptor.defineComponent<{ health: number }>()("SpaceInvaders/Enemy")
 const Bullet = Descriptor.defineComponent<{ damage: number }>()("SpaceInvaders/Bullet")
-const DescentPattern = Descriptor.defineComponent<{
-  pattern: (time: number) => { dx: number; dy: number }
-}>()("SpaceInvaders/DescentPattern")
+const DescentPattern = Descriptor.defineComponent<DescentPatternValue>()("SpaceInvaders/DescentPattern")
 
 const FrameDelta = Descriptor.defineResource<number>()("SpaceInvaders/FrameDelta")
 const DeltaMilliseconds = Descriptor.defineResource<number>()("SpaceInvaders/DeltaMilliseconds")
@@ -75,19 +71,9 @@ const DestroyEnemy = Descriptor.defineEvent<{
 const InputManager = Descriptor.defineService<{
   readonly isKeyPressed: (keyCode: "ArrowLeft" | "ArrowRight" | "Space") => boolean
 }>()("SpaceInvaders/InputManager")
-const PixiHost = Descriptor.defineService<{
-  readonly application: Application
-  readonly scene: Container
-  readonly nodes: Map<number, Graphics>
-  readonly clock: {
-    deltaFrames: number
-    deltaMilliseconds: number
-  }
-}>()("SpaceInvaders/PixiHost")
-const MatterHost = Descriptor.defineService<{
-  readonly engine: Matter.Engine
-  readonly bodies: Map<number, Matter.Body>
-}>()("SpaceInvaders/MatterHost")
+
+const PixiHost = Descriptor.defineService<PixiHostValue>()("SpaceInvaders/PixiHost")
+const MatterHost = Descriptor.defineService<MatterHostValue>()("SpaceInvaders/MatterHost")
 
 const schema = Schema.build(
   Schema.fragment({
@@ -112,30 +98,31 @@ const schema = Schema.build(
     }
   })
 )
+
 const Game = Schema.bind(schema, Root)
 
-const playerVelocityQuery = Game.Query.define({
+const PlayerVelocityQuery = Game.Query.define({
   selection: {
     player: Game.Query.read(Player),
     velocity: Game.Query.write(Velocity)
   }
 })
 
-const playerPositionQuery = Game.Query.define({
+const PlayerPositionQuery = Game.Query.define({
   selection: {
     player: Game.Query.read(Player),
     position: Game.Query.read(Position)
   }
 })
 
-const movingQuery = Game.Query.define({
+const MovingQuery = Game.Query.define({
   selection: {
     position: Game.Query.write(Position),
     velocity: Game.Query.read(Velocity)
   }
 })
 
-const enemyDescentQuery = Game.Query.define({
+const EnemyDescentQuery = Game.Query.define({
   selection: {
     enemy: Game.Query.read(Enemy),
     position: Game.Query.write(Position),
@@ -143,60 +130,61 @@ const enemyDescentQuery = Game.Query.define({
   }
 })
 
-const bodySyncQuery = Game.Query.define({
+const PlayerClampQuery = Game.Query.define({
+  selection: {
+    player: Game.Query.read(Player),
+    position: Game.Query.write(Position),
+    renderBody: Game.Query.read(RenderBody)
+  }
+})
+
+const ColliderQuery = Game.Query.define({
   selection: {
     position: Game.Query.read(Position),
     renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const enemyCollisionQuery = Game.Query.define({
-  selection: {
-    enemy: Game.Query.read(Enemy),
-    renderBody: Game.Query.read(RenderBody)
-  }
-})
-
-const bulletCollisionQuery = Game.Query.define({
-  selection: {
-    bullet: Game.Query.read(Bullet),
-    renderBody: Game.Query.read(RenderBody)
-  }
-})
-
-const renderQuery = Game.Query.define({
-  selection: {
-    position: Game.Query.read(Position),
-    renderBody: Game.Query.read(RenderBody)
-  }
-})
-
-const enemyCullingQuery = Game.Query.define({
-  selection: {
-    enemy: Game.Query.read(Enemy),
-    position: Game.Query.read(Position),
-    renderBody: Game.Query.read(RenderBody)
-  }
-})
-
-const bulletCullingQuery = Game.Query.define({
-  selection: {
-    bullet: Game.Query.read(Bullet),
-    position: Game.Query.read(Position),
-    renderBody: Game.Query.read(RenderBody)
-  }
-})
-
-const bulletEntityQuery = Game.Query.define({
+const BulletCollisionQuery = Game.Query.define({
   selection: {
     bullet: Game.Query.read(Bullet)
   }
 })
 
-const enemyEntityQuery = Game.Query.define({
+const EnemyCollisionQuery = Game.Query.define({
   selection: {
     enemy: Game.Query.read(Enemy)
   }
+})
+
+const BulletCullingQuery = Game.Query.define({
+  selection: {
+    bullet: Game.Query.read(Bullet),
+    position: Game.Query.read(Position)
+  }
+})
+
+const EnemyCullingQuery = Game.Query.define({
+  selection: {
+    enemy: Game.Query.read(Enemy),
+    position: Game.Query.read(Position)
+  }
+})
+
+const AddedRenderableQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    renderBody: Game.Query.read(RenderBody)
+  },
+  filters: [Game.Query.added(RenderBody)]
+})
+
+const ChangedRenderableTransformQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    renderBody: Game.Query.read(RenderBody)
+  },
+  filters: [Game.Query.changed(Position)]
 })
 
 const idleVelocity = { vx: 0, vy: 0, speed: 6 } as const
@@ -311,26 +299,60 @@ const bodyCenterFromPosition = (
   y: position.y + renderBody.height * (0.5 - renderBody.anchorY)
 })
 
-const removeEntityArtifacts = (
+const destroyPixiNode = (
   entityId: Entity.EntityId<typeof schema>,
-  pixi: PixiHostValue,
-  matter: MatterHostValue
+  pixi: PixiHostValue
 ) => {
   const node = pixi.nodes.get(entityId.value)
-  if (node) {
-    node.destroy()
-    pixi.nodes.delete(entityId.value)
+  if (!node) {
+    return
   }
 
-  const body = matter.bodies.get(entityId.value)
-  if (body) {
-    Matter.World.remove(matter.engine.world, body)
-    matter.bodies.delete(entityId.value)
+  pixi.scene.removeChild(node)
+  node.destroy()
+  pixi.nodes.delete(entityId.value)
+}
+
+const ensureMatterBody = (
+  entityId: Entity.EntityId<typeof schema>,
+  position: { x: number; y: number },
+  renderBody: RenderBodyValue,
+  matter: MatterHostValue
+): Matter.Body => {
+  const existing = matter.bodies.get(entityId.value)
+  if (existing) {
+    return existing
   }
+
+  const center = bodyCenterFromPosition(position, renderBody)
+  const body = Matter.Bodies.rectangle(
+    center.x,
+    center.y,
+    renderBody.width,
+    renderBody.height,
+    { isSensor: true }
+  )
+  Matter.World.add(matter.engine.world, body)
+  matter.bodies.set(entityId.value, body)
+  return body
+}
+
+const destroyMatterBody = (
+  entityId: Entity.EntityId<typeof schema>,
+  matter: MatterHostValue
+) => {
+  const body = matter.bodies.get(entityId.value)
+  if (!body) {
+    return
+  }
+
+  Matter.World.remove(matter.engine.world, body)
+  matter.bodies.delete(entityId.value)
 }
 
 const renderBackdrop = (): Container => {
   const backdrop = new Container()
+
   const panel = new Graphics()
   panel.roundRect(0, 0, MAX_WIDTH, MAX_HEIGHT, 28)
   panel.fill(0x091017)
@@ -406,8 +428,8 @@ const createNode = (renderBody: RenderBodyValue): Graphics => {
   return node
 }
 
-const SetupSystem = Game.System.define(
-  "SpaceInvaders/Setup",
+const SpawnPlayerSystem = Game.System.define(
+  "SpaceInvaders/SpawnPlayer",
   {},
   ({ commands }) =>
     Fx.sync(() => {
@@ -439,7 +461,7 @@ const PlayerInputSystem = Game.System.define(
   "SpaceInvaders/PlayerInput",
   {
     queries: {
-      player: playerVelocityQuery
+      player: PlayerVelocityQuery
     },
     services: {
       input: Game.System.service(InputManager)
@@ -452,23 +474,14 @@ const PlayerInputSystem = Game.System.define(
         return
       }
 
-      const velocity = player.value.data.velocity.get()
-      if (services.input.isKeyPressed("ArrowLeft")) {
-        player.value.data.velocity.set({
-          ...velocity,
-          vx: -velocity.speed
-        })
-      } else if (services.input.isKeyPressed("ArrowRight")) {
-        player.value.data.velocity.set({
-          ...velocity,
-          vx: velocity.speed
-        })
-      } else if (velocity.vx !== 0) {
-        player.value.data.velocity.set({
-          ...velocity,
-          vx: 0
-        })
-      }
+      player.value.data.velocity.update((velocity) => ({
+        ...velocity,
+        vx: services.input.isKeyPressed("ArrowLeft")
+          ? -velocity.speed
+          : services.input.isKeyPressed("ArrowRight")
+            ? velocity.speed
+            : 0
+      }))
     })
 )
 
@@ -476,7 +489,7 @@ const ShootingSystem = Game.System.define(
   "SpaceInvaders/Shooting",
   {
     queries: {
-      player: playerPositionQuery
+      player: PlayerPositionQuery
     },
     resources: {
       deltaMilliseconds: Game.System.readResource(DeltaMilliseconds),
@@ -544,7 +557,7 @@ const MovementSystem = Game.System.define(
   "SpaceInvaders/Movement",
   {
     queries: {
-      moving: movingQuery
+      moving: MovingQuery
     },
     resources: {
       frameDelta: Game.System.readResource(FrameDelta)
@@ -554,12 +567,11 @@ const MovementSystem = Game.System.define(
     Fx.sync(() => {
       const delta = resources.frameDelta.get()
       for (const match of queries.moving.each()) {
-        const position = match.data.position.get()
         const velocity = match.data.velocity.get()
-        match.data.position.set({
+        match.data.position.update((position) => ({
           x: position.x + velocity.vx * delta,
           y: position.y + velocity.vy * delta
-        })
+        }))
       }
     })
 )
@@ -568,13 +580,7 @@ const ClampPlayerBoundsSystem = Game.System.define(
   "SpaceInvaders/ClampPlayerBounds",
   {
     queries: {
-      player: Game.Query.define({
-        selection: {
-          player: Game.Query.read(Player),
-          position: Game.Query.write(Position),
-          renderBody: Game.Query.read(RenderBody)
-        }
-      })
+      player: PlayerClampQuery
     }
   },
   ({ queries }) =>
@@ -584,14 +590,14 @@ const ClampPlayerBoundsSystem = Game.System.define(
         return
       }
 
-      const position = player.value.data.position.get()
       const renderBody = player.value.data.renderBody.get()
       const minX = renderBody.width * renderBody.anchorX
       const maxX = MAX_WIDTH - renderBody.width * (1 - renderBody.anchorX)
-      player.value.data.position.set({
+
+      player.value.data.position.update((position) => ({
         x: Math.min(maxX, Math.max(minX, position.x)),
         y: position.y
-      })
+      }))
     })
 )
 
@@ -599,7 +605,7 @@ const EnemyDescentSystem = Game.System.define(
   "SpaceInvaders/EnemyDescent",
   {
     queries: {
-      enemies: enemyDescentQuery
+      enemies: EnemyDescentQuery
     },
     resources: {
       frameDelta: Game.System.readResource(FrameDelta),
@@ -610,22 +616,45 @@ const EnemyDescentSystem = Game.System.define(
     Fx.sync(() => {
       const delta = resources.frameDelta.get()
       const elapsed = resources.elapsedFrames.get()
+
       for (const match of queries.enemies.each()) {
-        const position = match.data.position.get()
         const { dx, dy } = match.data.descentPattern.get().pattern(elapsed)
-        match.data.position.set({
+        match.data.position.update((position) => ({
           x: Math.min(MAX_WIDTH - 20, Math.max(20, position.x + dx * delta)),
           y: position.y + dy * delta
-        })
+        }))
       }
     })
 )
 
-const SyncMatterBodiesSystem = Game.System.define(
-  "SpaceInvaders/SyncMatterBodies",
+const CreateMatterBodiesSystem = Game.System.define(
+  "SpaceInvaders/CreateMatterBodies",
   {
     queries: {
-      colliders: bodySyncQuery
+      addedRenderables: AddedRenderableQuery
+    },
+    services: {
+      matter: Game.System.service(MatterHost)
+    }
+  },
+  ({ queries, services }) =>
+    Fx.sync(() => {
+      for (const match of queries.addedRenderables.each()) {
+        ensureMatterBody(
+          match.entity.id,
+          match.data.position.get(),
+          match.data.renderBody.get(),
+          services.matter
+        )
+      }
+    })
+)
+
+const SyncMatterBodyTransformsSystem = Game.System.define(
+  "SpaceInvaders/SyncMatterBodyTransforms",
+  {
+    queries: {
+      colliders: ColliderQuery
     },
     resources: {
       deltaMilliseconds: Game.System.readResource(DeltaMilliseconds)
@@ -641,37 +670,43 @@ const SyncMatterBodiesSystem = Game.System.define(
         Math.min(resources.deltaMilliseconds.get(), MATTER_MAX_STEP_MS)
       )
 
-      const seen = new Set<number>()
       for (const match of queries.colliders.each()) {
-        const entityId = match.entity.id.value
-        const position = match.data.position.get()
-        const renderBody = match.data.renderBody.get()
-        const center = bodyCenterFromPosition(position, renderBody)
+        const body = ensureMatterBody(
+          match.entity.id,
+          match.data.position.get(),
+          match.data.renderBody.get(),
+          services.matter
+        )
+        const center = bodyCenterFromPosition(
+          match.data.position.get(),
+          match.data.renderBody.get()
+        )
+        Matter.Body.setPosition(body, center)
+      }
+    })
+)
 
-        let body = services.matter.bodies.get(entityId)
-        if (!body) {
-          body = Matter.Bodies.rectangle(
-            center.x,
-            center.y,
-            renderBody.width,
-            renderBody.height,
-            { isSensor: true }
-          )
-          Matter.World.add(services.matter.engine.world, body)
-          services.matter.bodies.set(entityId, body)
-        } else {
-          Matter.Body.setPosition(body, center)
-        }
-
-        seen.add(entityId)
+const DestroyMatterBodiesSystem = Game.System.define(
+  "SpaceInvaders/DestroyMatterBodies",
+  {
+    removed: {
+      renderables: Game.System.readRemoved(RenderBody)
+    },
+    despawned: {
+      entities: Game.System.readDespawned()
+    },
+    services: {
+      matter: Game.System.service(MatterHost)
+    }
+  },
+  ({ removed, despawned, services }) =>
+    Fx.sync(() => {
+      for (const entityId of removed.renderables.all()) {
+        destroyMatterBody(entityId, services.matter)
       }
 
-      for (const [entityId, body] of services.matter.bodies) {
-        if (seen.has(entityId)) {
-          continue
-        }
-        Matter.World.remove(services.matter.engine.world, body)
-        services.matter.bodies.delete(entityId)
+      for (const entityId of despawned.entities.all()) {
+        destroyMatterBody(entityId, services.matter)
       }
     })
 )
@@ -680,8 +715,8 @@ const EnemyBulletCollisionSystem = Game.System.define(
   "SpaceInvaders/EnemyBulletCollision",
   {
     queries: {
-      bullets: bulletCollisionQuery,
-      enemies: enemyCollisionQuery
+      bullets: BulletCollisionQuery,
+      enemies: EnemyCollisionQuery
     },
     events: {
       destroyEnemy: Game.System.writeEvent(DestroyEnemy)
@@ -696,33 +731,33 @@ const EnemyBulletCollisionSystem = Game.System.define(
       const consumedEnemies = new Set<number>()
 
       for (const bullet of queries.bullets.each()) {
-        const bulletId = bullet.entity.id.value
-        if (consumedBullets.has(bulletId)) {
+        const bulletId = bullet.entity.id
+        if (consumedBullets.has(bulletId.value)) {
           continue
         }
 
-        const bulletBody = services.matter.bodies.get(bulletId)
+        const bulletBody = services.matter.bodies.get(bulletId.value)
         if (!bulletBody) {
           continue
         }
 
         for (const enemy of queries.enemies.each()) {
-          const enemyId = enemy.entity.id.value
-          if (consumedEnemies.has(enemyId)) {
+          const enemyId = enemy.entity.id
+          if (consumedEnemies.has(enemyId.value)) {
             continue
           }
 
-          const enemyBody = services.matter.bodies.get(enemyId)
+          const enemyBody = services.matter.bodies.get(enemyId.value)
           if (!enemyBody) {
             continue
           }
 
           if (Matter.Collision.collides(bulletBody, enemyBody)?.collided ?? false) {
-            consumedBullets.add(bulletId)
-            consumedEnemies.add(enemyId)
+            consumedBullets.add(bulletId.value)
+            consumedEnemies.add(enemyId.value)
             events.destroyEnemy.emit({
-              bullet: Game.Entity.handleAs(Bullet, bullet.entity.id),
-              enemy: Game.Entity.handleAs(Enemy, enemy.entity.id)
+              bullet: Game.Entity.handleAs(Bullet, bulletId),
+              enemy: Game.Entity.handleAs(Enemy, enemyId)
             })
             break
           }
@@ -736,36 +771,23 @@ const EnemyDestroySystem = Game.System.define(
   {
     events: {
       destroyEnemy: Game.System.readEvent(DestroyEnemy)
-    },
-    services: {
-      pixi: Game.System.service(PixiHost),
-      matter: Game.System.service(MatterHost)
     }
   },
-  ({ events, services, commands, lookup }) =>
+  ({ events, commands, lookup }) =>
     Fx.sync(() => {
       const despawned = new Set<number>()
+
       for (const event of events.destroyEnemy.all()) {
-        const bulletEntity = lookup.getHandle(event.bullet, bulletEntityQuery)
-        const enemyEntity = lookup.getHandle(event.enemy, enemyEntityQuery)
-
-        if (!bulletEntity.ok || !enemyEntity.ok) {
-          continue
+        const bullet = lookup.getHandle(event.bullet, BulletCollisionQuery)
+        if (bullet.ok && !despawned.has(bullet.value.entity.id.value)) {
+          commands.despawn(bullet.value.entity.id)
+          despawned.add(bullet.value.entity.id.value)
         }
 
-        const bulletId = bulletEntity.value.entity.id
-        const enemyId = enemyEntity.value.entity.id
-
-        if (!despawned.has(bulletId.value)) {
-          removeEntityArtifacts(bulletId, services.pixi, services.matter)
-          commands.despawn(bulletId)
-          despawned.add(bulletId.value)
-        }
-
-        if (!despawned.has(enemyId.value)) {
-          removeEntityArtifacts(enemyId, services.pixi, services.matter)
-          commands.despawn(enemyId)
-          despawned.add(enemyId.value)
+        const enemy = lookup.getHandle(event.enemy, EnemyCollisionQuery)
+        if (enemy.ok && !despawned.has(enemy.value.entity.id.value)) {
+          commands.despawn(enemy.value.entity.id)
+          despawned.add(enemy.value.entity.id.value)
         }
       }
     })
@@ -775,43 +797,35 @@ const CullingSystem = Game.System.define(
   "SpaceInvaders/Culling",
   {
     queries: {
-      bullets: bulletCullingQuery,
-      enemies: enemyCullingQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost),
-      matter: Game.System.service(MatterHost)
+      bullets: BulletCullingQuery,
+      enemies: EnemyCullingQuery
     }
   },
-  ({ queries, services, commands }) =>
+  ({ queries, commands }) =>
     Fx.sync(() => {
       for (const match of queries.bullets.each()) {
-        const position = match.data.position.get()
-        if (position.y >= -40) {
+        if (match.data.position.get().y >= -40) {
           continue
         }
 
-        removeEntityArtifacts(match.entity.id, services.pixi, services.matter)
         commands.despawn(match.entity.id)
       }
 
       for (const match of queries.enemies.each()) {
-        const position = match.data.position.get()
-        if (position.y <= MAX_HEIGHT + 80) {
+        if (match.data.position.get().y <= MAX_HEIGHT + 80) {
           continue
         }
 
-        removeEntityArtifacts(match.entity.id, services.pixi, services.matter)
         commands.despawn(match.entity.id)
       }
     })
 )
 
-const SyncPixiSceneSystem = Game.System.define(
-  "SpaceInvaders/SyncPixiScene",
+const CreatePixiNodesSystem = Game.System.define(
+  "SpaceInvaders/CreatePixiNodes",
   {
     queries: {
-      renderables: renderQuery
+      addedRenderables: AddedRenderableQuery
     },
     services: {
       pixi: Game.System.service(PixiHost)
@@ -819,41 +833,85 @@ const SyncPixiSceneSystem = Game.System.define(
   },
   ({ queries, services }) =>
     Fx.sync(() => {
-      const seen = new Set<number>()
-
-      for (const match of queries.renderables.each()) {
+      for (const match of queries.addedRenderables.each()) {
         const entityId = match.entity.id.value
-        const position = match.data.position.get()
-        const renderBody = match.data.renderBody.get()
-
         let node = services.pixi.nodes.get(entityId)
         if (!node) {
-          node = createNode(renderBody)
+          node = createNode(match.data.renderBody.get())
           services.pixi.scene.addChild(node)
           services.pixi.nodes.set(entityId, node)
         }
 
+        const position = match.data.position.get()
         node.position.set(position.x, position.y)
-        seen.add(entityId)
+      }
+    })
+)
+
+const SyncPixiTransformsSystem = Game.System.define(
+  "SpaceInvaders/SyncPixiTransforms",
+  {
+    queries: {
+      movedRenderables: ChangedRenderableTransformQuery
+    },
+    services: {
+      pixi: Game.System.service(PixiHost)
+    }
+  },
+  ({ queries, services }) =>
+    Fx.sync(() => {
+      for (const match of queries.movedRenderables.each()) {
+        const entityId = match.entity.id.value
+        let node = services.pixi.nodes.get(entityId)
+        if (!node) {
+          node = createNode(match.data.renderBody.get())
+          services.pixi.scene.addChild(node)
+          services.pixi.nodes.set(entityId, node)
+        }
+
+        const position = match.data.position.get()
+        node.position.set(position.x, position.y)
+      }
+    })
+)
+
+const DestroyPixiNodesSystem = Game.System.define(
+  "SpaceInvaders/DestroyPixiNodes",
+  {
+    removed: {
+      renderables: Game.System.readRemoved(RenderBody)
+    },
+    despawned: {
+      entities: Game.System.readDespawned()
+    },
+    services: {
+      pixi: Game.System.service(PixiHost)
+    }
+  },
+  ({ removed, despawned, services }) =>
+    Fx.sync(() => {
+      for (const entityId of removed.renderables.all()) {
+        destroyPixiNode(entityId, services.pixi)
       }
 
-      for (const [entityId, node] of services.pixi.nodes) {
-        if (seen.has(entityId)) {
-          continue
-        }
-        node.destroy()
-        services.pixi.nodes.delete(entityId)
+      for (const entityId of despawned.entities.all()) {
+        destroyPixiNode(entityId, services.pixi)
       }
     })
 )
 
 const setupSchedule = Game.Schedule.define({
-  systems: [SetupSystem, SyncMatterBodiesSystem, SyncPixiSceneSystem],
+  systems: [
+    SpawnPlayerSystem,
+    CreateMatterBodiesSystem,
+    CreatePixiNodesSystem
+  ],
   steps: [
-    SetupSystem,
+    SpawnPlayerSystem,
     Game.Schedule.applyDeferred(),
-    SyncMatterBodiesSystem,
-    SyncPixiSceneSystem
+    Game.Schedule.updateLifecycle(),
+    CreateMatterBodiesSystem,
+    CreatePixiNodesSystem
   ]
 })
 
@@ -863,14 +921,18 @@ const updateSchedule = Game.Schedule.define({
     PlayerInputSystem,
     ShootingSystem,
     EnemySpawnSystem,
+    CreateMatterBodiesSystem,
+    CreatePixiNodesSystem,
     MovementSystem,
     ClampPlayerBoundsSystem,
     EnemyDescentSystem,
-    SyncMatterBodiesSystem,
+    SyncMatterBodyTransformsSystem,
     EnemyBulletCollisionSystem,
     EnemyDestroySystem,
     CullingSystem,
-    SyncPixiSceneSystem
+    DestroyMatterBodiesSystem,
+    DestroyPixiNodesSystem,
+    SyncPixiTransformsSystem
   ],
   steps: [
     CaptureFrameInputSystem,
@@ -878,20 +940,28 @@ const updateSchedule = Game.Schedule.define({
     ShootingSystem,
     EnemySpawnSystem,
     Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
+    CreateMatterBodiesSystem,
+    CreatePixiNodesSystem,
     MovementSystem,
     ClampPlayerBoundsSystem,
     EnemyDescentSystem,
-    SyncMatterBodiesSystem,
+    SyncMatterBodyTransformsSystem,
     EnemyBulletCollisionSystem,
     Game.Schedule.updateEvents(),
     EnemyDestroySystem,
     CullingSystem,
     Game.Schedule.applyDeferred(),
-    SyncPixiSceneSystem
+    Game.Schedule.updateLifecycle(),
+    DestroyMatterBodiesSystem,
+    DestroyPixiNodesSystem,
+    SyncPixiTransformsSystem
   ]
 })
 
-export const startSpaceInvadersExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
+export const startSpaceInvadersExample = async (
+  mount: HTMLElement
+): Promise<BrowserExampleHandle> => {
   const application = new Application()
   await application.init({
     antialias: true,
@@ -910,22 +980,25 @@ export const startSpaceInvadersExample = async (mount: HTMLElement): Promise<Bro
   application.stage.addChild(scene)
 
   const keyStates = new Map<string, boolean>()
+
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.code === "ArrowLeft" || event.code === "ArrowRight" || event.code === "Space") {
       event.preventDefault()
       keyStates.set(event.code, true)
     }
   }
+
   const onKeyUp = (event: KeyboardEvent) => {
     if (event.code === "ArrowLeft" || event.code === "ArrowRight" || event.code === "Space") {
       event.preventDefault()
       keyStates.set(event.code, false)
     }
   }
+
   window.addEventListener("keydown", onKeyDown)
   window.addEventListener("keyup", onKeyUp)
 
-  const pixiHost = {
+  const pixiHost: PixiHostValue = {
     application,
     scene,
     nodes: new Map<number, Graphics>(),
@@ -935,7 +1008,7 @@ export const startSpaceInvadersExample = async (mount: HTMLElement): Promise<Bro
     }
   }
 
-  const matterHost = {
+  const matterHost: MatterHostValue = {
     engine: Matter.Engine.create({
       gravity: { scale: 0 }
     }),
@@ -978,6 +1051,7 @@ export const startSpaceInvadersExample = async (mount: HTMLElement): Promise<Bro
       window.removeEventListener("keyup", onKeyUp)
 
       for (const node of pixiHost.nodes.values()) {
+        scene.removeChild(node)
         node.destroy()
       }
       pixiHost.nodes.clear()

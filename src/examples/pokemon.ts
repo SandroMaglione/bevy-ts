@@ -1,23 +1,25 @@
 /**
- * Minimal `pokemon`-style example with interpolated tile movement.
+ * Minimal `pokemon`-style example with ordered tile movement.
  *
  * ECS owns gameplay state:
  * - tile coordinates
- * - movement intent
+ * - movement intent and interpolation state
  * - collision decisions
- * - interpolation progress
  *
- * Pixi owns rendering objects and the outer frame loop.
+ * Pixi owns renderer objects and the outer frame loop.
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Descriptor, Fx, Label, Schema } from "../index.ts"
+import { App, Descriptor, Fx, Schema } from "../index.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
+
+const Root = Schema.defineRoot("Pokemon")
 
 const GRID_COLS = 10
 const GRID_ROWS = 10
 const TILE_SIZE = 32
 const MOVE_DURATION_SECONDS = 0.18
+
 type Direction = "up" | "down" | "left" | "right"
 type TilePosition = { col: number; row: number }
 
@@ -29,14 +31,19 @@ const Movement = Descriptor.defineComponent<{
   progress: number
   isMoving: boolean
 }>()("Pokemon/Movement")
+const Renderable = Descriptor.defineComponent<{
+  kind: "player" | "solid"
+}>()("Pokemon/Renderable")
 const Player = Descriptor.defineComponent<{}>()("Pokemon/Player")
 const Solid = Descriptor.defineComponent<{}>()("Pokemon/Solid")
 
-const GridSize = Descriptor.defineResource<{ cols: number; rows: number; tileSize: number }>()("GridSize")
-const DeltaTime = Descriptor.defineResource<number>()("DeltaTime")
+const GridSize = Descriptor.defineResource<{ cols: number; rows: number; tileSize: number }>()("Pokemon/GridSize")
+const DeltaTime = Descriptor.defineResource<number>()("Pokemon/DeltaTime")
+
 const InputManager = Descriptor.defineService<{
   readonly direction: () => Direction | null
 }>()("Pokemon/InputManager")
+
 const PixiHost = Descriptor.defineService<{
   readonly application: Application
   readonly scene: Container
@@ -51,6 +58,7 @@ const schema = Schema.build(
     components: {
       Position,
       Movement,
+      Renderable,
       Player,
       Solid
     },
@@ -60,15 +68,37 @@ const schema = Schema.build(
     }
   })
 )
-const Game = Schema.bind(schema)
 
-const InputPipelineSetLabel = Label.defineSystemSetLabel("Pokemon/InputPipeline")
-const ResolveMovementSetLabel = Label.defineSystemSetLabel("Pokemon/ResolveMovement")
+const Game = Schema.bind(schema, Root)
 
 const PlayerQuery = Game.Query.define({
   selection: {
     position: Game.Query.write(Position),
     movement: Game.Query.write(Movement),
+    player: Game.Query.read(Player)
+  }
+})
+
+const SolidQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    solid: Game.Query.read(Solid)
+  }
+})
+
+const AddedRenderableQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    renderable: Game.Query.read(Renderable)
+  },
+  filters: [Game.Query.added(Renderable)]
+})
+
+const PlayerRenderableQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    movement: Game.Query.read(Movement),
+    renderable: Game.Query.read(Renderable),
     player: Game.Query.read(Player)
   }
 })
@@ -123,6 +153,17 @@ const nextTileFromDirection = (position: TilePosition, direction: Direction): Ti
   : direction === "left" ? { col: position.col - 1, row: position.row }
   : { col: position.col + 1, row: position.row }
 
+const setNodeTilePosition = (
+  node: Graphics,
+  kind: "player" | "solid",
+  tileSize: number,
+  x: number,
+  y: number
+): void => {
+  const inset = kind === "player" ? 5 : 4
+  node.position.set(x + inset, y + inset)
+}
+
 const SetupSystem = Game.System.define(
   "Pokemon/Setup",
   {},
@@ -137,6 +178,9 @@ const SetupSystem = Game.System.define(
             to: { col: 3, row: 3 },
             progress: 1,
             isMoving: false
+          }],
+          [Renderable, {
+            kind: "player"
           }],
           [Player, {}]
         )
@@ -153,6 +197,9 @@ const SetupSystem = Game.System.define(
         commands.spawn(
           Game.Command.spawnWith(
             [Position, solid],
+            [Renderable, {
+              kind: "solid"
+            }],
             [Solid, {}]
           )
         )
@@ -179,7 +226,6 @@ const CaptureFrameInputSystem = Game.System.define(
 const InputSystem = Game.System.define(
   "Pokemon/Input",
   {
-    inSets: [InputPipelineSetLabel],
     queries: {
       player: PlayerQuery
     },
@@ -213,7 +259,7 @@ const InputSystem = Game.System.define(
 const PlanMovementSystem = Game.System.define(
   "Pokemon/PlanMovement",
   {
-    inSets: [InputPipelineSetLabel],
+    after: [InputSystem],
     queries: {
       player: PlayerQuery
     }
@@ -245,15 +291,10 @@ const PlanMovementSystem = Game.System.define(
 const CollisionSystem = Game.System.define(
   "Pokemon/Collision",
   {
-    inSets: [ResolveMovementSetLabel],
+    after: [PlanMovementSystem],
     queries: {
       player: PlayerQuery,
-      solids: Game.Query.define({
-        selection: {
-          position: Game.Query.read(Position),
-          solid: Game.Query.read(Solid)
-        }
-      })
+      solids: SolidQuery
     },
     resources: {
       grid: Game.System.readResource(GridSize)
@@ -285,8 +326,8 @@ const CollisionSystem = Game.System.define(
         movement.to.row < 0 ||
         movement.to.col >= cols ||
         movement.to.row >= rows
-      const occupiedTarget = occupied.has(`${movement.to.col},${movement.to.row}`)
-      if (outOfBounds || occupiedTarget) {
+
+      if (outOfBounds || occupied.has(`${movement.to.col},${movement.to.row}`)) {
         match.data.movement.set({
           ...movement,
           direction: null,
@@ -301,7 +342,7 @@ const CollisionSystem = Game.System.define(
 const AdvanceMovementSystem = Game.System.define(
   "Pokemon/AdvanceMovement",
   {
-    inSets: [ResolveMovementSetLabel],
+    after: [CollisionSystem],
     queries: {
       player: PlayerQuery
     },
@@ -322,7 +363,10 @@ const AdvanceMovementSystem = Game.System.define(
         return
       }
 
-      const nextProgress = Math.min(movement.progress + resources.deltaTime.get() / MOVE_DURATION_SECONDS, 1)
+      const nextProgress = Math.min(
+        movement.progress + resources.deltaTime.get() / MOVE_DURATION_SECONDS,
+        1
+      )
 
       if (nextProgress >= 1) {
         match.data.position.set(movement.to)
@@ -343,17 +387,50 @@ const AdvanceMovementSystem = Game.System.define(
     })
 )
 
-const SyncPixiSceneSystem = Game.System.define(
-  "Pokemon/SyncPixiScene",
+const DestroyRenderNodesSystem = Game.System.define(
+  "Pokemon/DestroyRenderNodes",
+  {
+    removed: {
+      renderables: Game.System.readRemoved(Renderable)
+    },
+    despawned: {
+      entities: Game.System.readDespawned()
+    },
+    services: {
+      pixi: Game.System.service(PixiHost)
+    }
+  },
+  ({ removed, despawned, services }) =>
+    Fx.sync(() => {
+      for (const entityId of removed.renderables.all()) {
+        const node = services.pixi.nodes.get(entityId.value)
+        if (!node) {
+          continue
+        }
+
+        services.pixi.scene.removeChild(node)
+        node.destroy()
+        services.pixi.nodes.delete(entityId.value)
+      }
+
+      for (const entityId of despawned.entities.all()) {
+        const node = services.pixi.nodes.get(entityId.value)
+        if (!node) {
+          continue
+        }
+
+        services.pixi.scene.removeChild(node)
+        node.destroy()
+        services.pixi.nodes.delete(entityId.value)
+      }
+    })
+)
+
+const CreateRenderNodesSystem = Game.System.define(
+  "Pokemon/CreateRenderNodes",
   {
     queries: {
-      player: PlayerQuery,
-      solids: Game.Query.define({
-        selection: {
-          position: Game.Query.read(Position),
-          solid: Game.Query.read(Solid)
-        }
-      })
+      addedRenderables: AddedRenderableQuery
     },
     resources: {
       grid: Game.System.readResource(GridSize)
@@ -365,25 +442,51 @@ const SyncPixiSceneSystem = Game.System.define(
   ({ queries, resources, services }) =>
     Fx.sync(() => {
       const { tileSize } = resources.grid.get()
-      const seen = new Set<number>()
-      const playerMatches = queries.player.each()
-      const solidMatches = queries.solids.each()
 
-      const placeNode = (entityId: number, kind: "player" | "solid", x: number, y: number) => {
+      for (const match of queries.addedRenderables.each()) {
+        const entityId = match.entity.id.value
         let node = services.pixi.nodes.get(entityId)
         if (!node) {
-          node = makePokemonNode(kind, tileSize)
+          node = makePokemonNode(match.data.renderable.get().kind, tileSize)
           services.pixi.scene.addChild(node)
           services.pixi.nodes.set(entityId, node)
         }
 
-        seen.add(entityId)
-        const inset = kind === "player" ? 5 : 4
-        node.position.set(x + inset, y + inset)
-      }
-
-      for (const match of playerMatches) {
         const position = match.data.position.get()
+        setNodeTilePosition(
+          node,
+          match.data.renderable.get().kind,
+          tileSize,
+          position.col * tileSize,
+          position.row * tileSize
+        )
+      }
+    })
+)
+
+const SyncPlayerNodeSystem = Game.System.define(
+  "Pokemon/SyncPlayerNode",
+  {
+    queries: {
+      players: PlayerRenderableQuery
+    },
+    resources: {
+      grid: Game.System.readResource(GridSize)
+    },
+    services: {
+      pixi: Game.System.service(PixiHost)
+    }
+  },
+  ({ queries, resources, services }) =>
+    Fx.sync(() => {
+      const { tileSize } = resources.grid.get()
+
+      for (const match of queries.players.each()) {
+        const node = services.pixi.nodes.get(match.entity.id.value)
+        if (!node) {
+          continue
+        }
+
         const movement = match.data.movement.get()
         const fromX = movement.from.col * tileSize
         const fromY = movement.from.row * tileSize
@@ -391,25 +494,14 @@ const SyncPixiSceneSystem = Game.System.define(
         const toY = movement.to.row * tileSize
         const renderX = fromX + (toX - fromX) * movement.progress
         const renderY = fromY + (toY - fromY) * movement.progress
-        placeNode(match.entity.id.value, "player", renderX, renderY)
-      }
 
-      for (const match of solidMatches) {
-        const position = match.data.position.get()
-        placeNode(
-          match.entity.id.value,
-          "solid",
-          position.col * tileSize,
-          position.row * tileSize
+        setNodeTilePosition(
+          node,
+          match.data.renderable.get().kind,
+          tileSize,
+          renderX,
+          renderY
         )
-      }
-
-      for (const [entityId, node] of services.pixi.nodes) {
-        if (seen.has(entityId)) {
-          continue
-        }
-        node.destroy()
-        services.pixi.nodes.delete(entityId)
       }
     })
 )
@@ -419,37 +511,39 @@ const setupSchedule = Game.Schedule.define({
 })
 
 const browserSetupSchedule = Game.Schedule.define({
-  systems: [SetupSystem, SyncPixiSceneSystem],
-  steps: [SetupSystem, Game.Schedule.applyDeferred(), SyncPixiSceneSystem]
+  systems: [
+    SetupSystem,
+    CreateRenderNodesSystem,
+    SyncPlayerNodeSystem
+  ],
+  steps: [
+    SetupSystem,
+    Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
+    CreateRenderNodesSystem,
+    SyncPlayerNodeSystem
+  ]
 })
 
 const updateSchedule = Game.Schedule.define({
-  systems: [InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem],
-  sets: [
-    Game.Schedule.configureSet({
-      label: InputPipelineSetLabel,
-      chain: true
-    }),
-    Game.Schedule.configureSet({
-      label: ResolveMovementSetLabel,
-      after: [InputPipelineSetLabel],
-      chain: true
-    })
+  systems: [
+    InputSystem,
+    PlanMovementSystem,
+    CollisionSystem,
+    AdvanceMovementSystem
   ]
 })
 
 const browserUpdateSchedule = Game.Schedule.define({
-  systems: [CaptureFrameInputSystem, InputSystem, PlanMovementSystem, CollisionSystem, AdvanceMovementSystem, SyncPixiSceneSystem],
-  sets: [
-    Game.Schedule.configureSet({
-      label: InputPipelineSetLabel,
-      chain: true
-    }),
-    Game.Schedule.configureSet({
-      label: ResolveMovementSetLabel,
-      after: [InputPipelineSetLabel],
-      chain: true
-    })
+  systems: [
+    CaptureFrameInputSystem,
+    InputSystem,
+    PlanMovementSystem,
+    CollisionSystem,
+    AdvanceMovementSystem,
+    DestroyRenderNodesSystem,
+    CreateRenderNodesSystem,
+    SyncPlayerNodeSystem
   ],
   steps: [
     CaptureFrameInputSystem,
@@ -457,7 +551,11 @@ const browserUpdateSchedule = Game.Schedule.define({
     PlanMovementSystem,
     CollisionSystem,
     AdvanceMovementSystem,
-    SyncPixiSceneSystem
+    Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
+    DestroyRenderNodesSystem,
+    CreateRenderNodesSystem,
+    SyncPlayerNodeSystem
   ]
 })
 
@@ -465,7 +563,9 @@ export const createPokemonExample = (input: {
   readonly direction: () => Direction | null
 }) => {
   const runtime = Game.Runtime.make({
-    services: Game.Runtime.services(Game.Runtime.service(InputManager, input)),
+    services: Game.Runtime.services(
+      Game.Runtime.service(InputManager, input)
+    ),
     resources: {
       GridSize: {
         cols: GRID_COLS,
@@ -483,7 +583,7 @@ export const createPokemonExample = (input: {
     runtime,
     app,
     update() {
-      runtime.runSchedule(updateSchedule)
+      app.update(updateSchedule)
     }
   }
 }
@@ -575,12 +675,13 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
     }
   })
 
-  runtime.initialize(browserSetupSchedule)
-  runtime.runSchedule(browserUpdateSchedule)
+  const app = App.makeApp(runtime)
+  app.bootstrap(browserSetupSchedule)
+  app.update(browserUpdateSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
-    runtime.runSchedule(browserUpdateSchedule)
+    app.update(browserUpdateSchedule)
   }
 
   application.ticker.add(tick)
@@ -590,6 +691,7 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
       application.ticker.remove(tick)
       window.removeEventListener("keydown", onKeyDown)
       for (const node of host.nodes.values()) {
+        scene.removeChild(node)
         node.destroy()
       }
       host.nodes.clear()

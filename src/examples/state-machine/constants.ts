@@ -1,0 +1,9 @@
+export const STAGE_WIDTH = 640
+export const STAGE_HEIGHT = 420
+export const PLAYER_SPEED = 220
+export const PLAYER_RADIUS = 16
+export const PICKUP_RADIUS = 10
+export const PICKUP_GOAL = 5
+export const ROUND_DURATION_SECONDS = 14
+export const COUNTDOWN_DURATION_SECONDS = 3
+export const NOTICE_DURATION_SECONDS = 0.95

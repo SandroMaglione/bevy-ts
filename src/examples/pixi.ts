@@ -1,6 +1,6 @@
-import { Application, Sprite, Texture } from "pixi.js"
+import { Application, Container, Sprite, Texture } from "pixi.js"
 
-import { App, Descriptor, Fx, Label, Schema } from "../index.ts"
+import { App, Descriptor, Fx, Schema } from "../index.ts"
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -16,12 +16,10 @@ const Tint = Descriptor.defineComponent<{ value: number }>()("Tint")
 const DeltaTime = Descriptor.defineResource<number>()("DeltaTime")
 const Viewport = Descriptor.defineResource<{ width: number; height: number }>()("Viewport")
 
-// Coarse simulation lifecycle state.
-const SimulationPhase = Descriptor.defineState<"Booting" | "Running">()("SimulationPhase")
-
 // Host-side renderer bridge. ECS owns simulation state; Pixi owns renderer objects.
 const PixiHost = Descriptor.defineService<{
   readonly application: Application
+  readonly scene: Container
   readonly sprites: Map<number, Sprite>
   readonly clock: {
     deltaSeconds: number
@@ -38,31 +36,37 @@ const pixiSchema = Schema.fragment({
   resources: {
     DeltaTime,
     Viewport
-  },
-  states: {
-    SimulationPhase
   }
 })
 
 const schema = Schema.build(pixiSchema)
 const Game = Schema.bind(schema)
 
+const AddedRenderableQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    renderable: Game.Query.read(Renderable),
+    tint: Game.Query.read(Tint)
+  },
+  filters: [Game.Query.added(Renderable)]
+})
+
+const ChangedPositionQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position)
+  },
+  filters: [Game.Query.changed(Position)]
+})
+
 const SetupSceneSystem = Game.System.define(
   "SetupSceneSystem",
   {
-    states: {
-      phase: Game.System.writeState(SimulationPhase)
-    },
     services: {
       pixi: Game.System.service(PixiHost)
     }
   },
-  ({ commands, services, states }) =>
+  ({ commands, services }) =>
     Fx.sync(() => {
-      if (states.phase.get() === "Running") {
-        return
-      }
-
       const { width, height } = services.pixi.application.screen
       const palette = [0xff6b35, 0xf7c948, 0x4ecdc4, 0x2d6cdf, 0xf25f5c, 0x7bd389] as const
 
@@ -91,8 +95,6 @@ const SetupSceneSystem = Game.System.define(
           )
         )
       }
-
-      states.phase.set("Running")
     })
 )
 
@@ -130,17 +132,10 @@ const IntegrateMotionSystem = Game.System.define(
     },
     resources: {
       deltaTime: Game.System.readResource(DeltaTime)
-    },
-    states: {
-      phase: Game.System.readState(SimulationPhase)
     }
   },
-  ({ queries, resources, states }) =>
+  ({ queries, resources }) =>
     Fx.sync(() => {
-      if (states.phase.get() !== "Running") {
-        return
-      }
-
       const dt = resources.deltaTime.get()
       for (const match of queries.moving.each()) {
         const position = match.data.position.get()
@@ -169,17 +164,10 @@ const BounceWithinViewportSystem = Game.System.define(
     },
     resources: {
       viewport: Game.System.readResource(Viewport)
-    },
-    states: {
-      phase: Game.System.readState(SimulationPhase)
     }
   },
-  ({ queries, resources, states }) =>
+  ({ queries, resources }) =>
     Fx.sync(() => {
-      if (states.phase.get() !== "Running") {
-        return
-      }
-
       const viewport = resources.viewport.get()
       for (const match of queries.moving.each()) {
         const position = match.data.position.get()
@@ -222,32 +210,18 @@ const BounceWithinViewportSystem = Game.System.define(
     })
 )
 
-const SyncPixiSceneSystem = Game.System.define(
-  "SyncPixiSceneSystem",
+const CreatePixiSpritesSystem = Game.System.define(
+  "CreatePixiSpritesSystem",
   {
-    after: [BounceWithinViewportSystem],
     queries: {
-      renderables: Game.Query.define({
-        selection: {
-          position: Game.Query.read(Position),
-          renderable: Game.Query.read(Renderable),
-          tint: Game.Query.read(Tint)
-        }
-      })
+      renderables: AddedRenderableQuery
     },
     services: {
       pixi: Game.System.service(PixiHost)
-    },
-    states: {
-      phase: Game.System.readState(SimulationPhase)
     }
   },
-  ({ queries, services, states }) =>
+  ({ queries, services }) =>
     Fx.sync(() => {
-      if (states.phase.get() !== "Running") {
-        return
-      }
-
       for (const match of queries.renderables.each()) {
         const entityId = match.entity.id.value
         const position = match.data.position.get()
@@ -258,7 +232,7 @@ const SyncPixiSceneSystem = Game.System.define(
         if (!sprite) {
           sprite = new Sprite(Texture.WHITE)
           sprite.anchor.set(0.5)
-          services.pixi.application.stage.addChild(sprite)
+          services.pixi.scene.addChild(sprite)
           services.pixi.sprites.set(entityId, sprite)
         }
 
@@ -270,12 +244,55 @@ const SyncPixiSceneSystem = Game.System.define(
     })
 )
 
+const SyncPixiTransformsSystem = Game.System.define(
+  "SyncPixiTransformsSystem",
+  {
+    after: [BounceWithinViewportSystem],
+    queries: {
+      moved: ChangedPositionQuery
+    },
+    services: {
+      pixi: Game.System.service(PixiHost)
+    }
+  },
+  ({ queries, services }) =>
+    Fx.sync(() => {
+      for (const match of queries.moved.each()) {
+        const sprite = services.pixi.sprites.get(match.entity.id.value)
+        if (!sprite) {
+          continue
+        }
+
+        const position = match.data.position.get()
+        sprite.position.set(position.x, position.y)
+      }
+    })
+)
+
 const setupSchedule = Game.Schedule.define({
-  systems: [SetupSceneSystem]
+  systems: [SetupSceneSystem, CreatePixiSpritesSystem],
+  steps: [
+    SetupSceneSystem,
+    Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
+    CreatePixiSpritesSystem
+  ]
 })
 
 const updateSchedule = Game.Schedule.define({
-  systems: [CaptureFrameInputSystem, IntegrateMotionSystem, BounceWithinViewportSystem, SyncPixiSceneSystem]
+  systems: [
+    CaptureFrameInputSystem,
+    IntegrateMotionSystem,
+    BounceWithinViewportSystem,
+    SyncPixiTransformsSystem
+  ],
+  steps: [
+    CaptureFrameInputSystem,
+    IntegrateMotionSystem,
+    BounceWithinViewportSystem,
+    Game.Schedule.updateLifecycle(),
+    SyncPixiTransformsSystem
+  ]
 })
 
 /**
@@ -294,8 +311,12 @@ export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExamp
   wrapper.appendChild(application.canvas)
   mount.replaceChildren(wrapper)
 
+  const scene = new Container()
+  application.stage.addChild(scene)
+
   const host = {
     application,
+    scene,
     sprites: new Map<number, Sprite>(),
     clock: {
       deltaSeconds: 1 / 60
@@ -310,9 +331,6 @@ export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExamp
         width: application.screen.width,
         height: application.screen.height
       }
-    },
-    states: {
-      SimulationPhase: "Booting"
     }
   })
 
@@ -330,6 +348,9 @@ export const startPixiExample = async (mount: HTMLElement): Promise<BrowserExamp
   return {
     async destroy() {
       application.ticker.remove(tick)
+      for (const sprite of host.sprites.values()) {
+        sprite.destroy()
+      }
       host.sprites.clear()
       application.destroy(true)
       mount.replaceChildren()
