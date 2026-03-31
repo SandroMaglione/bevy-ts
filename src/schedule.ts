@@ -593,6 +593,34 @@ export const updateEvents = (): EventUpdateStep => ({
  *
  * This commits readable `added`, `changed`, `removed`, and `despawned`
  * lifecycle buffers for later systems in the same schedule.
+ *
+ * This is the required boundary before lifecycle-driven host sync. Systems
+ * using `Game.Query.added(...)`, `Game.Query.changed(...)`,
+ * `Game.System.readRemoved(...)`, or `Game.System.readDespawned()` only observe
+ * the current schedule's structural changes after this marker.
+ *
+ * @example
+ * ```ts
+ * const browserUpdate = Game.Schedule.define({
+ *   systems: [
+ *     simulationSystem,
+ *     destroyNodesSystem,
+ *     createNodesSystem,
+ *     syncTransformsSystem
+ *   ],
+ *   steps: [
+ *     simulationSystem,
+ *     Game.Schedule.applyDeferred(),
+ *     Game.Schedule.updateLifecycle(),
+ *     destroyNodesSystem,
+ *     createNodesSystem,
+ *     syncTransformsSystem
+ *   ]
+ * })
+ * ```
+ *
+ * {@link extend} is the preferred wrapper when the host slice is just a prefix
+ * or suffix around a headless gameplay schedule.
  */
 export const updateLifecycle = (): LifecycleUpdateStep => ({
   kind: "lifecycleUpdate"
@@ -778,6 +806,10 @@ export function named<
  * Use this to keep one headless gameplay schedule as the source of truth, then
  * add host-only capture or sync phases around it.
  *
+ * This is the preferred composition tool when browser or renderer work is a
+ * pure prefix or suffix around gameplay. Keep using `Game.Schedule.define(...)`
+ * when host work must be interleaved in the middle of the simulation steps.
+ *
  * @example
  * ```ts
  * const browserUpdate = Game.Schedule.extend(gameplayUpdate, {
@@ -790,6 +822,9 @@ export function named<
  *   ]
  * })
  * ```
+ *
+ * If the suffix depends on lifecycle filters or lifecycle reads, include
+ * `Game.Schedule.updateLifecycle()` explicitly in that suffix.
  */
 export function extend<
   Base extends ScheduleDefinition<any, any, any>,

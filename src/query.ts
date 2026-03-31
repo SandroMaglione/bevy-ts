@@ -161,6 +161,23 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
  *
  * This depends on the readable lifecycle buffer, so it only changes after an
  * explicit `Game.Schedule.updateLifecycle()` boundary.
+ *
+ * This is the usual entrypoint for incremental host sync: create host-owned
+ * nodes only after lifecycle visibility has been advanced for the current
+ * schedule.
+ *
+ * @example
+ * ```ts
+ * const AddedRenderableQuery = Game.Query.define({
+ *   selection: {
+ *     position: Game.Query.read(Position),
+ *     renderable: Game.Query.read(Renderable)
+ *   },
+ *   filters: [Game.Query.added(Renderable)]
+ * })
+ * ```
+ *
+ * {@link changed} complements this for later update passes.
  */
 export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter<D> => ({
   kind: "added",
@@ -173,6 +190,22 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
  *
  * This depends on the readable lifecycle buffer, so it only changes after an
  * explicit `Game.Schedule.updateLifecycle()` boundary.
+ *
+ * Use this for narrow host-sync passes after initial creation, for example one
+ * transform-sync system that should only touch entities whose position changed
+ * since the last lifecycle boundary.
+ *
+ * @example
+ * ```ts
+ * const MovedQuery = Game.Query.define({
+ *   selection: {
+ *     position: Game.Query.read(Position)
+ *   },
+ *   filters: [Game.Query.changed(Position)]
+ * })
+ * ```
+ *
+ * {@link added} is the matching creation-side lifecycle filter.
  */
 export const changed = <D extends ComponentDescriptor>(descriptor: D): ChangedFilter<D> => ({
   kind: "changed",

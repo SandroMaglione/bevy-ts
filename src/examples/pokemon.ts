@@ -529,6 +529,8 @@ const updateSchedule = Game.Schedule.define({
 const browserUpdateSchedule = Game.Schedule.extend(updateSchedule, {
   before: [CaptureFrameInputSystem],
   after: [
+    // `updateSchedule` already includes the implicit lifecycle boundary because
+    // it uses the default `systems`-only schedule shape.
     DestroyRenderNodesSystem,
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem

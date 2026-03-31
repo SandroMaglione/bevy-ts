@@ -79,6 +79,7 @@ export const updateSchedule = Game.Schedule.define({
     Game.Schedule.applyStateTransitions(stateTransitions),
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateEvents(),
+    // Host sync only becomes correct after lifecycle visibility is committed.
     Game.Schedule.updateLifecycle(),
     WriteTransitionNoticeSystem,
     FadeTransitionNoticeSystem,

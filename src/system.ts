@@ -354,6 +354,28 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
   readonly relation: R
 }
 
+/**
+ * Declares read access to removed-component lifecycle records.
+ *
+ * This reads the committed lifecycle buffer, not immediate removals. Systems
+ * usually pair this with `Game.Schedule.updateLifecycle()` and host cleanup
+ * logic such as removing renderer-owned nodes.
+ *
+ * @example
+ * ```ts
+ * const DestroyRenderNodesSystem = Game.System.define("DestroyRenderNodes", {
+ *   removed: {
+ *     renderables: Game.System.readRemoved(Renderable)
+ *   }
+ * }, ({ removed }) => Fx.sync(() => {
+ *   for (const entityId of removed.renderables.all()) {
+ *     // destroy host-owned node here
+ *   }
+ * }))
+ * ```
+ *
+ * {@link readDespawned} complements this for whole-entity teardown.
+ */
 export const readRemoved = <D extends Descriptor<"component", string, any>>(
   descriptor: D
 ): RemovedRead<D> => ({
@@ -371,6 +393,25 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
 
 /**
  * Declares read access to despawned-entity lifecycle records.
+ *
+ * This reads the committed despawn buffer after `Game.Schedule.updateLifecycle()`.
+ * Use it when host-owned state must be destroyed even if no single removed
+ * component is the canonical trigger.
+ *
+ * @example
+ * ```ts
+ * const DestroyNodesSystem = Game.System.define("DestroyNodes", {
+ *   despawned: {
+ *     entities: Game.System.readDespawned()
+ *   }
+ * }, ({ despawned }) => Fx.sync(() => {
+ *   for (const entityId of despawned.entities.all()) {
+ *     // destroy host-owned node here
+ *   }
+ * }))
+ * ```
+ *
+ * {@link readRemoved} is often used alongside this in authoritative host mirrors.
  */
 export const readDespawned = (): DespawnedRead => ({
   kind: "despawned"
