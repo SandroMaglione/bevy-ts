@@ -4,6 +4,32 @@ import type { Schema } from "./schema.ts"
 import type { OrderTarget, RuntimeRequirements, SystemDefinition, SystemRequirements } from "./system.ts"
 
 /**
+ * Schedule construction and explicit runtime boundaries.
+ *
+ * Schedules are the orchestration layer on top of systems. They define:
+ *
+ * - which systems are included
+ * - how those systems are ordered
+ * - where deferred runtime boundaries occur
+ *
+ * The important mental model is that visibility changes are explicit. Commands,
+ * events, lifecycle buffers, relation failures, and machine transitions advance
+ * only when the schedule contains the matching marker step.
+ *
+ * @example
+ * ```ts
+ * const update = Game.Schedule.define({
+ *   systems: [writeHits, reactToHits],
+ *   steps: [
+ *     writeHits,
+ *     Game.Schedule.updateEvents(),
+ *     reactToHits
+ *   ]
+ * })
+ * ```
+ */
+
+/**
  * A typed set-level ordering configuration.
  *
  * This is the Bevy-inspired grouping layer used to order multiple systems as a
@@ -434,6 +460,9 @@ type ValidateScheduleOptions<
 
 /**
  * Creates a typed system-set configuration.
+ *
+ * Use sets to order groups of systems as one unit. Sets stay fully typed: no
+ * open string references are allowed.
  */
 export const configureSet = <
   const Set extends Label.SystemSet,
@@ -455,6 +484,9 @@ export const configureSet = <
 
 /**
  * Creates an explicit command-application marker step.
+ *
+ * Systems before this marker can enqueue commands. Systems after it see the
+ * fully applied world changes.
  */
 export const applyDeferred = (): ApplyDeferredStep => ({
   kind: "applyDeferred"
@@ -462,6 +494,9 @@ export const applyDeferred = (): ApplyDeferredStep => ({
 
 /**
  * Creates an explicit event/message update marker step.
+ *
+ * Systems before this marker can write events. Systems after it read the
+ * committed readable event buffers for the current schedule execution.
  */
 export const updateEvents = (): EventUpdateStep => ({
   kind: "eventUpdate"
@@ -469,6 +504,9 @@ export const updateEvents = (): EventUpdateStep => ({
 
 /**
  * Creates an explicit lifecycle update marker step.
+ *
+ * This commits readable `added`, `changed`, `removed`, and `despawned`
+ * lifecycle buffers for later systems in the same schedule.
  */
 export const updateLifecycle = (): LifecycleUpdateStep => ({
   kind: "lifecycleUpdate"
@@ -476,6 +514,8 @@ export const updateLifecycle = (): LifecycleUpdateStep => ({
 
 /**
  * Creates an explicit relation-failure update marker step.
+ *
+ * Deferred relation mutation failures become readable only after this marker.
  */
 export const updateRelationFailures = (): RelationFailureUpdateStep => ({
   kind: "relationFailureUpdate"
@@ -483,6 +523,9 @@ export const updateRelationFailures = (): RelationFailureUpdateStep => ({
 
 /**
  * Creates a typed reusable transition bundle.
+ *
+ * Use bundles to group multiple machine transition schedules and then attach
+ * them to one `applyStateTransitions(...)` marker.
  */
 export const transitions = <
   S extends Schema.Any,
@@ -495,6 +538,10 @@ export const transitions = <
 
 /**
  * Creates an explicit machine-transition application marker step.
+ *
+ * Queued machine writes are committed only at this boundary. If a transition
+ * bundle is provided, matching enter/exit/transition schedules run as part of
+ * the same boundary.
  */
 export const applyStateTransitions = <
   const Bundle extends TransitionBundleDefinition<any, any, any, any> | undefined = undefined
@@ -560,6 +607,23 @@ export type NamedScheduleFor<
  * When only `systems` are provided, the schedule uses the resolved system order
  * followed by an implicit `applyDeferred()`, `updateEvents()`,
  * `updateLifecycle()`, and `updateRelationFailures()` sequence.
+ *
+ * Use explicit `steps` when systems in the same schedule must observe
+ * intermediate deferred, event, lifecycle, relation-failure, or transition
+ * boundaries.
+ *
+ * @example
+ * ```ts
+ * const update = Game.Schedule.define({
+ *   systems: [spawnEnemies, reactToSpawns],
+ *   steps: [
+ *     spawnEnemies,
+ *     Game.Schedule.applyDeferred(),
+ *     Game.Schedule.updateLifecycle(),
+ *     reactToSpawns
+ *   ]
+ * })
+ * ```
  */
 export function define<
   S extends Schema.Any,

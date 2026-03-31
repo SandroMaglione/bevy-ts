@@ -11,6 +11,54 @@ import * as LabelModule from "./label.ts"
 import type { Label } from "./label.ts"
 
 /**
+ * System declarations, typed execution context, and runtime requirements.
+ *
+ * Systems are explicit dependency declarations. A system spec lists exactly
+ * what the implementation may read or write, and the runtime context is
+ * derived from that spec.
+ *
+ * The main mental model is:
+ *
+ * - declare access up front with `Game.System.*` helpers
+ * - derive a typed context from the declaration
+ * - run the implementation with no hidden world access
+ *
+ * Runtime visibility boundaries stay explicit:
+ *
+ * - deferred commands become visible after `Game.Schedule.applyDeferred()`
+ * - event reads become visible after `Game.Schedule.updateEvents()`
+ * - lifecycle reads become visible after `Game.Schedule.updateLifecycle()`
+ * - relation-failure reads become visible after
+ *   `Game.Schedule.updateRelationFailures()`
+ *
+ * @example
+ * ```ts
+ * const Move = Game.System.define("Move", {
+ *   queries: {
+ *     moving: Game.Query.define({
+ *       selection: {
+ *         position: Game.Query.write(Position),
+ *         velocity: Game.Query.read(Velocity)
+ *       }
+ *     })
+ *   },
+ *   resources: {
+ *     dt: Game.System.readResource(DeltaTime)
+ *   }
+ * }, ({ queries, resources }) => Fx.sync(() => {
+ *   const dt = resources.dt.get()
+ *   for (const { data } of queries.moving.each()) {
+ *     const velocity = data.velocity.get()
+ *     data.position.update((position) => ({
+ *       x: position.x + velocity.x * dt,
+ *       y: position.y + velocity.y * dt
+ *     }))
+ *   }
+ * }))
+ * ```
+ */
+
+/**
  * Declares a dependency-injected service requirement for a system.
  */
 export interface ServiceRead<D extends Descriptor<"service", string, any>> {
@@ -19,6 +67,9 @@ export interface ServiceRead<D extends Descriptor<"service", string, any>> {
 
 /**
  * Declares that a system needs a service from the external runtime environment.
+ *
+ * Services are not stored in the world. They are provided when the runtime is
+ * created with `Game.Runtime.services(...)`.
  */
 export const service = <D extends Descriptor<"service", string, any>>(
   descriptor: D
@@ -44,6 +95,8 @@ export type ResourceWrite<D extends Descriptor<"resource", string, any>> = {
 
 /**
  * Creates a resource-read declaration for a system spec.
+ *
+ * This gives the system a read-only `ReadCell` in `context.resources`.
  */
 export const readResource = <D extends Descriptor<"resource", string, any>>(
   descriptor: D
@@ -54,6 +107,19 @@ export const readResource = <D extends Descriptor<"resource", string, any>>(
 
 /**
  * Creates a resource-write declaration for a system spec.
+ *
+ * This gives the system a `WriteCell` in `context.resources`.
+ *
+ * @example
+ * ```ts
+ * const CountUp = Game.System.define("CountUp", {
+ *   resources: {
+ *     score: Game.System.writeResource(Score)
+ *   }
+ * }, ({ resources }) => Fx.sync(() => {
+ *   resources.score.update((score) => score + 1)
+ * }))
+ * ```
  */
 export const writeResource = <D extends Descriptor<"resource", string, any>>(
   descriptor: D
@@ -80,6 +146,9 @@ export type EventWrite<D extends Descriptor<"event", string, any>> = {
 
 /**
  * Creates an event-read declaration for a system spec.
+ *
+ * Event reads observe the committed readable event buffer. New writes become
+ * visible only after an explicit `Game.Schedule.updateEvents()` boundary.
  */
 export const readEvent = <D extends Descriptor<"event", string, any>>(
   descriptor: D
@@ -90,6 +159,20 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
 
 /**
  * Creates an event-write declaration for a system spec.
+ *
+ * Event writes append to the pending event buffer. They are not visible to
+ * readers in the same schedule phase until `Game.Schedule.updateEvents()`.
+ *
+ * @example
+ * ```ts
+ * const EmitHit = Game.System.define("EmitHit", {
+ *   events: {
+ *     hit: Game.System.writeEvent(Hit)
+ *   }
+ * }, ({ events }) => Fx.sync(() => {
+ *   events.hit.emit({ amount: 1 })
+ * }))
+ * ```
  */
 export const writeEvent = <D extends Descriptor<"event", string, any>>(
   descriptor: D
@@ -136,6 +219,9 @@ export const writeState = <D extends Descriptor<"state", string, any>>(
 
 /**
  * Declares read access to the current committed value of a finite-state machine.
+ *
+ * Use this when a system needs to branch on the current committed machine
+ * state. Queued writes are exposed separately through `nextState(...)`.
  */
 export const machine = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -143,6 +229,10 @@ export const machine = <M extends Machine.StateMachine.Any>(
 
 /**
  * Declares queued write access to the next value of a finite-state machine.
+ *
+ * This does not immediately change the committed state. The queued value is
+ * applied only at an explicit `Game.Schedule.applyStateTransitions(...)`
+ * boundary.
  */
 export const nextState = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -157,6 +247,9 @@ export const transition = <M extends Machine.StateMachine.Any>(
 
 /**
  * Declares read access to committed transition events for one machine.
+ *
+ * Transition events are committed together with normal events and become
+ * readable only after `Game.Schedule.updateEvents()`.
  */
 export const readTransitionEvent = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -253,6 +346,9 @@ export interface DespawnedRead {
 
 /**
  * Declares read access to relation-mutation failure records.
+ *
+ * These failures are deferred. Systems can read them only after an explicit
+ * `Game.Schedule.updateRelationFailures()` boundary.
  */
 export interface RelationFailureRead<R extends Relation.Relation.Any> {
   readonly relation: R
@@ -328,6 +424,12 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
  *
  * Use this when you already have an entity id and want a validated, typed view
  * over a specific component access specification.
+ *
+ * All lookup methods are total and explicit:
+ *
+ * - no hidden exceptions
+ * - stale handles are treated as normal typed failures
+ * - hierarchy traversal is available only for hierarchy relations
  */
 export interface LookupApi<S extends Schema.Any, Root = unknown> {
   get<Q extends Query.Any<Root>>(
@@ -736,6 +838,28 @@ export interface SystemDefinition<
  * This is the public entrypoint for authoring systems. The implementation only
  * receives the capabilities declared in the spec, and the returned effect keeps
  * service dependencies tracked in the type system.
+ *
+ * Use the string-name overload in normal code. The name is turned into a typed
+ * internal label automatically, so the system can participate in schedule
+ * ordering without extra label plumbing.
+ *
+ * @example
+ * ```ts
+ * const CountEnemies = Game.System.define("CountEnemies", {
+ *   queries: {
+ *     enemies: Game.Query.define({
+ *       selection: {
+ *         enemy: Game.Query.read(Enemy)
+ *       }
+ *     })
+ *   },
+ *   resources: {
+ *     total: Game.System.writeResource(EnemyCount)
+ *   }
+ * }, ({ queries, resources }) => Fx.sync(() => {
+ *   resources.total.set(queries.enemies.each().length)
+ * }))
+ * ```
  */
 export function define<
   S extends Schema.Any,

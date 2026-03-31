@@ -1,3 +1,20 @@
+/**
+ * Small application facade over a runtime.
+ *
+ * `App` does not own game state separately from `Runtime`. It only exposes a
+ * familiar `bootstrap(...)` / `update(...)` shape on top of the same runtime
+ * value, so host code can stay simple without hiding the underlying ECS model.
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.make({
+ *   services: Game.Runtime.services()
+ * })
+ *
+ * const app = App.makeApp(runtime)
+ * app.update(updateSchedule)
+ * ```
+ */
 import type { Runtime } from "./runtime.ts"
 
 export interface App<
@@ -25,6 +42,20 @@ export interface App<
  *
  * This is useful when you want to expose a familiar `app.update(...)` API while
  * still keeping the runtime reusable from any external loop or host.
+ *
+ * `bootstrap(...)` is an alias of `runtime.initialize(...)`, and `update(...)`
+ * is an alias of `runtime.tick(...)`.
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.make({
+ *   services: Game.Runtime.services()
+ * })
+ *
+ * const app = App.makeApp(runtime)
+ * app.bootstrap(setupSchedule)
+ * app.update(updateSchedule)
+ * ```
  */
 export const makeApp = <
   R extends Runtime<any, any, any, any, any, any>

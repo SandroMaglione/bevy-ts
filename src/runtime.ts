@@ -29,6 +29,31 @@ import type {
 } from "./system.ts"
 
 /**
+ * Runtime provisioning and schedule execution.
+ *
+ * `Runtime` owns ECS state and host-provided services, but not the outer game
+ * loop. Host code decides when to call `initialize(...)`, `runSchedule(...)`,
+ * or `tick(...)`.
+ *
+ * The runtime keeps dynamic behavior explicit:
+ *
+ * - schedule requirements are checked at the call boundary
+ * - deferred changes advance only at explicit schedule markers
+ * - typed lookup failures stay value-level instead of throwing
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.make({
+ *   services: Game.Runtime.services(
+ *     Game.Runtime.service(Logger, { log: console.log })
+ *   )
+ * })
+ *
+ * runtime.tick(updateSchedule)
+ * ```
+ */
+
+/**
  * The in-memory store used by the prototype runtime.
  *
  * Each entity id maps to descriptor-keyed component storage.
@@ -351,6 +376,9 @@ export interface Runtime<
    *
    * This is a semantic alias for a one-off bootstrap phase before entering the
    * repeating outer loop.
+   *
+   * Use this for startup or setup phases that should run before the normal
+   * repeating update loop.
    */
   readonly initialize: {
     <const Schedules extends ReadonlyArray<unknown>>(
@@ -362,6 +390,9 @@ export interface Runtime<
    *
    * Deferred commands and events advance only at explicit schedule marker
    * steps, plus one final end-of-schedule apply/update pass for safety.
+   *
+   * Use this when you want one explicit schedule execution rather than a batch
+   * of schedules.
    */
   readonly runSchedule: {
     <const Selected>(
@@ -392,6 +423,18 @@ export interface Runtime<
  *
  * The runtime does not own the outer frame loop. It only owns ECS state plus
  * the host-provided services that systems are allowed to depend on.
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.make({
+ *   services: Game.Runtime.services(
+ *     Game.Runtime.service(Logger, { log: console.log })
+ *   ),
+ *   resources: {
+ *     score: 0
+ *   }
+ * })
+ * ```
  */
 export const makeRuntime = <
   S extends Schema.Any,
@@ -1708,6 +1751,14 @@ export const makeRuntime = <
  * Use this instead of writing service objects keyed by strings manually. The
  * helper derives the runtime map directly from service descriptors, so the key
  * used at runtime can never drift from the declared service identity.
+ *
+ * @example
+ * ```ts
+ * const services = Game.Runtime.services(
+ *   Game.Runtime.service(Logger, { log: console.log }),
+ *   Game.Runtime.service(Random, { next: Math.random })
+ * )
+ * ```
  */
 export const services = <
   const Entries extends ReadonlyArray<ServiceProvision>
@@ -1738,6 +1789,8 @@ export const service = <
 
 /**
  * Builds the machine initialization environment from machine definitions.
+ *
+ * Use this when the runtime must start with committed machine values.
  */
 export const machines = <
   const Entries extends ReadonlyArray<MachineProvision>
@@ -1754,6 +1807,13 @@ export const machines = <
 
 /**
  * Creates one machine initialization provision.
+ *
+ * @example
+ * ```ts
+ * const machines = Game.Runtime.machines(
+ *   Game.Runtime.machine(GameFlow, "Menu")
+ * )
+ * ```
  */
 export const machine = <
   M extends Machine.StateMachine.Any

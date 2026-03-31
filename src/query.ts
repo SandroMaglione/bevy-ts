@@ -6,6 +6,33 @@ import type { Schema } from "./schema.ts"
 type ComponentDescriptor = Descriptor<"component", string, unknown>
 
 /**
+ * Query declarations and typed query result cells.
+ *
+ * Queries are the main way systems gain typed entity access. A query spec is
+ * fully explicit:
+ *
+ * - `selection` declares readable and writable slots
+ * - `with` / `without` refine structural matching
+ * - `added` / `changed` refine matching using lifecycle buffers
+ * - relation filters refine matching using explicit relation state
+ *
+ * The key mental model is that query matching is separate from the cell API:
+ * required slots affect matching, while `optional(...)` does not.
+ *
+ * @example
+ * ```ts
+ * const Moving = Game.Query.define({
+ *   selection: {
+ *     position: Game.Query.write(Position),
+ *     velocity: Game.Query.read(Velocity),
+ *     sprite: Game.Query.optional(Sprite)
+ *   },
+ *   with: [Position, Velocity]
+ * })
+ * ```
+ */
+
+/**
  * A read access declaration for a descriptor.
  *
  * Read accesses allow systems to observe data without gaining mutation
@@ -85,7 +112,12 @@ export type Filter<D extends ComponentDescriptor> =
   | ChangedFilter<D>
 
 /**
- * Declares read-only access to a descriptor in a query specification.
+ * Declares read-only access to a component in a query selection.
+ *
+ * A required read slot contributes to both:
+ *
+ * - query matching: the component must be present
+ * - result typing: the slot becomes a `ReadCell`
  */
 export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D> => ({
   mode: "read",
@@ -93,7 +125,10 @@ export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D
 })
 
 /**
- * Declares writable access to a descriptor in a query specification.
+ * Declares writable access to a component in a query selection.
+ *
+ * A write slot requires the component to be present and produces a
+ * `WriteCell`, making mutation capability explicit in the query result.
  */
 export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess<D> => ({
   mode: "write",
@@ -103,6 +138,18 @@ export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess
 /**
  * Declares maybe-present read-only access to a component in a query
  * specification.
+ *
+ * `optional(...)` does not affect entity matching. It only changes the cell
+ * type for that slot, forcing callers to narrow on `present` before reading.
+ *
+ * @example
+ * ```ts
+ * const query = Game.Query.define({
+ *   selection: {
+ *     sprite: Game.Query.optional(Sprite)
+ *   }
+ * })
+ * ```
  */
 export const optional = <D extends ComponentDescriptor>(descriptor: D): OptionalReadAccess<D> => ({
   mode: "optional",
@@ -111,6 +158,9 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
 
 /**
  * Declares a lifecycle filter that matches newly added components.
+ *
+ * This depends on the readable lifecycle buffer, so it only changes after an
+ * explicit `Game.Schedule.updateLifecycle()` boundary.
  */
 export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter<D> => ({
   kind: "added",
@@ -120,6 +170,9 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
 /**
  * Declares a lifecycle filter that matches components written since the last
  * lifecycle boundary.
+ *
+ * This depends on the readable lifecycle buffer, so it only changes after an
+ * explicit `Game.Schedule.updateLifecycle()` boundary.
  */
 export const changed = <D extends ComponentDescriptor>(descriptor: D): ChangedFilter<D> => ({
   kind: "changed",
@@ -432,6 +485,21 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * Use this inside system specs instead of relying on callback parameter
  * inference. The resulting value drives both runtime execution and the derived
  * query result type.
+ *
+ * A query spec is purely declarative. It does not access the world by itself;
+ * systems receive `QueryHandle`s derived from the spec.
+ *
+ * @example
+ * ```ts
+ * const Moving = Game.Query.define({
+ *   selection: {
+ *     position: Game.Query.write(Position),
+ *     velocity: Game.Query.read(Velocity)
+ *   },
+ *   with: [Position, Velocity],
+ *   without: [Sleeping]
+ * })
+ * ```
  */
 export const define = <
   const Selection extends Record<string, SelectionAccess<any, Root>>,

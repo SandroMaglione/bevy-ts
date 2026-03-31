@@ -4,7 +4,24 @@ import type { StagedRelation } from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
 /**
- * String-literal type id used to mirror Effect's current `~effect/...` style.
+ * Entity identities, proofs, and long-lived handles.
+ *
+ * `EntityId` is the current-runtime identity used by commands, queries, and
+ * lookup. `Handle` is the storage-safe long-lived reference type used when the
+ * entity must survive across frames inside components, resources, or events.
+ *
+ * The important distinction is explicit:
+ *
+ * - `EntityId` is not proof that an entity has specific components
+ * - `Handle` is not proof that the entity is still alive
+ * - current-world access must come from queries or checked lookup APIs
+ *
+ * @example
+ * ```ts
+ * const handle = Game.Entity.handleAs(Player, playerId)
+ * const resolved = lookup.getHandle(handle, PlayerQuery)
+ * if (!resolved.ok) return
+ * ```
  */
 export type EntityTypeId = "~bevy-ts/Entity"
 
@@ -179,6 +196,17 @@ export const makeHandle = <
 
 /**
  * Converts a current runtime id into an unqualified durable handle.
+ *
+ * Use this when you need a long-lived reference but do not want to assert any
+ * intended component role. Resolve it later with `lookup.getHandle(...)`.
+ *
+ * The handle is storage-safe, not a proof of liveness. The entity may have
+ * been despawned by the time it is resolved.
+ *
+ * @example
+ * ```ts
+ * const handle = Game.Entity.handle(entityId)
+ * ```
  */
 export const handle = <S extends Schema.Any, Root = unknown>(
   entityId: EntityId<S, Root>
@@ -186,6 +214,15 @@ export const handle = <S extends Schema.Any, Root = unknown>(
 
 /**
  * Converts a current runtime id into an intent-qualified durable handle.
+ *
+ * The extra intent does not prove the entity still has that component later.
+ * It only forces resolution through a query that statically proves the
+ * component is present.
+ *
+ * @example
+ * ```ts
+ * const handle = Game.Entity.handleAs(Player, playerId)
+ * ```
  */
 export const handleAs = <
   S extends Schema.Any,

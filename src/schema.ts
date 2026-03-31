@@ -1,3 +1,32 @@
+/**
+ * Schema authoring, binding, and pre-bind feature composition.
+ *
+ * The normal authoring flow is:
+ *
+ * 1. declare descriptors with `Descriptor.define...`
+ * 2. group them into reusable `Schema.fragment(...)` values
+ * 3. close the schema with `Schema.build(...)`
+ * 4. bind one `Game` with `Schema.bind(...)`
+ * 5. build a runtime or composed project from that bound `Game`
+ *
+ * `Schema.Feature` lives on the same pre-bind layer. Features contribute schema
+ * fragments and build schedules only after the final merged schema is known.
+ *
+ * @example
+ * ```ts
+ * const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
+ * const Score = Descriptor.defineResource<number>()("Score")
+ *
+ * const Core = Schema.fragment({
+ *   components: { Position },
+ *   resources: { Score }
+ * })
+ *
+ * const schema = Schema.build(Core)
+ * const Root = Schema.defineRoot("Game")
+ * const Game = Schema.bind(schema, Root)
+ * ```
+ */
 import * as Command from "./command.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
@@ -848,6 +877,18 @@ const mergeRelations = <
  *
  * Root tokens exist before schema construction so durable entity handles can be
  * stored in descriptor payload types without widening to `Schema.Any`.
+ *
+ * Use one root token for the whole application. Anything created from
+ * `Schema.bind(schema, Root)` will carry the same hidden root brand.
+ *
+ * @example
+ * ```ts
+ * const Root = Schema.defineRoot("Game")
+ *
+ * const Target = Descriptor.defineComponent<{
+ *   handle: Entity.Handle<typeof Root>
+ * }>()("Target")
+ * ```
  */
 export const defineRoot = <const Name extends string>(name: Name): RootToken<Name> => ({
   kind: "SchemaRoot",
@@ -876,6 +917,16 @@ export const empty = (): SchemaDefinition => ({
  *
  * Modules should export fragments instead of mutating global registries. Later
  * the application can merge these fragments into one final schema.
+ *
+ * Use fragments as the reusable lego blocks of schema composition.
+ *
+ * @example
+ * ```ts
+ * const Combat = Schema.fragment({
+ *   components: { Health, Damage },
+ *   events: { Hit }
+ * })
+ * ```
  */
 export const fragment = <
   const Components extends Registry = {},
@@ -932,6 +983,13 @@ export const merge = <
  * Builds one final schema from a non-empty list of fragments.
  *
  * This is the typical application-level entrypoint for schema composition.
+ *
+ * Duplicate schema keys are rejected both at the type level and at runtime.
+ *
+ * @example
+ * ```ts
+ * const schema = Schema.build(Core, Combat, Dialogue)
+ * ```
  */
 export const build = <
   Fragments extends readonly [Schema.Any, ...Array<Schema.Any>]
@@ -971,6 +1029,35 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
  * This is the canonical high-safety API. Everything created from the returned
  * object carries the same hidden schema-root brand, so systems, schedules, and
  * runtimes from different bound schemas cannot be connected accidentally.
+ *
+ * The returned `Game` object is the main public authoring surface for:
+ * queries, systems, schedules, runtimes, commands, handles, and machines.
+ *
+ * @example
+ * ```ts
+ * const schema = Schema.build(Core)
+ * const Root = Schema.defineRoot("Game")
+ * const Game = Schema.bind(schema, Root)
+ *
+ * const Move = Game.System.define("Move", {
+ *   queries: {
+ *     moving: Game.Query.define({
+ *       selection: {
+ *         position: Game.Query.write(Position),
+ *         velocity: Game.Query.read(Velocity)
+ *       }
+ *     })
+ *   }
+ * }, ({ queries }) => Fx.sync(() => {
+ *   for (const { data } of queries.moving.each()) {
+ *     const velocity = data.velocity.get()
+ *     data.position.update((position) => ({
+ *       x: position.x + velocity.x,
+ *       y: position.y + velocity.y
+ *     }))
+ *   }
+ * }))
+ * ```
  */
 export const bind = <S extends Schema.Any, Root = S>(
   schema: S,
@@ -1452,6 +1539,29 @@ export const bind = <S extends Schema.Any, Root = S>(
   }
 }
 
+/**
+ * Defines one pre-bind feature.
+ *
+ * Features are pure typed values. They contribute a schema fragment, declare
+ * structural dependencies on other features, and build schedules only after
+ * the final merged schema has been bound.
+ *
+ * Feature builders can only access descriptors from:
+ *
+ * - the feature's own fragment
+ * - the fragments of features listed in `requires`
+ *
+ * @example
+ * ```ts
+ * const Combat = Schema.Feature.define("Combat", {
+ *   schema: CombatSchema,
+ *   requires: [Core],
+ *   build: (Game) => ({
+ *     update: [combatUpdate]
+ *   })
+ * })
+ * ```
+ */
 export const defineFeature = <
   const Name extends string,
   FeatureSchema extends Schema.Any,
@@ -1557,6 +1667,36 @@ export const composeFeatures = <
     }
   } as unknown as ComposedFeatureProject<Features, Root>
 }
+
+/**
+ * Composes selected features into one merged schema, one bound `Game`, and one
+ * aggregated app facade.
+ *
+ * Composition happens before runtime creation:
+ *
+ * 1. feature schemas are merged
+ * 2. the final schema is bound once
+ * 3. every feature builds against that same bound `Game`
+ * 4. feature `bootstrap` and `update` schedules are normalized into arrays
+ *
+ * Aggregated schedule order is the selected feature order, not dependency
+ * topological order. Use normal schedule and system ordering when features
+ * need explicit execution ordering.
+ *
+ * @example
+ * ```ts
+ * const project = Schema.Feature.compose({
+ *   root: Root,
+ *   features: [Core, Combat, Dialogue]
+ * })
+ *
+ * const app = project.App.make({
+ *   services: project.Game.Runtime.services()
+ * })
+ *
+ * app.update()
+ * ```
+ */
 
 type FeaturesToSchemaTuple<Features extends readonly [AnyFeatureDefinition, ...Array<AnyFeatureDefinition>]> =
   Features extends readonly [infer Head extends AnyFeatureDefinition, ...infer Tail extends Array<AnyFeatureDefinition>]
