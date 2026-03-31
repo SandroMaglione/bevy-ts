@@ -669,6 +669,27 @@ if (result.ok) {
 }
 ```
 
+When gameplay correctness depends on hierarchy order, prefer the hierarchy
+match helpers instead of relying on arbitrary query iteration order:
+
+```ts
+const body = lookup.descendantMatches(headId, ChildOf, BodyQuery, { order: "depth" })
+if (!body.ok) {
+  return
+}
+
+let previous = headPrevious
+for (const segment of body.value) {
+  const nextPrevious = segment.data.previousPosition.get()
+  segment.data.position.set(previous)
+  previous = nextPrevious
+}
+```
+
+`lookup.childMatches(...)` resolves direct children in stored child order, and
+`lookup.descendantMatches(...)` traverses descendants in explicit breadth- or
+depth-first order while skipping entities that do not satisfy the query.
+
 Relationships model current world structure and ownership. They are not a substitute for durable handles, which are for storing long-lived targets across frames and resolving them later through checked lookup. For single-target gameplay state such as a focused interactable, a durable handle in a resource is usually the simpler model.
 
 ## Renderer integration
@@ -1076,10 +1097,6 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
 ## Roadmap
 
 1. Schedule execution still needs a cheaper carried type shape after validation. Refactoring [`src/examples/smoke.ts`](./src/examples/smoke.ts) to the current explicit API worked cleanly at the system and schedule-definition level, but the direct `app.update(update)` / `runtime.runSchedule(update)` path can still hit TypeScript instantiation limits in a minimal example. That is a direct violation of the library's main user-facing constraint: users should not need casts, explicit generics, or artificial schedule splitting just to execute a valid schedule. The execution boundary should preserve exact validation, root safety, and runtime-requirement safety while carrying a much cheaper normalized schedule type into `App` and `Runtime`.
-
-2. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
-
-3. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
 
 ## Out of scope for now
 

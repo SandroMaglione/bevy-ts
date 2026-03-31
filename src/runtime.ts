@@ -1219,6 +1219,19 @@ export const makeRuntime = <
         getRelatedSourceIds(relation, entityId.value).map((sourceId) => Entity.makeEntityId<S, Root>(sourceId))
       )
     },
+    childMatches(entityId, relation, query) {
+      if (!entityExists(entityId.value)) {
+        return Relation.failure(Relation.missingEntityError(entityId.value))
+      }
+      const matches: Array<QueryMatch<S, typeof query>> = []
+      for (const sourceId of getRelatedSourceIds(relation, entityId.value)) {
+        const resolved = this.get(Entity.makeEntityId<S, Root>(sourceId), query)
+        if (resolved.ok) {
+          matches.push(resolved.value)
+        }
+      }
+      return Relation.success(matches)
+    },
     parent(entityId, relation) {
       if (!entityExists(entityId.value)) {
         return Relation.failure(Relation.missingEntityError(entityId.value))
@@ -1259,6 +1272,20 @@ export const makeRuntime = <
         }
       }
       return Relation.success(descendants)
+    },
+    descendantMatches(entityId, relation, query, options) {
+      const descendants = this.descendants(entityId, relation, options)
+      if (!descendants.ok) {
+        return descendants
+      }
+      const matches: Array<QueryMatch<S, typeof query>> = []
+      for (const descendantId of descendants.value) {
+        const resolved = this.get(descendantId, query)
+        if (resolved.ok) {
+          matches.push(resolved.value)
+        }
+      }
+      return Relation.success(matches)
     },
     root(entityId, relation) {
       if (!entityExists(entityId.value)) {

@@ -458,6 +458,89 @@ describe("Runtime relationships", () => {
     expect(readResourceValue(runtime, schema, Summary)).toBe("4,2,3/4,2,3/4,2,3")
   })
 
+  it("returns ordered typed hierarchy matches while skipping non-matching entities", () => {
+    let rootId: Entity.EntityId<typeof schema, any> | undefined
+    let branchId: Entity.EntityId<typeof schema, any> | undefined
+
+    const NamedQuery = Game.Query.define({
+      selection: {
+        name: Game.Query.read(Name)
+      }
+    })
+
+    const spawn = Game.System.define(
+      "SpawnHierarchyMatchTraversal",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+          commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "first" }] as const),
+              ChildOf,
+              rootId
+            )
+          )
+          branchId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith(),
+              ChildOf,
+              rootId
+            )
+          )
+          commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "nested" }] as const),
+              ChildOf,
+              branchId
+            )
+          )
+        })
+    )
+
+    const observe = Game.System.define(
+      "ObserveHierarchyMatchTraversal",
+      {
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ lookup, resources }) =>
+        Fx.sync(() => {
+          if (!rootId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+
+          const children = lookup.childMatches(rootId, ChildOf, NamedQuery)
+          const descendants = lookup.descendantMatches(rootId, ChildOf, NamedQuery, { order: "breadth" })
+          const missing = lookup.descendantMatches(
+            Entity.makeEntityId<typeof schema, typeof Game.schema>(999),
+            ChildOf,
+            NamedQuery
+          )
+
+          resources.summary.set([
+            children.ok
+              ? children.value.map((match) => match.data.name.get().value).join(",")
+              : children.error._tag,
+            descendants.ok
+              ? descendants.value.map((match) => match.data.name.get().value).join(",")
+              : descendants.error._tag,
+            missing.ok ? "ok" : missing.error._tag
+          ].join("/"))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({ systems: [spawn] }),
+      Game.Schedule.define({ systems: [observe] })
+    )
+
+    expect(readResourceValue(runtime, schema, Summary)).toBe("first/first,nested/MissingEntity")
+  })
+
   it("makes successful deferred relation mutations visible through lookup and keeps failure streams empty", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined

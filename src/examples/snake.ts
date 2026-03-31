@@ -27,8 +27,9 @@ const Position = Descriptor.defineComponent<GridPosition>()("Snake/Position")
 const PreviousPosition = Descriptor.defineComponent<GridPosition>()("Snake/PreviousPosition")
 const Velocity = Descriptor.defineComponent<GridPosition>()("Snake/Velocity")
 const SnakeHead = Descriptor.defineComponent<{}>()("Snake/Head")
-const SnakeBody = Descriptor.defineComponent<{ parent: Entity.Handle<typeof Root>; isTail: boolean }>()("Snake/Body")
+const SnakeBody = Descriptor.defineComponent<{ isTail: boolean }>()("Snake/Body")
 const Food = Descriptor.defineComponent<{}>()("Snake/Food")
+const { relation: ChildOf } = Descriptor.defineHierarchy("Snake/ChildOf", "Snake/Children")
 
 const FoodEaten = Descriptor.defineEvent<{ entity: Entity.Handle<typeof Root, typeof Food> }>()("Snake/FoodEaten")
 
@@ -73,6 +74,9 @@ const schema = Schema.build(
     },
     events: {
       FoodEaten
+    },
+    relations: {
+      ChildOf
     }
   })
 )
@@ -101,12 +105,6 @@ const FoodQuery = Game.Query.define({
   selection: {
     position: Game.Query.read(Position),
     food: Game.Query.read(Food)
-  }
-})
-
-const ParentPreviousPositionQuery = Game.Query.define({
-  selection: {
-    previousPosition: Game.Query.read(PreviousPosition)
   }
 })
 
@@ -163,14 +161,20 @@ const makeHeadDraft = () =>
     [SnakeHead, {}]
   )
 
-const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
-  Game.Command.spawnWith(
-    [Position, position],
-    [PreviousPosition, position],
-    [SnakeBody, {
-      parent,
-      isTail: true
-    }]
+const makeTailDraft = (
+  parent: Entity.EntityId<typeof schema, typeof Root>,
+  position: GridPosition
+) =>
+  Game.Command.relate(
+    Game.Command.spawnWith(
+      [Position, position],
+      [PreviousPosition, position],
+      [SnakeBody, {
+        isTail: true
+      }]
+    ),
+    ChildOf,
+    parent
   )
 
 const makeFoodDraft = (position: GridPosition) =>
@@ -394,7 +398,7 @@ const ResetGameSystem = Game.System.define(
       const headId = commands.spawn(makeHeadDraft())
 
       commands.spawn(
-        makeTailDraft(Game.Entity.handle(headId), INITIAL_TAIL_POSITION)
+        makeTailDraft(headId, INITIAL_TAIL_POSITION)
       )
     })
 )
@@ -506,19 +510,27 @@ const MoveBodySystem = Game.System.define(
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
     queries: {
+      head: HeadQuery,
       body: BodyQuery
     }
   },
   ({ queries, lookup }) =>
     Fx.sync(() => {
-      for (const match of queries.body.each()) {
-        const parent = match.data.body.get().parent
-        const parentLookup = lookup.getHandle(parent, ParentPreviousPositionQuery)
-        if (!parentLookup.ok) {
-          continue
-        }
+      const head = queries.head.singleOptional()
+      if (!head.ok || !head.value) {
+        return
+      }
 
-        match.data.position.set(parentLookup.value.data.previousPosition.get())
+      const body = lookup.descendantMatches(head.value.entity.id, ChildOf, BodyQuery, { order: "depth" })
+      if (!body.ok) {
+        return
+      }
+
+      let previous = head.value.data.previousPosition.get()
+      for (const match of body.value) {
+        const nextPrevious = match.data.previousPosition.get()
+        match.data.position.set(previous)
+        previous = nextPrevious
       }
     })
 )
@@ -617,7 +629,7 @@ const GrowSnakeSystem = Game.System.define(
         }))
 
         commands.spawn(
-          makeTailDraft(Game.Entity.handle(tail.entity.id), tailPrevious)
+          makeTailDraft(tail.entity.id, tailPrevious)
         )
       } else {
         const head = queries.head.singleOptional()
@@ -627,7 +639,7 @@ const GrowSnakeSystem = Game.System.define(
 
         const headPrevious = head.value.data.previousPosition.get()
         commands.spawn(
-          makeTailDraft(Game.Entity.handle(head.value.entity.id), headPrevious)
+          makeTailDraft(head.value.entity.id, headPrevious)
         )
       }
 

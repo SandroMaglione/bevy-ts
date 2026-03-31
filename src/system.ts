@@ -555,6 +555,21 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     entityId: Entity.EntityId<S, Root>,
     relation: R
   ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  /**
+   * Reads the direct children of one hierarchy parent as typed query matches.
+   *
+   * This preserves the stored child order for that hierarchy relation and skips
+   * entities that do not satisfy the query. Missing parents remain explicit
+   * `MissingEntity` failures.
+   */
+  childMatches<
+    R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>,
+    Q extends Query.Any<Root>
+  >(
+    entityId: Entity.EntityId<S, Root>,
+    relation: R,
+    query: Q
+  ): Relation.Relation.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   parent<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
@@ -570,6 +585,24 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
       readonly order?: "breadth" | "depth"
     }
   ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  /**
+   * Traverses hierarchy descendants and resolves only the entities that match
+   * the given query.
+   *
+   * Traversal order stays explicit through `options.order`, and non-matching
+   * descendants are skipped without turning traversal into a failure.
+   */
+  descendantMatches<
+    R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>,
+    Q extends Query.Any<Root>
+  >(
+    entityId: Entity.EntityId<S, Root>,
+    relation: R,
+    query: Q,
+    options?: {
+      readonly order?: "breadth" | "depth"
+    }
+  ): Relation.Relation.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   root<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R

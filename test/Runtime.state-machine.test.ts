@@ -451,11 +451,9 @@ describe("Runtime state machine", () => {
         Runtime.machine(RoundState, "Warmup")
       )
     })
-    const incrementSchedule = Game.Schedule.define({
+    runtime.runSchedule(Game.Schedule.define({
       systems: [increment]
-    })
-
-    runtime.runSchedule(incrementSchedule)
+    }))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
   })

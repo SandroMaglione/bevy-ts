@@ -486,6 +486,8 @@ describe("Schema", () => {
         Fx.sync(() => {
           lookup.parent(entityId, ChildOf)
           lookup.ancestors(entityId, ChildOf)
+          lookup.childMatches(entityId, ChildOf, query)
+          lookup.descendantMatches(entityId, ChildOf, query, { order: "depth" })
           lookup.related(entityId, Targeting)
           relationFailures.targeting.all()
           commands.relate(entityId, Targeting, entityId)
@@ -506,6 +508,18 @@ describe("Schema", () => {
               typeof Game.schema
             >>
           >()
+          expect(lookup.childMatches(entityId, ChildOf, query)).type.toBeAssignableTo<
+            import("../src/relation.ts").Relation.Result<
+              ReadonlyArray<import("../src/query.ts").QueryMatch<typeof schema, typeof query>>,
+              import("../src/relation.ts").Relation.MissingEntityError
+            >
+          >()
+          expect(lookup.descendantMatches(entityId, ChildOf, query, { order: "breadth" })).type.toBeAssignableTo<
+            import("../src/relation.ts").Relation.Result<
+              ReadonlyArray<import("../src/query.ts").QueryMatch<typeof schema, typeof query>>,
+              import("../src/relation.ts").Relation.MissingEntityError
+            >
+          >()
 
           // @ts-expect-error!
           commands.reorderChildren(entityId, Targeting, [entityId])
@@ -517,6 +531,10 @@ describe("Schema", () => {
           Game.Query.readRelated(Position)
           // @ts-expect-error!
           lookup.parent(entityId, Targeting)
+          // @ts-expect-error!
+          lookup.childMatches(entityId, Targeting, query)
+          // @ts-expect-error!
+          lookup.descendantMatches(entityId, Targeting, query)
           // @ts-expect-error!
           Game.System.readRelationFailures(Position)
         })
