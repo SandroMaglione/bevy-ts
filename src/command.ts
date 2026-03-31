@@ -276,6 +276,21 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
     descriptor: D
   ) => Entity.EntityId<S, Root>
   /**
+   * Queues one live relation mutation for deferred application.
+   */
+  readonly relate: <R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
+    entity: Entity.EntityId<S, Root>,
+    relation: R,
+    target: Entity.EntityId<S, Root>
+  ) => void
+  /**
+   * Queues removal of one outgoing relation when present.
+   */
+  readonly unrelate: <R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
+    entity: Entity.EntityId<S, Root>,
+    relation: R
+  ) => void
+  /**
    * Queues a resource write.
    */
   readonly setResource: <K extends keyof Schema.Resources<S>>(
@@ -372,6 +387,22 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
         }
       })
       return entity
+    },
+    relate(entity, relation, target) {
+      queue.push({
+        tag: "relate",
+        apply(world) {
+          world.tryRelate(entity, relation, target)
+        }
+      })
+    },
+    unrelate(entity, relation) {
+      queue.push({
+        tag: "unrelate",
+        apply(world) {
+          world.unrelate(entity, relation)
+        }
+      })
     },
     setResource(descriptor, value) {
       queue.push({

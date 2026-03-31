@@ -12,12 +12,14 @@
 import { Application, Container, Graphics } from "pixi.js"
 
 import { App, Descriptor, Fx, Label, Schema } from "../index.ts"
+import type { ScheduleDefinition } from "../schedule.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const GRID_COLS = 10
 const GRID_ROWS = 10
 const TILE_SIZE = 32
 const MOVE_DURATION_SECONDS = 0.18
+type AnyExecutableSchedule = ScheduleDefinition<any, any, any>
 
 type Direction = "up" | "down" | "left" | "right"
 type TilePosition = { col: number; row: number }
@@ -478,13 +480,13 @@ export const createPokemonExample = (input: {
   })
 
   const app = App.makeApp(runtime)
-  app.bootstrap(setupSchedule)
+  app.bootstrap(setupSchedule as never)
 
   return {
     runtime,
     app,
     update() {
-      app.update(updateSchedule)
+      runtime.runSchedule(updateSchedule as never)
     }
   }
 }
@@ -576,13 +578,15 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
     }
   })
 
-  const app = App.makeApp(runtime)
-  app.bootstrap(browserSetupSchedule)
-  app.update(browserUpdateSchedule)
+  const bootstrap = runtime.initialize as (schedule: AnyExecutableSchedule) => void
+  const runFrame = runtime.runSchedule as (schedule: AnyExecutableSchedule) => void
+
+  bootstrap(browserSetupSchedule as never)
+  runFrame(browserUpdateSchedule as never)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
-    app.update(browserUpdateSchedule)
+    runFrame(browserUpdateSchedule as never)
   }
 
   application.ticker.add(tick)

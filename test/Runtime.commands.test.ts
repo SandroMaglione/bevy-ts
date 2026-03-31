@@ -234,15 +234,16 @@ describe("Runtime commands", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.tick(
-      Game.Schedule.define({
-        systems: [spawn]
-      }),
-      Game.Schedule.define({
-        systems: [insertVelocity, observe],
-        steps: [insertVelocity, Game.Schedule.applyDeferred(), observe]
-      })
-    )
+    const spawnSchedule = Game.Schedule.define({
+      systems: [spawn]
+    })
+    const observeSchedule = Game.Schedule.define({
+      systems: [insertVelocity, observe],
+      steps: [insertVelocity, Game.Schedule.applyDeferred(), observe]
+    })
+
+    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
+    tick(spawnSchedule as never, observeSchedule as never)
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })

@@ -287,10 +287,12 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule.define({
+    const schedule = Game.Schedule.define({
       systems: [ObserveLifecycleSystem],
       steps: [Game.Schedule.updateLifecycle(), ObserveLifecycleSystem]
-    }))
+    })
+
+    expect(schedule).type.toBeAssignableTo<Parameters<typeof runtime.runSchedule>[0]>()
   })
 
   it("rejects non-component descriptors in lifecycle query APIs", () => {
@@ -410,12 +412,19 @@ describe("Schema", () => {
 
     const ObserveSystem = Game.System.define(
       "ObserveRelations",
-      {},
-      ({ lookup }) =>
+      {
+        relationFailures: {
+          targeting: Game.System.readRelationFailures(Targeting)
+        }
+      },
+      ({ lookup, commands, relationFailures }) =>
         Fx.sync(() => {
           lookup.parent(entityId, ChildOf)
           lookup.ancestors(entityId, ChildOf)
           lookup.related(entityId, Targeting)
+          relationFailures.targeting.all()
+          commands.relate(entityId, Targeting, entityId)
+          commands.unrelate(entityId, Targeting)
 
           // @ts-expect-error!
           Game.Query.readRelation(Position)
@@ -423,6 +432,8 @@ describe("Schema", () => {
           Game.Query.readRelated(Position)
           // @ts-expect-error!
           lookup.parent(entityId, Targeting)
+          // @ts-expect-error!
+          Game.System.readRelationFailures(Position)
         })
     )
   })
@@ -518,6 +529,6 @@ describe("Schema", () => {
         })
     )
 
-    expect(ObserveSystem).type.toBeAssignableTo<import("../src/system.ts").SystemDefinition<any, void, never>>()
+    expect(ObserveSystem).type.toBeAssignableTo<import("../src/schema.ts").Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
   })
 })

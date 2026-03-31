@@ -107,7 +107,8 @@ export namespace Schema {
   > = {
     readonly name: string
     readonly spec: Spec & { readonly schema: S }
-    readonly __schemaRoot?: Root | undefined
+    readonly requirements: System.SystemRequirements<Spec>
+    readonly __schemaRoot: Root
     readonly run: (context: any) => Fx<A, E, any>
   }
 
@@ -521,7 +522,7 @@ export const bind = <S extends Schema.Any, Root = S>(
   schema: S,
   _root: Root = schema as unknown as Root
 ) => {
-  type BoundAnySystem = System.SystemDefinition<any, any, any, Root>
+  type BoundAnySystem = Schema.BoundSystem<any, Root, any, any, any>
   type BoundOrderTarget = BoundAnySystem | Label.System | Label.SystemSet
   type BoundMachine = Schema.BoundStateMachine<Root>
   type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root>
@@ -539,8 +540,14 @@ export const bind = <S extends Schema.Any, Root = S>(
     | Schedule.ApplyDeferredStep
     | Schedule.EventUpdateStep
     | Schedule.LifecycleUpdateStep
-    | Schedule.ApplyStateTransitionsStep<BoundTransitionBundle | undefined, Root>
-  type BoundTransitionStep = BoundAnySystem | Schedule.ApplyDeferredStep | Schedule.EventUpdateStep | Schedule.LifecycleUpdateStep
+    | Schedule.RelationFailureUpdateStep
+    | Schedule.ApplyStateTransitionsStep<any, Root>
+  type BoundTransitionStep =
+    | BoundAnySystem
+    | Schedule.ApplyDeferredStep
+    | Schedule.EventUpdateStep
+    | Schedule.LifecycleUpdateStep
+    | Schedule.RelationFailureUpdateStep
   type BoundScheduleOptions<
     Systems extends ReadonlyArray<BoundAnySystem>,
     Sets extends ReadonlyArray<Schedule.SystemSetConfig<any, any, any>>
@@ -604,6 +611,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     const TransitionEvents extends Record<string, Machine.TransitionEventRead<BoundMachine>> = {},
     const Removed extends Record<string, System.RemovedRead<ComponentDescriptor<S>>> = {},
     const Despawned extends Record<string, System.DespawnedRead> = {},
+    const RelationFailures extends Record<string, System.RelationFailureRead<RelationDescriptor<S>>> = {},
     const When extends ReadonlyArray<Machine.Condition<Root>> = [],
     const Transitions extends Record<string, Machine.TransitionRead<BoundMachine>> = {},
     A = void,
@@ -624,20 +632,21 @@ export const bind = <S extends Schema.Any, Root = S>(
       readonly transitionEvents?: TransitionEvents
       readonly removed?: Removed
       readonly despawned?: Despawned
+      readonly relationFailures?: RelationFailures
       readonly when?: When
       readonly transitions?: Transitions
     },
-    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>) => Fx<
+    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
       A,
       E,
-      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root>>
+      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
     >
   ) => {
-    const system = System.define<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, A, E>(name, {
+    const system = System.define<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, RelationFailures, When, Transitions, Root, A, E>(name, {
       schema,
       ...spec
     }, run)
-    return system as typeof system & Schema.BoundSystem<S, Root, typeof system.spec, A, E>
+    return system as Schema.BoundSystem<S, Root, typeof system.spec, A, E>
   }
 
   const commandSpawn = () => Command.spawn<S, Root>()
@@ -724,6 +733,7 @@ export const bind = <S extends Schema.Any, Root = S>(
   const systemTransition = <M extends BoundMachine>(machine: M) => System.transition(machine)
   const systemReadRemoved = <D extends ComponentDescriptor<S>>(descriptor: D) => System.readRemoved(descriptor)
   const systemReadDespawned = () => System.readDespawned()
+  const systemReadRelationFailures = <R extends RelationDescriptor<S>>(relation: R) => System.readRelationFailures(relation)
 
   function defineSchedule<
     const Systems extends ReadonlyArray<BoundAnySystem>,
@@ -986,6 +996,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       readTransitionEvent: systemReadTransitionEvent,
       readRemoved: systemReadRemoved,
       readDespawned: systemReadDespawned,
+      readRelationFailures: systemReadRelationFailures,
       transition: systemTransition
     },
     Schedule: {
@@ -999,6 +1010,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       applyDeferred: Schedule.applyDeferred,
       updateEvents: Schedule.updateEvents,
       updateLifecycle: Schedule.updateLifecycle,
+      updateRelationFailures: Schedule.updateRelationFailures,
       applyStateTransitions: <Bundle extends BoundTransitionBundle | undefined = undefined>(bundle?: Bundle) =>
         Schedule.applyStateTransitions(bundle) as Schedule.ApplyStateTransitionsStep<Bundle, Root>
     },

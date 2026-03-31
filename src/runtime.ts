@@ -14,6 +14,7 @@ import type {
   EventReadView,
   EventWriteView,
   QueryHandle,
+  RelationFailureReadView,
   RemovedReadView,
   ResourceReadView,
   RuntimeRequirements,
@@ -21,8 +22,6 @@ import type {
   MachineReadView,
   NextMachineWriteView,
   ResourceWriteView,
-  StateReadView,
-  StateWriteView,
   SystemContext,
   SystemDefinition,
   TransitionReadView
@@ -239,10 +238,8 @@ type ExecutableSchedule<
 > = {
   readonly kind: "anonymous" | "named"
   readonly schema: S
-  readonly steps: ReadonlyArray<Schedule.ScheduleStep>
-  readonly systems: ReadonlyArray<SystemDefinition<any, any, any>>
-  readonly sets: ReadonlyArray<Schedule.SystemSetConfig>
   readonly requirements: RuntimeRequirements
+  readonly label?: { readonly name: string }
   readonly __schemaRoot?: Root | undefined
 }
 
@@ -471,6 +468,14 @@ export const makeRuntime = <
    * Pending despawned-entity ids written before the next lifecycle update.
    */
   let pendingDespawnedEntities = new Set<number>()
+  /**
+   * Relation-keyed readable mutation-failure buffers for the current phase.
+   */
+  let readableRelationFailures = new Map<symbol, Array<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>>()
+  /**
+   * Relation-keyed pending mutation-failure buffers written before the next relation-failure update.
+   */
+  let pendingRelationFailures = new Map<symbol, Array<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>>()
 
   /**
    * Seeds runtime resources from the host-provided initial values.
@@ -612,6 +617,24 @@ export const makeRuntime = <
     return Relation.success(undefined)
   }
 
+  const appendRelationFailure = (
+    relation: Relation.Relation.Any,
+    sourceId: number,
+    targetId: number,
+    error: Relation.Relation.MutationError
+  ): void => {
+    const failures = pendingRelationFailures.get(relation.key) ?? []
+    failures.push(
+      Relation.mutationFailure(
+        relation,
+        Entity.makeEntityId<S, Root>(sourceId),
+        Entity.makeEntityId<S, Root>(targetId),
+        error
+      )
+    )
+    pendingRelationFailures.set(relation.key, failures)
+  }
+
   /**
    * Internal world adapter used by deferred commands.
    */
@@ -689,7 +712,11 @@ export const makeRuntime = <
       pendingEvents.set(descriptor.key, queue)
     },
     tryRelate(id, relation, target) {
-      return tryRelateEntity(id.value, relation, target.value)
+      const result = tryRelateEntity(id.value, relation, target.value)
+      if (!result.ok) {
+        appendRelationFailure(relation, id.value, target.value, result.error)
+      }
+      return result
     },
     unrelate(id, relation) {
       unrelateEntity(id.value, relation)
@@ -1165,6 +1192,17 @@ export const makeRuntime = <
   })
 
   /**
+   * Creates a read-only relation-mutation failure stream view.
+   */
+  const makeRelationFailureReadView = <R extends Relation.Relation.Any>(
+    relation: R
+  ): RelationFailureReadView<R, S, Root> => ({
+    all() {
+      return (readableRelationFailures.get(relation.key) ?? []) as unknown as ReadonlyArray<Relation.Relation.MutationFailure<R, S, Root>>
+    }
+  })
+
+  /**
    * Creates a read-only machine view.
    */
   const makeMachineReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): MachineReadView<M> => ({
@@ -1293,6 +1331,12 @@ export const makeRuntime = <
         makeDespawnedReadView()
       ])
     )
+    const relationFailureViews = Object.fromEntries(
+      Object.entries((system.spec.relationFailures ?? {}) as Record<string, any>).map(([key, access]) => [
+        key,
+        makeRelationFailureReadView(access.relation)
+      ])
+    )
     const serviceViews = Object.fromEntries(
       Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [key, providedServices[access.descriptor.name as keyof Services]])
     )
@@ -1308,6 +1352,7 @@ export const makeRuntime = <
       transitionEvents: transitionEventViews,
       removed: removedViews,
       despawned: despawnedViews,
+      relationFailures: relationFailureViews,
       transitions: transitionViews,
       services: serviceViews,
       commands
@@ -1365,6 +1410,14 @@ export const makeRuntime = <
     pendingDespawnedEntities = new Set()
   }
 
+  /**
+   * Advances readable relation-failure buffers to the latest pending writes.
+   */
+  const updateRelationFailures = (): void => {
+    readableRelationFailures = pendingRelationFailures
+    pendingRelationFailures = new Map()
+  }
+
   const hasPendingEvents = (): boolean =>
     pendingEvents.size > 0 || pendingTransitionEvents.size > 0
 
@@ -1373,6 +1426,9 @@ export const makeRuntime = <
     || pendingChangedComponents.size > 0
     || pendingRemovedComponents.size > 0
     || pendingDespawnedEntities.size > 0
+
+  const hasPendingRelationFailures = (): boolean =>
+    pendingRelationFailures.size > 0
 
   /**
    * Runs one internal transition schedule with an active transition snapshot.
@@ -1500,7 +1556,11 @@ export const makeRuntime = <
         updateEvents()
         continue
       }
-      updateLifecycle()
+      if (step.kind === "lifecycleUpdate") {
+        updateLifecycle()
+        continue
+      }
+      updateRelationFailures()
     }
     const lastStep = schedule.steps.at(-1)
     applyDeferred(deferred)
@@ -1509,6 +1569,9 @@ export const makeRuntime = <
     }
     if ((!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "lifecycleUpdate") && hasPendingLifecycle()) {
       updateLifecycle()
+    }
+    if ((!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "relationFailureUpdate") && hasPendingRelationFailures()) {
+      updateRelationFailures()
     }
   }
 
@@ -1534,7 +1597,7 @@ export const makeRuntime = <
       tickUnsafe(schedules)
     },
     runSchedule(schedule) {
-      runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
+      runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root>)
     },
     tick(...schedules) {
       tickUnsafe(schedules)

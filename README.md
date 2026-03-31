@@ -527,6 +527,10 @@ This is still an early implementation. The public types are stricter than the ru
 
 At this point the main pressure is less "missing ECS capability" and more "choosing the right existing abstraction clearly" as the public API grows.
 
+One important current limitation is compiler scalability. The public API is intentionally strict, root-bound, and explicit, but some heavily composed schedules and runtime call sites still create meaningful TypeScript or `tsgo` type-instantiation pressure. The runtime behavior is correct, but the internal type architecture still does more eager recomputation than it should in a few places, especially around bound schedule wrapping, requirement folding, and composed machine/query shapes.
+
+The current codebase already carries canonical `requirements` on systems, schedules, transition bundles, and runtimes, which is the right direction and is also close to the useful part of the `effect-smol` model: derive once, carry the result, and validate from the carried type instead of rebuilding it structurally later. The remaining issue is that some bound API layers still reconstruct large intersections eagerly. A future roadmap step is dedicated specifically to reducing that compiler cost without weakening the public guarantees or requiring users to add manual type aliases just to help inference.
+
 ## Roadmap
 
 The next meaningful additions are the ones that improve type safety, explicitness, and feature reach without turning the runtime into an engine. If TypeScript cannot prove a behavior honestly, the public API should not pretend it can.
@@ -553,6 +557,21 @@ const app = Game.App.make({
 })
 ```
 
+### 2. Type-instantiation scalability and compiler-cost reduction
+
+This is not a new ECS feature. It is an internal type-architecture milestone to keep the existing strict model sustainable as schedules, queries, transitions, relations, and durable handles compose more deeply.
+
+The goal is to preserve the current guarantees while making heavily composed authoring code compile without localized casts, wrapper helpers, or user-written type aliases whose only purpose is to keep the compiler under its instantiation limits.
+
+The likely direction is:
+
+- keep deriving requirements once and carrying them canonically on values
+- remove the remaining bound-level requirement recomputation in `Schema.bind(...)`
+- defer expensive type instantiation at execution boundaries instead of eagerly rebuilding full structural intersections
+- simplify runtime and app validation signatures so they inspect only the carried requirement shape and the minimal executable schedule shape
+
+`effect-smol` is a useful reference here, not for API shape, but for type architecture: carry one canonical requirement representation, extract from it later, and prefer deferred instantiation helpers over repeatedly expanding large composed types.
+
 ### Durable handle follow-ups
 
 Durable handles are now part of the public model:
@@ -572,32 +591,13 @@ That closes the original `Schema.Any` widening problem in examples like [`src/ex
 - handle resolution is always explicit and always fallible
 - intent like `Entity.Handle<typeof Root, typeof Player>` does not count as live proof and still requires a query that proves `Player`
 
-The current first milestone still leaves a few useful follow-ups.
-
-One is broader migration of long-lived numeric ids in examples like [`src/examples/top-down.ts`](./src/examples/top-down.ts), where durable handles would further reduce ad hoc target bookkeeping.
-
-Another is a possible future upgrade of runtime identity if entity ids ever become reusable. The current durable-handle model is honest because ids are monotonic and not reused within one runtime. If that changes later, handle soundness would need generation-aware identity before the public API could keep the same guarantees.
+One remaining future follow-up is a possible upgrade of runtime identity if entity ids ever become reusable. The current durable-handle model is honest because ids are monotonic and not reused within one runtime. If that changes later, handle soundness would need generation-aware identity before the public API could keep the same guarantees.
 
 Bevy is still the useful reference here, but mainly for the principle that long-lived references must be remapped or revalidated explicitly rather than pretending to stay live forever.
 
 ### Relationship follow-ups
 
-The first relationship milestone is now in place: explicit paired relation definitions, relation-aware queries, reverse reads, hierarchy traversal, and linked hierarchy despawn. That is enough to cover trees, ownership, attachments, and targeting safely. The remaining work in this area is useful, but it is follow-up work rather than the next highest-priority capability gap.
-
-The clearest missing piece is live relation mutation for already-spawned entities. Today the strongest path is draft-time relation staging through `Game.Command.relate(...)`, which keeps the initial model explicit and safe. Real gameplay code will still eventually need to reparent, retarget, equip, unequip, attach, and detach at runtime. When that lands, it should preserve the same assumptions as the current relationship API:
-
-- relation mutation should stay on dedicated relation commands, not component insert/remove overloads
-- dynamic invalidity must remain explicit in the type surface
-- missing entities, invalid targets, and hierarchy-cycle attempts must not surface as accidental runtime exceptions
-
-That means the runtime-facing form should look more like:
-
-```ts
-const result = commands.tryRelate(swordId, EquippedBy, playerId)
-if (!result.ok) {
-  // handle missing entity, invalid target, or hierarchy constraint failure
-}
-```
+The first relationship milestone is now in place: explicit paired relation definitions, relation-aware queries, reverse reads, hierarchy traversal, linked hierarchy despawn, live deferred relation mutation, and explicit typed relation-failure streams. That is enough to cover trees, ownership, attachments, targeting, and runtime retargeting safely.
 
 Another likely follow-up is explicit hierarchy child reordering. The current hierarchy model already preserves child order on reads, which is enough for many gameplay and UI uses. If later examples need deterministic reordering, it should still be exposed through a separate hierarchy-specific API rather than a generic mutable collection surface, so the type system can keep “ordered tree only” behavior distinct from general relations.
 

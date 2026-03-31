@@ -63,6 +63,13 @@ export interface LifecycleUpdateStep {
 }
 
 /**
+ * A typed schedule marker that updates readable relation-mutation failures.
+ */
+export interface RelationFailureUpdateStep {
+  readonly kind: "relationFailureUpdate"
+}
+
+/**
  * A typed schedule marker that applies queued finite-state-machine transitions.
  */
 export interface ApplyStateTransitionsStep<
@@ -81,6 +88,7 @@ export type ScheduleMarkerStep =
   | ApplyDeferredStep
   | EventUpdateStep
   | LifecycleUpdateStep
+  | RelationFailureUpdateStep
   | ApplyStateTransitionsStep<any, any>
 
 /**
@@ -450,6 +458,13 @@ export const updateLifecycle = (): LifecycleUpdateStep => ({
 })
 
 /**
+ * Creates an explicit relation-failure update marker step.
+ */
+export const updateRelationFailures = (): RelationFailureUpdateStep => ({
+  kind: "relationFailureUpdate"
+})
+
+/**
  * Creates a typed reusable transition bundle.
  */
 export const transitions = <
@@ -526,8 +541,8 @@ type NamedScheduleFor<
  * Creates an anonymous schedule value from an ordered execution plan.
  *
  * When only `systems` are provided, the schedule uses the resolved system order
- * followed by an implicit `applyDeferred()`, `updateEvents()`, and
- * `updateLifecycle()` trio.
+ * followed by an implicit `applyDeferred()`, `updateEvents()`,
+ * `updateLifecycle()`, and `updateRelationFailures()` sequence.
  */
 export function define<
   S extends Schema.Any,
@@ -544,7 +559,7 @@ export function define<
     ? options.steps.map((step) => isSystemStep(step)
       ? orderedSystemMap.get(step.spec.label.key) ?? step
       : step)
-    : [...orderedSystems, applyDeferred(), updateEvents(), updateLifecycle()]
+    : [...orderedSystems, applyDeferred(), updateEvents(), updateLifecycle(), updateRelationFailures()]
 
   return {
     kind: "anonymous",

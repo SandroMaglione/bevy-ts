@@ -98,6 +98,18 @@ export namespace Relation {
     | MissingTargetEntityError
     | SelfRelationNotAllowedError
     | HierarchyCycleError
+
+  export interface MutationFailure<
+    R extends Any = Any,
+    S extends Schema.Any = Schema.Any,
+    Root = unknown
+  > {
+    readonly relation: R
+    readonly operation: "relate"
+    readonly source: EntityId<S, Root>
+    readonly target: EntityId<S, Root>
+    readonly error: MutationError
+  }
 }
 
 export const success = <A>(value: A): Relation.Result<A, never> => ({
@@ -153,6 +165,23 @@ export const hierarchyCycleError = (
   entityId,
   targetId,
   relation
+})
+
+export const mutationFailure = <
+  R extends Relation.Any,
+  S extends Schema.Any,
+  Root
+>(
+  relation: R,
+  source: EntityId<S, Root>,
+  target: EntityId<S, Root>,
+  error: Relation.MutationError
+): Relation.MutationFailure<R, S, Root> => ({
+  relation,
+  operation: "relate",
+  source,
+  target,
+  error
 })
 
 const makePair = <
