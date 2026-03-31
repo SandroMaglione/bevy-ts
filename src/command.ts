@@ -239,6 +239,25 @@ export const relate = <
  * Reset and restart systems should prefer this helper when rebuilding world
  * content after a transition boundary, because it keeps respawn logic flat and
  * explicit.
+ *
+ * This is also the normal bootstrap/setup path for initial world content:
+ * build one typed draft with `spawnWith(...)`, then queue it through
+ * `commands.spawn(...)` and commit it later at the schedule's
+ * `applyDeferred()` boundary.
+ *
+ * @example
+ * ```ts
+ * const SetupSystem = Game.System.define("Setup", {}, ({ commands }) =>
+ *   Fx.sync(() => {
+ *     commands.spawn(
+ *       Game.Command.spawnWith(
+ *         [Position, { x: 0, y: 0 }],
+ *         [Velocity, { x: 1, y: 0 }]
+ *       )
+ *     )
+ *   })
+ * )
+ * ```
  */
 export const spawnWith = <
   S extends Schema.Any,

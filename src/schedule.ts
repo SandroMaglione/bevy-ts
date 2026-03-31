@@ -573,6 +573,22 @@ export const configureSet = <
  *
  * Systems before this marker can enqueue commands. Systems after it see the
  * fully applied world changes.
+ *
+ * This is the normal boundary between setup/simulation work and any later
+ * system that depends on spawned entities, inserted components, or queued
+ * despawns becoming visible in the current schedule.
+ *
+ * @example
+ * ```ts
+ * const update = Game.Schedule.define({
+ *   systems: [simulateSystem, observeSpawnedSystem],
+ *   steps: [
+ *     simulateSystem,
+ *     Game.Schedule.applyDeferred(),
+ *     observeSpawnedSystem
+ *   ]
+ * })
+ * ```
  */
 export const applyDeferred = (): ApplyDeferredStep => ({
   kind: "applyDeferred"
@@ -583,6 +599,21 @@ export const applyDeferred = (): ApplyDeferredStep => ({
  *
  * Systems before this marker can write events. Systems after it read the
  * committed readable event buffers for the current schedule execution.
+ *
+ * Use this when a later system in the same schedule should observe events that
+ * earlier systems just emitted.
+ *
+ * @example
+ * ```ts
+ * const update = Game.Schedule.define({
+ *   systems: [emitTickSystem, observeTickSystem],
+ *   steps: [
+ *     emitTickSystem,
+ *     Game.Schedule.updateEvents(),
+ *     observeTickSystem
+ *   ]
+ * })
+ * ```
  */
 export const updateEvents = (): EventUpdateStep => ({
   kind: "eventUpdate"

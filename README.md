@@ -6,6 +6,15 @@ It keeps Bevy-style ECS concepts, but the public API is shaped more like Effect:
 
 ## Quick start
 
+The smallest recommended shape is:
+
+1. define descriptors
+2. build one closed schema and bind `Game`
+3. define one `bootstrap` schedule for initial spawning
+4. define one `update` schedule for per-frame simulation
+5. use a `StateMachine` only when the phase boundary itself matters
+6. keep the outer loop outside ECS and call `app.bootstrap(...)` once, then `app.update(...)`
+
 Define descriptors first:
 
 ```ts
@@ -32,14 +41,35 @@ const schema = Schema.build(movement)
 const Game = Schema.bind(schema)
 ```
 
-Define one system against that bound root:
+If the gameplay phase boundary matters, define a machine on the bound root:
+
+```ts
+const Phase = Game.StateMachine.define("Phase", ["Running", "Paused"])
+```
+
+Define one setup system and one update system against that bound root:
 
 ```ts
 import { Fx } from "./src/index.ts"
 
+const SetupSystem = Game.System.define(
+  "SetupSystem",
+  {},
+  ({ commands }) =>
+    Fx.sync(() => {
+      commands.spawn(
+        Game.Command.spawnWith(
+          [Position, { x: 0, y: 0 }],
+          [Velocity, { x: 1, y: 0.5 }]
+        )
+      )
+    })
+)
+
 const MoveSystem = Game.System.define(
   "MoveSystem",
   {
+    when: [Game.Condition.inState(Phase, "Running")],
     queries: {
       moving: Game.Query.define({
         selection: {
@@ -60,13 +90,11 @@ const MoveSystem = Game.System.define(
       // Systems only see the access they declared in the spec above.
       const dt = resources.time.get()
       for (const match of queries.moving.each()) {
-        const position = match.data.position.get()
         const velocity = match.data.velocity.get()
-
-        match.data.position.set({
+        match.data.position.update((position) => ({
           x: position.x + velocity.x * dt,
           y: position.y + velocity.y * dt
-        })
+        }))
       }
 
       services.logger.log("movement step completed")
@@ -74,13 +102,21 @@ const MoveSystem = Game.System.define(
 )
 ```
 
-Run that system through a schedule and a runtime:
+Run those systems through explicit `bootstrap` and `update` schedules:
 
 ```ts
 import { App } from "./src/index.ts"
 
+const bootstrap = Game.Schedule.define({
+  systems: [SetupSystem]
+})
+
 const update = Game.Schedule.define({
-  systems: [MoveSystem]
+  systems: [MoveSystem],
+  steps: [
+    MoveSystem,
+    Game.Schedule.applyDeferred()
+  ]
 })
 
 const runtime = Game.Runtime.make({
@@ -96,13 +132,21 @@ const runtime = Game.Runtime.make({
   resources: {
     // Resources are initialized by schema key from the closed schema.
     Time: 1 / 60
+  },
+  machines: Game.Runtime.machines(
+    Game.Runtime.machine(Phase, "Running")
   }
 })
 
 const app = App.makeApp(runtime)
 // This only type-checks if the runtime satisfies everything `update` requires.
+app.bootstrap(bootstrap)
 app.update(update)
 ```
+
+The important runtime rule is that deferred writes are still queued inside the
+system callback. They only become visible after explicit schedule markers like
+`Game.Schedule.applyDeferred()` and `Game.Schedule.updateEvents()` run.
 
 ## Core flow
 
@@ -116,6 +160,20 @@ When choosing between the main ECS surfaces, the intended split is:
 - lifecycle reads for structural world changes that become visible only after `updateLifecycle()`
 
 In practice, let runtime construction own initial resource and machine values, and keep setup systems focused on spawning world content.
+
+## Smallest recommended structure
+
+For the smallest modern app, prefer this shape:
+
+- one schema block or one `schema.ts` that defines descriptors and binds `Game`
+- one `bootstrap` schedule that only prepares initial world content
+- one `update` schedule that owns the per-frame simulation flow
+- one `StateMachine` when discrete phases need a queued commit boundary
+- one external host loop that calls `app.update(...)`
+
+This is the shape used by [`src/examples/smoke.ts`](./src/examples/smoke.ts), and
+it is the best default starting point before adding renderer or browser
+integration.
 
 ## Choosing between resources, states, and machines
 
@@ -150,7 +208,7 @@ const ActiveLocale = Descriptor.defineState<"en" | "it">()("ActiveLocale")
 Schedules now carry the runtime requirements implied by their systems. A runtime records which services it provides and which resources and states it initialized. You can only run a schedule when those two sides match.
 
 ```ts
-const Locale = Descriptor.defineState<"en" | "it">()("Locale")
+const Phase = Game.StateMachine.define("Phase", ["Running", "Paused"])
 
 const TickSystem = Game.System.define(
   "TickSystem",
@@ -158,16 +216,16 @@ const TickSystem = Game.System.define(
     resources: {
       time: Game.System.readResource(Time)
     },
-    states: {
-      phase: Game.System.readState(Phase)
+    machines: {
+      phase: Game.System.machine(Phase)
     },
     services: {
       logger: Game.System.service(Logger)
     }
   },
-  ({ resources, states, services }) =>
+  ({ resources, machines, services }) =>
     Fx.sync(() => {
-      services.logger.log(`${states.phase.get()}: ${resources.time.get()}`)
+      services.logger.log(`${machines.phase.get()}: ${resources.time.get()}`)
     })
 )
 
@@ -186,16 +244,15 @@ const runtime = Game.Runtime.make({
     // Resources use schema keys.
     Time: 1 / 60
   },
-  states: {
-    // States also use schema keys.
-    Locale: "en"
-  }
+  machines: Game.Runtime.machines(
+    Game.Runtime.machine(Phase, "Running")
+  )
 })
 
 App.makeApp(runtime).update(tick)
 ```
 
-If one of those inputs is missing, the schedule should fail in typecheck before it can fail at runtime. Services use descriptors; resources and states stay keyed by schema property names from the closed schema.
+If one of those inputs is missing, the schedule should fail in typecheck before it can fail at runtime. Services use descriptors, resources stay keyed by schema property names, and machines are provided explicitly through `Game.Runtime.machines(...)`.
 
 For gameplay modes or phase machines, prefer `StateMachine` instead of plain `states`. Plain `states` are best used as schema-owned singleton values without queued transition semantics.
 
@@ -936,15 +993,9 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
 
 1. Schedule execution still needs a cheaper carried type shape after validation. Refactoring [`src/examples/smoke.ts`](./src/examples/smoke.ts) to the current explicit API worked cleanly at the system and schedule-definition level, but the direct `app.update(update)` / `runtime.runSchedule(update)` path can still hit TypeScript instantiation limits in a minimal example. That is a direct violation of the library's main user-facing constraint: users should not need casts, explicit generics, or artificial schedule splitting just to execute a valid schedule. The execution boundary should preserve exact validation, root safety, and runtime-requirement safety while carrying a much cheaper normalized schedule type into `App` and `Runtime`.
 
-2. The docs should present the smallest modern end-to-end pattern more directly. The current README still mixes older and newer idioms in a way that makes the intended default harder to infer than it should be. The smallest canonical example should align around the current recommended shape:
-   - `StateMachine` for discrete phases when the boundary itself matters
-   - writable-cell `update(...)` for incremental mutation instead of older `get()` + `set(...)` examples where that adds noise
-   - explicit `applyDeferred()` / `updateEvents()` boundaries when the example depends on deferred visibility
-   - `bootstrap(...)` plus update-schedule separation when setup is responsible for initial spawning
+2. Explicit transient entity references across boundaries still need a more ergonomic pattern. The refactored space-invaders example still has to emit `Handle` values into an event and then re-resolve them later with checked lookup after `updateEvents()`, even though the intent is simply "despawn these entities later in the same update". That is semantically correct and should stay fallible, but the library could do better at making this pattern obvious and less noisy. The first step may be documentation that treats "emit handles, re-resolve later" as canonical. If the ergonomics still feel too heavy after that, a narrowly scoped helper for same-runtime transient entity references may be justified, but only if it preserves explicit failure and does not blur the line between `EntityId` and long-lived storage-safe handles.
 
-3. Explicit transient entity references across boundaries still need a more ergonomic pattern. The refactored space-invaders example still has to emit `Handle` values into an event and then re-resolve them later with checked lookup after `updateEvents()`, even though the intent is simply "despawn these entities later in the same update". That is semantically correct and should stay fallible, but the library could do better at making this pattern obvious and less noisy. The first step may be documentation that treats "emit handles, re-resolve later" as canonical. If the ergonomics still feel too heavy after that, a narrowly scoped helper for same-runtime transient entity references may be justified, but only if it preserves explicit failure and does not blur the line between `EntityId` and long-lived storage-safe handles.
-
-4. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
+3. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
 
    ```ts
    const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
@@ -955,9 +1006,9 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
      )
    ```
 
-5. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
+4. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
 
-6. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
+5. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
 
 ## Out of scope for now
 
