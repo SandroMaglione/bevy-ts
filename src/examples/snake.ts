@@ -402,6 +402,7 @@ const QueueRestartSystem = Game.System.define(
   ({ nextMachines, services }) =>
     Fx.sync(() => {
       if (services.input.consumeRestart()) {
+        // Restart is queued here and becomes real only at applyStateTransitions().
         nextMachines.phase.set("Playing")
       }
     })
@@ -920,6 +921,7 @@ const browserSetupSchedule = Game.Schedule.extend(setupSchedule, {
 
 const phaseTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(GamePhase, "Playing", {
+    // Reset work stays explicit and runs only once the new phase is committed.
     systems: [ResetGameSystem]
   })
 )

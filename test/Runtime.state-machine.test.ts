@@ -238,7 +238,17 @@ describe("Runtime state machine", () => {
       })
     )
 
-    const runtime = makeRuntime()
+    const runtime = Game.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        Counter: 0,
+        Log: []
+      },
+      machines: Runtime.machines(
+        Runtime.machine(AppState, "Menu"),
+        Runtime.machine(RoundState, "Warmup")
+      )
+    })
     const bundledTransitionSchedule = Game.Schedule.define({
       systems: [queuePlaying],
       steps: [queuePlaying, Game.Schedule.applyStateTransitions(transitions)]

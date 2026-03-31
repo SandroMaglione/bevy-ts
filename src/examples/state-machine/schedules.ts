@@ -33,6 +33,7 @@ export const setupSchedule = Game.Schedule.define({
 
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Countdown", {
+    // Entering Countdown is the explicit reset boundary for the next round.
     systems: [ResetRoundOnCountdownEnterSystem]
   })
 )

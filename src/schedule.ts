@@ -656,6 +656,29 @@ export const transitions = <
  * Queued machine writes are committed only at this boundary. If a transition
  * bundle is provided, matching enter/exit/transition schedules run as part of
  * the same boundary.
+ *
+ * This is the canonical restart/reset boundary: queue the next phase with
+ * `Game.System.nextState(...)`, then let `applyStateTransitions(...)` commit
+ * the new current state and run any attached reset schedules.
+ *
+ * @example
+ * ```ts
+ * const transitions = Game.Schedule.transitions(
+ *   Game.Schedule.onEnter(Phase, "Playing", {
+ *     systems: [ResetWorldSystem]
+ *   })
+ * )
+ *
+ * const update = Game.Schedule.define({
+ *   systems: [QueueRestartSystem, GameplaySystem],
+ *   steps: [
+ *     QueueRestartSystem,
+ *     GameplaySystem,
+ *     Game.Schedule.applyDeferred(),
+ *     Game.Schedule.applyStateTransitions(transitions)
+ *   ]
+ * })
+ * ```
  */
 export const applyStateTransitions = <
   const Bundle extends TransitionBundleDefinition<any, any, any, any> | undefined = undefined

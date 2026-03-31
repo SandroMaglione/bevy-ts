@@ -235,6 +235,10 @@ export const relate = <
  * This is the recommended authoring API for new entity drafts because it keeps
  * the exact proof typing without the visual noise of nested `insert(...)`
  * chains.
+ *
+ * Reset and restart systems should prefer this helper when rebuilding world
+ * content after a transition boundary, because it keeps respawn logic flat and
+ * explicit.
  */
 export const spawnWith = <
   S extends Schema.Any,

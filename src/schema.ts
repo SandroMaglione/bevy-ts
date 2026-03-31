@@ -1426,6 +1426,12 @@ export const bind = <S extends Schema.Any, Root = S>(
     return bundle as unknown as BoundTransitionBundleFor<Entries>
   }
 
+  /**
+   * Creates a transition schedule that runs when one machine enters one exact state.
+   *
+   * This is the usual place for reset or setup work that should run only after
+   * `applyStateTransitions(...)` commits the new current state.
+   */
   const onEnter = <
     M extends BoundMachine,
     const SystemValue extends BoundAnySystem,
@@ -1439,7 +1445,6 @@ export const bind = <S extends Schema.Any, Root = S>(
     phase: "enter",
     state
   }, options)
-
   const onExit = <
     M extends BoundMachine,
     const SystemValue extends BoundAnySystem,
@@ -1454,6 +1459,12 @@ export const bind = <S extends Schema.Any, Root = S>(
     state
   }, options)
 
+  /**
+   * Creates a transition schedule that runs only for one exact `from -> to` pair.
+   *
+   * Use this when reset or cleanup logic depends on the full transition, not
+   * just the entered or exited state.
+   */
   const onTransition = <
     M extends BoundMachine,
     const SystemValue extends BoundAnySystem,

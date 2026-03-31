@@ -250,6 +250,10 @@ export const machine = <M extends Machine.StateMachine.Any>(
  *
  * Use this instead of `writeState(...)` when gameplay depends on the explicit
  * transition boundary.
+ *
+ * This is the usual restart or mode-change entrypoint: input systems queue the
+ * next phase here, then transition schedules perform reset or setup work later
+ * at the explicit apply boundary.
  */
 export const nextState = <M extends Machine.StateMachine.Any>(
   stateMachine: M

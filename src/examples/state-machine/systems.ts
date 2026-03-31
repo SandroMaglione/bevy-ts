@@ -101,6 +101,8 @@ export const QueueStartFromTitleSystem = Game.System.define(
   ({ nextMachines, services }) =>
     Fx.sync(() => {
       if (services.input.consumeStart()) {
+        // Restart is routed back through Countdown so reset work stays on the
+        // transition boundary instead of happening immediately in input code.
         nextMachines.session.set("Countdown")
       }
     })
