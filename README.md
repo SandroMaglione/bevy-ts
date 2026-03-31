@@ -527,18 +527,53 @@ This is still an early implementation. The public types are stricter than the ru
 
 At this point the main pressure is less "missing ECS capability" and more "choosing the right existing abstraction clearly" as the public API grows.
 
-One important current limitation is compiler scalability. The public API is intentionally strict, root-bound, and explicit, but some heavily composed schedules and runtime call sites still create meaningful TypeScript or `tsgo` type-instantiation pressure. The runtime behavior is correct, but the internal type architecture still does more eager recomputation than it should in a few places, especially around bound schedule wrapping, requirement folding, and composed machine/query shapes.
+One important implementation rule for this library is how type optimization works. The public API is intentionally strict, root-bound, and explicit, but TypeScript and `tsgo` do have practical instantiation limits on very large composed values.
 
-The current codebase already carries canonical `requirements` on systems, schedules, transition bundles, and runtimes, which is the right direction and is also close to the useful part of the `effect-smol` model: derive once, carry the result, and validate from the carried type instead of rebuilding it structurally later. The remaining issue is that some bound API layers still reconstruct large intersections eagerly. A future roadmap step is dedicated specifically to reducing that compiler cost without weakening the public guarantees or requiring users to add manual type aliases just to help inference.
+The current codebase follows this rule:
 
-There is still one concrete unresolved hotspot today: very large `Game.Schedule.define(...)` calls that keep exact direct system-ordering references and exact step composition in the same inline value can still hit `tsgo` instantiation depth. The current top-down example keeps one localized workaround at the schedule-definition call site for that reason. What is breaking is not runtime semantics, but the combination of these type-level constraints:
+1. validate exact structure at the constructor boundary
+2. derive and carry the normalized runtime-facing type once
+3. widen only internal post-validation structure when that precision is no longer user-meaningful
+4. keep the public guarantees exact
 
-- exact direct system-reference validation in `after` / `before`
-- exact carried schedule requirements from the full system and step union
-- exact bound-root propagation through `Schema.bind(...)`
-- exact inline schedule construction without any internal widening at the constructor boundary
+Concretely, the tradeoff looks like this:
 
-If that hotspot cannot be removed internally, one of those constraints will eventually need to relax slightly at the schedule-constructor boundary. The least damaging candidate would be to widen schedule construction internally after validation, while preserving the same external runtime guarantees. What should not be relaxed is cross-root safety, requirement validation, or the explicit fallible runtime boundaries.
+```ts
+const A = Game.System.define("A", { schema }, ...)
+const B = Game.System.define("B", { schema, after: [A] }, ...)
+
+const schedule = Game.Schedule.define({
+  systems: [A, B, /* many more systems */],
+  steps: [A, Game.Schedule.applyDeferred(), B, /* many more steps */]
+})
+```
+
+The parts that still matter after optimization are:
+
+- `B` really points to the exact `A` value in `after: [A]`
+- invalid direct references are rejected when defining the schedule
+- the carried requirements are correct
+- the bound root is preserved exactly
+- runtime compatibility is still checked later on
+
+What is allowed to relax internally is only this:
+
+- the schedule value does not need to preserve the full tuple-exact identity of every system and step forever through every later internal layer
+
+That is the type-optimization pattern to reuse in future work. If a similar compiler hotspot appears again, the acceptable fix is:
+
+- keep exact validation at the edge where the value is created
+- collapse the carried value to a cheaper normalized shape immediately afterward
+- preserve root safety, requirement safety, and explicit runtime failure semantics
+
+What is not an acceptable fix:
+
+- requiring user-facing casts
+- requiring explicit generic arguments in normal examples
+- requiring users to split schedules or features into pieces only to satisfy the compiler
+- weakening cross-root rejection or runtime requirement validation
+
+This is best understood as an internal compiler-cost tradeoff, not as a user-meaningful loss of safety.
 
 ## Roadmap
 
@@ -565,47 +600,6 @@ const app = Game.App.make({
   features: [Core, Combat, Dialogue]
 })
 ```
-
-### 2. Type-instantiation scalability and compiler-cost reduction
-
-This is not a new ECS feature. It is an internal type-architecture milestone to keep the existing strict model sustainable as schedules, queries, transitions, relations, and durable handles compose more deeply.
-
-The goal is to preserve the current guarantees while making heavily composed authoring code compile without localized casts, wrapper helpers, or user-written type aliases whose only purpose is to keep the compiler under its instantiation limits.
-
-The likely direction is:
-
-- keep deriving requirements once and carrying them canonically on values
-- remove the remaining bound-level requirement recomputation in `Schema.bind(...)`
-- defer expensive type instantiation at execution boundaries instead of eagerly rebuilding full structural intersections
-- simplify runtime and app validation signatures so they inspect only the carried requirement shape and the minimal executable schedule shape
-- isolate and eliminate the remaining large-schedule constructor hotspot without forcing example or user code to add casts
-
-`effect-smol` is a useful reference here, not for API shape, but for type architecture: carry one canonical requirement representation, extract from it later, and prefer deferred instantiation helpers over repeatedly expanding large composed types.
-
-The still-open constraint here is specific: if TypeScript cannot simultaneously preserve exact direct system-reference validation and exact large inline schedule construction at acceptable compiler cost, the internal constructor representation may need to widen after validation. If that happens, the public guarantee to preserve would be "invalid schedules are rejected and valid schedules execute safely", not "every large schedule literal stays fully tuple-exact forever through every later internal layer".
-
-### Durable handle follow-ups
-
-Durable handles are now part of the public model:
-
-- define an explicit root token with `Schema.defineRoot(...)`
-- bind the runtime with `Schema.bind(schema, Root)`
-- store long-lived references as `Entity.Handle<typeof Root, Intent?>`
-- create them explicitly through `Game.Entity.handle(...)` and `Game.Entity.handleAs(...)`
-- resolve them only through `lookup.getHandle(...)`
-
-The intended current practice is simple: if a target has to survive across frames, store a handle instead of a raw numeric id, and treat resolution as an explicit fallible step rather than as proof that the entity is still live.
-
-That closes the original `Schema.Any` widening problem in examples like [`src/examples/snake.ts`](./src/examples/snake.ts) and [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts). The current guarantees are intentionally strict:
-
-- a durable handle is not an `EntityId`
-- a durable handle is storage-safe, not access-capable
-- handle resolution is always explicit and always fallible
-- intent like `Entity.Handle<typeof Root, typeof Player>` does not count as live proof and still requires a query that proves `Player`
-
-One remaining future follow-up is a possible upgrade of runtime identity if entity ids ever become reusable. The current durable-handle model is honest because ids are monotonic and not reused within one runtime. If that changes later, handle soundness would need generation-aware identity before the public API could keep the same guarantees.
-
-Bevy is still the useful reference here, but mainly for the principle that long-lived references must be remapped or revalidated explicitly rather than pretending to stay live forever.
 
 ### Relationship follow-ups
 

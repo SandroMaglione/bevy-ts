@@ -259,11 +259,6 @@ type WidenSteps<Steps extends ReadonlyArray<ScheduleStep> | undefined> =
   Steps extends ReadonlyArray<ScheduleStep> ? WidenArray<Steps> : undefined
 
 /**
- * Extracts the union of system-set labels configured in one schedule.
- */
-type ScheduleSetLabels<Sets extends ReadonlyArray<AnySetConfig>> = Sets[number]["label"]
-
-/**
  * Extracts the union of systems included in one schedule.
  */
 type ScheduleSystems<Systems extends ReadonlyArray<AnySystem>> = Systems[number]
@@ -363,9 +358,11 @@ export type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>, Steps
   Simplify<SystemRequirementsForSchedule<Systems> & StepRequirements<Steps>>
 
 /**
- * Extracts the union of internal system labels included in one schedule.
+ * Extracts the union of internal system names included in one schedule.
  */
-type ScheduleSystemLabels<Systems extends ReadonlyArray<AnySystem>> = ScheduleSystems<Systems>["ordering"]["label"]
+type ScheduleSystemNames<Systems extends ReadonlyArray<AnySystem>> = ScheduleSystems<Systems>["name"]
+
+type ScheduleSetNames<Sets extends ReadonlyArray<AnySetConfig>> = Sets[number]["label"]["name"]
 
 /**
  * The union of all system-level ordering targets declared in one schedule.
@@ -374,13 +371,29 @@ type SystemOrderTargets<Systems extends ReadonlyArray<AnySystem>> =
   ScheduleSystems<Systems>["ordering"]["after"][number]
   | ScheduleSystems<Systems>["ordering"]["before"][number]
 
+type TargetSystemNames<Targets> =
+  Targets extends infer Target
+    ? Target extends { readonly ordering: { readonly label: Label.System }, readonly name: infer Name extends string }
+      ? Name
+      : Target extends Label.System
+        ? Target["name"]
+        : never
+    : never
+
+type TargetSetNames<Targets> =
+  Targets extends infer Target
+    ? Target extends Label.SystemSet
+      ? Target["name"]
+      : never
+    : never
+
 /**
  * Collects undeclared set memberships from `system.spec.inSets`.
  */
 type InvalidSystemMemberships<
   Systems extends ReadonlyArray<AnySystem>,
   Sets extends ReadonlyArray<AnySetConfig>
-> = Exclude<ScheduleSystems<Systems>["ordering"]["inSets"][number], ScheduleSetLabels<Sets>>
+> = Exclude<ScheduleSystems<Systems>["ordering"]["inSets"][number]["name"], ScheduleSetNames<Sets>>
 
 /**
  * Collects undeclared ordering targets from system-level `after` / `before`.
@@ -389,9 +402,8 @@ type InvalidSystemOrderTargets<
   Systems extends ReadonlyArray<AnySystem>,
   Sets extends ReadonlyArray<AnySetConfig>
 > =
-  | Exclude<Extract<SystemOrderTargets<Systems>, AnySystem>, ScheduleSystems<Systems>>
-  | Exclude<Extract<SystemOrderTargets<Systems>, Label.System>, ScheduleSystemLabels<Systems>>
-  | Exclude<Extract<SystemOrderTargets<Systems>, Label.SystemSet>, ScheduleSetLabels<Sets>>
+  | Exclude<TargetSystemNames<SystemOrderTargets<Systems>>, ScheduleSystemNames<Systems>>
+  | Exclude<TargetSetNames<SystemOrderTargets<Systems>>, ScheduleSetNames<Sets>>
 
 type HasInvalidSystemMemberships<
   Systems extends ReadonlyArray<AnySystem>,

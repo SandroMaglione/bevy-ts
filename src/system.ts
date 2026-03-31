@@ -697,12 +697,13 @@ export interface SystemDefinition<
   Spec extends AnySystemSpec,
   out A = void,
   out E = never,
-  out Root = unknown
+  out Root = unknown,
+  out Name extends string = string
 > {
   /**
    * Human-readable declaration name used to derive the internal typed label.
    */
-  readonly name: string
+  readonly name: Name
   /**
    * The explicit static description of the system.
    */
@@ -756,9 +757,10 @@ export function define<
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown,
   A = void,
-  E = never
+  E = never,
+  const Name extends string = string
 >(
-  name: string,
+  name: Name,
   spec: {
     readonly schema: S
     readonly inSets?: InSets
@@ -783,7 +785,7 @@ export function define<
     E,
     ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root>
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
 
 /**
  * Legacy low-level overload that accepts an explicit system label.
@@ -811,7 +813,8 @@ export function define<
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown,
   A = void,
-  E = never
+  E = never,
+  const Name extends string = string
 >(
   spec: {
     readonly label: Label.System
@@ -838,7 +841,7 @@ export function define<
     E,
     ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root>
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
 
 export function define<
   S extends Schema.Any,
@@ -860,7 +863,8 @@ export function define<
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
   Root = unknown,
   A = void,
-  E = never
+  E = never,
+  const Name extends string = string
 >(
   nameOrSpec: string | {
     readonly label: Label.System
@@ -976,5 +980,11 @@ export function define<
       __schemaRoot: undefined as unknown as Root
     },
     run
-  }
+  } as SystemDefinition<
+    SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
+    A,
+    E,
+    Root,
+    Name
+  >
 }

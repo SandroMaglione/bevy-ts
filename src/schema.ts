@@ -103,9 +103,10 @@ export namespace Schema {
     Root,
     Spec extends System.AnySystemSpec = System.AnySystemSpec,
     A = void,
-    E = never
+    E = never,
+    Name extends string = string
   > = {
-    readonly name: string
+    readonly name: Name
     readonly spec: Spec & { readonly schema: S }
     readonly requirements: System.SystemRequirements<Spec>
     readonly __schemaRoot: Root
@@ -499,6 +500,7 @@ export const bind = <S extends Schema.Any, Root = S>(
   ): Entity.Handle<Root, D> => Entity.handleAs(descriptor, entity.id)
 
   const defineSystem = <
+    const Name extends string,
     const Queries extends Record<string, Query.Any<Root>> = {},
     const Resources extends Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>> = {},
     const Events extends Record<string, System.EventRead<EventDescriptor<S>> | System.EventWrite<EventDescriptor<S>>> = {},
@@ -518,7 +520,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     A = void,
     E = never
   >(
-    name: string,
+    name: Name,
     spec: {
       readonly inSets?: InSets
       readonly after?: After
@@ -547,7 +549,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       schema,
       ...spec
     }, run)
-    return system as Schema.BoundSystem<S, Root, typeof system.spec, A, E>
+    return system as Schema.BoundSystem<S, Root, typeof system.spec, A, E, Name>
   }
 
   const commandSpawn = () => Command.spawn<S, Root>()
