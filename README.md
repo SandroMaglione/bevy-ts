@@ -531,6 +531,15 @@ One important current limitation is compiler scalability. The public API is inte
 
 The current codebase already carries canonical `requirements` on systems, schedules, transition bundles, and runtimes, which is the right direction and is also close to the useful part of the `effect-smol` model: derive once, carry the result, and validate from the carried type instead of rebuilding it structurally later. The remaining issue is that some bound API layers still reconstruct large intersections eagerly. A future roadmap step is dedicated specifically to reducing that compiler cost without weakening the public guarantees or requiring users to add manual type aliases just to help inference.
 
+There is still one concrete unresolved hotspot today: very large `Game.Schedule.define(...)` calls that keep exact direct system-ordering references and exact step composition in the same inline value can still hit `tsgo` instantiation depth. The current top-down example keeps one localized workaround at the schedule-definition call site for that reason. What is breaking is not runtime semantics, but the combination of these type-level constraints:
+
+- exact direct system-reference validation in `after` / `before`
+- exact carried schedule requirements from the full system and step union
+- exact bound-root propagation through `Schema.bind(...)`
+- exact inline schedule construction without any internal widening at the constructor boundary
+
+If that hotspot cannot be removed internally, one of those constraints will eventually need to relax slightly at the schedule-constructor boundary. The least damaging candidate would be to widen schedule construction internally after validation, while preserving the same external runtime guarantees. What should not be relaxed is cross-root safety, requirement validation, or the explicit fallible runtime boundaries.
+
 ## Roadmap
 
 The next meaningful additions are the ones that improve type safety, explicitness, and feature reach without turning the runtime into an engine. If TypeScript cannot prove a behavior honestly, the public API should not pretend it can.
@@ -569,8 +578,11 @@ The likely direction is:
 - remove the remaining bound-level requirement recomputation in `Schema.bind(...)`
 - defer expensive type instantiation at execution boundaries instead of eagerly rebuilding full structural intersections
 - simplify runtime and app validation signatures so they inspect only the carried requirement shape and the minimal executable schedule shape
+- isolate and eliminate the remaining large-schedule constructor hotspot without forcing example or user code to add casts
 
 `effect-smol` is a useful reference here, not for API shape, but for type architecture: carry one canonical requirement representation, extract from it later, and prefer deferred instantiation helpers over repeatedly expanding large composed types.
+
+The still-open constraint here is specific: if TypeScript cannot simultaneously preserve exact direct system-reference validation and exact large inline schedule construction at acceptable compiler cost, the internal constructor representation may need to widen after validation. If that happens, the public guarantee to preserve would be "invalid schedules are rejected and valid schedules execute safely", not "every large schedule literal stays fully tuple-exact forever through every later internal layer".
 
 ### Durable handle follow-ups
 

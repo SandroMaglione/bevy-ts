@@ -357,8 +357,7 @@ describe("Runtime relationships", () => {
       systems: [unrelate],
         steps: [unrelate, Game.Schedule.applyDeferred(), observe]
       })
-    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
-    tick(spawnSchedule as never, relateSchedule as never, unrelateSchedule as never)
+    runtime.tick(spawnSchedule, relateSchedule, unrelateSchedule)
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0")
   })
@@ -454,8 +453,7 @@ describe("Runtime relationships", () => {
         readAfter
       ]
     })
-    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
-    tick(spawnSchedule as never, failureSchedule as never)
+    runtime.tick(spawnSchedule, failureSchedule)
 
     expect(readResourceValue(runtime, schema, Summary)).toBe(
       "MissingTargetEntity/HierarchyCycle/MissingRelation/MissingRelation"

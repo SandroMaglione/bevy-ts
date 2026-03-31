@@ -17,7 +17,7 @@ export interface App<
    * Use this from an external loop, test, or host integration whenever you
    * want one ECS update step.
    */
-  readonly update: R["runSchedule"] & R["tick"]
+  readonly update: R["tick"]
 }
 
 /**
@@ -32,10 +32,6 @@ export const makeApp = <
   runtime: R
 ): App<R> => ({
   runtime,
-  bootstrap: ((...schedules: ReadonlyArray<never>) =>
-    runtime.initialize(...schedules as never)) as App<R>["bootstrap"],
-  update: ((first: never, ...rest: ReadonlyArray<never>) =>
-    rest.length === 0
-      ? runtime.runSchedule(first as never)
-      : runtime.tick(first as never, ...(rest as never))) as App<R>["update"]
+  bootstrap: runtime.initialize,
+  update: runtime.tick
 })

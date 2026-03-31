@@ -145,6 +145,21 @@ interface ScheduleBase<
 }
 
 /**
+ * Compact carried schedule shape used by runtime/app execution boundaries.
+ *
+ * This keeps execution validation focused on the normalized carried data rather
+ * than the full authoring-time schedule structure.
+ */
+export interface ExecutableScheduleDefinition<
+  S extends Schema.Any,
+  out Requirements extends RuntimeRequirements = RuntimeRequirements,
+  out Root = unknown
+> extends ScheduleBase<S, Requirements> {
+  readonly kind: "anonymous" | "named"
+  readonly __schemaRoot?: Root | undefined
+}
+
+/**
  * A directly executable schedule value with no external typed identity.
  *
  * Anonymous schedules are the default form. They can be passed to the runtime
@@ -154,9 +169,8 @@ export interface AnonymousScheduleDefinition<
   S extends Schema.Any,
   out Requirements extends RuntimeRequirements = RuntimeRequirements,
   out Root = unknown
-> extends ScheduleBase<S, Requirements> {
+> extends ExecutableScheduleDefinition<S, Requirements, Root> {
   readonly kind: "anonymous"
-  readonly __schemaRoot?: Root | undefined
 }
 
 /**
@@ -170,10 +184,9 @@ export interface NamedScheduleDefinition<
   out Requirements extends RuntimeRequirements = RuntimeRequirements,
   out L extends Label.Schedule = Label.Schedule,
   out Root = unknown
-> extends ScheduleBase<S, Requirements> {
+> extends ExecutableScheduleDefinition<S, Requirements, Root> {
   readonly kind: "named"
   readonly label: L
-  readonly __schemaRoot?: Root | undefined
 }
 
 /**
@@ -241,6 +254,9 @@ type UnionToIntersection<A> =
  */
 type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
 type EmptyRequirements = RuntimeRequirements<{}, {}, {}, {}>
+type WidenArray<Values extends ReadonlyArray<unknown>> = ReadonlyArray<Values[number]>
+type WidenSteps<Steps extends ReadonlyArray<ScheduleStep> | undefined> =
+  Steps extends ReadonlyArray<ScheduleStep> ? WidenArray<Steps> : undefined
 
 /**
  * Extracts the union of system-set labels configured in one schedule.
@@ -349,19 +365,14 @@ export type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>, Steps
 /**
  * Extracts the union of internal system labels included in one schedule.
  */
-type ScheduleSystemLabels<Systems extends ReadonlyArray<AnySystem>> = ScheduleSystems<Systems>["spec"]["label"]
-
-/**
- * Produces a readable type-level name for a target or label.
- */
-type TargetName<Target> = Target extends { readonly name: infer Name extends string } ? Name : never
+type ScheduleSystemLabels<Systems extends ReadonlyArray<AnySystem>> = ScheduleSystems<Systems>["ordering"]["label"]
 
 /**
  * The union of all system-level ordering targets declared in one schedule.
  */
 type SystemOrderTargets<Systems extends ReadonlyArray<AnySystem>> =
-  ScheduleSystems<Systems>["spec"]["after"][number]
-  | ScheduleSystems<Systems>["spec"]["before"][number]
+  ScheduleSystems<Systems>["ordering"]["after"][number]
+  | ScheduleSystems<Systems>["ordering"]["before"][number]
 
 /**
  * Collects undeclared set memberships from `system.spec.inSets`.
@@ -369,7 +380,7 @@ type SystemOrderTargets<Systems extends ReadonlyArray<AnySystem>> =
 type InvalidSystemMemberships<
   Systems extends ReadonlyArray<AnySystem>,
   Sets extends ReadonlyArray<AnySetConfig>
-> = Exclude<ScheduleSystems<Systems>["spec"]["inSets"][number], ScheduleSetLabels<Sets>>
+> = Exclude<ScheduleSystems<Systems>["ordering"]["inSets"][number], ScheduleSetLabels<Sets>>
 
 /**
  * Collects undeclared ordering targets from system-level `after` / `before`.
@@ -382,25 +393,15 @@ type InvalidSystemOrderTargets<
   | Exclude<Extract<SystemOrderTargets<Systems>, Label.System>, ScheduleSystemLabels<Systems>>
   | Exclude<Extract<SystemOrderTargets<Systems>, Label.SystemSet>, ScheduleSetLabels<Sets>>
 
-/**
- * Builds a compile-time error payload for invalid schedule-local references.
- */
-type ScheduleValidationErrors<
+type HasInvalidSystemMemberships<
   Systems extends ReadonlyArray<AnySystem>,
   Sets extends ReadonlyArray<AnySetConfig>
-> =
-  | ([InvalidSystemMemberships<Systems, Sets>] extends [never]
-    ? never
-    : {
-        readonly __scheduleValidationError__: "Unknown system set in system.inSets"
-        readonly __missingTargets__: TargetName<InvalidSystemMemberships<Systems, Sets>>
-      })
-  | ([InvalidSystemOrderTargets<Systems, Sets>] extends [never]
-    ? never
-    : {
-        readonly __scheduleValidationError__: "Unknown ordering target in system.after/system.before"
-        readonly __missingTargets__: TargetName<InvalidSystemOrderTargets<Systems, Sets>>
-      })
+> = [InvalidSystemMemberships<Systems, Sets>] extends [never] ? false : true
+
+type HasInvalidSystemOrderTargets<
+  Systems extends ReadonlyArray<AnySystem>,
+  Sets extends ReadonlyArray<AnySetConfig>
+> = [InvalidSystemOrderTargets<Systems, Sets>] extends [never] ? false : true
 
 /**
  * Intersects schedule options with a required impossible property only when the
@@ -409,10 +410,14 @@ type ScheduleValidationErrors<
 type ValidateScheduleOptions<
   Systems extends ReadonlyArray<AnySystem>,
   Sets extends ReadonlyArray<AnySetConfig>
-> = [ScheduleValidationErrors<Systems, Sets>] extends [never]
-  ? {}
+> = HasInvalidSystemMemberships<Systems, Sets> extends false
+  ? HasInvalidSystemOrderTargets<Systems, Sets> extends false
+    ? {}
+    : {
+        readonly __fixScheduleReferences__: "Unknown ordering target in system.after/system.before"
+      }
   : {
-      readonly __fixScheduleReferences__: ScheduleValidationErrors<Systems, Sets>
+      readonly __fixScheduleReferences__: "Unknown system set in system.inSets"
     }
 
 /**
@@ -513,27 +518,27 @@ type ScheduleOptionsWithoutSteps<
   readonly steps?: undefined
 }
 
-type AnonymousScheduleFor<
+export type AnonymousScheduleFor<
   S extends Schema.Any,
-  Systems extends ReadonlyArray<AnySystem>,
-  Steps extends ReadonlyArray<ScheduleStep> | undefined
+  SystemValue extends AnySystem,
+  StepValue extends ScheduleStep | undefined
 > = AnonymousScheduleDefinition<
   S,
-  [Steps] extends [undefined]
-    ? SystemRequirementsForSchedule<Systems>
-    : ScheduleRequirements<Systems, Extract<Steps, ReadonlyArray<ScheduleStep>>>
+  [StepValue] extends [undefined]
+    ? SystemRequirementsForSchedule<ReadonlyArray<SystemValue>>
+    : ScheduleRequirements<ReadonlyArray<SystemValue>, ReadonlyArray<Extract<StepValue, ScheduleStep>>>
 >
 
-type NamedScheduleFor<
+export type NamedScheduleFor<
   S extends Schema.Any,
   L extends Label.Schedule,
-  Systems extends ReadonlyArray<AnySystem>,
-  Steps extends ReadonlyArray<ScheduleStep> | undefined
+  SystemValue extends AnySystem,
+  StepValue extends ScheduleStep | undefined
 > = NamedScheduleDefinition<
   S,
-  [Steps] extends [undefined]
-    ? SystemRequirementsForSchedule<Systems>
-    : ScheduleRequirements<Systems, Extract<Steps, ReadonlyArray<ScheduleStep>>>,
+  [StepValue] extends [undefined]
+    ? SystemRequirementsForSchedule<ReadonlyArray<SystemValue>>
+    : ScheduleRequirements<ReadonlyArray<SystemValue>, ReadonlyArray<Extract<StepValue, ScheduleStep>>>,
   L
 >
 
@@ -548,16 +553,18 @@ export function define<
   S extends Schema.Any,
   const Systems extends ReadonlyArray<AnySystem>,
   const Sets extends ReadonlyArray<AnySetConfig> = [],
-  const Steps extends ReadonlyArray<ScheduleStep> | undefined = undefined
->(options: BaseScheduleOptions<S, Systems, Sets> & { readonly steps?: Steps }): AnonymousScheduleFor<S, Systems, Steps> {
+  StepValue extends ScheduleStep | undefined = undefined
+>(
+  options: BaseScheduleOptions<S, Systems, Sets> & { readonly steps?: ReadonlyArray<Extract<StepValue, ScheduleStep>> }
+): AnonymousScheduleFor<S, Systems[number], StepValue> {
   const orderedSystems = resolveSystems(options.systems, options.sets ?? [])
   const orderedSystemMap = new Map(
-    orderedSystems.map((system) => [system.spec.label.key, system] as const)
+    orderedSystems.map((system) => [system.ordering.label.key, system] as const)
   )
 
   const steps = options.steps
     ? options.steps.map((step) => isSystemStep(step)
-      ? orderedSystemMap.get(step.spec.label.key) ?? step
+      ? orderedSystemMap.get(step.ordering.label.key) ?? step
       : step)
     : [...orderedSystems, applyDeferred(), updateEvents(), updateLifecycle(), updateRelationFailures()]
 
@@ -567,8 +574,8 @@ export function define<
     systems: orderedSystems,
     sets: options.sets ?? [],
     schema: options.schema,
-    requirements: undefined as unknown as AnonymousScheduleFor<S, Systems, Steps>["requirements"]
-  } as AnonymousScheduleFor<S, Systems, Steps>
+    requirements: undefined as unknown as AnonymousScheduleFor<S, Systems[number], StepValue>["requirements"]
+  } as AnonymousScheduleFor<S, Systems[number], StepValue>
 }
 
 /**
@@ -579,20 +586,20 @@ export function define<
  */
 export function named<
   S extends Schema.Any,
-  const L extends Label.Schedule,
+  L extends Label.Schedule,
   const Systems extends ReadonlyArray<AnySystem>,
   const Sets extends ReadonlyArray<AnySetConfig> = [],
-  const Steps extends ReadonlyArray<ScheduleStep> | undefined = undefined
+  StepValue extends ScheduleStep | undefined = undefined
 >(
   label: L,
-  options: BaseScheduleOptions<S, Systems, Sets> & { readonly steps?: Steps }
-): NamedScheduleFor<S, L, Systems, Steps> {
+  options: BaseScheduleOptions<S, Systems, Sets> & { readonly steps?: ReadonlyArray<Extract<StepValue, ScheduleStep>> }
+): NamedScheduleFor<S, L, Systems[number], StepValue> {
   const anonymous = define(options)
   return {
     ...anonymous,
     kind: "named",
     label
-  } as NamedScheduleFor<S, L, Systems, Steps>
+  } as NamedScheduleFor<S, L, Systems[number], StepValue>
 }
 
 /**
@@ -608,9 +615,9 @@ const resolveSystems = (
   const byKey = new Map<symbol, SystemDefinition<any, any, any>>()
   const inputOrder = new Map<symbol, number>()
   for (const [index, system] of systems.entries()) {
-    const key = system.spec.label.key
+    const key = system.ordering.label.key
     if (byKey.has(key)) {
-      throw new Error(`Duplicate system label in schedule: ${system.spec.label.name}`)
+      throw new Error(`Duplicate system label in schedule: ${system.ordering.label.name}`)
     }
     byKey.set(key, system)
     inputOrder.set(key, index)
@@ -629,10 +636,10 @@ const resolveSystems = (
     systemsInSet.set(set.label.key, [])
   }
   for (const system of systems) {
-    for (const set of system.spec.inSets) {
+    for (const set of system.ordering.inSets) {
       const members = systemsInSet.get(set.key)
       if (!members) {
-        throw new Error(`Missing system set '${set.name}' referenced by '${system.spec.label.name}'`)
+        throw new Error(`Missing system set '${set.name}' referenced by '${system.ordering.label.name}'`)
       }
       members.push(system)
     }
@@ -640,12 +647,12 @@ const resolveSystems = (
 
   const dependencies = new Map<symbol, Set<symbol>>()
   for (const system of systems) {
-    dependencies.set(system.spec.label.key, new Set())
+    dependencies.set(system.ordering.label.key, new Set())
   }
 
   const resolveTargetSystems = (target: OrderTarget, sourceName: string): ReadonlyArray<SystemDefinition<any, any, any>> => {
-    if ("spec" in target) {
-      const system = byKey.get(target.spec.label.key)
+    if ("ordering" in target) {
+      const system = byKey.get(target.ordering.label.key)
       if (!system) {
         throw new Error(`Missing system dependency '${target.name}' referenced by '${sourceName}'`)
       }
@@ -669,20 +676,20 @@ const resolveSystems = (
     dependent: SystemDefinition<any, any, any>,
     dependency: SystemDefinition<any, any, any>
   ): void => {
-    if (dependent.spec.label.key === dependency.spec.label.key) {
+    if (dependent.ordering.label.key === dependency.ordering.label.key) {
       return
     }
-    dependencies.get(dependent.spec.label.key)?.add(dependency.spec.label.key)
+    dependencies.get(dependent.ordering.label.key)?.add(dependency.ordering.label.key)
   }
 
   for (const system of systems) {
-    for (const target of system.spec.after) {
-      for (const dependency of resolveTargetSystems(target, system.spec.label.name)) {
+    for (const target of system.ordering.after) {
+      for (const dependency of resolveTargetSystems(target, system.ordering.label.name)) {
         addDependency(system, dependency)
       }
     }
-    for (const target of system.spec.before) {
-      for (const dependent of resolveTargetSystems(target, system.spec.label.name)) {
+    for (const target of system.ordering.before) {
+      for (const dependent of resolveTargetSystems(target, system.ordering.label.name)) {
         addDependency(dependent, system)
       }
     }
@@ -692,7 +699,7 @@ const resolveSystems = (
     const members = systemsInSet.get(set.label.key) ?? []
     if (set.chain) {
       const orderedMembers = [...members].sort((left, right) =>
-        (inputOrder.get(left.spec.label.key) ?? 0) - (inputOrder.get(right.spec.label.key) ?? 0)
+        (inputOrder.get(left.ordering.label.key) ?? 0) - (inputOrder.get(right.ordering.label.key) ?? 0)
       )
       for (let index = 1; index < orderedMembers.length; index += 1) {
         addDependency(orderedMembers[index]!, orderedMembers[index - 1]!)
@@ -725,7 +732,7 @@ const resolveSystems = (
   const visit = (key: symbol): void => {
     if (stack.has(key)) {
       const system = byKey.get(key)
-      throw new Error(`Circular system dependency detected at '${system?.spec.label.name ?? "unknown"}'`)
+      throw new Error(`Circular system dependency detected at '${system?.ordering.label.name ?? "unknown"}'`)
     }
     if (visited.has(key)) {
       return

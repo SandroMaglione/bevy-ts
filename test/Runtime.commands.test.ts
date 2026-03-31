@@ -242,8 +242,7 @@ describe("Runtime commands", () => {
       steps: [insertVelocity, Game.Schedule.applyDeferred(), observe]
     })
 
-    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
-    tick(spawnSchedule as never, observeSchedule as never)
+    runtime.tick(spawnSchedule, observeSchedule)
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })

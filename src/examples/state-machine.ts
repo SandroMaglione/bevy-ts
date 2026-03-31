@@ -924,15 +924,13 @@ export const startStateMachineExample = async (mount: HTMLElement): Promise<Brow
   })
 
   const app = App.makeApp(runtime)
-  const bootstrap = app.bootstrap as (...schedules: ReadonlyArray<never>) => void
-  const update = app.update as (schedule: never) => void
 
-  bootstrap(bootstrapSchedule as never)
-  update(updateSchedule as never)
+  app.bootstrap(bootstrapSchedule)
+  app.update(updateSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
-    update(updateSchedule as never)
+    app.update(updateSchedule)
   }
 
   application.ticker.add(tick)

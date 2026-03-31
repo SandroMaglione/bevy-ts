@@ -375,6 +375,23 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
 }
 
 /**
+ * Compact ordering metadata carried by each system for schedule validation.
+ *
+ * This keeps schedule-level type computation focused on the small ordering
+ * surface instead of repeatedly expanding the full system spec.
+ */
+export interface SystemOrderingSpec<
+  out InSets extends ReadonlyArray<Label.SystemSet> = ReadonlyArray<Label.SystemSet>,
+  out After extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>,
+  out Before extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>
+> {
+  readonly label: Label.System
+  readonly inSets: InSets
+  readonly after: After
+  readonly before: Before
+}
+
+/**
  * An ordering target inside one schedule.
  *
  * Systems can order themselves relative to other system definitions or reusable
@@ -703,6 +720,10 @@ export interface SystemDefinition<
    */
   readonly __schemaRoot: Root
   /**
+   * Compact schedule-ordering view derived from the system spec once.
+   */
+  readonly ordering: SystemOrderingSpec<Spec["inSets"], Spec["after"], Spec["before"]>
+  /**
    * The executable implementation of the system.
    */
   readonly run: (context: SystemContext<Spec>) => Fx<A, E, SystemDependencies<Spec>>
@@ -918,17 +939,27 @@ export function define<
     E,
     ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
+  const label = spec.label ?? LabelModule.defineSystemLabel(name)
+  const inSets = (spec.inSets ?? []) as InSets
+  const after = (spec.after ?? []) as After
+  const before = (spec.before ?? []) as Before
 
   return {
     name,
     requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>,
     __schemaRoot: undefined as unknown as Root,
+    ordering: {
+      label,
+      inSets,
+      after,
+      before
+    },
     spec: {
-      label: spec.label ?? LabelModule.defineSystemLabel(name),
+      label,
       schema: spec.schema,
-      inSets: (spec.inSets ?? []) as InSets,
-      after: (spec.after ?? []) as After,
-      before: (spec.before ?? []) as Before,
+      inSets,
+      after,
+      before,
       queries: (spec.queries ?? {}) as Queries,
       resources: (spec.resources ?? {}) as Resources,
       events: (spec.events ?? {}) as Events,

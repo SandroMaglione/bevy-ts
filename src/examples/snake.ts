@@ -487,14 +487,13 @@ export const createSnakeExample = () => {
   })
 
   const app = App.makeApp(runtime)
-  app.bootstrap(setupSchedule as never)
+  app.bootstrap(setupSchedule)
 
   return {
     runtime,
     app,
     update() {
-      const runSchedule = runtime.runSchedule as (schedule: never) => void
-      runSchedule(updateSchedule as never)
+      runtime.runSchedule(updateSchedule)
     }
   }
 }
@@ -596,13 +595,10 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
     )
   })
 
-  const bootstrap = runtime.initialize as (schedule: import("../schedule.ts").ScheduleDefinition<any, any, any>) => void
-  const runFrame = runtime.runSchedule as (schedule: import("../schedule.ts").ScheduleDefinition<any, any, any>) => void
-
-  bootstrap(browserSetupSchedule as never)
+  runtime.initialize(browserSetupSchedule)
 
   const intervalId = window.setInterval(() => {
-    runFrame(browserUpdateSchedule as never)
+    runtime.runSchedule(browserUpdateSchedule)
   }, 240)
 
   return {

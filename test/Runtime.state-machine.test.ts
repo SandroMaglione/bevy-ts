@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Fx, Label, Schema } from "../src/index.ts"
 import * as Runtime from "../src/runtime.ts"
-import type { ScheduleDefinition } from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
@@ -16,7 +15,6 @@ const schema = Schema.build(Schema.fragment({
 }))
 
 const Game = Schema.bind(schema)
-type AnyExecutableSchedule = ScheduleDefinition<any, any, any>
 const AppState = Game.StateMachine.define("AppState", ["Menu", "Playing", "Paused"] as const)
 const RoundState = Game.StateMachine.define("RoundState", ["Warmup", "Live", "SuddenDeath"] as const)
 
@@ -74,8 +72,7 @@ describe("Runtime state machine", () => {
       steps: [queuePlaying, Game.Schedule.applyStateTransitions(), increment]
     })
 
-    const runSchedule = runtime.runSchedule as (schedule: AnyExecutableSchedule) => void
-    runSchedule(applyPlayingSchedule as never)
+    runtime.runSchedule(applyPlayingSchedule)
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
   })
@@ -133,8 +130,7 @@ describe("Runtime state machine", () => {
       systems: [queuePlaying, before, after],
       steps: [queuePlaying, before, Game.Schedule.applyStateTransitions(), after]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(transitionVisibilitySchedule as never)
+    runtime.runSchedule(transitionVisibilitySchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["before:Menu", "after:Playing"])
   })
@@ -227,8 +223,7 @@ describe("Runtime state machine", () => {
       systems: [queuePlaying],
       steps: [queuePlaying, Game.Schedule.applyStateTransitions(transitions)]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(bundledTransitionSchedule as never)
+    runtime.runSchedule(bundledTransitionSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([
       "exit:Menu->Playing",
@@ -270,8 +265,7 @@ describe("Runtime state machine", () => {
       systems: [queuePlaying, observeChanged],
       steps: [queuePlaying, Game.Schedule.applyStateTransitions(), observeChanged]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(changedSchedule as never)
+    runtime.runSchedule(changedSchedule)
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
   })
@@ -361,8 +355,7 @@ describe("Runtime state machine", () => {
       systems: [queueStates, gated],
       steps: [queueStates, Game.Schedule.applyStateTransitions(), gated]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(gatedSchedule as never)
+    runtime.runSchedule(gatedSchedule)
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
   })
@@ -392,7 +385,7 @@ describe("Runtime state machine", () => {
       systems: [increment]
     })
 
-    runtime.runSchedule(incrementSchedule as never)
+    runtime.runSchedule(incrementSchedule)
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
   })
@@ -476,8 +469,7 @@ describe("Runtime state machine", () => {
       systems: [queueStates],
       steps: [queueStates, LocalGame.Schedule.applyStateTransitions(transitions)]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(localTransitionSchedule as never)
+    runtime.runSchedule(localTransitionSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([
       "app:Menu->Playing",
@@ -575,8 +567,7 @@ describe("Runtime state machine", () => {
       systems: [queueApp, observeRoundChange, observeRoundState],
       steps: [queueApp, LocalGame.Schedule.applyStateTransitions(transitions), observeRoundChange, observeRoundState]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(localRoundSchedule as never)
+    runtime.runSchedule(localRoundSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([
       "enter-app:Playing",
@@ -587,7 +578,7 @@ describe("Runtime state machine", () => {
       systems: [observeRoundChange, observeRoundState],
       steps: [LocalGame.Schedule.applyStateTransitions(), observeRoundChange, observeRoundState]
     })
-    runSchedule(observeRoundSchedule as never)
+    runtime.runSchedule(observeRoundSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([
       "enter-app:Playing",
@@ -638,8 +629,7 @@ describe("Runtime state machine", () => {
       systems: [queuePlaying],
       steps: [queuePlaying, Game.Schedule.applyStateTransitions()]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(applyQueuedTransitionSchedule as never)
+    runtime.runSchedule(applyQueuedTransitionSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
 
@@ -647,7 +637,7 @@ describe("Runtime state machine", () => {
       systems: [queuePlaying],
       steps: [queuePlaying, Game.Schedule.applyStateTransitions(bundle)]
     })
-    runSchedule(applyBundledTransitionSchedule as never)
+    runtime.runSchedule(applyBundledTransitionSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["entered:Playing"])
   })

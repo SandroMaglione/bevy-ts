@@ -2,7 +2,6 @@ import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
 import { App, Descriptor, Entity, Fx, Schema } from "../index.ts"
-import type { ScheduleDefinition } from "../schedule.ts"
 import type { BrowserExampleHandle } from "./pixi.ts"
 
 const MAX_WIDTH = 800
@@ -16,8 +15,6 @@ const BULLET_HEIGHT = 10
 const ENEMY_SPAWN_COOLDOWN = 100
 const SHOOT_COOLDOWN = 300
 const MATTER_MAX_STEP_MS = 1000 / 60
-type AnyExecutableSchedule = ScheduleDefinition<any, any, any>
-
 const Root = Schema.defineRoot("SpaceInvaders")
 type RenderKind = "player" | "enemy" | "bullet"
 type RenderBodyValue = {
@@ -964,15 +961,12 @@ export const startSpaceInvadersExample = async (mount: HTMLElement): Promise<Bro
     }
   })
 
-  const bootstrap = runtime.initialize as (schedule: AnyExecutableSchedule) => void
-  const runFrame = runtime.runSchedule as (schedule: AnyExecutableSchedule) => void
-
-  bootstrap(setupSchedule as never)
+  runtime.initialize(setupSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     pixiHost.clock.deltaMilliseconds = ticker.deltaMS
     pixiHost.clock.deltaFrames = ticker.deltaMS / (1000 / 60)
-    runFrame(updateSchedule as never)
+    runtime.runSchedule(updateSchedule)
   }
 
   application.ticker.add(tick)

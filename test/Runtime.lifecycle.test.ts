@@ -128,8 +128,7 @@ describe("Runtime lifecycle", () => {
         ObserveAfterSystem
       ]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(lifecycleSchedule as never)
+    runtime.runSchedule(lifecycleSchedule)
 
     expect(readResourceValue(runtime, schema, AddedBefore)).toBe(0)
     expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)
@@ -230,8 +229,7 @@ describe("Runtime lifecycle", () => {
           ObserveAfterSystem
         ]
       })
-    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
-    tick(spawnSchedule as never, observeSchedule as never)
+    runtime.tick(spawnSchedule, observeSchedule)
 
     expect(readResourceValue(runtime, schema, RemovedBefore)).toBe(0)
     expect(readResourceValue(runtime, schema, DespawnedBefore)).toBe(0)
@@ -289,8 +287,7 @@ describe("Runtime lifecycle", () => {
         systems: [ObserveChanged],
         steps: [ObserveChanged]
       })
-    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
-    tick(spawnSchedule as never, clearSchedule as never)
+    runtime.tick(spawnSchedule, clearSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(1)
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
@@ -299,8 +296,7 @@ describe("Runtime lifecycle", () => {
       systems: [ObserveChanged],
       steps: [Game.Schedule.updateLifecycle(), ObserveChanged]
     })
-    const runSchedule = runtime.runSchedule as (schedule: never) => void
-    runSchedule(refreshSchedule as never)
+    runtime.runSchedule(refreshSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(0)
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(0)
@@ -394,8 +390,7 @@ describe("Runtime lifecycle", () => {
           ObserveAfterSystem
         ]
       })
-    const tick = runtime.tick as (...schedules: ReadonlyArray<never>) => void
-    tick(spawnSchedule as never, observeSchedule as never)
+    runtime.tick(spawnSchedule, observeSchedule)
 
     expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)

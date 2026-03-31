@@ -8,6 +8,7 @@ import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
 import * as Relation from "./relation.ts"
 import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
+import type { ExecutableScheduleDefinition } from "./schedule.ts"
 import type { Registry, Schema } from "./schema.ts"
 import type {
   DespawnedReadView,
@@ -164,11 +165,8 @@ type RequirementsOfSchedule<Schedule> =
     ? Requirements
     : never
 
-type UnionToIntersection<A> =
-  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
-
 type NormalizeRequirementObject<Required extends object> =
-  [Required] extends [never] ? {} : Simplify<UnionToIntersection<Required>>
+  [Required] extends [never] ? {} : Simplify<Required>
 
 /**
  * Produces a readable type-level label name.
@@ -219,7 +217,7 @@ type ScheduleRequirementErrors<
   : never
 
 export type ValidateSchedules<
-  Schedules extends ReadonlyArray<ExecutableSchedule<any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -232,16 +230,48 @@ export type ValidateSchedules<
 
 export type AnyRequirements = RuntimeRequirements<any, any, any, any>
 
-type ExecutableSchedule<
+type ExecutableScheduleShape<
+  Schedule,
+  S extends Schema.Any,
+  Root
+> = Schedule extends {
+  readonly kind: "anonymous" | "named"
+  readonly schema: S
+  readonly requirements: infer _Requirements extends RuntimeRequirements
+  readonly __schemaRoot?: Root | undefined
+}
+  ? Schedule
+  : never
+
+type ExecutableScheduleShapes<
+  Schedules extends ReadonlyArray<unknown>,
   S extends Schema.Any,
   Root
 > = {
-  readonly kind: "anonymous" | "named"
-  readonly schema: S
-  readonly requirements: RuntimeRequirements
-  readonly label?: { readonly name: string }
-  readonly __schemaRoot?: Root | undefined
+  readonly [K in keyof Schedules]: ExecutableScheduleShape<Schedules[K], S, Root>
 }
+
+type ScheduleValidationGate<
+  Schedule,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = [ScheduleRequirementErrors<Schedule, Services, Resources, States, Machines>] extends [never]
+  ? unknown
+  : {
+      readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedule, Services, Resources, States, Machines>
+    }
+
+type SchedulesValidationGate<
+  Schedules extends ReadonlyArray<unknown>,
+  S extends Schema.Any,
+  Root,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = ValidateSchedules<ExecutableScheduleShapes<Schedules, S, Root>, Services, Resources, States, Machines>
 
 /**
  * The caller-facing initialization shape for one descriptor registry.
@@ -323,8 +353,8 @@ export interface Runtime<
    * repeating outer loop.
    */
   readonly initialize: {
-    <const Schedules extends ReadonlyArray<ExecutableSchedule<S, Root>>>(
-      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
+    <const Schedules extends ReadonlyArray<unknown>>(
+      ...schedules: Schedules & ExecutableScheduleShapes<Schedules, S, Root> & SchedulesValidationGate<Schedules, S, Root, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -334,8 +364,10 @@ export interface Runtime<
    * steps, plus one final end-of-schedule apply/update pass for safety.
    */
   readonly runSchedule: {
-    <const Selected extends ExecutableSchedule<S, Root>>(
-      schedule: Selected & ValidateSchedules<[Selected], Services, Resources, States, Machines>
+    <const Selected>(
+      schedule: Selected
+        & ExecutableScheduleShape<Selected, S, Root>
+        & ScheduleValidationGate<ExecutableScheduleShape<Selected, S, Root>, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -346,8 +378,8 @@ export interface Runtime<
    * updates produced by earlier schedules.
    */
   readonly tick: {
-    <const Schedules extends ReadonlyArray<ExecutableSchedule<S, Root>>>(
-      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
+    <const Schedules extends ReadonlyArray<unknown>>(
+      ...schedules: Schedules & ExecutableScheduleShapes<Schedules, S, Root> & SchedulesValidationGate<Schedules, S, Root, Services, Resources, States, Machines>
     ): void
   }
 }
@@ -1578,7 +1610,7 @@ export const makeRuntime = <
   /**
    * Executes multiple schedules after their requirement checks have passed.
    */
-  const tickUnsafe = (schedules: ReadonlyArray<ExecutableSchedule<S, Root>>): void => {
+  const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>): void => {
     for (const schedule of schedules) {
       runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
     }

@@ -316,7 +316,7 @@ describe("StateMachine", () => {
       )
     })
 
-    expect(schedule).type.toBeAssignableTo<Parameters<typeof runtime.runSchedule>[0]>()
+    runtime.runSchedule(schedule)
   })
 
   it("keeps transition event unions exact and allows bundle flattening", () => {

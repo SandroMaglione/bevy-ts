@@ -292,7 +292,7 @@ describe("Schema", () => {
       steps: [Game.Schedule.updateLifecycle(), ObserveLifecycleSystem]
     })
 
-    expect(schedule).type.toBeAssignableTo<Parameters<typeof runtime.runSchedule>[0]>()
+    runtime.runSchedule(schedule)
   })
 
   it("rejects non-component descriptors in lifecycle query APIs", () => {
