@@ -287,6 +287,36 @@ const SpawnProjectileSystem = Game.System.define(
 
 `Game.Command.spawn()` and single-step `Game.Command.insert(...)` still exist, but `spawnWith(...)` is the default authoring path.
 
+## Reusable typed drafts
+
+Keep `spawnWith(...)` inline for one-off entities. When the same shape appears
+more than once, extract a small local factory function that returns the draft
+and keep the actual spawn explicit.
+
+```ts
+const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
+  Game.Command.spawnWith(
+    [Position, position],
+    [PreviousPosition, position],
+    [SnakeBody, { parent, isTail: true }]
+  )
+
+commands.spawn(makeTailDraft(Game.Entity.handle(headId), { x: 4, y: 5 }))
+```
+
+This is the recommended scaling path:
+
+- inline `spawnWith(...)` when the draft is truly one-off
+- extract `makeXDraft(...)` when the same tuple shape repeats
+- keep factories as ordinary functions, not schema registrations
+- keep `commands.spawn(...)` explicit so schedule boundaries stay obvious
+
+Reference examples:
+
+- [`src/examples/top-down/drafts.ts`](./src/examples/top-down/drafts.ts)
+- [`src/examples/snake.ts`](./src/examples/snake.ts)
+- [`src/examples/pokemon.ts`](./src/examples/pokemon.ts)
+
 ## Ordering systems
 
 Direct system references are the default ordering mechanism. Reusable sets stay explicit and typed.
@@ -1047,20 +1077,9 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
 
 1. Schedule execution still needs a cheaper carried type shape after validation. Refactoring [`src/examples/smoke.ts`](./src/examples/smoke.ts) to the current explicit API worked cleanly at the system and schedule-definition level, but the direct `app.update(update)` / `runtime.runSchedule(update)` path can still hit TypeScript instantiation limits in a minimal example. That is a direct violation of the library's main user-facing constraint: users should not need casts, explicit generics, or artificial schedule splitting just to execute a valid schedule. The execution boundary should preserve exact validation, root safety, and runtime-requirement safety while carrying a much cheaper normalized schedule type into `App` and `Runtime`.
 
-2. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
+2. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
 
-   ```ts
-   const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
-     Game.Command.spawnWith(
-       [Position, position],
-       [PreviousPosition, position],
-       [SnakeBody, { parent, isTail: true }]
-     )
-   ```
-
-3. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
-
-4. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
+3. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
 
 ## Out of scope for now
 

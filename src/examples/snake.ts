@@ -155,6 +155,31 @@ const randomSeedFromNow = (): number => {
   return seed === 0 ? 1 : seed
 }
 
+const makeHeadDraft = () =>
+  Game.Command.spawnWith(
+    [Position, INITIAL_HEAD_POSITION],
+    [PreviousPosition, INITIAL_HEAD_POSITION],
+    [Velocity, INITIAL_VELOCITY],
+    [SnakeHead, {}]
+  )
+
+const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
+  Game.Command.spawnWith(
+    [Position, position],
+    [PreviousPosition, position],
+    [SnakeBody, {
+      parent,
+      isTail: true
+    }]
+  )
+
+const makeFoodDraft = (position: GridPosition) =>
+  Game.Command.spawnWith(
+    [Position, position],
+    [PreviousPosition, position],
+    [Food, {}]
+  )
+
 const makeHud = (): SnakeHud => {
   const root = document.createElement("div")
   root.style.position = "absolute"
@@ -366,24 +391,10 @@ const ResetGameSystem = Game.System.define(
         commands.despawn(match.entity.id)
       }
 
-      const headId = commands.spawn(
-        Game.Command.spawnWith(
-          [Position, INITIAL_HEAD_POSITION],
-          [PreviousPosition, INITIAL_HEAD_POSITION],
-          [Velocity, INITIAL_VELOCITY],
-          [SnakeHead, {}]
-        )
-      )
+      const headId = commands.spawn(makeHeadDraft())
 
       commands.spawn(
-        Game.Command.spawnWith(
-          [Position, INITIAL_TAIL_POSITION],
-          [PreviousPosition, INITIAL_TAIL_POSITION],
-          [SnakeBody, {
-            parent: headId,
-            isTail: true
-          }]
-        )
+        makeTailDraft(Game.Entity.handle(headId), INITIAL_TAIL_POSITION)
       )
     })
 )
@@ -606,14 +617,7 @@ const GrowSnakeSystem = Game.System.define(
         }))
 
         commands.spawn(
-          Game.Command.spawnWith(
-            [Position, tailPrevious],
-            [PreviousPosition, tailPrevious],
-            [SnakeBody, {
-              parent: Game.Entity.handle(tail.entity.id),
-              isTail: true
-            }]
-          )
+          makeTailDraft(Game.Entity.handle(tail.entity.id), tailPrevious)
         )
       } else {
         const head = queries.head.singleOptional()
@@ -623,14 +627,7 @@ const GrowSnakeSystem = Game.System.define(
 
         const headPrevious = head.value.data.previousPosition.get()
         commands.spawn(
-          Game.Command.spawnWith(
-            [Position, headPrevious],
-            [PreviousPosition, headPrevious],
-            [SnakeBody, {
-              parent: Game.Entity.handle(head.value.entity.id),
-              isTail: true
-            }]
-          )
+          makeTailDraft(Game.Entity.handle(head.value.entity.id), headPrevious)
         )
       }
 
@@ -735,11 +732,7 @@ const EnsureFoodSystem = Game.System.define(
       }
 
       commands.spawn(
-        Game.Command.spawnWith(
-          [Position, spawnAt],
-          [PreviousPosition, spawnAt],
-          [Food, {}]
-        )
+        makeFoodDraft(spawnAt)
       )
     })
 )

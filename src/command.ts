@@ -245,6 +245,11 @@ export const relate = <
  * `commands.spawn(...)` and commit it later at the schedule's
  * `applyDeferred()` boundary.
  *
+ * When the same entity shape appears more than once, the normal scaling path
+ * is to extract a small local draft factory that just returns
+ * `Game.Command.spawnWith(...)`. Keep spawning explicit through
+ * `commands.spawn(...)`.
+ *
  * @example
  * ```ts
  * const SetupSystem = Game.System.define("Setup", {}, ({ commands }) =>
@@ -257,6 +262,12 @@ export const relate = <
  *     )
  *   })
  * )
+ *
+ * const makeProjectileDraft = (x: number, y: number) =>
+ *   Game.Command.spawnWith(
+ *     [Position, { x, y }],
+ *     [Velocity, { x: 4, y: 0 }]
+ *   )
  * ```
  */
 export const spawnWith = <

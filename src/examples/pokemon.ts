@@ -164,27 +164,39 @@ const setNodeTilePosition = (
   node.position.set(x + inset, y + inset)
 }
 
+const INITIAL_PLAYER_POSITION = { col: 3, row: 3 } as const
+
+const makePlayerDraft = () =>
+  Game.Command.spawnWith(
+    [Position, INITIAL_PLAYER_POSITION],
+    [Movement, {
+      direction: null,
+      from: INITIAL_PLAYER_POSITION,
+      to: INITIAL_PLAYER_POSITION,
+      progress: 1,
+      isMoving: false
+    }],
+    [Renderable, {
+      kind: "player"
+    }],
+    [Player, {}]
+  )
+
+const makeSolidDraft = (position: TilePosition) =>
+  Game.Command.spawnWith(
+    [Position, position],
+    [Renderable, {
+      kind: "solid"
+    }],
+    [Solid, {}]
+  )
+
 const SetupSystem = Game.System.define(
   "Pokemon/Setup",
   {},
   ({ commands }) =>
     Fx.sync(() => {
-      commands.spawn(
-        Game.Command.spawnWith(
-          [Position, { col: 3, row: 3 }],
-          [Movement, {
-            direction: null,
-            from: { col: 3, row: 3 },
-            to: { col: 3, row: 3 },
-            progress: 1,
-            isMoving: false
-          }],
-          [Renderable, {
-            kind: "player"
-          }],
-          [Player, {}]
-        )
-      )
+      commands.spawn(makePlayerDraft())
 
       const solids = [
         { col: 5, row: 5 },
@@ -194,15 +206,7 @@ const SetupSystem = Game.System.define(
       ] as const
 
       for (const solid of solids) {
-        commands.spawn(
-          Game.Command.spawnWith(
-            [Position, solid],
-            [Renderable, {
-              kind: "solid"
-            }],
-            [Solid, {}]
-          )
-        )
+        commands.spawn(makeSolidDraft(solid))
       }
     })
 )
