@@ -601,19 +601,6 @@ const app = Game.App.make({
 })
 ```
 
-### Relationship follow-ups
-
-The first relationship milestone is now in place: explicit paired relation definitions, relation-aware queries, reverse reads, hierarchy traversal, linked hierarchy despawn, live deferred relation mutation, and explicit typed relation-failure streams. That is enough to cover trees, ownership, attachments, targeting, and runtime retargeting safely.
-
-Another likely follow-up is explicit hierarchy child reordering. The current hierarchy model already preserves child order on reads, which is enough for many gameplay and UI uses. If later examples need deterministic reordering, it should still be exposed through a separate hierarchy-specific API rather than a generic mutable collection surface, so the type system can keep “ordered tree only” behavior distinct from general relations.
-
-These follow-ups fit the same explicit, type-safe, runtime-safe model that defines the current relationship feature:
-
-- relations stay separate from components in the public API
-- hierarchy-only behavior stays restricted to hierarchy relations
-- all relation values remain schema-bound and root-bound
-- if a guarantee depends on current world state, it must be reflected in a result type rather than hidden behind an exception
-
 ### Out of scope for now
 
 Some additions are intentionally not near-term because they do not match the current goals.

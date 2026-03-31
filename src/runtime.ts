@@ -649,8 +649,54 @@ export const makeRuntime = <
     return Relation.success(undefined)
   }
 
+  const reorderChildrenEntity = (
+    parentId: number,
+    relation: Relation.Relation.Hierarchy,
+    childIds: ReadonlyArray<number>
+  ): Relation.Relation.Result<void, Relation.Relation.MutationError> => {
+    if (!entityExists(parentId)) {
+      return Relation.failure(Relation.missingEntityError(parentId))
+    }
+
+    const currentChildren = getRelatedSourceIds(relation, parentId)
+    const seenChildren = new Set<number>()
+
+    for (const childId of childIds) {
+      if (!entityExists(childId)) {
+        return Relation.failure(Relation.missingChildEntityError(parentId, childId, relation.name))
+      }
+      if (seenChildren.has(childId)) {
+        return Relation.failure(Relation.duplicateChildError(parentId, childId, relation.name))
+      }
+      seenChildren.add(childId)
+
+      const currentParent = relationTargets.get(relation.key)?.get(childId)
+      if (currentParent !== parentId) {
+        return Relation.failure(Relation.childNotRelatedToParentError(parentId, childId, relation.name))
+      }
+    }
+
+    if (currentChildren.length !== childIds.length) {
+      return Relation.failure(Relation.childSetMismatchError(parentId, relation.name))
+    }
+    for (const childId of currentChildren) {
+      if (!seenChildren.has(childId)) {
+        return Relation.failure(Relation.childSetMismatchError(parentId, relation.name))
+      }
+    }
+
+    const sources = ensureRelatedSourcesStore(relation.key)
+    if (childIds.length === 0) {
+      sources.delete(parentId)
+      return Relation.success(undefined)
+    }
+    sources.set(parentId, [...childIds])
+    return Relation.success(undefined)
+  }
+
   const appendRelationFailure = (
     relation: Relation.Relation.Any,
+    operation: Relation.Relation.MutationOperation,
     sourceId: number,
     targetId: number,
     error: Relation.Relation.MutationError
@@ -659,6 +705,7 @@ export const makeRuntime = <
     failures.push(
       Relation.mutationFailure(
         relation,
+        operation,
         Entity.makeEntityId<S, Root>(sourceId),
         Entity.makeEntityId<S, Root>(targetId),
         error
@@ -746,12 +793,28 @@ export const makeRuntime = <
     tryRelate(id, relation, target) {
       const result = tryRelateEntity(id.value, relation, target.value)
       if (!result.ok) {
-        appendRelationFailure(relation, id.value, target.value, result.error)
+        appendRelationFailure(relation, "relate", id.value, target.value, result.error)
       }
       return result
     },
     unrelate(id, relation) {
       unrelateEntity(id.value, relation)
+    },
+    reorderChildren(id, relation, children) {
+      const result = reorderChildrenEntity(
+        id.value,
+        relation,
+        children.map((child) => child.value)
+      )
+      if (!result.ok) {
+        const targetId = result.error._tag === "MissingChildEntity"
+          || result.error._tag === "DuplicateChild"
+          || result.error._tag === "ChildNotRelatedToParent"
+          ? result.error.childId
+          : id.value
+        appendRelationFailure(relation, "reorderChildren", id.value, targetId, result.error)
+      }
+      return result
     }
   }
 

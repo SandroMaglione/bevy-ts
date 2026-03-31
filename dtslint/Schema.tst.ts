@@ -414,7 +414,8 @@ describe("Schema", () => {
       "ObserveRelations",
       {
         relationFailures: {
-          targeting: Game.System.readRelationFailures(Targeting)
+          targeting: Game.System.readRelationFailures(Targeting),
+          childOf: Game.System.readRelationFailures(ChildOf)
         }
       },
       ({ lookup, commands, relationFailures }) =>
@@ -425,7 +426,27 @@ describe("Schema", () => {
           relationFailures.targeting.all()
           commands.relate(entityId, Targeting, entityId)
           commands.unrelate(entityId, Targeting)
+          commands.reorderChildren(entityId, ChildOf, [entityId])
 
+          expect(relationFailures.targeting.all()).type.toBeAssignableTo<
+            ReadonlyArray<import("../src/relation.ts").Relation.MutationFailure<
+              typeof Targeting,
+              typeof schema,
+              typeof Game.schema
+            >>
+          >()
+          expect(relationFailures.childOf.all()).type.toBeAssignableTo<
+            ReadonlyArray<import("../src/relation.ts").Relation.MutationFailure<
+              typeof ChildOf,
+              typeof schema,
+              typeof Game.schema
+            >>
+          >()
+
+          // @ts-expect-error!
+          commands.reorderChildren(entityId, Targeting, [entityId])
+          // @ts-expect-error!
+          commands.reorderChildren(entityId, ChildOf.related, [entityId])
           // @ts-expect-error!
           Game.Query.readRelation(Position)
           // @ts-expect-error!

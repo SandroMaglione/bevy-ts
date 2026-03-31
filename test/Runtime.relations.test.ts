@@ -362,6 +362,88 @@ describe("Runtime relationships", () => {
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0")
   })
 
+  it("reorders hierarchy children through deferred commands", () => {
+    let rootId: Entity.EntityId<typeof schema, any> | undefined
+    let firstId: Entity.EntityId<typeof schema, any> | undefined
+    let secondId: Entity.EntityId<typeof schema, any> | undefined
+    let thirdId: Entity.EntityId<typeof schema, any> | undefined
+
+    const spawn = Game.System.define(
+      "SpawnHierarchyForReorder",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+          firstId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "first" }] as const),
+              ChildOf,
+              rootId
+            )
+          )
+          secondId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "second" }] as const),
+              ChildOf,
+              rootId
+            )
+          )
+          thirdId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "third" }] as const),
+              ChildOf,
+              rootId
+            )
+          )
+        })
+    )
+
+    const reorder = Game.System.define(
+      "ReorderHierarchyChildren",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          if (!rootId || !firstId || !secondId || !thirdId) {
+            return
+          }
+          commands.reorderChildren(rootId, ChildOf, [thirdId, firstId, secondId])
+        })
+    )
+
+    const observe = Game.System.define(
+      "ObserveHierarchyReorder",
+      {
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ lookup, resources }) =>
+        Fx.sync(() => {
+          if (!rootId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+          const children = lookup.relatedSources(rootId, ChildOf)
+          resources.summary.set(
+            children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag
+          )
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [spawn]
+      }),
+      Game.Schedule.define({
+        systems: [reorder, observe],
+        steps: [reorder, Game.Schedule.applyDeferred(), observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Summary)).toBe("4,2,3")
+  })
+
   it("surfaces failed deferred relation mutations only after updateRelationFailures and leaves world state unchanged", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
@@ -457,6 +539,114 @@ describe("Runtime relationships", () => {
 
     expect(readResourceValue(runtime, schema, Summary)).toBe(
       "MissingTargetEntity/HierarchyCycle/MissingRelation/MissingRelation"
+    )
+  })
+
+  it("surfaces failed hierarchy reorders only after updateRelationFailures and keeps child order unchanged", () => {
+    let rootId: Entity.EntityId<typeof schema, any> | undefined
+    let firstId: Entity.EntityId<typeof schema, any> | undefined
+    let secondId: Entity.EntityId<typeof schema, any> | undefined
+    let unrelatedId: Entity.EntityId<typeof schema, any> | undefined
+
+    const spawn = Game.System.define(
+      "SpawnHierarchyForReorderFailure",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+          firstId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "first" }] as const),
+              ChildOf,
+              rootId
+            )
+          )
+          secondId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "second" }] as const),
+              ChildOf,
+              rootId
+            )
+          )
+          unrelatedId = commands.spawn(Game.Command.spawnWith([Name, { value: "free" }] as const))
+        })
+    )
+
+    const queueInvalid = Game.System.define(
+      "QueueInvalidReorders",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          if (!rootId || !firstId || !secondId || !unrelatedId) {
+            return
+          }
+          commands.reorderChildren(rootId, ChildOf, [secondId, secondId])
+          commands.reorderChildren(rootId, ChildOf, [firstId])
+          commands.reorderChildren(rootId, ChildOf, [firstId, unrelatedId])
+          commands.reorderChildren(Entity.makeEntityId<typeof schema, typeof Game.schema>(999), ChildOf, [firstId, secondId])
+        })
+    )
+
+    const readBefore = Game.System.define(
+      "ReadReorderFailuresBeforeFlush",
+      {
+        relationFailures: {
+          childOf: Game.System.readRelationFailures(ChildOf)
+        },
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ relationFailures, resources }) =>
+        Fx.sync(() => {
+          resources.summary.set(String(relationFailures.childOf.all().length))
+        })
+    )
+
+    const readAfter = Game.System.define(
+      "ReadReorderFailuresAfterFlush",
+      {
+        relationFailures: {
+          childOf: Game.System.readRelationFailures(ChildOf)
+        },
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ relationFailures, lookup, resources }) =>
+        Fx.sync(() => {
+          if (!rootId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+          const failures = relationFailures.childOf.all()
+          const children = lookup.relatedSources(rootId, ChildOf)
+          resources.summary.set([
+            failures.map((failure) => `${failure.operation}:${failure.error._tag}`).join(","),
+            children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag
+          ].join("/"))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [spawn]
+      }),
+      Game.Schedule.define({
+        systems: [queueInvalid, readBefore, readAfter],
+        steps: [
+          queueInvalid,
+          Game.Schedule.applyDeferred(),
+          readBefore,
+          Game.Schedule.updateRelationFailures(),
+          readAfter
+        ]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Summary)).toBe(
+      "reorderChildren:DuplicateChild,reorderChildren:ChildSetMismatch,reorderChildren:ChildNotRelatedToParent,reorderChildren:MissingEntity/2,3"
     )
   })
 })

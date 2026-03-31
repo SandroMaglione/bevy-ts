@@ -56,6 +56,7 @@ export namespace Relation {
   export type Any = RelationDefinition<string, string, RelationKind, any>
   export type AnyRelated = RelatedDefinition<string, string, RelationKind, any>
   export type Hierarchy = RelationDefinition<string, string, "hierarchy", any>
+  export type MutationOperation = "relate" | "reorderChildren"
 
   export type Result<A, E> =
     | { readonly ok: true; readonly value: A }
@@ -92,20 +93,52 @@ export namespace Relation {
     readonly relation: string
   }
 
+  export interface MissingChildEntityError {
+    readonly _tag: "MissingChildEntity"
+    readonly entityId: number
+    readonly childId: number
+    readonly relation: string
+  }
+
+  export interface DuplicateChildError {
+    readonly _tag: "DuplicateChild"
+    readonly entityId: number
+    readonly childId: number
+    readonly relation: string
+  }
+
+  export interface ChildNotRelatedToParentError {
+    readonly _tag: "ChildNotRelatedToParent"
+    readonly entityId: number
+    readonly childId: number
+    readonly relation: string
+  }
+
+  export interface ChildSetMismatchError {
+    readonly _tag: "ChildSetMismatch"
+    readonly entityId: number
+    readonly relation: string
+  }
+
   export type LookupError = MissingEntityError | MissingRelationError
   export type MutationError =
     | MissingEntityError
     | MissingTargetEntityError
     | SelfRelationNotAllowedError
     | HierarchyCycleError
+    | MissingChildEntityError
+    | DuplicateChildError
+    | ChildNotRelatedToParentError
+    | ChildSetMismatchError
 
   export interface MutationFailure<
     R extends Any = Any,
     S extends Schema.Any = Schema.Any,
-    Root = unknown
+    Root = unknown,
+    Operation extends MutationOperation = MutationOperation
   > {
     readonly relation: R
-    readonly operation: "relate"
+    readonly operation: Operation
     readonly source: EntityId<S, Root>
     readonly target: EntityId<S, Root>
     readonly error: MutationError
@@ -167,18 +200,62 @@ export const hierarchyCycleError = (
   relation
 })
 
+export const missingChildEntityError = (
+  entityId: number,
+  childId: number,
+  relation: string
+): Relation.MissingChildEntityError => ({
+  _tag: "MissingChildEntity",
+  entityId,
+  childId,
+  relation
+})
+
+export const duplicateChildError = (
+  entityId: number,
+  childId: number,
+  relation: string
+): Relation.DuplicateChildError => ({
+  _tag: "DuplicateChild",
+  entityId,
+  childId,
+  relation
+})
+
+export const childNotRelatedToParentError = (
+  entityId: number,
+  childId: number,
+  relation: string
+): Relation.ChildNotRelatedToParentError => ({
+  _tag: "ChildNotRelatedToParent",
+  entityId,
+  childId,
+  relation
+})
+
+export const childSetMismatchError = (
+  entityId: number,
+  relation: string
+): Relation.ChildSetMismatchError => ({
+  _tag: "ChildSetMismatch",
+  entityId,
+  relation
+})
+
 export const mutationFailure = <
   R extends Relation.Any,
   S extends Schema.Any,
-  Root
+  Root,
+  Operation extends Relation.MutationOperation
 >(
   relation: R,
+  operation: Operation,
   source: EntityId<S, Root>,
   target: EntityId<S, Root>,
   error: Relation.MutationError
-): Relation.MutationFailure<R, S, Root> => ({
+): Relation.MutationFailure<R, S, Root, Operation> => ({
   relation,
-  operation: "relate",
+  operation,
   source,
   target,
   error

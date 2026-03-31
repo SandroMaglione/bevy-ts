@@ -131,6 +131,14 @@ export interface InternalWorld<S extends Schema.Any> {
     id: Entity.EntityId<S, any>,
     relation: Relation.Relation.Any
   ) => void
+  /**
+   * Reorders the existing children of one hierarchy parent.
+   */
+  readonly reorderChildren: (
+    id: Entity.EntityId<S, any>,
+    relation: Relation.Relation.Hierarchy,
+    children: ReadonlyArray<Entity.EntityId<S, any>>
+  ) => Relation.Relation.Result<void, Relation.Relation.MutationError>
 }
 
 /**
@@ -291,6 +299,14 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
     relation: R
   ) => void
   /**
+   * Queues a hierarchy-only reorder of one parent's current children.
+   */
+  readonly reorderChildren: <R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entity: Entity.EntityId<S, Root>,
+    relation: R,
+    children: ReadonlyArray<Entity.EntityId<S, Root>>
+  ) => void
+  /**
    * Queues a resource write.
    */
   readonly setResource: <K extends keyof Schema.Resources<S>>(
@@ -401,6 +417,14 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
         tag: "unrelate",
         apply(world) {
           world.unrelate(entity, relation)
+        }
+      })
+    },
+    reorderChildren(entity, relation, children) {
+      queue.push({
+        tag: "reorderChildren",
+        apply(world) {
+          world.reorderChildren(entity, relation, children)
         }
       })
     },
