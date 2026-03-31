@@ -48,6 +48,385 @@ export type RootToken<Name extends string = string> = {
   }
 }
 
+type EmptySchemaDefinition = SchemaDefinition<{}, {}, {}, {}, {}>
+
+type MergeSchemaDefinitions<
+  A extends Schema.Any,
+  B extends Schema.Any
+> = SchemaDefinition<
+  Schema.Components<A> & Schema.Components<B>,
+  Schema.Resources<A> & Schema.Resources<B>,
+  Schema.Events<A> & Schema.Events<B>,
+  Schema.States<A> & Schema.States<B>,
+  Schema.Relations<A> & Schema.Relations<B>
+>
+
+type AnyFeatureDefinition = {
+  readonly kind: "feature"
+  readonly name: string
+  readonly schema: Schema.Any
+  readonly requires: ReadonlyArray<AnyFeatureDefinition>
+  readonly build: unknown
+  readonly output: FeatureBuildOutput
+}
+
+type MergeFeatureSchemas<Features extends ReadonlyArray<AnyFeatureDefinition>> =
+  Features extends readonly [infer Head extends AnyFeatureDefinition, ...infer Tail extends Array<AnyFeatureDefinition>]
+    ? MergeSchemaDefinitions<FeatureClosureSchema<Head>, MergeFeatureSchemas<Tail>>
+    : EmptySchemaDefinition
+
+type FeatureClosureSchema<F extends AnyFeatureDefinition> =
+  F extends FeatureDefinition<any, infer FeatureSchema extends Schema.Any, infer Requires extends ReadonlyArray<AnyFeatureDefinition>, any>
+    ? MergeSchemaDefinitions<FeatureSchema, MergeFeatureSchemas<Requires>>
+    : EmptySchemaDefinition
+
+type FeatureNames<Features extends ReadonlyArray<AnyFeatureDefinition>> = Features[number]["name"]
+
+type DuplicateFeatureNames<
+  Features extends ReadonlyArray<AnyFeatureDefinition>,
+  Seen extends string = never
+> = Features extends readonly [infer Head extends AnyFeatureDefinition, ...infer Tail extends Array<AnyFeatureDefinition>]
+  ? Head["name"] extends Seen
+    ? Head["name"] | DuplicateFeatureNames<Tail, Seen>
+    : DuplicateFeatureNames<Tail, Seen | Head["name"]>
+  : never
+
+type RequiredFeatureNames<Features extends ReadonlyArray<AnyFeatureDefinition>> =
+  Features[number]["requires"][number]["name"]
+
+type MissingFeatureDependencies<Features extends ReadonlyArray<AnyFeatureDefinition>> =
+  Exclude<RequiredFeatureNames<Features>, FeatureNames<Features>>
+
+type ValidateFeatureSelection<Features extends ReadonlyArray<AnyFeatureDefinition>> =
+  [DuplicateFeatureNames<Features>] extends [never]
+    ? [MissingFeatureDependencies<Features>] extends [never]
+      ? unknown
+      : {
+          readonly __fixFeatureDependencies__: MissingFeatureDependencies<Features>
+        }
+    : {
+        readonly __fixFeatureSelection__: DuplicateFeatureNames<Features>
+      }
+
+type RebindFeatureSchedule<ScheduleValue, S extends Schema.Any, Root> =
+  ScheduleValue extends Schedule.Schedule.Named<any, infer Requirements, infer LabelValue, any>
+    ? Schedule.Schedule.Named<S, Requirements, LabelValue, Root>
+    : ScheduleValue extends Schedule.Schedule.Anonymous<any, infer Requirements, any>
+      ? Schedule.Schedule.Anonymous<S, Requirements, Root>
+      : never
+
+type FeatureScheduleArray<Output, Key extends "bootstrap" | "update"> =
+  Key extends keyof Output
+    ? Extract<Output[Key], ReadonlyArray<Schedule.ScheduleDefinition<any, any, any>>>
+    : readonly []
+
+type NormalizeFeatureOutput<
+  Output extends object,
+  S extends Schema.Any,
+  Root
+> = {
+  readonly [K in Exclude<keyof Output, "bootstrap" | "update">]: Output[K]
+} & {
+  readonly bootstrap: ReadonlyArray<RebindFeatureSchedule<FeatureScheduleArray<Output, "bootstrap">[number], S, Root>>
+  readonly update: ReadonlyArray<RebindFeatureSchedule<FeatureScheduleArray<Output, "update">[number], S, Root>>
+}
+
+type FeatureOutputRecord<
+  Features extends ReadonlyArray<AnyFeatureDefinition>,
+  S extends Schema.Any,
+  Root
+> = {
+  readonly [K in FeatureNames<Features>]:
+    NormalizeFeatureOutput<
+      Extract<Features[number], { readonly name: K }>["output"],
+      S,
+      Root
+    >
+}
+
+type FeatureBootstrapScheduleUnion<
+  Features extends ReadonlyArray<AnyFeatureDefinition>,
+  S extends Schema.Any,
+  Root
+> = FeatureOutputRecord<Features, S, Root>[FeatureNames<Features>]["bootstrap"][number]
+
+type FeatureUpdateScheduleUnion<
+  Features extends ReadonlyArray<AnyFeatureDefinition>,
+  S extends Schema.Any,
+  Root
+> = FeatureOutputRecord<Features, S, Root>[FeatureNames<Features>]["update"][number]
+
+type FeatureComponentDescriptor<S extends Schema.Any> = Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+type FeatureResourceDescriptor<S extends Schema.Any> = Extract<Schema.Resources<S>[keyof Schema.Resources<S>], Descriptor<"resource", string, any>>
+type FeatureEventDescriptor<S extends Schema.Any> = Extract<Schema.Events<S>[keyof Schema.Events<S>], Descriptor<"event", string, any>>
+type FeatureStateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Schema.States<S>], Descriptor<"state", string, any>>
+type FeatureRelationDescriptor<S extends Schema.Any> = Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>
+type FeatureQuerySelectionAccess<Accessible extends Schema.Any, Root> =
+  | QueryModule.Access<FeatureComponentDescriptor<Accessible>>
+  | Relation.SelectionAccess<Accessible, Root>
+
+export interface FeatureBuildGame<
+  Accessible extends Schema.Any,
+  Root = unknown
+> {
+  readonly schema: Accessible
+  readonly Entity: {
+    handle: (entityId: Entity.EntityId<Accessible, Root>) => Entity.Handle<Root>
+    handleFrom: <P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
+      entity: Entity.EntityRef<Accessible, P, Root> | Entity.EntityMut<Accessible, P, W, Root>
+    ) => Entity.Handle<Root>
+    handleAs: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D, entityId: Entity.EntityId<Accessible, Root>) => Entity.Handle<Root, D>
+    handleAsFrom: <D extends FeatureComponentDescriptor<Accessible>, P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
+      descriptor: D,
+      entity: Entity.EntityRef<Accessible, P, Root> | Entity.EntityMut<Accessible, P, W, Root>
+    ) => Entity.Handle<Root, D>
+  }
+  readonly Query: {
+    define: <
+      const Selection extends Record<string, FeatureQuerySelectionAccess<Accessible, Root>>,
+      const With extends ReadonlyArray<FeatureComponentDescriptor<Accessible>> = [],
+      const Without extends ReadonlyArray<FeatureComponentDescriptor<Accessible>> = [],
+      const Filters extends ReadonlyArray<QueryModule.Filter<FeatureComponentDescriptor<Accessible>>> = [],
+      const WithRelations extends ReadonlyArray<FeatureRelationDescriptor<Accessible>> = [],
+      const WithoutRelations extends ReadonlyArray<FeatureRelationDescriptor<Accessible>> = [],
+      const WithRelated extends ReadonlyArray<FeatureRelationDescriptor<Accessible>> = [],
+      const WithoutRelated extends ReadonlyArray<FeatureRelationDescriptor<Accessible>> = []
+    >(spec: {
+      readonly selection: Selection
+      readonly with?: With
+      readonly without?: Without
+      readonly filters?: Filters
+      readonly withRelations?: WithRelations
+      readonly withoutRelations?: WithoutRelations
+      readonly withRelated?: WithRelated
+      readonly withoutRelated?: WithoutRelated
+    }) => QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
+    read: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.ReadAccess<D>
+    write: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.WriteAccess<D>
+    optional: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
+    added: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.AddedFilter<D>
+    changed: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.ChangedFilter<D>
+    readRelation: <R extends FeatureRelationDescriptor<Accessible>>(descriptor: R) => Relation.RelationReadAccess<R, Accessible, Root>
+    optionalRelation: <R extends FeatureRelationDescriptor<Accessible>>(descriptor: R) => Relation.OptionalRelationReadAccess<R, Accessible, Root>
+    readRelated: <R extends FeatureRelationDescriptor<Accessible>>(descriptor: R) => Relation.RelatedReadAccess<R, Accessible, Root>
+    optionalRelated: <R extends FeatureRelationDescriptor<Accessible>>(descriptor: R) => Relation.OptionalRelatedReadAccess<R, Accessible, Root>
+  }
+  readonly Command: {
+    spawn: () => Entity.EntityDraft<Accessible, {}, Root>
+    entry: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D, value: Descriptor.Value<D>) => Command.Entry<D>
+    insert: <P extends Entity.ComponentProof, D extends FeatureComponentDescriptor<Accessible>>(
+      draft: Entity.EntityDraft<Accessible, P, Root>,
+      descriptor: D,
+      value: Descriptor.Value<D>
+    ) => Entity.EntityDraft<Accessible, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>
+    insertMany: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SchemaEntry<Accessible>>>(
+      draft: Entity.EntityDraft<Accessible, P, Root>,
+      ...entries: Entries
+    ) => Entity.EntityDraft<Accessible, Command.Draft.FoldEntries<Entries, P>, Root>
+    spawnWith: <const Entries extends ReadonlyArray<Command.SchemaEntry<Accessible>>>(
+      ...entries: Entries
+    ) => Entity.EntityDraft<Accessible, Command.Draft.FoldEntries<Entries>, Root>
+    relate: <P extends Entity.ComponentProof, R extends FeatureRelationDescriptor<Accessible>>(
+      draft: Entity.EntityDraft<Accessible, P, Root>,
+      relation: R,
+      target: Entity.EntityId<Accessible, Root>
+    ) => Entity.EntityDraft<Accessible, P, Root>
+  }
+  readonly StateMachine: Schema.Game<Accessible, Root>["StateMachine"]
+  readonly Condition: Schema.Game<Accessible, Root>["Condition"]
+  readonly System: {
+    define: <
+      const Name extends string,
+      const Queries extends Record<string, Query.Any<Root>> = {},
+      const Resources extends Record<string, System.ResourceRead<FeatureResourceDescriptor<Accessible>> | System.ResourceWrite<FeatureResourceDescriptor<Accessible>>> = {},
+      const Events extends Record<string, System.EventRead<FeatureEventDescriptor<Accessible>> | System.EventWrite<FeatureEventDescriptor<Accessible>>> = {},
+      const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
+      const States extends Record<string, System.StateRead<FeatureStateDescriptor<Accessible>> | System.StateWrite<FeatureStateDescriptor<Accessible>>> = {},
+      const InSets extends ReadonlyArray<Label.SystemSet> = [],
+      const After extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
+      const Before extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
+      const Machines extends Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>> = {},
+      const NextMachines extends Record<string, Machine.NextMachineWrite<Schema.BoundStateMachine<Root>>> = {},
+      const TransitionEvents extends Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>> = {},
+      const Removed extends Record<string, System.RemovedRead<FeatureComponentDescriptor<Accessible>>> = {},
+      const Despawned extends Record<string, System.DespawnedRead> = {},
+      const RelationFailures extends Record<string, System.RelationFailureRead<FeatureRelationDescriptor<Accessible>>> = {},
+      const When extends ReadonlyArray<Machine.Condition<Root>> = [],
+      const Transitions extends Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>> = {},
+      A = void,
+      E = never
+    >(
+      name: Name,
+      spec: {
+        readonly inSets?: InSets
+        readonly after?: After
+        readonly before?: Before
+        readonly queries?: Queries
+        readonly resources?: Resources
+        readonly events?: Events
+        readonly services?: Services
+        readonly states?: States
+        readonly machines?: Machines
+        readonly nextMachines?: NextMachines
+        readonly transitionEvents?: TransitionEvents
+        readonly removed?: Removed
+        readonly despawned?: Despawned
+        readonly relationFailures?: RelationFailures
+        readonly when?: When
+        readonly transitions?: Transitions
+      },
+      run: (context: System.SystemContext<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+        A,
+        E,
+        System.SystemDependencies<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+      >
+    ) => Schema.BoundSystem<
+      Accessible,
+      Root,
+      System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
+      A,
+      E,
+      Name
+    >
+    readResource: <D extends FeatureResourceDescriptor<Accessible>>(descriptor: D) => System.ResourceRead<D>
+    writeResource: <D extends FeatureResourceDescriptor<Accessible>>(descriptor: D) => System.ResourceWrite<D>
+    readEvent: <D extends FeatureEventDescriptor<Accessible>>(descriptor: D) => System.EventRead<D>
+    writeEvent: <D extends FeatureEventDescriptor<Accessible>>(descriptor: D) => System.EventWrite<D>
+    readState: <D extends FeatureStateDescriptor<Accessible>>(descriptor: D) => System.StateRead<D>
+    writeState: <D extends FeatureStateDescriptor<Accessible>>(descriptor: D) => System.StateWrite<D>
+    service: Schema.Game<Accessible, Root>["System"]["service"]
+    machine: Schema.Game<Accessible, Root>["System"]["machine"]
+    nextState: Schema.Game<Accessible, Root>["System"]["nextState"]
+    readTransitionEvent: Schema.Game<Accessible, Root>["System"]["readTransitionEvent"]
+    readRemoved: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => System.RemovedRead<D>
+    readDespawned: Schema.Game<Accessible, Root>["System"]["readDespawned"]
+    readRelationFailures: <R extends FeatureRelationDescriptor<Accessible>>(relation: R) => System.RelationFailureRead<R>
+    transition: Schema.Game<Accessible, Root>["System"]["transition"]
+  }
+  readonly Schedule: {
+    define: <
+      SystemValue extends Schema.BoundSystem<any, Root, any, any, any>,
+      SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
+      StepValue extends (
+        | Schema.BoundSystem<any, Root, any, any, any>
+        | Schedule.ApplyDeferredStep
+        | Schedule.EventUpdateStep
+        | Schedule.LifecycleUpdateStep
+        | Schedule.RelationFailureUpdateStep
+        | Schedule.ApplyStateTransitionsStep<any, Root>
+      ) | undefined = undefined
+    >(options: {
+      readonly systems: ReadonlyArray<SystemValue>
+      readonly sets?: ReadonlyArray<SetValue>
+      readonly steps?: ReadonlyArray<Extract<StepValue, (
+        | Schema.BoundSystem<any, Root, any, any, any>
+        | Schedule.ApplyDeferredStep
+        | Schedule.EventUpdateStep
+        | Schedule.LifecycleUpdateStep
+        | Schedule.RelationFailureUpdateStep
+        | Schedule.ApplyStateTransitionsStep<any, Root>
+      )>>
+    }) => Schedule.AnonymousScheduleFor<Accessible, SystemValue, StepValue>
+    named: <
+      L extends Label.Schedule,
+      SystemValue extends Schema.BoundSystem<any, Root, any, any, any>,
+      SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
+      StepValue extends (
+        | Schema.BoundSystem<any, Root, any, any, any>
+        | Schedule.ApplyDeferredStep
+        | Schedule.EventUpdateStep
+        | Schedule.LifecycleUpdateStep
+        | Schedule.RelationFailureUpdateStep
+        | Schedule.ApplyStateTransitionsStep<any, Root>
+      ) | undefined = undefined
+    >(label: L, options: {
+      readonly systems: ReadonlyArray<SystemValue>
+      readonly sets?: ReadonlyArray<SetValue>
+      readonly steps?: ReadonlyArray<Extract<StepValue, (
+        | Schema.BoundSystem<any, Root, any, any, any>
+        | Schedule.ApplyDeferredStep
+        | Schedule.EventUpdateStep
+        | Schedule.LifecycleUpdateStep
+        | Schedule.RelationFailureUpdateStep
+        | Schedule.ApplyStateTransitionsStep<any, Root>
+      )>>
+    }) => Schedule.NamedScheduleFor<Accessible, L, SystemValue, StepValue>
+    transitions: Schema.Game<Accessible, Root>["Schedule"]["transitions"]
+    onEnter: Schema.Game<Accessible, Root>["Schedule"]["onEnter"]
+    onExit: Schema.Game<Accessible, Root>["Schedule"]["onExit"]
+    onTransition: Schema.Game<Accessible, Root>["Schedule"]["onTransition"]
+    configureSet: Schema.Game<Accessible, Root>["Schedule"]["configureSet"]
+    applyDeferred: Schema.Game<Accessible, Root>["Schedule"]["applyDeferred"]
+    updateEvents: Schema.Game<Accessible, Root>["Schedule"]["updateEvents"]
+    updateLifecycle: Schema.Game<Accessible, Root>["Schedule"]["updateLifecycle"]
+    updateRelationFailures: Schema.Game<Accessible, Root>["Schedule"]["updateRelationFailures"]
+    applyStateTransitions: Schema.Game<Accessible, Root>["Schedule"]["applyStateTransitions"]
+  }
+}
+
+type FeatureBuildOutput = {
+  readonly bootstrap?: ReadonlyArray<Schedule.ScheduleDefinition<any, any, any>>
+  readonly update?: ReadonlyArray<Schedule.ScheduleDefinition<any, any, any>>
+}
+
+type FeatureBuildFunction<
+  Accessible extends Schema.Any,
+  Output extends FeatureBuildOutput = FeatureBuildOutput
+> = (
+  Game: FeatureBuildGame<Accessible>
+) => Output
+
+export interface FeatureDefinition<
+  Name extends string = string,
+  FeatureSchema extends Schema.Any = Schema.Any,
+  Requires extends ReadonlyArray<AnyFeatureDefinition> = ReadonlyArray<AnyFeatureDefinition>,
+  Output extends FeatureBuildOutput = FeatureBuildOutput
+> {
+  readonly kind: "feature"
+  readonly name: Name
+  readonly schema: FeatureSchema
+  readonly requires: Requires
+  readonly build: FeatureBuildFunction<MergeSchemaDefinitions<FeatureSchema, MergeFeatureSchemas<Requires>>, Output>
+  readonly output: Output
+}
+
+export interface ComposedFeatureProject<
+  Features extends ReadonlyArray<AnyFeatureDefinition>,
+  Root = unknown,
+  S extends Schema.Any = MergeFeatureSchemas<Features>
+> {
+  readonly schema: S
+  readonly Game: Schema.Game<S, Root>
+  readonly features: FeatureOutputRecord<Features, S, Root>
+  readonly schedules: {
+    readonly bootstrap: ReadonlyArray<FeatureBootstrapScheduleUnion<Features, S, Root>>
+    readonly update: ReadonlyArray<FeatureUpdateScheduleUnion<Features, S, Root>>
+  }
+  readonly App: {
+    readonly make: <
+      const Services extends Record<string, unknown>,
+      const Resources extends Runtime.RuntimeResources<S> = {},
+      const States extends Runtime.RuntimeStates<S> = {},
+      const Machines extends Record<string, unknown> = {}
+    >(options: {
+      readonly services: Runtime.RuntimeServices<Services>
+      readonly resources?: Resources
+      readonly states?: States
+      readonly machines?: Runtime.RuntimeMachines<Machines>
+    } & Runtime.ValidateSchedules<
+      ReadonlyArray<FeatureBootstrapScheduleUnion<Features, S, Root> | FeatureUpdateScheduleUnion<Features, S, Root>>,
+      Services,
+      Resources,
+      States,
+      Machines
+    >) => {
+      readonly runtime: Schema.BoundRuntime<S, Root, Services, Resources, States, Machines>
+      readonly bootstrap: () => void
+      readonly update: () => void
+    }
+  }
+}
+
 /**
  * Type-level helpers for schema-driven programming.
  */
@@ -224,6 +603,157 @@ export namespace Schema {
         relation: R,
         target: Entity.EntityId<S, Root>
       ) => Entity.EntityDraft<S, P, Root>
+    }
+    readonly StateMachine: {
+      define: <
+        const Name extends string,
+        const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
+      >(name: Name, values: Values) => Schema.BoundStateMachine<Root, Name, Values>
+    }
+    readonly Condition: {
+      inState: typeof Machine.inState
+      stateChanged: typeof Machine.stateChanged
+      not: typeof Machine.not
+      and: typeof Machine.and
+      or: typeof Machine.or
+    }
+    readonly System: {
+      define: <
+        const Name extends string,
+        const Queries extends Record<string, Query.Any<Root>> = {},
+        const Resources extends Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>> = {},
+        const Events extends Record<string, System.EventRead<EventDescriptor<S>> | System.EventWrite<EventDescriptor<S>>> = {},
+        const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
+        const States extends Record<string, System.StateRead<StateDescriptor<S>> | System.StateWrite<StateDescriptor<S>>> = {},
+        const InSets extends ReadonlyArray<Label.SystemSet> = [],
+        const After extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
+        const Before extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
+        const Machines extends Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>> = {},
+        const NextMachines extends Record<string, Machine.NextMachineWrite<Schema.BoundStateMachine<Root>>> = {},
+        const TransitionEvents extends Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>> = {},
+        const Removed extends Record<string, System.RemovedRead<ComponentDescriptor<S>>> = {},
+        const Despawned extends Record<string, System.DespawnedRead> = {},
+        const RelationFailures extends Record<string, System.RelationFailureRead<RelationDescriptor<S>>> = {},
+        const When extends ReadonlyArray<Machine.Condition<Root>> = [],
+        const Transitions extends Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>> = {},
+        A = void,
+        E = never
+      >(
+        name: Name,
+        spec: {
+          readonly inSets?: InSets
+          readonly after?: After
+          readonly before?: Before
+          readonly queries?: Queries
+          readonly resources?: Resources
+          readonly events?: Events
+          readonly services?: Services
+          readonly states?: States
+          readonly machines?: Machines
+          readonly nextMachines?: NextMachines
+          readonly transitionEvents?: TransitionEvents
+          readonly removed?: Removed
+          readonly despawned?: Despawned
+          readonly relationFailures?: RelationFailures
+          readonly when?: When
+          readonly transitions?: Transitions
+        },
+        run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+          A,
+          E,
+          System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+        >
+      ) => Schema.BoundSystem<S, Root, any, A, E, Name>
+      readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
+      writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
+      readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>
+      writeEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventWrite<D>
+      readState: <D extends StateDescriptor<S>>(descriptor: D) => System.StateRead<D>
+      writeState: <D extends StateDescriptor<S>>(descriptor: D) => System.StateWrite<D>
+      service: typeof System.service
+      machine: typeof System.machine
+      nextState: typeof System.nextState
+      readTransitionEvent: typeof System.readTransitionEvent
+      readRemoved: <D extends ComponentDescriptor<S>>(descriptor: D) => System.RemovedRead<D>
+      readDespawned: () => System.DespawnedRead
+      readRelationFailures: <R extends RelationDescriptor<S>>(relation: R) => System.RelationFailureRead<R>
+      transition: typeof System.transition
+    }
+    readonly Schedule: {
+      define: <
+        SystemValue extends Schema.BoundSystem<any, Root, any, any, any>,
+        SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
+        StepValue extends (
+          | Schema.BoundSystem<any, Root, any, any, any>
+          | Schedule.ApplyDeferredStep
+          | Schedule.EventUpdateStep
+          | Schedule.LifecycleUpdateStep
+          | Schedule.RelationFailureUpdateStep
+          | Schedule.ApplyStateTransitionsStep<any, Root>
+        ) | undefined = undefined
+      >(options: {
+        readonly systems: ReadonlyArray<SystemValue>
+        readonly sets?: ReadonlyArray<SetValue>
+        readonly steps?: ReadonlyArray<Extract<StepValue, (
+          | Schema.BoundSystem<any, Root, any, any, any>
+          | Schedule.ApplyDeferredStep
+          | Schedule.EventUpdateStep
+          | Schedule.LifecycleUpdateStep
+          | Schedule.RelationFailureUpdateStep
+          | Schedule.ApplyStateTransitionsStep<any, Root>
+        )>>
+      }) => Schema.BoundSchedule<S, Root, any>
+      named: <
+        L extends Label.Schedule,
+        SystemValue extends Schema.BoundSystem<any, Root, any, any, any>,
+        SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
+        StepValue extends (
+          | Schema.BoundSystem<any, Root, any, any, any>
+          | Schedule.ApplyDeferredStep
+          | Schedule.EventUpdateStep
+          | Schedule.LifecycleUpdateStep
+          | Schedule.RelationFailureUpdateStep
+          | Schedule.ApplyStateTransitionsStep<any, Root>
+        ) | undefined = undefined
+      >(label: L, options: {
+        readonly systems: ReadonlyArray<SystemValue>
+        readonly sets?: ReadonlyArray<SetValue>
+        readonly steps?: ReadonlyArray<Extract<StepValue, (
+          | Schema.BoundSystem<any, Root, any, any, any>
+          | Schedule.ApplyDeferredStep
+          | Schedule.EventUpdateStep
+          | Schedule.LifecycleUpdateStep
+          | Schedule.RelationFailureUpdateStep
+          | Schedule.ApplyStateTransitionsStep<any, Root>
+        )>>
+      }) => Schema.BoundSchedule<S, Root, any>
+      transitions: typeof Schedule.transitions
+      onEnter: typeof bind<S, Root> extends (...args: any[]) => infer _ ? any : never
+      onExit: typeof bind<S, Root> extends (...args: any[]) => infer _ ? any : never
+      onTransition: typeof bind<S, Root> extends (...args: any[]) => infer _ ? any : never
+      configureSet: typeof Schedule.configureSet
+      applyDeferred: typeof Schedule.applyDeferred
+      updateEvents: typeof Schedule.updateEvents
+      updateLifecycle: typeof Schedule.updateLifecycle
+      updateRelationFailures: typeof Schedule.updateRelationFailures
+      applyStateTransitions: <Bundle extends Schema.BoundTransitionBundle<S, Root> | undefined = undefined>(bundle?: Bundle) => Schedule.ApplyStateTransitionsStep<Bundle, Root>
+    }
+    readonly Runtime: {
+      make: <
+        const Services extends Record<string, unknown>,
+        const Resources extends Runtime.RuntimeResources<S> = {},
+        const States extends Runtime.RuntimeStates<S> = {},
+        const Machines extends Record<string, unknown> = {}
+      >(options: {
+        readonly services: Runtime.RuntimeServices<Services>
+        readonly resources?: Resources
+        readonly states?: States
+        readonly machines?: Runtime.RuntimeMachines<Machines>
+      }) => Schema.BoundRuntime<S, Root, Services, Resources, States, Machines>
+      service: typeof Runtime.service
+      services: typeof Runtime.services
+      machine: typeof Runtime.machine
+      machines: typeof Runtime.machines
     }
   }
 }
@@ -920,4 +1450,124 @@ export const bind = <S extends Schema.Any, Root = S>(
       machines: Runtime.machines
     }
   }
+}
+
+export const defineFeature = <
+  const Name extends string,
+  FeatureSchema extends Schema.Any,
+  const Requires extends ReadonlyArray<AnyFeatureDefinition> = [],
+  Output extends FeatureBuildOutput = FeatureBuildOutput
+>(
+  name: Name,
+  options: {
+    readonly schema: FeatureSchema
+    readonly requires?: Requires
+    readonly build: FeatureBuildFunction<MergeSchemaDefinitions<FeatureSchema, MergeFeatureSchemas<Requires>>, Output>
+  }
+): FeatureDefinition<Name, FeatureSchema, Requires, Output> => ({
+  kind: "feature",
+  name,
+  schema: options.schema,
+  requires: (options.requires ?? []) as Requires,
+  build: options.build,
+  output: undefined as unknown as Output
+})
+
+export const composeFeatures = <
+  Root,
+  const Features extends readonly [AnyFeatureDefinition, ...Array<AnyFeatureDefinition>]
+>(options: {
+  readonly root: Root
+  readonly features: Features
+} & ValidateFeatureSelection<Features>): ComposedFeatureProject<Features, Root> => {
+  const featureNames = new Set<string>()
+  for (const feature of options.features) {
+    if (featureNames.has(feature.name)) {
+      throw new Error(`Duplicate feature name: ${feature.name}`)
+    }
+    featureNames.add(feature.name)
+  }
+  for (const feature of options.features) {
+    for (const requirement of feature.requires) {
+      if (!featureNames.has(requirement.name)) {
+        throw new Error(`Missing required feature: ${requirement.name}`)
+      }
+    }
+  }
+
+  const schema = build(...options.features.map((feature) => feature.schema) as unknown as FeaturesToSchemaTuple<Features>)
+  const Game = bind(schema, options.root)
+  const builtFeatures = Object.create(null) as Record<string, object>
+  const bootstrapSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root>> = []
+  const updateSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root>> = []
+
+  for (const feature of options.features) {
+    const built = (feature.build as FeatureBuildFunction<FeatureClosureSchema<typeof feature>, FeatureBuildOutput>)(
+      Game as unknown as FeatureBuildGame<FeatureClosureSchema<typeof feature>>
+    ) as FeatureBuildOutput & Record<string, unknown>
+
+    const normalized = {
+      ...built,
+      bootstrap: [...(built.bootstrap ?? [])],
+      update: [...(built.update ?? [])]
+    }
+
+    bootstrapSchedules.push(...normalized.bootstrap as ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>)
+    updateSchedules.push(...normalized.update as ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>)
+    builtFeatures[feature.name] = normalized
+  }
+
+  const projectBootstrapSchedules =
+    bootstrapSchedules as unknown as ReadonlyArray<FeatureBootstrapScheduleUnion<Features, typeof schema, Root>>
+  const projectUpdateSchedules =
+    updateSchedules as unknown as ReadonlyArray<FeatureUpdateScheduleUnion<Features, typeof schema, Root>>
+
+  return {
+    schema,
+    Game,
+    features: builtFeatures as FeatureOutputRecord<Features, typeof schema, Root>,
+    schedules: {
+      bootstrap: projectBootstrapSchedules,
+      update: projectUpdateSchedules
+    },
+    App: {
+      make<const Services extends Record<string, unknown>, const Resources extends Runtime.RuntimeResources<typeof schema> = {}, const States extends Runtime.RuntimeStates<typeof schema> = {}, const Machines extends Record<string, unknown> = {}>(runtimeOptions: {
+        readonly services: Runtime.RuntimeServices<Services>
+        readonly resources?: Resources
+        readonly states?: States
+        readonly machines?: Runtime.RuntimeMachines<Machines>
+      }) {
+        const runtime = Game.Runtime.make(runtimeOptions)
+        const initializeSchedules = runtime.initialize as (
+          ...schedules: ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>
+        ) => void
+        const tickSchedules = runtime.tick as (
+          ...schedules: ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>
+        ) => void
+        return {
+          runtime,
+          bootstrap: () => {
+            initializeSchedules(...bootstrapSchedules)
+          },
+          update: () => {
+            tickSchedules(...updateSchedules)
+          }
+        }
+      }
+    }
+  } as unknown as ComposedFeatureProject<Features, Root>
+}
+
+type FeaturesToSchemaTuple<Features extends readonly [AnyFeatureDefinition, ...Array<AnyFeatureDefinition>]> =
+  Features extends readonly [infer Head extends AnyFeatureDefinition, ...infer Tail extends Array<AnyFeatureDefinition>]
+    ? Tail["length"] extends 0
+      ? readonly [Head["schema"]]
+      : Tail extends readonly [AnyFeatureDefinition, ...Array<AnyFeatureDefinition>]
+        ? readonly [Head["schema"], ...FeaturesToSchemaTuple<Tail>]
+        : readonly [Head["schema"]]
+    : never
+
+export const Feature = {
+  define: defineFeature,
+  compose: composeFeatures
 }

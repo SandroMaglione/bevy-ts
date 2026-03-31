@@ -552,4 +552,122 @@ describe("Schema", () => {
 
     expect(ObserveSystem).type.toBeAssignableTo<import("../src/schema.ts").Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
   })
+
+  it("supports pre-bind typed feature composition with structural dependencies", () => {
+    const Root = Schema.defineRoot("FeatureRoot")
+    const Health = Descriptor.defineComponent<{ current: number }>()("Health")
+    const Damage = Descriptor.defineEvent<{ amount: number }>()("Damage")
+
+    const Core = Schema.Feature.define("Core", {
+      schema: Schema.fragment({
+        resources: {
+          DeltaTime: Time
+        }
+      }),
+      build: (Game) => {
+        const Tick = Game.System.define(
+          "Feature/CoreTick",
+          {
+            resources: {
+              time: Game.System.readResource(Time)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.time.get()
+            })
+        )
+
+        return {
+          update: [Game.Schedule.define({
+            systems: [Tick]
+          })]
+        }
+      }
+    })
+
+    const Combat = Schema.Feature.define("Combat", {
+      schema: Schema.fragment({
+        components: {
+          Health
+        },
+        events: {
+          Damage
+        }
+      }),
+      requires: [Core] as const,
+      build: (Game) => {
+        const ApplyDamage = Game.System.define(
+          "Feature/ApplyDamage",
+          {
+            queries: {
+              units: Game.Query.define({
+                selection: {
+                  health: Game.Query.write(Health)
+                }
+              })
+            },
+            resources: {
+              time: Game.System.readResource(Time)
+            },
+            events: {
+              damage: Game.System.readEvent(Damage)
+            }
+          },
+          ({ queries, resources, events }) =>
+            Fx.sync(() => {
+              resources.time.get()
+              events.damage.all()
+              for (const match of queries.units.each()) {
+                match.data.health.get()
+              }
+            })
+        )
+
+        return {
+          update: [Game.Schedule.define({
+            systems: [ApplyDamage]
+          })]
+        }
+      }
+    })
+
+    const project = Schema.Feature.compose({
+      root: Root,
+      features: [Core, Combat] as const
+    })
+
+    expect(project.Game).type.toBe<import("../src/schema.ts").Schema.Game<typeof project.schema, typeof Root>>()
+    expect(project.features.Core.update).type.toBeAssignableTo<ReadonlyArray<import("../src/schema.ts").Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
+    expect(project.features.Combat.update).type.toBeAssignableTo<ReadonlyArray<import("../src/schema.ts").Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
+
+    project.App.make({
+      services: project.Game.Runtime.services(),
+      resources: {
+        DeltaTime: 1
+      }
+    })
+
+    Schema.Feature.define("InvalidCombat", {
+      schema: Schema.fragment({}),
+      requires: [Core] as const,
+      build: (Game) => {
+        // @ts-expect-error!
+        Game.Query.read(Velocity)
+        return {}
+      }
+    })
+
+    // @ts-expect-error!
+    Schema.Feature.compose({
+      root: Root,
+      features: [Combat] as const
+    })
+
+    // @ts-expect-error!
+    Schema.Feature.compose({
+      root: Root,
+      features: [Core, Core] as const
+    })
+  })
 })

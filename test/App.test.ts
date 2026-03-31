@@ -6,6 +6,8 @@ import * as System from "../src/system.ts"
 
 const Counter = Descriptor.defineResource<number>()("Counter")
 const Log = Descriptor.defineResource<ReadonlyArray<string>>()("Log")
+const Health = Descriptor.defineComponent<{ current: number }>()("Health")
+const BootCount = Descriptor.defineResource<number>()("BootCount")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -240,6 +242,120 @@ describe("App", () => {
 
     const captured = readCounter(runtime)
     expect(captured).toBe(3)
+  })
+
+  it("composes typed features before bind and runs aggregated app phases", () => {
+    const Root = Schema.defineRoot("FeatureApp")
+
+    const Core = Schema.Feature.define("Core", {
+      schema: Schema.fragment({
+        resources: {
+          Counter,
+          Log,
+          BootCount
+        }
+      }),
+      build: (Game) => {
+        const bootstrap = Game.System.define(
+          "Feature/CoreBootstrap",
+          {
+            resources: {
+              bootCount: Game.System.writeResource(BootCount),
+              log: Game.System.writeResource(Log)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.bootCount.update((value) => value + 1)
+              resources.log.update((entries) => [...entries, "bootstrap"])
+            })
+        )
+
+        return {
+          bootstrap: [Game.Schedule.define({
+            systems: [bootstrap]
+          })]
+        }
+      }
+    })
+
+    const Combat = Schema.Feature.define("Combat", {
+      schema: Schema.fragment({
+        components: {
+          Health
+        }
+      }),
+      requires: [Core] as const,
+      build: (Game) => {
+        const increment = Game.System.define(
+          "Feature/CombatIncrement",
+          {
+            resources: {
+              counter: Game.System.writeResource(Counter),
+              log: Game.System.writeResource(Log)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.counter.update((value) => value + 1)
+              resources.log.update((entries) => [...entries, "combat"])
+            })
+        )
+
+        const capture = Game.System.define(
+          "Feature/CombatCapture",
+          {
+            resources: {
+              counter: Game.System.readResource(Counter),
+              bootCount: Game.System.readResource(BootCount),
+              log: Game.System.readResource(Log)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              capturedCounter = resources.counter.get()
+              capturedBootCount = resources.bootCount.get()
+              capturedLog = resources.log.get()
+            })
+        )
+
+        return {
+          update: [
+            Game.Schedule.define({
+              systems: [increment]
+            }),
+            Game.Schedule.define({
+              systems: [capture]
+            })
+          ]
+        }
+      }
+    })
+
+    let capturedCounter = -1
+    let capturedBootCount = -1
+    let capturedLog: ReadonlyArray<string> = []
+
+    const project = Schema.Feature.compose({
+      root: Root,
+      features: [Core, Combat] as const
+    })
+
+    const app = project.App.make({
+      services: project.Game.Runtime.services(),
+      resources: {
+        Counter: 0,
+        Log: [],
+        BootCount: 0
+      }
+    })
+
+    app.bootstrap()
+    app.update()
+
+    expect(capturedCounter).toBe(1)
+    expect(capturedBootCount).toBe(1)
+    expect(capturedLog).toEqual(["bootstrap", "combat"])
   })
 })
 

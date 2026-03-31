@@ -575,33 +575,51 @@ What is not an acceptable fix:
 
 This is best understood as an internal compiler-cost tradeoff, not as a user-meaningful loss of safety.
 
-## Roadmap
+## Feature Composition
 
-The next meaningful additions are the ones that improve type safety, explicitness, and feature reach without turning the runtime into an engine. If TypeScript cannot prove a behavior honestly, the public API should not pretend it can.
-
-The browser examples, especially the top-down proof of concept, confirmed that the current ECS core is already enough to drive real gameplay loops. They also exposed the next pressure points clearly: long-lived entity references, relationships, and higher-level feature composition.
-
-The order below is based on how much each addition strengthens the ECS authoring model, not on implementation ease.
-
-### 1. Typed feature or module composition
-
-This is the longer-term architectural piece. Larger games eventually need a first-class way to assemble optional gameplay features, server/client/editor variants, and reusable modules. Bevy plugins are the reference for the problem being solved, not the intended API shape.
-
-It would unlock things like:
+Typed feature composition is now implemented as a strict pre-bind layer under `Schema.Feature`.
 
 ```ts
-const Combat = Game.Feature.define({
-  schema: combatFragment,
-  schedules: [combatUpdate],
-  services: [DamageResolver]
+const Root = Schema.defineRoot("Game")
+
+const Core = Schema.Feature.define("Core", {
+  schema: coreFragment,
+  build: (Game) => ({
+    bootstrap: [coreBootstrap]
+  })
 })
 
-const app = Game.App.make({
-  features: [Core, Combat, Dialogue]
+const Combat = Schema.Feature.define("Combat", {
+  schema: combatFragment,
+  requires: [Core],
+  build: (Game) => ({
+    update: [combatUpdate]
+  })
 })
+
+const project = Schema.Feature.compose({
+  root: Root,
+  features: [Core, Combat]
+})
+
+const app = project.App.make({
+  services: project.Game.Runtime.services(...)
+})
+
+app.bootstrap()
+app.update()
 ```
 
-### Out of scope for now
+The important constraints are intentional:
+
+- features are pure typed values, not imperative plugins
+- composition happens before `Schema.bind(...)`
+- dependencies are structural only: a feature can require another feature's schema slice, but does not receive that feature's built outputs directly
+- runtime requirements still come from schedules, so there is no second dependency declaration surface to keep in sync
+
+This keeps the Bevy-style goal of modular gameplay assembly, while staying inside this library's stricter guarantees: exact schema closure, exact root flow, explicit runtime requirements, and no user-facing casts or compiler-workaround scaffolding
+
+## Out of scope for now
 
 Some additions are intentionally not near-term because they do not match the current goals.
 
