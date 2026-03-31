@@ -190,6 +190,10 @@ type FeatureResourceDescriptor<S extends Schema.Any> = Extract<Schema.Resources<
 type FeatureEventDescriptor<S extends Schema.Any> = Extract<Schema.Events<S>[keyof Schema.Events<S>], Descriptor<"event", string, any>>
 type FeatureStateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Schema.States<S>], Descriptor<"state", string, any>>
 type FeatureRelationDescriptor<S extends Schema.Any> = Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>
+type RuntimeServicesOf<Provided extends Runtime.RuntimeServices<any>> =
+  [Provided] extends [Runtime.RuntimeServices<infer Services>] ? Services : never
+type RuntimeMachinesOf<Provided extends Runtime.RuntimeMachines<any>> =
+  [Provided] extends [Runtime.RuntimeMachines<infer Machines>] ? Machines : {}
 type FeatureQuerySelectionAccess<Accessible extends Schema.Any, Root> =
   | QueryModule.Access<FeatureComponentDescriptor<Accessible>>
   | Relation.SelectionAccess<Accessible, Root>
@@ -431,25 +435,25 @@ export interface ComposedFeatureProject<
     readonly bootstrap: ReadonlyArray<FeatureBootstrapScheduleUnion<Features, S, Root>>
     readonly update: ReadonlyArray<FeatureUpdateScheduleUnion<Features, S, Root>>
   }
-  readonly App: {
-    readonly make: <
-      const Services extends Record<string, unknown>,
+    readonly App: {
+      readonly make: <
+      const ProvidedServices extends Runtime.RuntimeServices<any>,
       const Resources extends Runtime.RuntimeResources<S> = {},
       const States extends Runtime.RuntimeStates<S> = {},
-      const Machines extends Record<string, unknown> = {}
+      const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>
     >(options: {
-      readonly services: Runtime.RuntimeServices<Services>
+      readonly services: ProvidedServices
       readonly resources?: Resources
       readonly states?: States
-      readonly machines?: Runtime.RuntimeMachines<Machines>
+      readonly machines?: ProvidedMachines
     } & Runtime.ValidateSchedules<
       ReadonlyArray<FeatureBootstrapScheduleUnion<Features, S, Root> | FeatureUpdateScheduleUnion<Features, S, Root>>,
-      Services,
+      RuntimeServicesOf<ProvidedServices>,
       Resources,
       States,
-      Machines
+      RuntimeMachinesOf<ProvidedMachines>
     >) => {
-      readonly runtime: Schema.BoundRuntime<S, Root, Services, Resources, States, Machines>
+      readonly runtime: Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Resources, States, RuntimeMachinesOf<ProvidedMachines>>
       readonly bootstrap: () => void
       readonly update: () => void
     }
@@ -791,16 +795,16 @@ export namespace Schema {
     }
     readonly Runtime: {
       make: <
-        const Services extends Record<string, unknown>,
+        const ProvidedServices extends Runtime.RuntimeServices<any>,
         const Resources extends Runtime.RuntimeResources<S> = {},
         const States extends Runtime.RuntimeStates<S> = {},
-        const Machines extends Record<string, unknown> = {}
+        const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>
       >(options: {
-        readonly services: Runtime.RuntimeServices<Services>
+        readonly services: ProvidedServices
         readonly resources?: Resources
         readonly states?: States
-        readonly machines?: Runtime.RuntimeMachines<Machines>
-      }) => Schema.BoundRuntime<S, Root, Services, Resources, States, Machines>
+        readonly machines?: ProvidedMachines
+      }) => Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Resources, States, RuntimeMachinesOf<ProvidedMachines>>
       service: typeof Runtime.service
       services: typeof Runtime.services
       machine: typeof Runtime.machine
@@ -1484,16 +1488,16 @@ export const bind = <S extends Schema.Any, Root = S>(
   }, options)
 
   const makeRuntime = <
-    const Services extends Record<string, unknown>,
+    const ProvidedServices extends Runtime.RuntimeServices<any>,
     const Resources extends Runtime.RuntimeResources<S> = {},
     const States extends Runtime.RuntimeStates<S> = {},
-    const Machines extends Record<string, unknown> = {}
+    const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>
   >(options: {
-    readonly services: Runtime.RuntimeServices<Services>
+    readonly services: ProvidedServices
     readonly resources?: Resources
     readonly states?: States
-    readonly machines?: Runtime.RuntimeMachines<Machines>
-  }) => Runtime.makeRuntime<S, Services, Resources, States, Root, Machines>({
+    readonly machines?: ProvidedMachines
+  }) => Runtime.makeRuntime<S, ProvidedServices, Resources, States, Root, ProvidedMachines>({
     schema,
     ...options,
     machineDefinitions: definedMachines

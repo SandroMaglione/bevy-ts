@@ -175,20 +175,18 @@ export type RuntimeServices<Services extends Record<string, unknown> = {}> = Rea
   }
 }
 
+type RuntimeServicesOf<Provided extends RuntimeServices<any>> =
+  [Provided] extends [RuntimeServices<infer Services>] ? Services : never
+
+type RuntimeMachinesOf<Provided extends RuntimeMachines<any>> =
+  [Provided] extends [RuntimeMachines<infer Machines>] ? Machines : {}
+
 /**
  * Flattens an inferred object type for clearer diagnostics.
  */
 type Simplify<A> = {
   readonly [K in keyof A]: A[K]
 }
-
-/**
- * Extracts the requirements carried by one schedule definition.
- */
-type RequirementsOfSchedule<Schedule> =
-  Schedule extends { readonly requirements: infer Requirements extends RuntimeRequirements }
-    ? Requirements
-    : never
 
 type NormalizeRequirementObject<Required extends object> =
   [Required] extends [never] ? {} : Simplify<Required>
@@ -209,7 +207,7 @@ type IncompatibleKeys<Required extends object, Provided extends object> = {
 
 type CategoryRequirementErrors<
   Kind extends string,
-  Schedule,
+  ScheduleName extends string,
   Required extends object,
   Provided extends object
 > =
@@ -217,29 +215,44 @@ type CategoryRequirementErrors<
     ? never
     : {
         readonly __runtimeRequirementError__: Kind
-        readonly __schedule__: ScheduleName<Schedule>
+        readonly __schedule__: ScheduleName
         readonly __missing__: MissingKeys<Required, Provided>
       })
   | ([IncompatibleKeys<Required, Provided>] extends [never]
     ? never
     : {
         readonly __runtimeRequirementError__: `${Kind} (incompatible)`
-        readonly __schedule__: ScheduleName<Schedule>
+        readonly __schedule__: ScheduleName
         readonly __missing__: IncompatibleKeys<Required, Provided>
       })
 
-type ScheduleRequirementErrors<
-  Schedule,
+type RequirementErrorsFor<
+  Requirements extends RuntimeRequirements,
+  ScheduleLabel extends string,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
   Machines extends object
-> = RequirementsOfSchedule<Schedule> extends infer Requirements extends RuntimeRequirements
-  ? | CategoryRequirementErrors<"Missing or incompatible services", Schedule, NormalizeRequirementObject<Requirements["services"]>, Services>
-    | CategoryRequirementErrors<"Missing or incompatible resources", Schedule, NormalizeRequirementObject<Requirements["resources"]>, Resources>
-    | CategoryRequirementErrors<"Missing or incompatible states", Schedule, NormalizeRequirementObject<Requirements["states"]>, States>
-    | CategoryRequirementErrors<"Missing or incompatible machines", Schedule, NormalizeRequirementObject<Requirements["machines"]>, Machines>
-  : never
+> =
+  | CategoryRequirementErrors<"Missing or incompatible services", ScheduleLabel, NormalizeRequirementObject<Requirements["services"]>, Services>
+  | CategoryRequirementErrors<"Missing or incompatible resources", ScheduleLabel, NormalizeRequirementObject<Requirements["resources"]>, Resources>
+  | CategoryRequirementErrors<"Missing or incompatible states", ScheduleLabel, NormalizeRequirementObject<Requirements["states"]>, States>
+  | CategoryRequirementErrors<"Missing or incompatible machines", ScheduleLabel, NormalizeRequirementObject<Requirements["machines"]>, Machines>
+
+type RequirementErrorsOfSchedule<
+  Schedule extends ExecutableScheduleDefinition<any, any, any>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = RequirementErrorsFor<
+  Schedule["requirements"],
+  ScheduleName<Schedule>,
+  Services,
+  Resources,
+  States,
+  Machines
+>
 
 export type ValidateSchedules<
   Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any>>,
@@ -247,56 +260,13 @@ export type ValidateSchedules<
   Resources extends object,
   States extends object,
   Machines extends object
-> = [ScheduleRequirementErrors<Schedules[number], Services, Resources, States, Machines>] extends [never]
+> = [RequirementErrorsOfSchedule<Schedules[number], Services, Resources, States, Machines>] extends [never]
   ? unknown
   : {
-      readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedules[number], Services, Resources, States, Machines>
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedules[number], Services, Resources, States, Machines>
     }
 
 export type AnyRequirements = RuntimeRequirements<any, any, any, any>
-
-type ExecutableScheduleShape<
-  Schedule,
-  S extends Schema.Any,
-  Root
-> = Schedule extends {
-  readonly kind: "anonymous" | "named"
-  readonly schema: S
-  readonly requirements: infer _Requirements extends RuntimeRequirements
-  readonly __schemaRoot?: Root | undefined
-}
-  ? Schedule
-  : never
-
-type ExecutableScheduleShapes<
-  Schedules extends ReadonlyArray<unknown>,
-  S extends Schema.Any,
-  Root
-> = {
-  readonly [K in keyof Schedules]: ExecutableScheduleShape<Schedules[K], S, Root>
-}
-
-type ScheduleValidationGate<
-  Schedule,
-  Services extends Record<string, unknown>,
-  Resources extends object,
-  States extends object,
-  Machines extends object
-> = [ScheduleRequirementErrors<Schedule, Services, Resources, States, Machines>] extends [never]
-  ? unknown
-  : {
-      readonly __fixRuntimeRequirements__: ScheduleRequirementErrors<Schedule, Services, Resources, States, Machines>
-    }
-
-type SchedulesValidationGate<
-  Schedules extends ReadonlyArray<unknown>,
-  S extends Schema.Any,
-  Root,
-  Services extends Record<string, unknown>,
-  Resources extends object,
-  States extends object,
-  Machines extends object
-> = ValidateSchedules<ExecutableScheduleShapes<Schedules, S, Root>, Services, Resources, States, Machines>
 
 /**
  * The caller-facing initialization shape for one descriptor registry.
@@ -381,8 +351,8 @@ export interface Runtime<
    * repeating update loop.
    */
   readonly initialize: {
-    <const Schedules extends ReadonlyArray<unknown>>(
-      ...schedules: Schedules & ExecutableScheduleShapes<Schedules, S, Root> & SchedulesValidationGate<Schedules, S, Root, Services, Resources, States, Machines>
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>>(
+      ...schedules: Schedules & ValidateSchedules<NoInfer<Schedules>, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -395,10 +365,9 @@ export interface Runtime<
    * of schedules.
    */
   readonly runSchedule: {
-    <const Selected>(
+    <const Selected extends ExecutableScheduleDefinition<S, AnyRequirements, Root>>(
       schedule: Selected
-        & ExecutableScheduleShape<Selected, S, Root>
-        & ScheduleValidationGate<ExecutableScheduleShape<Selected, S, Root>, Services, Resources, States, Machines>
+        & ValidateSchedules<readonly [NoInfer<Selected>], Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -409,8 +378,8 @@ export interface Runtime<
    * updates produced by earlier schedules.
    */
   readonly tick: {
-    <const Schedules extends ReadonlyArray<unknown>>(
-      ...schedules: Schedules & ExecutableScheduleShapes<Schedules, S, Root> & SchedulesValidationGate<Schedules, S, Root, Services, Resources, States, Machines>
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>>(
+      ...schedules: Schedules & ValidateSchedules<NoInfer<Schedules>, Services, Resources, States, Machines>
     ): void
   }
 }
@@ -438,19 +407,26 @@ export interface Runtime<
  */
 export const makeRuntime = <
   S extends Schema.Any,
-  const Services extends Record<string, unknown>,
+  const ProvidedServices extends RuntimeServices<any>,
   const Resources extends RuntimeResources<S> = {},
   const States extends RuntimeStates<S> = {},
   Root = unknown,
-  const Machines extends Record<string, unknown> = {}
+  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>
 >(options: {
   readonly schema: S
-  readonly services: RuntimeServices<Services>
+  readonly services: ProvidedServices
   readonly resources?: Resources
   readonly states?: States
-  readonly machines?: RuntimeMachines<Machines>
+  readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-}): Runtime<S, Simplify<Services>, Resources, States, Root, Machines> => {
+}): Runtime<
+  S,
+  Simplify<RuntimeServicesOf<ProvidedServices>>,
+  Resources,
+  States,
+  Root,
+  RuntimeMachinesOf<ProvidedMachines>
+> => {
   /**
    * Monotonic entity id counter.
    */
@@ -565,11 +541,11 @@ export const makeRuntime = <
   /**
    * The normalized descriptor-backed runtime service environment.
    */
-  const providedServices = options.services as unknown as Simplify<Services>
+  const providedServices = options.services as unknown as Simplify<RuntimeServicesOf<ProvidedServices>>
   /**
    * The normalized machine initialization environment.
    */
-  const providedMachines = (options.machines ?? machines()) as unknown as Simplify<Machines>
+  const providedMachines = (options.machines ?? machines()) as unknown as Simplify<RuntimeMachinesOf<ProvidedMachines>>
   const machineEntries = (options.machines ?? machines())[runtimeMachinesEntries]
   const machineDefinitions = options.machineDefinitions ?? []
   const machineDefinitionOrder = new Map(
@@ -1513,7 +1489,10 @@ export const makeRuntime = <
       ])
     )
     const serviceViews = Object.fromEntries(
-      Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [key, providedServices[access.descriptor.name as keyof Services]])
+      Object.entries(system.spec.services as Record<string, any>).map(([key, access]) => [
+        key,
+        providedServices[access.descriptor.name as keyof RuntimeServicesOf<ProvidedServices>]
+      ])
     )
 
     return {
@@ -1762,12 +1741,19 @@ export const makeRuntime = <
   /**
    * The final loop-agnostic runtime value returned to users.
    */
-  const runtime: Runtime<S, Simplify<Services>, Resources, States, Root, Machines> = {
+  const runtime: Runtime<
+    S,
+    Simplify<RuntimeServicesOf<ProvidedServices>>,
+    Resources,
+    States,
+    Root,
+    RuntimeMachinesOf<ProvidedMachines>
+  > = {
     schema: options.schema,
     services: providedServices,
     resourceValues: (options.resources ?? {}) as Resources,
     stateValues: (options.states ?? {}) as States,
-    machineValues: providedMachines as Machines,
+    machineValues: providedMachines as RuntimeMachinesOf<ProvidedMachines>,
     initialize(...schedules) {
       tickUnsafe(schedules)
     },

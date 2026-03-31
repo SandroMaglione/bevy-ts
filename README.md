@@ -1094,9 +1094,38 @@ What is not an acceptable fix:
 
 This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety.
 
-## Roadmap
+There is still one known raw-compiler edge case around direct schedule execution
+when the schedule's machine requirements come from deeply nested disjunctive
+conditions. The concrete failing shape is a direct call like:
 
-1. Schedule execution still needs a cheaper carried type shape after validation. Refactoring [`src/examples/smoke.ts`](./src/examples/smoke.ts) to the current explicit API worked cleanly at the system and schedule-definition level, but the direct `app.update(update)` / `runtime.runSchedule(update)` path can still hit TypeScript instantiation limits in a minimal example. That is a direct violation of the library's main user-facing constraint: users should not need casts, explicit generics, or artificial schedule splitting just to execute a valid schedule. The execution boundary should preserve exact validation, root safety, and runtime-requirement safety while carrying a much cheaper normalized schedule type into `App` and `Runtime`.
+```ts
+runtime.runSchedule(Game.Schedule.define({
+  systems: [increment]
+}))
+```
+
+where `increment` is gated by a condition such as:
+
+```ts
+Game.Condition.or(
+  Game.Condition.inState(AppState, "Menu"),
+  Game.Condition.inState(RoundState, "Live")
+)
+```
+
+The schedule itself is valid, the carried runtime requirements are correct, and
+the runtime is provisioned correctly. The failure is a nondeterministic `tsgo`
+false negative at the execution boundary, where the compiler sometimes asks for
+the synthetic `__fixRuntimeRequirements__` error marker even though the machine
+requirements are satisfied.
+
+For now, the safe local workaround is to define the schedule value first and
+then pass that value to `runSchedule(...)` or `app.update(...)`. This keeps the
+public API strict and unchanged while avoiding the one unstable inline
+instantiation path. The remaining work, if this needs to be fully eliminated,
+is to make the execution-boundary machine-requirement gate cheaper without
+relaxing root safety, requirement safety, or explicit runtime-failure
+semantics.
 
 ## Out of scope for now
 
