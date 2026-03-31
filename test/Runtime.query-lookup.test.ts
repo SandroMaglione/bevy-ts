@@ -164,6 +164,152 @@ describe("Runtime query and lookup", () => {
     expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
   })
 
+  it("singleOptional returns undefined when no entity matches", () => {
+    const observe = System.define(
+      "RuntimeQuery/SingleOptionalNoEntities",
+      {
+        schema,
+        queries: {
+          positions: Query.define({
+            selection: {
+              position: Query.read(Position)
+            }
+          })
+        },
+        resources: {
+          lastX: System.writeResource(LastX),
+          lastError: System.writeResource(LastError)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          const result = queries.positions.singleOptional()
+          resources.lastError.set(result.ok ? "" : result.error._tag)
+          resources.lastX.set(result.ok && result.value ? result.value.data.position.get().x : -1)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Schedule.define({
+      schema,
+      systems: [observe]
+    }))
+
+    expect(readResourceValue(runtime, schema, LastError)).toBe("")
+    expect(readResourceValue(runtime, schema, LastX)).toBe(-1)
+  })
+
+  it("singleOptional returns the match when exactly one entity matches", () => {
+    const spawn = System.define(
+      "RuntimeQuery/SpawnOneForSingleOptional",
+      {
+        schema
+      },
+      ({ commands }) =>
+        Fx.sync(() => {
+          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 7, y: 3 }] as const))
+        })
+    )
+
+    const observe = System.define(
+      "RuntimeQuery/SingleOptionalOneEntity",
+      {
+        schema,
+        queries: {
+          positions: Query.define({
+            selection: {
+              position: Query.write(Position)
+            }
+          })
+        },
+        resources: {
+          lastX: System.writeResource(LastX),
+          lastError: System.writeResource(LastError)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          const result = queries.positions.singleOptional()
+          resources.lastError.set(result.ok ? "" : result.error._tag)
+          if (!result.ok || !result.value) {
+            resources.lastX.set(-1)
+            return
+          }
+
+          result.value.data.position.update((position) => ({
+            ...position,
+            x: position.x + 1
+          }))
+          resources.lastX.set(result.value.data.position.get().x)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Schedule.define({
+        schema,
+        systems: [spawn]
+      }),
+      Schedule.define({
+        schema,
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastError)).toBe("")
+    expect(readResourceValue(runtime, schema, LastX)).toBe(8)
+  })
+
+  it("singleOptional returns MultipleEntities when multiple entities match", () => {
+    const spawn = System.define(
+      "RuntimeQuery/SpawnMultipleForSingleOptional",
+      {
+        schema
+      },
+      ({ commands }) =>
+        Fx.sync(() => {
+          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 1, y: 1 }] as const))
+          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 2, y: 2 }] as const))
+        })
+    )
+
+    const observe = System.define(
+      "RuntimeQuery/SingleOptionalMultipleEntities",
+      {
+        schema,
+        queries: {
+          positions: Query.define({
+            selection: {
+              position: Query.read(Position)
+            }
+          })
+        },
+        resources: {
+          lastError: System.writeResource(LastError)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          const result = queries.positions.singleOptional()
+          resources.lastError.set(result.ok ? "" : result.error._tag)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Schedule.define({
+        schema,
+        systems: [spawn]
+      }),
+      Schedule.define({
+        schema,
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
+  })
+
   it("lookup returns MissingEntity and QueryMismatch for the expected cases", () => {
     let existingId: import("../src/entity.ts").EntityId<typeof schema> | undefined
 

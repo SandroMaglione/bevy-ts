@@ -27,8 +27,8 @@ export const ResolveFacingSystem = Game.System.define(
   },
   ({ queries, machines, nextMachines }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -61,8 +61,8 @@ export const ResolveLocomotionSystem = Game.System.define(
   },
   ({ queries, nextMachines }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 

@@ -419,8 +419,8 @@ const CapturePreviousPositionsSystem = Game.System.define(
   },
   ({ queries }) =>
     Fx.sync(() => {
-      const head = queries.head.single()
-      if (!head.ok) {
+      const head = queries.head.singleOptional()
+      if (!head.ok || !head.value) {
         return
       }
 
@@ -451,8 +451,8 @@ const BrowserInputSystem = Game.System.define(
         return
       }
 
-      const head = queries.head.single()
-      if (!head.ok) {
+      const head = queries.head.singleOptional()
+      if (!head.ok || !head.value) {
         return
       }
 
@@ -476,8 +476,8 @@ const MoveHeadSystem = Game.System.define(
   },
   ({ queries }) =>
     Fx.sync(() => {
-      const head = queries.head.single()
-      if (!head.ok) {
+      const head = queries.head.singleOptional()
+      if (!head.ok || !head.value) {
         return
       }
 
@@ -531,8 +531,8 @@ const DetectFoodCollisionSystem = Game.System.define(
   },
   ({ queries, events }) =>
     Fx.sync(() => {
-      const head = queries.head.single()
-      if (!head.ok) {
+      const head = queries.head.singleOptional()
+      if (!head.ok || !head.value) {
         return
       }
 
@@ -612,8 +612,8 @@ const GrowSnakeSystem = Game.System.define(
           )
         )
       } else {
-        const head = queries.head.single()
-        if (!head.ok) {
+        const head = queries.head.singleOptional()
+        if (!head.ok || !head.value) {
           return
         }
 
@@ -661,8 +661,8 @@ const DetectSelfCollisionSystem = Game.System.define(
   },
   ({ queries, resources, nextMachines }) =>
     Fx.sync(() => {
-      const head = queries.head.single()
-      if (!head.ok) {
+      const head = queries.head.singleOptional()
+      if (!head.ok || !head.value) {
         return
       }
 

@@ -1091,6 +1091,16 @@ export const makeRuntime = <
         return Query.failure(Query.multipleEntitiesError(matches.length))
       }
       return Query.success(matches[0]!)
+    },
+    singleOptional() {
+      const matches = this.each()
+      if (matches.length === 0) {
+        return Query.success(undefined)
+      }
+      if (matches.length > 1) {
+        return Query.failure(Query.multipleEntitiesError(matches.length))
+      }
+      return Query.success(matches[0]!)
     }
   })
 

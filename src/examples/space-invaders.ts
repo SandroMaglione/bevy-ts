@@ -469,8 +469,8 @@ const PlayerInputSystem = Game.System.define(
   },
   ({ queries, services }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -505,8 +505,8 @@ const ShootingSystem = Game.System.define(
         Math.max(0, cooldown - resources.deltaMilliseconds.get())
       )
 
-      const player = queries.player.single()
-      if (!player.ok || !services.input.isKeyPressed("Space")) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value || !services.input.isKeyPressed("Space")) {
         return
       }
 
@@ -585,8 +585,8 @@ const ClampPlayerBoundsSystem = Game.System.define(
   },
   ({ queries }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 

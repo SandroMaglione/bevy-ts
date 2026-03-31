@@ -23,8 +23,8 @@ export const UpdateFocusedCollectableSystem = Game.System.define(
   },
   ({ queries, resources }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 

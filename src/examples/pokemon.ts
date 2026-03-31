@@ -240,8 +240,8 @@ const InputSystem = Game.System.define(
         return
       }
 
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -266,8 +266,8 @@ const PlanMovementSystem = Game.System.define(
   },
   ({ queries }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -310,8 +310,8 @@ const CollisionSystem = Game.System.define(
         })
       )
 
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -352,8 +352,8 @@ const AdvanceMovementSystem = Game.System.define(
   },
   ({ queries, resources }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 

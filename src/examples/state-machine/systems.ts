@@ -218,8 +218,8 @@ export const MovePlayerSystem = Game.System.define(
   },
   ({ queries, resources, services }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -249,8 +249,8 @@ export const CollectPickupsSystem = Game.System.define(
   },
   ({ queries, resources, commands }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (!player.ok) {
+      const player = queries.player.singleOptional()
+      if (!player.ok || !player.value) {
         return
       }
 
@@ -322,8 +322,8 @@ export const ResetRoundOnCountdownEnterSystem = Game.System.define(
   },
   ({ queries, resources, commands }) =>
     Fx.sync(() => {
-      const player = queries.player.single()
-      if (player.ok) {
+      const player = queries.player.singleOptional()
+      if (player.ok && player.value) {
         player.value.data.position.set({
           x: STAGE_WIDTH * 0.5,
           y: STAGE_HEIGHT * 0.5

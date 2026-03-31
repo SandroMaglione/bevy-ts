@@ -482,6 +482,24 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
    * Returns a single match when exactly one entity satisfies the query.
    */
   single(): Query.Result<QueryMatch<S, Q>, Query.SingleError>
+  /**
+   * Returns a single match when zero or one entity satisfies the query.
+   *
+   * Use this when absence is acceptable but multiplicity is still a bug. Zero
+   * matches return `ok: true` with `value: undefined`; multiple matches remain
+   * an explicit `MultipleEntities` failure.
+   *
+   * @example
+   * ```ts
+   * const player = queries.player.singleOptional()
+   * if (!player.ok || !player.value) {
+   *   return
+   * }
+   *
+   * player.value.data.position.set({ x: 0, y: 0 })
+   * ```
+   */
+  singleOptional(): Query.Result<QueryMatch<S, Q> | undefined, Query.MultipleEntitiesError>
 }
 
 /**

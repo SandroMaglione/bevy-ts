@@ -200,6 +200,59 @@ describe("Schema", () => {
     }))
   })
 
+  it("supports a zero-or-one singleton read without widening successful matches", () => {
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position,
+        Velocity
+      }
+    }))
+
+    const Game = Schema.bind(schema)
+    const MovingQuery = Game.Query.define({
+      selection: {
+        position: Game.Query.write(Position),
+        velocity: Game.Query.read(Velocity)
+      }
+    })
+
+    const ObserveSystem = Game.System.define(
+      "ObserveSingleOptional",
+      {
+        queries: {
+          moving: MovingQuery
+        }
+      },
+      ({ queries }) =>
+        Fx.sync(() => {
+          const result = queries.moving.singleOptional()
+          expect(result).type.toBe<import("../src/query.ts").Query.Result<
+            import("../src/query.ts").QueryMatch<typeof schema, typeof MovingQuery> | undefined,
+            import("../src/query.ts").Query.MultipleEntitiesError
+          >>()
+
+          if (!result.ok || !result.value) {
+            return
+          }
+
+          expect(result.value.entity.proof).type.toBe<{
+            readonly position: { x: number; y: number }
+            readonly velocity: { dx: number; dy: number }
+          }>()
+          result.value.data.position.set({ x: 0, y: 0 })
+          expect(result.value.data.velocity.get()).type.toBe<{ dx: number; dy: number }>()
+        })
+    )
+
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services()
+    })
+
+    App.makeApp(runtime).update(Game.Schedule.define({
+      systems: [ObserveSystem]
+    }))
+  })
+
   it("rejects non-component descriptors in query selection and structural filters", () => {
     const schema = Schema.build(Schema.fragment({
       components: {
