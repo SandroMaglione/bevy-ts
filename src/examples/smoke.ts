@@ -37,6 +37,8 @@ const schema = Schema.build(Schema.fragment({
 }))
 
 const Game = Schema.bind(schema)
+// `Phase` is a machine because the queued transition boundary matters for
+// gameplay flow. A plain state descriptor would not model that boundary.
 const Phase = Game.StateMachine.define("Phase", ["Running", "Paused"])
 
 const MovingQuery = Game.Query.define({

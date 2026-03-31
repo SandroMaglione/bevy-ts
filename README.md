@@ -117,11 +117,41 @@ When choosing between the main ECS surfaces, the intended split is:
 
 In practice, let runtime construction own initial resource and machine values, and keep setup systems focused on spawning world content.
 
+## Choosing between resources, states, and machines
+
+Use the three singleton world surfaces for different jobs:
+
+- resources for continuous world values such as time, scores, camera positions, counters, or cached host snapshots
+- `StateMachine` for discrete phases where the transition boundary itself matters
+- descriptor-backed `states` for singleton schema values that do not need queued transitions, transition events, or enter/exit behavior
+
+If you want any of these, the answer is almost certainly `StateMachine`, not plain state descriptors:
+
+- `Game.Condition.inState(...)`
+- `Game.System.nextState(...)`
+- `Game.Schedule.applyStateTransitions(...)`
+- enter / exit / transition handlers
+- committed transition events later in the same schedule
+
+Use plain `states` when the value is just a singleton world slot and there is
+no meaningful transition boundary.
+
+```ts
+const Session = Game.StateMachine.define("Session", ["Menu", "Playing", "Paused"])
+
+const ActiveLocale = Descriptor.defineState<"en" | "it">()("ActiveLocale")
+```
+
+`Session` is a machine because the queued transition boundary matters.
+`ActiveLocale` is just one current singleton value.
+
 ## Runtime requirements
 
 Schedules now carry the runtime requirements implied by their systems. A runtime records which services it provides and which resources and states it initialized. You can only run a schedule when those two sides match.
 
 ```ts
+const Locale = Descriptor.defineState<"en" | "it">()("Locale")
+
 const TickSystem = Game.System.define(
   "TickSystem",
   {
@@ -158,7 +188,7 @@ const runtime = Game.Runtime.make({
   },
   states: {
     // States also use schema keys.
-    Phase: "Running"
+    Locale: "en"
   }
 })
 
@@ -166,6 +196,8 @@ App.makeApp(runtime).update(tick)
 ```
 
 If one of those inputs is missing, the schedule should fail in typecheck before it can fail at runtime. Services use descriptors; resources and states stay keyed by schema property names from the closed schema.
+
+For gameplay modes or phase machines, prefer `StateMachine` instead of plain `states`. Plain `states` are best used as schema-owned singleton values without queued transition semantics.
 
 ## Spawning entities
 
@@ -233,6 +265,9 @@ No runtime-relevant references are open strings. Systems are referenced directly
 
 Finite state machines are a dedicated API for discrete state with explicit transition boundaries. Systems queue the next state, the current state stays stable until `applyStateTransitions(...)`, and continuous values such as timers or animation elapsed time still stay in resources. When some local resource needs to react to machine changes, prefer `Game.Condition.stateChanged(...)` or transition handlers over storing "last state" fields manually.
 
+This is the default gameplay-phase tool. If the meaning of the state depends on
+when the transition commits, use a machine.
+
 ### Define machines
 
 Define machines from the bound schema root:
@@ -282,6 +317,34 @@ const GameplaySystem = Game.System.define(
   })
 )
 ```
+
+### When to use more than one machine
+
+Prefer multiple smaller machines when they model different boundary axes.
+
+The canonical pattern is:
+
+- one machine for session flow such as title, countdown, round, or game over
+- one machine for round-local flow such as playing, paused, victory, or defeat
+- explicit `inState(...)` gating across both when behavior depends on both axes
+- transition bundles on the machine whose boundary owns the reset or entry work
+- later observation through `readTransitionEvent(...)`
+
+That is the pattern used in [`src/examples/state-machine.ts`](./src/examples/state-machine.ts):
+
+```ts
+const SessionState = Game.StateMachine.define(
+  "SessionState",
+  ["Title", "Countdown", "Round"]
+)
+
+const RoundState = Game.StateMachine.define(
+  "RoundState",
+  ["Playing", "Paused", "Victory", "Defeat"]
+)
+```
+
+This is usually clearer than one large machine with unrelated combined values.
 
 ### Apply transitions explicitly
 
@@ -783,21 +846,17 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
 
 1. Schedule execution still needs a cheaper carried type shape after validation. Refactoring [`src/examples/smoke.ts`](./src/examples/smoke.ts) to the current explicit API worked cleanly at the system and schedule-definition level, but the direct `app.update(update)` / `runtime.runSchedule(update)` path can still hit TypeScript instantiation limits in a minimal example. That is a direct violation of the library's main user-facing constraint: users should not need casts, explicit generics, or artificial schedule splitting just to execute a valid schedule. The execution boundary should preserve exact validation, root safety, and runtime-requirement safety while carrying a much cheaper normalized schedule type into `App` and `Runtime`.
 
-2. The split between descriptor-backed `states` and `StateMachine` needs clearer guidance, and possibly a narrower intended role for plain states. The smoke example naturally wanted `StateMachine` for a simple running/paused phase because the discrete mode boundary is the meaningful part of the model. The refactored [`src/examples/state-machine.ts`](./src/examples/state-machine.ts) example naturally wanted two cooperating machines for session flow and round-local flow, which reinforces that gameplay phases are usually better modeled as machines when transition timing matters. The current README still teaches descriptor-backed `states` prominently in the Quick Start and Runtime Requirements sections, which makes the intended choice less clear than it should be. Either the docs need a sharper "when to use which" rule, or the API should become more opinionated if `StateMachine` is now the intended default for gameplay phases.
+2. Reset and restart flow should become a more first-class gameplay capability, or at least have one clearly documented canonical pattern. The snake example still requires a fairly manual teardown-and-rebuild system across [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`QueueRestartSystem`](./src/examples/snake.ts#L391-L408), and [`phaseTransitions`](./src/examples/snake.ts#L933-L937). The refactored state-machine example uses the same general shape through a transition bundle that resets resources, repositions entities, and respawns pickups on countdown entry. A stronger reset helper, or a clearly bounded transition-driven reset utility, would reduce repetitive despawn, respawn, and resource-reset orchestration while keeping explicit schedule boundaries intact.
 
-3. The docs should present one canonical multi-machine orchestration pattern. The refactored [`src/examples/state-machine.ts`](./src/examples/state-machine.ts) example now shows a clear shape for cooperating machines: one machine for session flow, one for round-local flow, transition bundles on one machine, cross-machine `inState(...)` gating, and later observation through `readTransitionEvent(...)`. The README should explain when two smaller machines are clearer than one larger machine, and how to combine them without hiding transition boundaries.
-
-4. Reset and restart flow should become a more first-class gameplay capability, or at least have one clearly documented canonical pattern. The snake example still requires a fairly manual teardown-and-rebuild system across [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`QueueRestartSystem`](./src/examples/snake.ts#L391-L408), and [`phaseTransitions`](./src/examples/snake.ts#L933-L937). The refactored state-machine example uses the same general shape through a transition bundle that resets resources, repositions entities, and respawns pickups on countdown entry. A stronger reset helper, or a clearly bounded transition-driven reset utility, would reduce repetitive despawn, respawn, and resource-reset orchestration while keeping explicit schedule boundaries intact.
-
-5. The docs should present the smallest modern end-to-end pattern more directly. The current README still mixes older and newer idioms in a way that makes the intended default harder to infer than it should be. The smallest canonical example should align around the current recommended shape:
+3. The docs should present the smallest modern end-to-end pattern more directly. The current README still mixes older and newer idioms in a way that makes the intended default harder to infer than it should be. The smallest canonical example should align around the current recommended shape:
    - `StateMachine` for discrete phases when the boundary itself matters
    - writable-cell `update(...)` for incremental mutation instead of older `get()` + `set(...)` examples where that adds noise
    - explicit `applyDeferred()` / `updateEvents()` boundaries when the example depends on deferred visibility
    - `bootstrap(...)` plus update-schedule separation when setup is responsible for initial spawning
 
-6. Explicit transient entity references across boundaries still need a more ergonomic pattern. The refactored space-invaders example still has to emit `Handle` values into an event and then re-resolve them later with checked lookup after `updateEvents()`, even though the intent is simply "despawn these entities later in the same update". That is semantically correct and should stay fallible, but the library could do better at making this pattern obvious and less noisy. The first step may be documentation that treats "emit handles, re-resolve later" as canonical. If the ergonomics still feel too heavy after that, a narrowly scoped helper for same-runtime transient entity references may be justified, but only if it preserves explicit failure and does not blur the line between `EntityId` and long-lived storage-safe handles.
+4. Explicit transient entity references across boundaries still need a more ergonomic pattern. The refactored space-invaders example still has to emit `Handle` values into an event and then re-resolve them later with checked lookup after `updateEvents()`, even though the intent is simply "despawn these entities later in the same update". That is semantically correct and should stay fallible, but the library could do better at making this pattern obvious and less noisy. The first step may be documentation that treats "emit handles, re-resolve later" as canonical. If the ergonomics still feel too heavy after that, a narrowly scoped helper for same-runtime transient entity references may be justified, but only if it preserves explicit failure and does not blur the line between `EntityId` and long-lived storage-safe handles.
 
-7. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
+5. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
 
    ```ts
    const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
@@ -808,11 +867,11 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
      )
    ```
 
-8. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
+6. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
 
-9. The query surface could use a dedicated zero-or-one singleton read for the common "maybe present, but never many" case. The pattern now appears not only in [`src/examples/snake.ts`](./src/examples/snake.ts), but also in [`src/examples/top-down.ts`](./src/examples/top-down.ts) and [`src/examples/state-machine.ts`](./src/examples/state-machine.ts), where `single()` is often followed by an explicit early return because absence is acceptable even if multiplicity is not. A small `singleOptional()`-style helper would improve ergonomics for that exact case without broadening semantics or hiding failure.
+7. The query surface could use a dedicated zero-or-one singleton read for the common "maybe present, but never many" case. The pattern now appears not only in [`src/examples/snake.ts`](./src/examples/snake.ts), but also in [`src/examples/top-down.ts`](./src/examples/top-down.ts) and [`src/examples/state-machine.ts`](./src/examples/state-machine.ts), where `single()` is often followed by an explicit early return because absence is acceptable even if multiplicity is not. A small `singleOptional()`-style helper would improve ergonomics for that exact case without broadening semantics or hiding failure.
 
-10. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
+8. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
 
 ## Out of scope for now
 

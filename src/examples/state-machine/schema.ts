@@ -52,6 +52,8 @@ export const SessionState = Game.StateMachine.define(
   ["Title", "Countdown", "Round"] as const
 )
 
+// Two smaller machines are clearer than one larger combined phase union here:
+// session flow and round-local flow have different transition boundaries.
 export const RoundState = Game.StateMachine.define(
   "StateMachineExample/RoundState",
   ["Playing", "Paused", "Victory", "Defeat"] as const

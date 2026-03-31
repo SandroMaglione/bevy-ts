@@ -199,6 +199,13 @@ export type StateWrite<D extends Descriptor<"state", string, any>> = {
 
 /**
  * Creates a state-read declaration for a system spec.
+ *
+ * Plain states are just singleton schema values. They do not have queued
+ * transition semantics, transition events, or enter/exit boundaries.
+ *
+ * If the behavior depends on when a mode change commits, prefer
+ * `machine(...)` / `nextState(...)` on a `Game.StateMachine.define(...)`
+ * machine instead.
  */
 export const readState = <D extends Descriptor<"state", string, any>>(
   descriptor: D
@@ -209,6 +216,10 @@ export const readState = <D extends Descriptor<"state", string, any>>(
 
 /**
  * Creates a state-write declaration for a system spec.
+ *
+ * This updates a singleton schema value immediately in the current world state.
+ * It does not queue a transition. Use `nextState(...)` when the boundary of
+ * changing mode is part of the gameplay model.
  */
 export const writeState = <D extends Descriptor<"state", string, any>>(
   descriptor: D
@@ -222,6 +233,9 @@ export const writeState = <D extends Descriptor<"state", string, any>>(
  *
  * Use this when a system needs to branch on the current committed machine
  * state. Queued writes are exposed separately through `nextState(...)`.
+ *
+ * Machines are the intended default for gameplay phases and other discrete
+ * mode changes whose transition boundary matters.
  */
 export const machine = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -233,6 +247,9 @@ export const machine = <M extends Machine.StateMachine.Any>(
  * This does not immediately change the committed state. The queued value is
  * applied only at an explicit `Game.Schedule.applyStateTransitions(...)`
  * boundary.
+ *
+ * Use this instead of `writeState(...)` when gameplay depends on the explicit
+ * transition boundary.
  */
 export const nextState = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -250,6 +267,9 @@ export const transition = <M extends Machine.StateMachine.Any>(
  *
  * Transition events are committed together with normal events and become
  * readable only after `Game.Schedule.updateEvents()`.
+ *
+ * This is one of the clearest signs that the modeled value should be a machine
+ * rather than a plain state descriptor.
  */
 export const readTransitionEvent = <M extends Machine.StateMachine.Any>(
   stateMachine: M

@@ -144,12 +144,16 @@ export const defineEvent = <Value>() => <const Name extends string>(
 /**
  * Defines a state descriptor.
  *
- * States are unique world-level finite values, typically used for coarse
- * application mode or gameplay flow.
+ * States are singleton schema values with no queued transition semantics.
+ *
+ * Use this when you need one current world-level value and the boundary of
+ * changing that value is not itself meaningful. If gameplay logic depends on
+ * queued transitions, enter/exit handling, or `inState(...)` gating, prefer
+ * `Game.StateMachine.define(...)` instead.
  *
  * @example
  * ```ts
- * const Phase = Descriptor.defineState<"Menu" | "Playing">()("Phase")
+ * const ActiveLocale = Descriptor.defineState<"en" | "it">()("ActiveLocale")
  * ```
  */
 export const defineState = <Value>() => <const Name extends string>(

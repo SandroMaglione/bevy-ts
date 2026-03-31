@@ -211,6 +211,16 @@ export type MachineRequirementsFromConditions<C extends ReadonlyArray<Condition>
 
 /**
  * Creates a schema-bound finite-state machine definition.
+ *
+ * This is the intended default for gameplay phases and other discrete modes
+ * where the transition boundary itself matters.
+ *
+ * Prefer a machine over `Descriptor.defineState(...)` when code depends on:
+ *
+ * - queued `nextState(...)` writes
+ * - explicit `applyStateTransitions(...)`
+ * - `inState(...)` gating
+ * - transition events or enter/exit schedules
  */
 export const define = <
   const Name extends string,
@@ -228,6 +238,9 @@ export const define = <
 
 /**
  * Declares that a system wants to read the current committed state.
+ *
+ * Use this for the current committed phase value. Queued updates remain hidden
+ * until the schedule reaches `applyStateTransitions(...)`.
  */
 export const read = <M extends StateMachine.Any>(machine: M): MachineRead<M> => ({
   machine
@@ -235,6 +248,9 @@ export const read = <M extends StateMachine.Any>(machine: M): MachineRead<M> => 
 
 /**
  * Declares that a system wants to queue the next state.
+ *
+ * This is the machine equivalent of "request a phase change later". The change
+ * becomes committed only at `applyStateTransitions(...)`.
  */
 export const write = <M extends StateMachine.Any>(machine: M): NextMachineWrite<M> => ({
   machine
@@ -249,6 +265,9 @@ export const transition = <M extends StateMachine.Any>(machine: M): TransitionRe
 
 /**
  * Declares that a system wants to read committed transition events for one machine.
+ *
+ * Use this when later systems need to observe that a transition happened after
+ * the schedule has already committed it.
  */
 export const readTransitionEvent = <M extends StateMachine.Any>(machine: M): TransitionEventRead<M> => ({
   machine
@@ -256,6 +275,9 @@ export const readTransitionEvent = <M extends StateMachine.Any>(machine: M): Tra
 
 /**
  * Creates a condition that only passes in one exact machine state.
+ *
+ * If you need this kind of gating, the value should generally be modeled as a
+ * finite-state machine rather than a plain state descriptor.
  */
 export const inState = <M extends StateMachine.Any>(
   machine: M,
