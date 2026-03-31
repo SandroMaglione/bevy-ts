@@ -149,6 +149,10 @@ export type EventWrite<D extends Descriptor<"event", string, any>> = {
  *
  * Event reads observe the committed readable event buffer. New writes become
  * visible only after an explicit `Game.Schedule.updateEvents()` boundary.
+ *
+ * This is the usual second half of a deferred cross-system flow: one earlier
+ * system emits an event, `updateEvents()` commits the buffer, and a later
+ * system reads those events and re-validates any handles or lookups it needs.
  */
 export const readEvent = <D extends Descriptor<"event", string, any>>(
   descriptor: D
@@ -162,6 +166,11 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
  *
  * Event writes append to the pending event buffer. They are not visible to
  * readers in the same schedule phase until `Game.Schedule.updateEvents()`.
+ *
+ * If the payload needs to name an entity for later work, emit a durable
+ * `Game.Entity.handle(...)` or `Game.Entity.handleAs(...)` and let the later
+ * reader re-resolve it through `lookup.getHandle(...)` after the event buffer
+ * is committed.
  *
  * @example
  * ```ts
@@ -519,6 +528,14 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     entityId: Entity.EntityId<S, Root>,
     query: Q
   ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  /**
+   * Resolves a stored durable handle back into current-world query access.
+   *
+   * Use this after crossing deferred boundaries such as `updateEvents()` or
+   * when reading handles back out of resources or components. A handle is
+   * storage-safe, not proof of liveness, so stale or mismatched handles remain
+   * explicit typed failures.
+   */
   getHandle<
     H extends Entity.Handle<Root, any>,
     Q extends Query.Any<Root>

@@ -601,7 +601,9 @@ export const applyDeferred = (): ApplyDeferredStep => ({
  * committed readable event buffers for the current schedule execution.
  *
  * Use this when a later system in the same schedule should observe events that
- * earlier systems just emitted.
+ * earlier systems just emitted. If those event payloads carry entity handles,
+ * later systems should re-resolve them through `lookup.getHandle(...)` after
+ * this marker.
  *
  * @example
  * ```ts

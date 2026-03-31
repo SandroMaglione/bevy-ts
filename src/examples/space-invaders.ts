@@ -755,6 +755,8 @@ const EnemyBulletCollisionSystem = Game.System.define(
           if (Matter.Collision.collides(bulletBody, enemyBody)?.collided ?? false) {
             consumedBullets.add(bulletId.value)
             consumedEnemies.add(enemyId.value)
+            // The destroy event is read only after updateEvents(), so emit
+            // storage-safe handles and re-resolve them later.
             events.destroyEnemy.emit({
               bullet: Game.Entity.handleAs(Bullet, bulletId),
               enemy: Game.Entity.handleAs(Enemy, enemyId)
@@ -778,6 +780,8 @@ const EnemyDestroySystem = Game.System.define(
       const despawned = new Set<number>()
 
       for (const event of events.destroyEnemy.all()) {
+        // The event is readable now, but either entity may already be stale.
+        // Re-resolution keeps that failure explicit and typed.
         const bullet = lookup.getHandle(event.bullet, BulletCollisionQuery)
         if (bullet.ok && !despawned.has(bullet.value.entity.id.value)) {
           commands.despawn(bullet.value.entity.id)
@@ -944,6 +948,7 @@ const updateSchedule = Game.Schedule.define({
     EnemyDescentSystem,
     SyncMatterBodyTransformsSystem,
     EnemyBulletCollisionSystem,
+    // DestroyEnemy becomes readable only after this explicit event boundary.
     Game.Schedule.updateEvents(),
     EnemyDestroySystem,
     CullingSystem,

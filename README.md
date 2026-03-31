@@ -844,6 +844,60 @@ This keeps the phases explicit:
 If host create/destroy systems are moved before `updateLifecycle()`, the
 renderer sees the previous lifecycle state instead of the current one.
 
+### Transient entity references across deferred boundaries
+
+When an entity reference must cross a deferred boundary like
+`Game.Schedule.updateEvents()`, store a durable `Handle` and re-resolve it
+later through checked lookup.
+
+The rule is explicit:
+
+- `EntityId` is the current-runtime identity for the world you are in now
+- `Handle` is the storage-safe reference form for events, resources, or components
+- crossing `updateEvents()` means liveness is no longer guaranteed
+- later code must call `lookup.getHandle(...)` and handle failure explicitly
+
+```ts
+const DetectCollisionSystem = Game.System.define(
+  "DetectCollision",
+  {
+    events: {
+      destroyEnemy: Game.System.writeEvent(DestroyEnemy)
+    }
+  },
+  ({ events }) =>
+    Fx.sync(() => {
+      events.destroyEnemy.emit({
+        bullet: Game.Entity.handleAs(Bullet, bulletId),
+        enemy: Game.Entity.handleAs(Enemy, enemyId)
+      })
+    })
+)
+
+const DestroyEnemySystem = Game.System.define(
+  "DestroyEnemy",
+  {
+    events: {
+      destroyEnemy: Game.System.readEvent(DestroyEnemy)
+    }
+  },
+  ({ events, lookup, commands }) =>
+    Fx.sync(() => {
+      for (const event of events.destroyEnemy.all()) {
+        const bullet = lookup.getHandle(event.bullet, BulletQuery)
+        if (bullet.ok) {
+          commands.despawn(bullet.value.entity.id)
+        }
+      }
+    })
+)
+```
+
+The later system runs after `updateEvents()`, so the event itself is now
+readable, but the referenced entity may already have changed or disappeared.
+That is why re-resolution is required and why stale handles remain a normal
+typed failure instead of an exception.
+
 ### When `Schedule.extend(...)` is the right tool
 
 If the browser or renderer work is only a pure prefix or suffix around one
@@ -993,9 +1047,7 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
 
 1. Schedule execution still needs a cheaper carried type shape after validation. Refactoring [`src/examples/smoke.ts`](./src/examples/smoke.ts) to the current explicit API worked cleanly at the system and schedule-definition level, but the direct `app.update(update)` / `runtime.runSchedule(update)` path can still hit TypeScript instantiation limits in a minimal example. That is a direct violation of the library's main user-facing constraint: users should not need casts, explicit generics, or artificial schedule splitting just to execute a valid schedule. The execution boundary should preserve exact validation, root safety, and runtime-requirement safety while carrying a much cheaper normalized schedule type into `App` and `Runtime`.
 
-2. Explicit transient entity references across boundaries still need a more ergonomic pattern. The refactored space-invaders example still has to emit `Handle` values into an event and then re-resolve them later with checked lookup after `updateEvents()`, even though the intent is simply "despawn these entities later in the same update". That is semantically correct and should stay fallible, but the library could do better at making this pattern obvious and less noisy. The first step may be documentation that treats "emit handles, re-resolve later" as canonical. If the ergonomics still feel too heavy after that, a narrowly scoped helper for same-runtime transient entity references may be justified, but only if it preserves explicit failure and does not blur the line between `EntityId` and long-lived storage-safe handles.
-
-3. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
+2. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
 
    ```ts
    const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
@@ -1006,9 +1058,9 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
      )
    ```
 
-4. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
+3. A first-class randomness story is still a worthwhile feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
 
-5. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
+4. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake example keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
 
 ## Out of scope for now
 

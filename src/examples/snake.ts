@@ -539,6 +539,8 @@ const DetectFoodCollisionSystem = Game.System.define(
       const headPosition = head.value.data.position.get()
       for (const match of queries.food.each()) {
         if (sameCell(headPosition, match.data.position.get())) {
+          // The event crosses updateEvents(), so store a durable handle now and
+          // re-resolve it later in ResolveFoodEatenSystem.
           events.foodEaten.emit({
             entity: Game.Entity.handleAs(Food, match.entity.id)
           })
@@ -562,6 +564,8 @@ const ResolveFoodEatenSystem = Game.System.define(
   ({ events, resources, commands, lookup }) =>
     Fx.sync(() => {
       for (const event of events.foodEaten.all()) {
+        // Event visibility is committed now, but the food entity may already be
+        // stale, so re-resolve the durable handle explicitly.
         const food = lookup.getHandle(event.entity, FoodQuery)
         if (!food.ok) {
           continue
