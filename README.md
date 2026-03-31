@@ -620,6 +620,117 @@ What is not an acceptable fix:
 
 This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety.
 
+## Roadmap
+
+### New features
+
+1. A first-class randomness story is the highest-priority feature addition. The snake example currently carries its own seed resource and local stepping logic in [`src/examples/snake.ts#L679-L739`](./src/examples/snake.ts#L679-L739), which keeps failure explicit but still leaves each gameplay example to invent its own RNG shape. A canonical typed RNG service, with one endorsed runtime-provisioning path, would make procedural gameplay code easier to author without weakening explicit dependencies.
+
+   ```ts
+   // Current example-level pattern
+   const SpawnSeed = Descriptor.defineResource<number>()("Snake/SpawnSeed")
+
+   const EnsureFoodSystem = Game.System.define("Snake/EnsureFood", {
+     resources: {
+       seed: Game.System.writeResource(SpawnSeed)
+     }
+   }, ({ resources }) => ...)
+   ```
+
+   ```ts
+   // Better public pattern
+   const Random = Descriptor.defineService<{
+     readonly nextInt: (maxExclusive: number) => number
+   }>()("Random")
+
+   const EnsureFoodSystem = Game.System.define("Snake/EnsureFood", {
+     services: {
+       random: Game.System.service(Random)
+     }
+   }, ({ services }) => ...)
+   ```
+
+2. Reset and restart flow should become a more first-class gameplay capability. In the snake example, restarting through [`QueueRestartSystem`](./src/examples/snake.ts#L391-L408) and [`phaseTransitions`](./src/examples/snake.ts#L933-L937) still requires a fairly manual teardown-and-rebuild system in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389). A stronger reset helper, or a clearly bounded transition-driven reset utility, would reduce repetitive despawn, respawn, and resource-reset orchestration while keeping explicit schedule boundaries intact.
+
+   ```ts
+   // Current restart path
+   const phaseTransitions = Game.Schedule.transitions(
+     Game.Schedule.onEnter(GamePhase, "Playing", {
+       systems: [ResetGameSystem]
+     })
+   )
+   ```
+
+   ```ts
+   // Possible direction
+   const phaseTransitions = Game.Schedule.transitions(
+     Game.Schedule.onEnter(GamePhase, "Playing", {
+       reset: Game.Reset.world({
+         resources: [Score, PendingGrowth, GameOverReason],
+         systems: [SpawnInitialSnakeSystem, SpawnInitialFoodSystem]
+       })
+     })
+   )
+   ```
+
+3. The query surface could use a dedicated zero-or-one singleton read for the common "maybe present, but never many" case. The snake example uses `single()` repeatedly in places like [`CapturePreviousPositionsSystem`](./src/examples/snake.ts#L410-L433), [`MoveHeadSystem`](./src/examples/snake.ts#L468-L490), and [`DetectSelfCollisionSystem`](./src/examples/snake.ts#L636-L677), where absence is handled explicitly but is not always a true error. A small `singleOptional()`-style helper would improve ergonomics for that exact case without broadening semantics or hiding failure.
+
+### API improvements
+
+1. Renderer synchronization is the clearest current API-usage rough edge. The snake example now needs four separate systems for destroy, create, transform sync, and final reconciliation in [`src/examples/snake.ts#L742-L856`](./src/examples/snake.ts#L742-L856), plus an explicit lifecycle boundary in [`browserUpdateSchedule`](./src/examples/snake.ts#L967-L1008). That is correct and explicit, but it asks users to assemble several low-level pieces before the safe host-sync pattern becomes obvious. The API should make the authoritative create, update, destroy, and reconcile flow easier to express directly.
+
+   ```ts
+   // Current pattern
+   Game.Schedule.updateLifecycle(),
+   DestroySnakeNodesSystem,
+   CreateSnakeNodesSystem,
+   SyncSnakeNodeTransformsSystem,
+   ReconcileSnakeNodesSystem
+   ```
+
+   ```ts
+   // Possible direction
+   Game.Schedule.syncHost(PixiHost, {
+     create: CreateSnakeNodesSystem,
+     update: SyncSnakeNodeTransformsSystem,
+     destroy: DestroySnakeNodesSystem,
+     reconcile: ReconcileSnakeNodesSystem
+   })
+   ```
+
+2. Schedule composition across headless gameplay and host-specific integration could be clearer at the API level. The snake example has a clean split between pure gameplay in [`updateSchedule`](./src/examples/snake.ts#L939-L965) and browser-specific orchestration in [`browserUpdateSchedule`](./src/examples/snake.ts#L967-L1008), but the host schedule still repeats most of the core simulation steps. A better pattern for extending one core schedule with host-only input and sync layers would improve reuse while preserving strict runtime requirement validation.
+
+3. Some gameplay code needs explicit stable traversal ordering, and today that is awkward to express directly. The snake refactor keeps ordering safe by storing parent handles and previous positions in [`MoveBodySystem`](./src/examples/snake.ts#L492-L512) and [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), which is valid but indirect. A small ordered-query or ordered-iteration helper would keep order-dependent logic explicit instead of forcing users into structural workarounds whenever gameplay correctness depends on processing order.
+
+### Better docs
+
+1. The docs should explicitly show the full authoritative host-sync pattern, not only the minimal incremental one. The renderer section currently explains the separation of responsibilities well, but the snake example shows the richer reality: lifecycle-driven destroy, create, transform sync, and a final reconciliation pass in [`src/examples/snake.ts#L742-L856`](./src/examples/snake.ts#L742-L856). That exact pattern should be documented as the recommended host-sync approach for restart-heavy browser examples.
+
+2. State-machine-driven reset and restart should have one documented pattern that the repo treats as canonical. The snake example already demonstrates the pieces across [`QueueRestartSystem`](./src/examples/snake.ts#L391-L408), [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), and [`phaseTransitions`](./src/examples/snake.ts#L933-L937), but the README currently stops at transition semantics rather than gameplay-loop reset. A concrete walkthrough based on that example would make the machine API easier to apply in actual game loops.
+
+3. The docs should show a clearer pattern for reusable typed drafts and spawn factories. The snake example repeatedly builds the same entity shapes in [`ResetGameSystem`](./src/examples/snake.ts#L331-L389), [`GrowSnakeSystem`](./src/examples/snake.ts#L576-L634), and [`EnsureFoodSystem`](./src/examples/snake.ts#L679-L739). A short documented pattern for small draft factories would improve readability and reduce repeated tuple construction without compromising strict public typing.
+
+   ```ts
+   // Current pattern
+   commands.spawn(
+     Game.Command.spawnWith(
+       [Position, INITIAL_TAIL_POSITION],
+       [PreviousPosition, INITIAL_TAIL_POSITION],
+       [SnakeBody, { parent: headId, isTail: true }]
+     )
+   )
+   ```
+
+   ```ts
+   // Better documented pattern
+   const makeTailDraft = (parent: Entity.Handle<typeof Root>, position: GridPosition) =>
+     Game.Command.spawnWith(
+       [Position, position],
+       [PreviousPosition, position],
+       [SnakeBody, { parent, isTail: true }]
+     )
+   ```
+
 ## Out of scope for now
 
 Some additions are intentionally not near-term because they do not match the current goals.
