@@ -546,6 +546,26 @@ describe("Schema", () => {
 
             // @ts-expect-error!
             lookup.getHandle(current, OptionalOnlyQuery)
+
+            const RelatedOnlyQuery = Game.Query.define({
+              selection: {
+                target: Game.Query.read(Target)
+              },
+              with: [Target] as const
+            })
+
+            // @ts-expect-error!
+            lookup.getHandle(current, RelatedOnlyQuery)
+
+            const LifecycleOnlyQuery = Game.Query.define({
+              selection: {
+                target: Game.Query.read(Target)
+              },
+              filters: [Game.Query.changed(Position)] as const
+            })
+
+            // @ts-expect-error!
+            lookup.getHandle(current, LifecycleOnlyQuery)
           }
         })
     )
@@ -654,6 +674,10 @@ describe("Schema", () => {
       build: (Game) => {
         // @ts-expect-error!
         Game.Query.read(Velocity)
+        // @ts-expect-error!
+        Game.System.readResource(Counter)
+        // @ts-expect-error!
+        Game.System.writeEvent(TickEvent)
         return {}
       }
     })

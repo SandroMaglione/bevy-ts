@@ -96,7 +96,7 @@ describe("Runtime relationships", () => {
 
           const rootChildren = queries.hasChildren.get(rootId)
           const childParent = queries.parents.get(childId)
-          const descendants = lookup.descendants(rootId, ChildOf)
+          const descendants = lookup.descendants(rootId, ChildOf, { order: "breadth" })
           const target = lookup.related(archerId, Targeting)
           const ancestors = lookup.ancestors(childId, ChildOf)
 
@@ -413,19 +413,33 @@ describe("Runtime relationships", () => {
     const observe = Game.System.define(
       "ObserveHierarchyReorder",
       {
+        queries: {
+          hasChildren: Game.Query.define({
+            selection: {
+              children: Game.Query.readRelated(ChildOf)
+            },
+            withRelated: [ChildOf]
+          })
+        },
         resources: {
           summary: Game.System.writeResource(Summary)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, lookup, resources }) =>
         Fx.sync(() => {
           if (!rootId) {
             resources.summary.set("missing-setup")
             return
           }
           const children = lookup.relatedSources(rootId, ChildOf)
+          const descendants = lookup.descendants(rootId, ChildOf, { order: "breadth" })
+          const fromQuery = queries.hasChildren.get(rootId)
           resources.summary.set(
-            children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag
+            [
+              children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag,
+              descendants.ok ? descendants.value.map((child) => child.value).join(",") : descendants.error._tag,
+              fromQuery.ok ? fromQuery.value.data.children.get().map((child) => child.value).join(",") : fromQuery.error._tag
+            ].join("/")
           )
         })
     )
@@ -441,7 +455,170 @@ describe("Runtime relationships", () => {
       })
     )
 
-    expect(readResourceValue(runtime, schema, Summary)).toBe("4,2,3")
+    expect(readResourceValue(runtime, schema, Summary)).toBe("4,2,3/4,2,3/4,2,3")
+  })
+
+  it("makes successful deferred relation mutations visible through lookup and keeps failure streams empty", () => {
+    let alphaId: Entity.EntityId<typeof schema, any> | undefined
+    let betaId: Entity.EntityId<typeof schema, any> | undefined
+
+    const spawn = Game.System.define(
+      "SpawnSuccessfulRelationMutation",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          alphaId = commands.spawn(Game.Command.spawnWith([Name, { value: "alpha" }] as const))
+          betaId = commands.spawn(Game.Command.spawnWith([Name, { value: "beta" }] as const))
+        })
+    )
+
+    const relate = Game.System.define(
+      "QueueSuccessfulRelationMutation",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          if (!alphaId || !betaId) {
+            return
+          }
+          commands.relate(alphaId, Targeting, betaId)
+        })
+    )
+
+    const observeBefore = Game.System.define(
+      "ObserveSuccessfulRelationMutationBeforeFlush",
+      {
+        relationFailures: {
+          targeting: Game.System.readRelationFailures(Targeting)
+        },
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ relationFailures, lookup, resources }) =>
+        Fx.sync(() => {
+          if (!alphaId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+          const target = lookup.related(alphaId, Targeting)
+          resources.summary.set(`${target.ok ? "ok" : target.error._tag}/${relationFailures.targeting.all().length}`)
+        })
+    )
+
+    const observeAfter = Game.System.define(
+      "ObserveSuccessfulRelationMutationAfterFlush",
+      {
+        relationFailures: {
+          targeting: Game.System.readRelationFailures(Targeting)
+        },
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ relationFailures, lookup, resources }) =>
+        Fx.sync(() => {
+          if (!alphaId || !betaId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+          const target = lookup.related(alphaId, Targeting)
+          const sources = lookup.relatedSources(betaId, Targeting)
+          resources.summary.set([
+            target.ok ? String(target.value.value) : target.error._tag,
+            sources.ok ? sources.value.map((source) => source.value).join(",") : sources.error._tag,
+            relationFailures.targeting.all().length
+          ].join("/"))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({ systems: [spawn] }),
+      Game.Schedule.define({
+        systems: [relate, observeBefore, observeAfter],
+        steps: [
+          relate,
+          observeBefore,
+          Game.Schedule.applyDeferred(),
+          Game.Schedule.updateRelationFailures(),
+          observeAfter
+        ]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Summary)).toBe("2/1/0")
+  })
+
+  it("keeps unrelate total and benign when repeated or when no edge exists", () => {
+    let alphaId: Entity.EntityId<typeof schema, any> | undefined
+    let betaId: Entity.EntityId<typeof schema, any> | undefined
+
+    const spawn = Game.System.define(
+      "SpawnForRepeatedUnrelate",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          betaId = commands.spawn(Game.Command.spawnWith([Name, { value: "beta" }] as const))
+          alphaId = commands.spawn(
+            Game.Command.relate(
+              Game.Command.spawnWith([Name, { value: "alpha" }] as const),
+              Targeting,
+              betaId
+            )
+          )
+        })
+    )
+
+    const clear = Game.System.define(
+      "RepeatedUnrelate",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          if (!alphaId) {
+            return
+          }
+          commands.unrelate(alphaId, Targeting)
+          commands.unrelate(alphaId, Targeting)
+          commands.unrelate(Entity.makeEntityId<typeof schema, typeof Game.schema>(999), Targeting)
+        })
+    )
+
+    const observe = Game.System.define(
+      "ObserveRepeatedUnrelate",
+      {
+        relationFailures: {
+          targeting: Game.System.readRelationFailures(Targeting)
+        },
+        resources: {
+          summary: Game.System.writeResource(Summary)
+        }
+      },
+      ({ relationFailures, lookup, resources }) =>
+        Fx.sync(() => {
+          if (!alphaId || !betaId) {
+            resources.summary.set("missing-setup")
+            return
+          }
+          const target = lookup.related(alphaId, Targeting)
+          const sources = lookup.relatedSources(betaId, Targeting)
+          resources.summary.set([
+            target.ok ? "ok" : target.error._tag,
+            sources.ok ? sources.value.length : 0,
+            relationFailures.targeting.all().length
+          ].join("/"))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({ systems: [spawn] }),
+      Game.Schedule.define({
+        systems: [clear, observe],
+        steps: [clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0/0")
   })
 
   it("surfaces failed deferred relation mutations only after updateRelationFailures and leaves world state unchanged", () => {

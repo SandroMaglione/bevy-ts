@@ -14,6 +14,8 @@ const Count = Descriptor.defineResource<number>()("Count")
 const LastX = Descriptor.defineResource<number>()("LastX")
 const LastError = Descriptor.defineResource<string>()("LastError")
 const HandleRoot = Schema.defineRoot("RuntimeQueryHandle")
+const StoredHandle = Descriptor.defineResource<Entity.Handle<typeof HandleRoot, typeof Position> | null>()("StoredHandle")
+const FollowTarget = Descriptor.defineEvent<{ target: Entity.Handle<typeof HandleRoot, typeof Position> }>()("FollowTarget")
 const Followed = Descriptor.defineComponent<{
   target: Entity.Handle<typeof HandleRoot, typeof Position> | null
 }>()("Followed")
@@ -28,7 +30,11 @@ const schema = Schema.build(Schema.fragment({
   resources: {
     Count,
     LastX,
-    LastError
+    LastError,
+    StoredHandle
+  },
+  events: {
+    FollowTarget
   }
 }))
 
@@ -39,7 +45,8 @@ const makeRuntime = () =>
     resources: {
       Count: 0,
       LastX: -1,
-      LastError: ""
+      LastError: "",
+      StoredHandle: null
     }
   })
 
@@ -546,7 +553,8 @@ describe("Runtime query and lookup", () => {
       resources: {
         Count: 0,
         LastX: -1,
-        LastError: ""
+        LastError: "",
+        StoredHandle: null
       }
     })
 
@@ -572,5 +580,134 @@ describe("Runtime query and lookup", () => {
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity")
+  })
+
+  it("resolves handles stored in resources and events with the same explicit failure semantics", () => {
+    const Game = Schema.bind(schema, HandleRoot)
+    let spawnedTarget: Entity.EntityId<typeof schema, typeof HandleRoot> | undefined
+
+    const spawn = Game.System.define(
+      "RuntimeQuery/SpawnStoredHandle",
+      {
+        resources: {
+          storedHandle: Game.System.writeResource(StoredHandle)
+        },
+        events: {
+          followTarget: Game.System.writeEvent(FollowTarget)
+        }
+      },
+      ({ resources, events, commands }) =>
+        Fx.sync(() => {
+          spawnedTarget = commands.spawn(Game.Command.spawnWith([Position, { x: 12, y: 8 }] as const))
+          const handle = Game.Entity.handleAs(Position, spawnedTarget)
+          resources.storedHandle.set(handle)
+          events.followTarget.emit({ target: handle })
+        })
+    )
+
+    const observe = Game.System.define(
+      "RuntimeQuery/ObserveStoredHandle",
+      {
+        resources: {
+          storedHandle: Game.System.readResource(StoredHandle),
+          lastX: Game.System.writeResource(LastX),
+          lastError: Game.System.writeResource(LastError)
+        },
+        events: {
+          followTarget: Game.System.readEvent(FollowTarget)
+        }
+      },
+      ({ lookup, resources, events }) =>
+        Fx.sync(() => {
+          const resourceHandle = resources.storedHandle.get()
+          const eventHandle = events.followTarget.all().at(0)?.target
+
+          if (!resourceHandle || !eventHandle) {
+            resources.lastError.set("MissingSetup")
+            return
+          }
+
+          const resourceResult = lookup.getHandle(resourceHandle, Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          }))
+          const eventResult = lookup.getHandle(eventHandle, Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          }))
+
+          if (!resourceResult.ok || !eventResult.ok) {
+            resources.lastError.set(`${resourceResult.ok ? "ok" : resourceResult.error._tag}/${eventResult.ok ? "ok" : eventResult.error._tag}`)
+            return
+          }
+
+          resources.lastX.set(resourceResult.value.data.position.get().x + eventResult.value.data.position.get().x)
+          resources.lastError.set("")
+        })
+    )
+
+    const destroy = Game.System.define(
+      "RuntimeQuery/DestroyStoredHandleTarget",
+      {},
+      ({ commands }) =>
+        Fx.sync(() => {
+          if (spawnedTarget) {
+            commands.despawn(spawnedTarget)
+          }
+        })
+    )
+
+    const emitStored = Game.System.define(
+      "RuntimeQuery/EmitStoredHandleAgain",
+      {
+        resources: {
+          storedHandle: Game.System.readResource(StoredHandle)
+        },
+        events: {
+          followTarget: Game.System.writeEvent(FollowTarget)
+        }
+      },
+      ({ resources, events }) =>
+        Fx.sync(() => {
+          const handle = resources.storedHandle.get()
+          if (handle) {
+            events.followTarget.emit({ target: handle })
+          }
+        })
+    )
+
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(),
+      resources: {
+        Count: 0,
+        LastX: -1,
+        LastError: "",
+        StoredHandle: null
+      }
+    })
+
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [spawn, observe],
+        steps: [spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastX)).toBe(24)
+    expect(readResourceValue(runtime, schema, LastError)).toBe("")
+
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [destroy]
+      }),
+      Game.Schedule.define({
+        systems: [emitStored, observe],
+        steps: [emitStored, Game.Schedule.updateEvents(), observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity/MissingEntity")
   })
 })

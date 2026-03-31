@@ -273,4 +273,164 @@ describe("Runtime", () => {
       }]
     )
   })
+
+  it("propagates composed feature runtime requirements through project.App.make and project.schedules", () => {
+    const Root = Schema.defineRoot("RuntimeFeatureRoot")
+
+    const Core = Schema.Feature.define("Core", {
+      schema: Schema.fragment({
+        resources: {
+          DeltaTime: Time
+        },
+        states: {
+          CurrentPhase: Phase
+        }
+      }),
+      build: (_Game) => ({})
+    })
+
+    const Modes = Schema.Feature.define("Modes", {
+      schema: Schema.fragment({}),
+      requires: [Core] as const,
+      build: (Game) => {
+        const Mode = Game.StateMachine.define("Mode", ["Idle", "Live"] as const)
+
+        const update = Game.System.define(
+          "RuntimeTypes/FeatureMode",
+          {
+            resources: {
+              time: Game.System.readResource(Time)
+            },
+            states: {
+              phase: Game.System.readState(Phase)
+            },
+            services: {
+              logger: Game.System.service(Logger)
+            },
+            machines: {
+              mode: Game.System.machine(Mode)
+            }
+          },
+          ({ resources, states, services, machines }) =>
+            Fx.sync(() => {
+              expect(resources.time.get()).type.toBe<number>()
+              expect(states.phase.get()).type.toBe<"Running" | "Paused">()
+              expect(machines.mode.get()).type.toBe<"Idle" | "Live">()
+              services.logger.log("feature")
+            })
+        )
+
+        return {
+          machines: {
+            Mode
+          },
+          update: [Game.Schedule.define({
+            systems: [update]
+          })]
+        }
+      }
+    })
+
+    const project = Schema.Feature.compose({
+      root: Root,
+      features: [Core, Modes] as const
+    })
+
+    const runtime = project.Game.Runtime.make({
+      services: project.Game.Runtime.services(
+        project.Game.Runtime.service(Logger, {
+          log(message) {
+            expect(message).type.toBe<string>()
+          }
+        })
+      ),
+      resources: {
+        DeltaTime: 1
+      },
+      states: {
+        CurrentPhase: "Running"
+      },
+      machines: project.Game.Runtime.machines(
+        project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
+      )
+    })
+
+    runtime.tick(...project.schedules.update)
+
+    project.App.make({
+      services: project.Game.Runtime.services(
+        project.Game.Runtime.service(Logger, {
+          log(_message) {}
+        })
+      ),
+      resources: {
+        DeltaTime: 1
+      },
+      states: {
+        CurrentPhase: "Running"
+      },
+      machines: project.Game.Runtime.machines(
+        project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
+      )
+    })
+
+    // @ts-expect-error!
+    project.App.make({
+      services: project.Game.Runtime.services(),
+      resources: {
+        DeltaTime: 1
+      },
+      states: {
+        CurrentPhase: "Running"
+      },
+      machines: project.Game.Runtime.machines(
+        project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
+      )
+    })
+
+    // @ts-expect-error!
+    project.App.make({
+      services: project.Game.Runtime.services(
+        project.Game.Runtime.service(Logger, {
+          log(_message) {}
+        })
+      ),
+      states: {
+        CurrentPhase: "Running"
+      },
+      machines: project.Game.Runtime.machines(
+        project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
+      )
+    })
+
+    // @ts-expect-error!
+    project.App.make({
+      services: project.Game.Runtime.services(
+        project.Game.Runtime.service(Logger, {
+          log(_message) {}
+        })
+      ),
+      resources: {
+        DeltaTime: 1
+      },
+      machines: project.Game.Runtime.machines(
+        project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
+      )
+    })
+
+    // @ts-expect-error!
+    project.App.make({
+      services: project.Game.Runtime.services(
+        project.Game.Runtime.service(Logger, {
+          log(_message) {}
+        })
+      ),
+      resources: {
+        DeltaTime: 1
+      },
+      states: {
+        CurrentPhase: "Running"
+      }
+    })
+  })
 })

@@ -3,6 +3,7 @@ import { App, Descriptor, Fx, Schema } from "../src/index.ts"
 import * as Runtime from "../src/runtime.ts"
 import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
+import { readResourceValue } from "./utils/fixtures.ts"
 
 const Counter = Descriptor.defineResource<number>()("Counter")
 const Log = Descriptor.defineResource<ReadonlyArray<string>>()("Log")
@@ -356,6 +357,162 @@ describe("App", () => {
     expect(capturedCounter).toBe(1)
     expect(capturedBootCount).toBe(1)
     expect(capturedLog).toEqual(["bootstrap", "combat"])
+  })
+
+  it("uses selected feature order for aggregated phases and matches manual schedule execution", () => {
+    const Root = Schema.defineRoot("FeatureOrderApp")
+    const Trace = Descriptor.defineResource<ReadonlyArray<string>>()("FeatureOrder/Trace")
+
+    const Core = Schema.Feature.define("Core", {
+      schema: Schema.fragment({
+        resources: {
+          Trace
+        }
+      }),
+      build: (Game) => {
+        const bootstrap = Game.System.define(
+          "FeatureOrder/CoreBootstrap",
+          {
+            resources: {
+              trace: Game.System.writeResource(Trace)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.trace.update((entries) => [...entries, "core-bootstrap"])
+            })
+        )
+
+        const update = Game.System.define(
+          "FeatureOrder/CoreUpdate",
+          {
+            resources: {
+              trace: Game.System.writeResource(Trace)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.trace.update((entries) => [...entries, "core-update"])
+            })
+        )
+
+        return {
+          bootstrap: [Game.Schedule.define({ systems: [bootstrap] })],
+          update: [Game.Schedule.define({ systems: [update] })]
+        }
+      }
+    })
+
+    const Combat = Schema.Feature.define("Combat", {
+      schema: Schema.fragment({}),
+      requires: [Core] as const,
+      build: (Game) => {
+        const bootstrap = Game.System.define(
+          "FeatureOrder/CombatBootstrap",
+          {
+            resources: {
+              trace: Game.System.writeResource(Trace)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.trace.update((entries) => [...entries, "combat-bootstrap"])
+            })
+        )
+
+        const update = Game.System.define(
+          "FeatureOrder/CombatUpdate",
+          {
+            resources: {
+              trace: Game.System.writeResource(Trace)
+            }
+          },
+          ({ resources }) =>
+            Fx.sync(() => {
+              resources.trace.update((entries) => [...entries, "combat-update"])
+            })
+        )
+
+        return {
+          bootstrap: [Game.Schedule.define({ systems: [bootstrap] })],
+          update: [Game.Schedule.define({ systems: [update] })]
+        }
+      }
+    })
+
+    const Empty = Schema.Feature.define("Empty", {
+      schema: Schema.fragment({}),
+      build: () => ({})
+    })
+
+    const project = Schema.Feature.compose({
+      root: Root,
+      features: [Combat, Core, Empty] as const
+    })
+
+    const manualRuntime = project.Game.Runtime.make({
+      services: project.Game.Runtime.services(),
+      resources: {
+        Trace: []
+      }
+    })
+
+    manualRuntime.initialize(...project.schedules.bootstrap)
+    manualRuntime.tick(...project.schedules.update)
+
+    const app = project.App.make({
+      services: project.Game.Runtime.services(),
+      resources: {
+        Trace: []
+      }
+    })
+
+    app.bootstrap()
+    app.update()
+
+    expect(readResourceValue(manualRuntime, project.schema, Trace)).toEqual([
+      "combat-bootstrap",
+      "core-bootstrap",
+      "combat-update",
+      "core-update"
+    ])
+    expect(readResourceValue(app.runtime, project.schema, Trace)).toEqual([
+      "combat-bootstrap",
+      "core-bootstrap",
+      "combat-update",
+      "core-update"
+    ])
+    expect(project.features.Empty.bootstrap).toEqual([])
+    expect(project.features.Empty.update).toEqual([])
+  })
+
+  it("throws deterministically for duplicate or missing features when type checks are bypassed", () => {
+    const Root = Schema.defineRoot("FeatureRuntimeChecks")
+
+    const Core = Schema.Feature.define("Core", {
+      schema: Schema.fragment({}),
+      build: () => ({})
+    })
+
+    const Combat = Schema.Feature.define("Combat", {
+      schema: Schema.fragment({}),
+      requires: [Core] as const,
+      build: () => ({})
+    })
+
+    expect(() =>
+      Schema.Feature.compose({
+        root: Root,
+        features: [Core, Core]
+      } as never)
+    ).toThrow("Duplicate feature name: Core")
+
+    expect(() =>
+      Schema.Feature.compose({
+        root: Root,
+        features: [Combat]
+      } as never)
+    ).toThrow("Missing required feature: Core")
   })
 })
 
