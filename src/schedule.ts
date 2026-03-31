@@ -283,6 +283,10 @@ type EmptyRequirements = RuntimeRequirements<{}, {}, {}, {}>
 type WidenArray<Values extends ReadonlyArray<unknown>> = ReadonlyArray<Values[number]>
 type WidenSteps<Steps extends ReadonlyArray<ScheduleStep> | undefined> =
   Steps extends ReadonlyArray<ScheduleStep> ? WidenArray<Steps> : undefined
+type ScheduleSystemName<SystemValue> =
+  SystemValue extends { readonly name: infer Name extends string } ? Name : never
+type StepSystems<Steps extends ReadonlyArray<ScheduleStep>> = Extract<Steps[number], AnySystem>
+type StepSystemNames<Steps extends ReadonlyArray<ScheduleStep>> = ScheduleSystemName<StepSystems<Steps>>
 
 /**
  * Extracts the union of systems included in one schedule.
@@ -382,6 +386,88 @@ export type SystemRequirementsForSchedule<Systems extends ReadonlyArray<AnySyste
 
 export type ScheduleRequirements<Systems extends ReadonlyArray<AnySystem>, Steps extends ReadonlyArray<ScheduleStep> = []> =
   Simplify<SystemRequirementsForSchedule<Systems> & StepRequirements<Steps>>
+
+type DuplicateNames<
+  Values extends ReadonlyArray<string>,
+  Seen extends string = never
+> = number extends Values["length"]
+  ? never
+  : Values extends readonly [infer Head extends string, ...infer Tail extends ReadonlyArray<string>]
+    ? Head extends Seen
+      ? Head | DuplicateNames<Tail, Seen>
+      : DuplicateNames<Tail, Seen | Head>
+    : never
+
+type DuplicateExtensionSystemNames<
+  Base extends ScheduleDefinition<any, any, any>,
+  Before extends ReadonlyArray<ScheduleStep>,
+  After extends ReadonlyArray<ScheduleStep>
+> =
+  | Extract<StepSystemNames<Before>, ScheduleSystemName<Base["systems"][number]>>
+  | Extract<StepSystemNames<After>, ScheduleSystemName<Base["systems"][number]>>
+  | Extract<StepSystemNames<Before>, StepSystemNames<After>>
+  | DuplicateNames<{
+      readonly [K in keyof Before]: Before[K] extends AnySystem ? ScheduleSystemName<Before[K]> : never
+    } & ReadonlyArray<string>>
+  | DuplicateNames<{
+      readonly [K in keyof After]: After[K] extends AnySystem ? ScheduleSystemName<After[K]> : never
+    } & ReadonlyArray<string>>
+
+type ScheduleSchemaOf<Base extends ScheduleDefinition<any, any, any>> =
+  Base extends ScheduleDefinition<infer S, any, any> ? S : never
+
+type ScheduleRootOf<Base extends ScheduleDefinition<any, any, any>> =
+  Base extends ScheduleDefinition<any, any, infer Root> ? Root : never
+
+type ScheduleRequirementsOf<Base extends ScheduleDefinition<any, any, any>> =
+  Base extends ScheduleDefinition<any, infer Requirements, any>
+    ? Requirements
+    : EmptyRequirements
+
+type StepRequirementPart<Step, Category extends keyof RuntimeRequirements> =
+  Step extends { readonly requirements: infer Requirements }
+    ? Requirements extends RuntimeRequirements
+      ? Requirements[Category]
+      : Step extends ApplyStateTransitionsStep<infer Bundle, any>
+        ? Bundle extends TransitionBundleDefinition<any, any, infer TransitionRequirements, any>
+          ? TransitionRequirements[Category]
+          : never
+        : never
+    : Step extends ApplyStateTransitionsStep<infer Bundle, any>
+      ? Bundle extends TransitionBundleDefinition<any, any, infer TransitionRequirements, any>
+        ? TransitionRequirements[Category]
+        : never
+      : never
+
+type ExtensionRequirements<Step> = Simplify<RuntimeRequirements<
+  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "services">>>,
+  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "resources">>>,
+  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "states">>>,
+  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "machines">>>
+>>
+
+type MergeRequirements<
+  Base extends RuntimeRequirements,
+  Extra extends RuntimeRequirements
+> = Simplify<RuntimeRequirements<
+  Simplify<Base["services"] & Extra["services"]>,
+  Simplify<Base["resources"] & Extra["resources"]>,
+  Simplify<Base["states"] & Extra["states"]>,
+  Simplify<Base["machines"] & Extra["machines"]>
+>>
+
+export type ExtendedScheduleFor<
+  Base extends ScheduleDefinition<any, any, any>,
+  BeforeStep extends ScheduleStep,
+  AfterStep extends ScheduleStep
+> = AnonymousScheduleDefinition<
+  ScheduleSchemaOf<Base>,
+  MergeRequirements<
+    ScheduleRequirementsOf<Base>,
+    ExtensionRequirements<BeforeStep | AfterStep>
+  >,
+  ScheduleRootOf<Base>
+>
 
 /**
  * Extracts the union of internal system names included in one schedule.
@@ -679,10 +765,95 @@ export function named<
 }
 
 /**
+ * Creates an anonymous schedule by wrapping an existing base schedule with
+ * explicit prefix and suffix steps.
+ *
+ * `extend(...)` is intentionally narrow:
+ *
+ * - `before` runs exactly before `base.steps`
+ * - `after` runs exactly after `base.steps`
+ * - `base.steps` stay unchanged
+ * - no implicit markers are inserted
+ *
+ * Use this to keep one headless gameplay schedule as the source of truth, then
+ * add host-only capture or sync phases around it.
+ *
+ * @example
+ * ```ts
+ * const browserUpdate = Game.Schedule.extend(gameplayUpdate, {
+ *   before: [CaptureInputSystem],
+ *   after: [
+ *     Game.Schedule.updateLifecycle(),
+ *     DestroyNodesSystem,
+ *     CreateNodesSystem,
+ *     SyncNodesSystem
+ *   ]
+ * })
+ * ```
+ */
+export function extend<
+  Base extends ScheduleDefinition<any, any, any>,
+  BeforeStep extends ScheduleStep = never,
+  AfterStep extends ScheduleStep = never
+>(
+  base: Base,
+  options: {
+    readonly before?: ReadonlyArray<BeforeStep>
+    readonly after?: ReadonlyArray<AfterStep>
+  }
+): ExtendedScheduleFor<Base, BeforeStep, AfterStep> {
+  const before = (options.before ?? []) as ReadonlyArray<BeforeStep>
+  const after = (options.after ?? []) as ReadonlyArray<AfterStep>
+  const baseSystemKeys = new Set(base.systems.map((system) => system.ordering.label.key))
+  const extensionSystemKeys = new Set<symbol>()
+
+  for (const step of [...before, ...after]) {
+    if (!isSystemStep(step)) {
+      continue
+    }
+    if (baseSystemKeys.has(step.ordering.label.key)) {
+      throw new Error(`Extended schedule reuses base system: ${step.ordering.label.name}`)
+    }
+    if (extensionSystemKeys.has(step.ordering.label.key)) {
+      throw new Error(`Extended schedule reuses extension system: ${step.ordering.label.name}`)
+    }
+    extensionSystemKeys.add(step.ordering.label.key)
+  }
+
+  const steps = [...before, ...base.steps, ...after] as ReadonlyArray<ScheduleStep>
+  const systems = collectUniqueSystems(steps)
+
+  return {
+    kind: "anonymous",
+    steps,
+    systems,
+    sets: base.sets,
+    schema: base.schema,
+    requirements: undefined as unknown as ExtendedScheduleFor<Base, BeforeStep, AfterStep>["requirements"],
+    __schemaRoot: base.__schemaRoot
+  } as ExtendedScheduleFor<Base, BeforeStep, AfterStep>
+}
+
+/**
  * Runtime check used to distinguish system steps from schedule markers.
  */
 export const isSystemStep = (step: ScheduleStep): step is SystemDefinition<any, any, any> =>
   "spec" in step
+
+const collectUniqueSystems = (
+  steps: ReadonlyArray<ScheduleStep>
+): ReadonlyArray<SystemDefinition<any, any, any>> => {
+  const unique = new Map<symbol, SystemDefinition<any, any, any>>()
+  for (const step of steps) {
+    if (!isSystemStep(step)) {
+      continue
+    }
+    if (!unique.has(step.ordering.label.key)) {
+      unique.set(step.ordering.label.key, step)
+    }
+  }
+  return [...unique.values()]
+}
 
 const resolveSystems = (
   systems: ReadonlyArray<SystemDefinition<any, any, any>>,

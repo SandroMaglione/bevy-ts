@@ -53,6 +53,14 @@ const PlainSystem = System.define(
   () => Fx.sync<undefined, {}>(() => undefined)
 )
 
+const SuffixSystem = System.define(
+  "SuffixSystem",
+  {
+    schema
+  },
+  () => Fx.sync<undefined, {}>(() => undefined)
+)
+
 describe("Schedule", () => {
   it("accepts valid systems and configured sets", () => {
     Schedule.define({
@@ -153,5 +161,23 @@ describe("Schedule", () => {
     })
 
     schedule.label
+  })
+
+  it("extends one base schedule with prefix and suffix steps", () => {
+    const base = Schedule.define({
+      schema,
+      systems: [PlainSystem]
+    })
+
+    const extended = Schedule.extend(base, {
+      before: [MovementSystem],
+      after: [Schedule.updateLifecycle(), SuffixSystem]
+    })
+
+    extended.steps
+    extended.systems
+
+    // @ts-expect-error!
+    extended.label
   })
 })

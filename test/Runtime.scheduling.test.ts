@@ -254,4 +254,89 @@ describe("Runtime scheduling", () => {
       } as never) as never)
     ).toThrow("Circular system dependency detected")
   })
+
+  it("extends one base schedule with prefix and suffix steps in exact order", () => {
+    const before = System.define(
+      "RuntimeScheduling/Before",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "before"])
+        })
+    )
+
+    const base = System.define(
+      "RuntimeScheduling/Base",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "base"])
+        })
+    )
+
+    const after = System.define(
+      "RuntimeScheduling/After",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "after"])
+        })
+    )
+
+    const runtime = makeRuntime()
+    const baseSchedule = Schedule.define({
+      schema,
+      systems: [base]
+    })
+    const extended = Schedule.extend(baseSchedule, {
+      before: [before],
+      after: [after]
+    })
+
+    runtime.runSchedule(extended)
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["before", "base", "after"])
+  })
+
+  it("throws when extension steps reuse a base schedule system", () => {
+    const base = System.define(
+      "RuntimeScheduling/ExtendedBase",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "base"])
+        })
+    )
+
+    const baseSchedule = Schedule.define({
+      schema,
+      systems: [base]
+    })
+
+    expect(() =>
+      Schedule.extend(baseSchedule as never, {
+        before: [base]
+      } as never)
+    ).toThrow("Extended schedule reuses base system")
+  })
 })

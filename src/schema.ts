@@ -756,6 +756,28 @@ export namespace Schema {
           | Schedule.ApplyStateTransitionsStep<any, Root>
         )>>
       }) => Schema.BoundSchedule<S, Root, any>
+      extend: <
+        Base extends Schema.BoundSchedule<S, Root, any>,
+        BeforeStep extends (
+          | Schema.BoundSystem<any, Root, any, any, any>
+          | Schedule.ApplyDeferredStep
+          | Schedule.EventUpdateStep
+          | Schedule.LifecycleUpdateStep
+          | Schedule.RelationFailureUpdateStep
+          | Schedule.ApplyStateTransitionsStep<any, Root>
+        ) = never,
+        AfterStep extends (
+          | Schema.BoundSystem<any, Root, any, any, any>
+          | Schedule.ApplyDeferredStep
+          | Schedule.EventUpdateStep
+          | Schedule.LifecycleUpdateStep
+          | Schedule.RelationFailureUpdateStep
+          | Schedule.ApplyStateTransitionsStep<any, Root>
+        ) = never
+      >(base: Base, options: {
+        readonly before?: ReadonlyArray<BeforeStep>
+        readonly after?: ReadonlyArray<AfterStep>
+      }) => Schema.BoundSchedule<S, Root, any>
       transitions: typeof Schedule.transitions
       onEnter: typeof bind<S, Root> extends (...args: any[]) => infer _ ? any : never
       onExit: typeof bind<S, Root> extends (...args: any[]) => infer _ ? any : never
@@ -1333,6 +1355,18 @@ export const bind = <S extends Schema.Any, Root = S>(
   >(label: L, options: BoundScheduleOptions<SystemValue, SetValue> & { readonly steps?: ReadonlyArray<Extract<StepValue, BoundScheduleStep>> }) =>
     makeNamedSchedule(label, options)
 
+  const extendSchedule = <
+    Base extends Schema.BoundSchedule<S, Root, any>,
+    BeforeStep extends BoundScheduleStep = never,
+    AfterStep extends BoundScheduleStep = never
+  >(base: Base, options: {
+    readonly before?: ReadonlyArray<BeforeStep>
+    readonly after?: ReadonlyArray<AfterStep>
+  }) => {
+    const schedule = Schedule.extend(base, options)
+    return schedule as unknown as BoundAnonymousScheduleFor<typeof schedule>
+  }
+
   const defineMachine = <
     const Name extends string,
     const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
@@ -1517,6 +1551,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     Schedule: {
       define: defineSchedule,
       named: namedSchedule,
+      extend: extendSchedule,
       transitions: makeTransitionBundle,
       onEnter,
       onExit,

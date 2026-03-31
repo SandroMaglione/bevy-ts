@@ -908,20 +908,8 @@ const setupSchedule = Game.Schedule.define({
   ]
 })
 
-const browserSetupSchedule = Game.Schedule.define({
-  systems: [
-    ResetGameSystem,
-    EnsureFoodSystem,
-    CreateSnakeNodesSystem,
-    SyncSnakeNodeTransformsSystem,
-    ReconcileSnakeNodesSystem,
-    SyncHudSystem
-  ],
-  steps: [
-    ResetGameSystem,
-    Game.Schedule.applyDeferred(),
-    EnsureFoodSystem,
-    Game.Schedule.applyDeferred(),
+const browserSetupSchedule = Game.Schedule.extend(setupSchedule, {
+  after: [
     Game.Schedule.updateLifecycle(),
     CreateSnakeNodesSystem,
     SyncSnakeNodeTransformsSystem,
@@ -964,40 +952,12 @@ const updateSchedule = Game.Schedule.define({
   ]
 })
 
-const browserUpdateSchedule = Game.Schedule.define({
-  systems: [
+const browserUpdateSchedule = Game.Schedule.extend(updateSchedule, {
+  before: [
     QueueRestartSystem,
-    BrowserInputSystem,
-    CapturePreviousPositionsSystem,
-    MoveHeadSystem,
-    MoveBodySystem,
-    DetectFoodCollisionSystem,
-    ResolveFoodEatenSystem,
-    GrowSnakeSystem,
-    DetectSelfCollisionSystem,
-    EnsureFoodSystem,
-    DestroySnakeNodesSystem,
-    CreateSnakeNodesSystem,
-    SyncSnakeNodeTransformsSystem,
-    ReconcileSnakeNodesSystem,
-    SyncHudSystem
+    BrowserInputSystem
   ],
-  steps: [
-    QueueRestartSystem,
-    BrowserInputSystem,
-    CapturePreviousPositionsSystem,
-    MoveHeadSystem,
-    MoveBodySystem,
-    DetectFoodCollisionSystem,
-    Game.Schedule.updateEvents(),
-    ResolveFoodEatenSystem,
-    Game.Schedule.applyDeferred(),
-    GrowSnakeSystem,
-    Game.Schedule.applyDeferred(),
-    DetectSelfCollisionSystem,
-    EnsureFoodSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.applyStateTransitions(phaseTransitions),
+  after: [
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateLifecycle(),
     DestroySnakeNodesSystem,

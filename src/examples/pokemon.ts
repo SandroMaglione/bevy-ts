@@ -510,16 +510,8 @@ const setupSchedule = Game.Schedule.define({
   systems: [SetupSystem]
 })
 
-const browserSetupSchedule = Game.Schedule.define({
-  systems: [
-    SetupSystem,
-    CreateRenderNodesSystem,
-    SyncPlayerNodeSystem
-  ],
-  steps: [
-    SetupSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
+const browserSetupSchedule = Game.Schedule.extend(setupSchedule, {
+  after: [
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem
   ]
@@ -534,25 +526,9 @@ const updateSchedule = Game.Schedule.define({
   ]
 })
 
-const browserUpdateSchedule = Game.Schedule.define({
-  systems: [
-    CaptureFrameInputSystem,
-    InputSystem,
-    PlanMovementSystem,
-    CollisionSystem,
-    AdvanceMovementSystem,
-    DestroyRenderNodesSystem,
-    CreateRenderNodesSystem,
-    SyncPlayerNodeSystem
-  ],
-  steps: [
-    CaptureFrameInputSystem,
-    InputSystem,
-    PlanMovementSystem,
-    CollisionSystem,
-    AdvanceMovementSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
+const browserUpdateSchedule = Game.Schedule.extend(updateSchedule, {
+  before: [CaptureFrameInputSystem],
+  after: [
     DestroyRenderNodesSystem,
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem

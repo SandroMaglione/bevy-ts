@@ -900,16 +900,12 @@ const DestroyPixiNodesSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define({
-  systems: [
-    SpawnPlayerSystem,
-    CreateMatterBodiesSystem,
-    CreatePixiNodesSystem
-  ],
-  steps: [
-    SpawnPlayerSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
+const gameplaySetupSchedule = Game.Schedule.define({
+  systems: [SpawnPlayerSystem]
+})
+
+const setupSchedule = Game.Schedule.extend(gameplaySetupSchedule, {
+  after: [
     CreateMatterBodiesSystem,
     CreatePixiNodesSystem
   ]

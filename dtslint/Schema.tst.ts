@@ -379,6 +379,17 @@ describe("Schema", () => {
 
     // @ts-expect-error!
     runtimeA.runSchedule(scheduleB)
+
+    const scheduleA = GameA.Schedule.define({
+      systems: [SystemA]
+    })
+
+    GameA.Schedule.extend(scheduleA, {
+      before: [
+        // @ts-expect-error!
+        SystemB
+      ]
+    })
   })
 
   it("supports explicit relation query access and hierarchy-only lookup helpers", () => {
