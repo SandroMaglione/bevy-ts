@@ -77,10 +77,10 @@ export const Game = Schema.bind(schema, Root)
 
 export const Facing = Game.StateMachine.define(
   "TopDown/Facing",
-  ["Down", "Left", "Right", "Up"] as const
+  ["Down", "Left", "Right", "Up"]
 )
 
 export const Locomotion = Game.StateMachine.define(
   "TopDown/Locomotion",
-  ["Idle", "Walking"] as const
+  ["Idle", "Walking"]
 )

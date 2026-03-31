@@ -444,7 +444,7 @@ const updateSchedule = Game.Schedule.define({
       after: [MovementSetLabel],
       chain: true
     })
-  ] as const,
+  ],
   steps: [
     MovementSystem,
     CollisionSystem,
@@ -467,7 +467,7 @@ const browserUpdateSchedule = Game.Schedule.define({
       after: [MovementSetLabel],
       chain: true
     })
-  ] as const,
+  ],
   steps: [
     BrowserInputSystem,
     MovementSystem,

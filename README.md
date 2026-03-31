@@ -246,12 +246,12 @@ Define machines from the bound schema root:
 ```ts
 const AppState = Game.StateMachine.define(
   "AppState",
-  ["Menu", "Playing", "Paused"] as const
+  ["Menu", "Playing", "Paused"]
 )
 
 const ModalState = Game.StateMachine.define(
   "ModalState",
-  ["None", "Inventory", "Map"] as const
+  ["None", "Inventory", "Map"]
 )
 ```
 

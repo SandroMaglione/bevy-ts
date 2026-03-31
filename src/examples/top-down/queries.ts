@@ -66,5 +66,5 @@ export const AddedRenderableQuery = Game.Query.define({
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable)
   },
-  filters: [Game.Query.added(Renderable)] as const
+  filters: [Game.Query.added(Renderable)]
 })

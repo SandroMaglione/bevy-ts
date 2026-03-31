@@ -95,7 +95,7 @@ const Game = Schema.bind(schema)
 
 const AppState = Game.StateMachine.define(
   "AppState",
-  ["Title", "Countdown", "Playing", "Paused", "Victory", "Defeat"] as const
+  ["Title", "Countdown", "Playing", "Paused", "Victory", "Defeat"]
 )
 
 const GameplaySet = Label.defineSystemSetLabel("StateMachineExample/Gameplay")
@@ -799,7 +799,7 @@ const updateSchedule = Game.Schedule.define({
       label: GameplaySet,
       when: [Game.Condition.inState(AppState, "Playing")]
     })
-  ] as const,
+  ],
   steps: [
     CaptureFrameInputSystem,
     QueueStartFromTitleSystem,

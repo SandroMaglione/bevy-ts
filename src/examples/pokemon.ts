@@ -435,7 +435,7 @@ const updateSchedule = Game.Schedule.define({
       after: [InputPipelineSetLabel],
       chain: true
     })
-  ] as const
+  ]
 })
 
 const browserUpdateSchedule = Game.Schedule.define({
@@ -450,7 +450,7 @@ const browserUpdateSchedule = Game.Schedule.define({
       after: [InputPipelineSetLabel],
       chain: true
     })
-  ] as const,
+  ],
   steps: [
     CaptureFrameInputSystem,
     InputSystem,
