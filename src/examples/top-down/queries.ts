@@ -1,5 +1,4 @@
 import {
-  Camera,
   Collider,
   Collectable,
   Game,
@@ -45,19 +44,7 @@ export const CollectableQuery = Game.Query.define({
   selection: {
     position: Game.Query.read(Position),
     collider: Game.Query.read(Collider),
-    collectable: Game.Query.read(Collectable),
-    renderable: Game.Query.read(Renderable)
-  }
-})
-
-export const RenderQuery = Game.Query.define({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable),
-    velocity: Game.Query.optional(Velocity),
-    player: Game.Query.optional(Player),
-    wall: Game.Query.optional(Wall),
-    collectable: Game.Query.optional(Collectable)
+    collectable: Game.Query.read(Collectable)
   }
 })
 
@@ -67,4 +54,26 @@ export const AddedRenderableQuery = Game.Query.define({
     renderable: Game.Query.read(Renderable)
   },
   filters: [Game.Query.added(Renderable)]
+})
+
+export const ChangedRenderableTransformQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position),
+    renderable: Game.Query.read(Renderable)
+  },
+  filters: [Game.Query.changed(Position)]
+})
+
+export const PlayerRenderQuery = Game.Query.define({
+  selection: {
+    renderable: Game.Query.read(Renderable),
+    player: Game.Query.read(Player)
+  }
+})
+
+export const PickupRenderQuery = Game.Query.define({
+  selection: {
+    collectable: Game.Query.read(Collectable),
+    pickup: Game.Query.read(Renderable)
+  }
 })

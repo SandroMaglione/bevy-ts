@@ -1,16 +1,22 @@
 import {
+  ApplyWorldCameraTransformSystem,
   AdvanceAnimationClockSystem,
   CaptureFrameContextSystem,
   CollectFocusedCollectableSystem,
+  CreateRenderNodesSystem,
+  DestroyRenderNodesSystem,
   MovePlayerSystem,
   PlanPlayerVelocitySystem,
   ResolveCurrentPlayerFrameSystem,
   ResolveFacingSystem,
   ResolveLocomotionSystem,
+  ResetAnimationClockSystem,
   SetupWorldSystem,
   SyncCameraSystem,
   SyncHudSystem,
-  SyncSceneSystem,
+  SyncPickupPresentationSystem,
+  SyncPlayerSpriteSystem,
+  SyncRenderableTransformsSystem,
   UpdateFocusedCollectableSystem
 } from "./systems/index.ts"
 import { Game } from "./schema.ts"
@@ -19,17 +25,21 @@ export const setupSchedule = Game.Schedule.define({
   systems: [
     SetupWorldSystem,
     SyncCameraSystem,
-    ResolveCurrentPlayerFrameSystem,
-    SyncSceneSystem,
+    ApplyWorldCameraTransformSystem,
+    CreateRenderNodesSystem,
+    SyncPlayerSpriteSystem,
+    SyncPickupPresentationSystem,
     SyncHudSystem
   ],
   steps: [
     SetupWorldSystem,
     Game.Schedule.applyDeferred(),
     SyncCameraSystem,
-    ResolveCurrentPlayerFrameSystem,
+    ApplyWorldCameraTransformSystem,
     Game.Schedule.updateLifecycle(),
-    SyncSceneSystem,
+    CreateRenderNodesSystem,
+    SyncPlayerSpriteSystem,
+    SyncPickupPresentationSystem,
     SyncHudSystem
   ]
 })
@@ -43,10 +53,16 @@ export const updateSchedule = Game.Schedule.define({
     CollectFocusedCollectableSystem,
     ResolveFacingSystem,
     ResolveLocomotionSystem,
+    ResetAnimationClockSystem,
     AdvanceAnimationClockSystem,
     ResolveCurrentPlayerFrameSystem,
     SyncCameraSystem,
-    SyncSceneSystem,
+    ApplyWorldCameraTransformSystem,
+    DestroyRenderNodesSystem,
+    CreateRenderNodesSystem,
+    SyncRenderableTransformsSystem,
+    SyncPlayerSpriteSystem,
+    SyncPickupPresentationSystem,
     SyncHudSystem
   ],
   steps: [
@@ -59,11 +75,17 @@ export const updateSchedule = Game.Schedule.define({
     ResolveLocomotionSystem,
     Game.Schedule.applyDeferred(),
     Game.Schedule.applyStateTransitions(),
+    ResetAnimationClockSystem,
     AdvanceAnimationClockSystem,
     ResolveCurrentPlayerFrameSystem,
     Game.Schedule.updateLifecycle(),
     SyncCameraSystem,
-    SyncSceneSystem,
+    ApplyWorldCameraTransformSystem,
+    DestroyRenderNodesSystem,
+    CreateRenderNodesSystem,
+    SyncRenderableTransformsSystem,
+    SyncPlayerSpriteSystem,
+    SyncPickupPresentationSystem,
     SyncHudSystem
   ]
 })

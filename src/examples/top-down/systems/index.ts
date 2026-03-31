@@ -6,8 +6,16 @@ export {
   AdvanceAnimationClockSystem,
   ResolveCurrentPlayerFrameSystem,
   ResolveFacingSystem,
+  ResetAnimationClockSystem,
   ResolveLocomotionSystem
 } from "./animation.ts"
 export { SyncCameraSystem } from "./camera.ts"
-export { SyncSceneSystem } from "./render-sync.ts"
+export {
+  ApplyWorldCameraTransformSystem,
+  CreateRenderNodesSystem,
+  DestroyRenderNodesSystem,
+  SyncPickupPresentationSystem,
+  SyncPlayerSpriteSystem,
+  SyncRenderableTransformsSystem
+} from "./render-sync.ts"
 export { SyncHudSystem } from "./hud.ts"

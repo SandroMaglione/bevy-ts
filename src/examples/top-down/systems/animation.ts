@@ -73,6 +73,28 @@ export const ResolveLocomotionSystem = Game.System.define(
     })
 )
 
+export const ResetAnimationClockSystem = Game.System.define(
+  "TopDown/ResetAnimationClock",
+  {
+    when: [
+      Game.Condition.or(
+        Game.Condition.stateChanged(Facing),
+        Game.Condition.stateChanged(Locomotion)
+      )
+    ],
+    resources: {
+      clock: Game.System.writeResource(AnimationClock)
+    }
+  },
+  ({ resources }) =>
+    Fx.sync(() => {
+      resources.clock.set({
+        frameIndex: 0,
+        elapsed: 0
+      })
+    })
+)
+
 export const AdvanceAnimationClockSystem = Game.System.define(
   "TopDown/AdvanceAnimationClock",
   {
@@ -81,32 +103,24 @@ export const AdvanceAnimationClockSystem = Game.System.define(
       clock: Game.System.writeResource(AnimationClock)
     },
     machines: {
-      facing: Game.System.machine(Facing),
       locomotion: Game.System.machine(Locomotion)
     }
   },
   ({ resources, machines }) =>
     Fx.sync(() => {
-      const facing = machines.facing.get()
       const locomotion = machines.locomotion.get()
       const clock = resources.clock.get()
 
       if (locomotion === "Idle") {
         resources.clock.set({
           frameIndex: 0,
-          elapsed: 0,
-          lastFacing: facing,
-          lastLocomotion: locomotion
+          elapsed: 0
         })
         return
       }
 
       let frameIndex = clock.frameIndex
       let elapsed = clock.elapsed + resources.deltaTime.get()
-      if (clock.lastFacing !== facing || clock.lastLocomotion !== locomotion) {
-        frameIndex = 0
-        elapsed = 0
-      }
 
       while (elapsed >= PLAYER_FRAME_SECONDS) {
         elapsed -= PLAYER_FRAME_SECONDS
@@ -115,9 +129,7 @@ export const AdvanceAnimationClockSystem = Game.System.define(
 
       resources.clock.set({
         frameIndex,
-        elapsed,
-        lastFacing: facing,
-        lastLocomotion: locomotion
+        elapsed
       })
     })
 )

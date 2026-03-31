@@ -31,6 +31,17 @@ export const makeEmptyInputState = (): InputStateValue => ({
   interactJustPressed: false
 })
 
+export const makeEmptyFocusedCollectable = () => ({
+  current: null,
+  label: null,
+  distance: null
+} as const)
+
+export const makeInitialAnimationClock = () => ({
+  frameIndex: 0,
+  elapsed: 0
+} as const)
+
 export const createTopDownRuntime = (
   host: TopDownHostValue,
   inputManager: TopDownInputManager
@@ -51,19 +62,10 @@ export const createTopDownRuntime = (
         y: WORLD_HEIGHT * 0.5
       },
       InputState: makeEmptyInputState(),
-      FocusedCollectable: {
-        current: null,
-        label: null,
-        distance: null
-      },
+      FocusedCollectable: makeEmptyFocusedCollectable(),
       CollectedCount: 0,
       TotalCollectables: pickupLayout.length,
-      AnimationClock: {
-        frameIndex: 0,
-        elapsed: 0,
-        lastFacing: "Down",
-        lastLocomotion: "Idle"
-      },
+      AnimationClock: makeInitialAnimationClock(),
       CurrentPlayerFrame: {
         row: 1,
         column: 1

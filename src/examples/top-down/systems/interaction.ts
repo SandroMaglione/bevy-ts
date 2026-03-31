@@ -8,6 +8,7 @@ import {
   Game,
   InputState
 } from "../schema.ts"
+import { makeEmptyFocusedCollectable } from "../runtime.ts"
 
 export const UpdateFocusedCollectableSystem = Game.System.define(
   "TopDown/UpdateFocusedCollectable",
@@ -44,7 +45,7 @@ export const UpdateFocusedCollectableSystem = Game.System.define(
         }
 
         bestDistanceSquared = distanceSquared
-        current = Game.Entity.handleAsFrom(Collectable, collectable.entity)
+        current = Game.Entity.handleAs(Collectable, collectable.entity.id)
         label = data.label
       }
 
@@ -78,20 +79,12 @@ export const CollectFocusedCollectableSystem = Game.System.define(
 
       const result = lookup.getHandle(focused.current, CollectableQuery)
       if (!result.ok) {
-        resources.focused.set({
-          current: null,
-          label: null,
-          distance: null
-        })
+        resources.focused.set(makeEmptyFocusedCollectable())
         return
       }
 
       commands.despawn(result.value.entity.id)
       resources.collectedCount.update((value) => value + 1)
-      resources.focused.set({
-        current: null,
-        label: null,
-        distance: null
-      })
+      resources.focused.set(makeEmptyFocusedCollectable())
     })
 )

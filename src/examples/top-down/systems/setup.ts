@@ -2,23 +2,12 @@ import { Fx } from "../../../index.ts"
 
 import { pickupLayout, wallLayout } from "../content.ts"
 import { makePickupDraft, makePlayerDraft, makeWallDraft } from "../drafts.ts"
-import {
-  CollectedCount,
-  FocusedCollectable,
-  Game,
-  TotalCollectables
-} from "../schema.ts"
+import { Game } from "../schema.ts"
 
 export const SetupWorldSystem = Game.System.define(
   "TopDown/SetupWorld",
-  {
-    resources: {
-      totalCollectables: Game.System.writeResource(TotalCollectables),
-      collectedCount: Game.System.writeResource(CollectedCount),
-      focused: Game.System.writeResource(FocusedCollectable)
-    }
-  },
-  ({ commands, resources }) =>
+  {},
+  ({ commands }) =>
     Fx.sync(() => {
       commands.spawn(makePlayerDraft())
 
@@ -29,13 +18,5 @@ export const SetupWorldSystem = Game.System.define(
       for (const pickup of pickupLayout) {
         commands.spawn(makePickupDraft(pickup.x, pickup.y, pickup.label))
       }
-
-      resources.totalCollectables.set(pickupLayout.length)
-      resources.collectedCount.set(0)
-      resources.focused.set({
-        current: null,
-        label: null,
-        distance: null
-      })
     })
 )

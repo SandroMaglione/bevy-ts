@@ -106,9 +106,7 @@ app.update(update)
 
 ## Core flow
 
-The normal flow is simple: define descriptors, group them into schema fragments, build one final schema, define systems against that schema, group systems into schedules, then run those schedules from your own loop. Rendering, input, physics, and timing stay outside the runtime unless you explicitly model them as resources or services.
-
-Systems only see what they declare. Queries describe read and write access up front. Resources, events, states, and services are exposed as typed views. Mutation goes through deferred commands instead of direct world writes.
+The normal flow is: define descriptors, group them into schema fragments, build one final schema, define systems, group them into schedules, then run those schedules from your own loop. Rendering, input, physics, and timing stay outside the runtime unless you model them explicitly as resources or services.
 
 When choosing between the main ECS surfaces, the intended split is:
 
@@ -116,6 +114,8 @@ When choosing between the main ECS surfaces, the intended split is:
 - state machines for discrete phases where the transition boundary itself matters
 - events for transient cross-system messages
 - lifecycle reads for structural world changes that become visible only after `updateLifecycle()`
+
+In practice, let runtime construction own initial resource and machine values, and keep setup systems focused on spawning world content.
 
 ## Runtime requirements
 
@@ -165,11 +165,7 @@ const runtime = Game.Runtime.make({
 App.makeApp(runtime).update(tick)
 ```
 
-If one of those inputs is missing, the schedule should fail in typecheck before it can fail at runtime.
-
-Services are provisioned through descriptors so runtime lookup follows the same
-identity the system spec declared. Resources and states stay keyed by schema
-property names because they come from the closed schema registry.
+If one of those inputs is missing, the schedule should fail in typecheck before it can fail at runtime. Services use descriptors; resources and states stay keyed by schema property names from the closed schema.
 
 ## Spawning entities
 
@@ -200,7 +196,7 @@ const SpawnProjectileSystem = Game.System.define(
 )
 ```
 
-`Game.Command.spawn()` and single-step `Game.Command.insert(...)` still exist, but `spawnWith(...)` is the intended authoring path.
+`Game.Command.spawn()` and single-step `Game.Command.insert(...)` still exist, but `spawnWith(...)` is the default authoring path.
 
 ## Ordering systems
 
@@ -231,13 +227,11 @@ const update = Game.Schedule.define({
 })
 ```
 
-No runtime-relevant references are open strings. Systems are referenced directly. Reusable sets use typed labels. Schedules only need labels when some other API must refer to them externally.
+No runtime-relevant references are open strings. Systems are referenced directly, and reusable sets use typed labels.
 
 ## State machines
 
-Finite state machines are a dedicated API, separate from generic `states`. They follow the useful part of Bevy's `States` model, but keep the transition boundary explicit in user schedules: systems queue the next state, the current state stays stable until an explicit transition marker runs, and enter/exit/transition handlers are attached locally to that marker.
-
-Use machines when the discrete state itself is meaningful and should change only at an explicit boundary. Continuous progression such as timers, cooldown values, or animation elapsed time should still stay in resources.
+Finite state machines are a dedicated API for discrete state with explicit transition boundaries. Systems queue the next state, the current state stays stable until `applyStateTransitions(...)`, and continuous values such as timers or animation elapsed time still stay in resources. When some local resource needs to react to machine changes, prefer `Game.Condition.stateChanged(...)` or transition handlers over storing "last state" fields manually.
 
 ### Define machines
 
@@ -317,7 +311,7 @@ const update = Game.Schedule.define({
 })
 ```
 
-This means a queued `set("Paused")` is invisible before `applyStateTransitions()`, and visible after it. That makes same-schedule behavior predictable.
+Queued state is invisible before `applyStateTransitions()` and visible after it.
 
 The three main explicit schedule boundaries are:
 
@@ -325,7 +319,7 @@ The three main explicit schedule boundaries are:
 - `updateEvents()` for emitted events
 - `updateLifecycle()` for added / changed / removed / despawned visibility
 
-Transition schedules are pure values. They only run when bundled into the exact marker that should execute them:
+Transition schedules are pure values and only run when bundled into the exact marker that should execute them:
 
 ```ts
 const OnEnterPaused = Game.System.define(
@@ -393,7 +387,49 @@ const update = Game.Schedule.define({
 })
 ```
 
-This unlocks the common orchestration cases that are awkward without a typed FSM layer: menus, pause screens, turn phases, battle phases, cutscenes, and editor vs play mode.
+This covers the common orchestration cases that are awkward without a typed FSM layer: menus, pause screens, turn phases, and similar mode-driven flows.
+
+## Relationships and hierarchy
+
+Relationships are explicit schema entries. General relations and hierarchy use separate paired constructors so the relation kind stays typed through commands, queries, and lookup.
+
+```ts
+const { relation: ChildOf } = Descriptor.defineHierarchy("ChildOf", "Children")
+const { relation: Targeting } = Descriptor.defineRelation("Targeting", "TargetedBy")
+
+const schema = Schema.build(Schema.fragment({
+  components: {
+    Position,
+    Unit
+  },
+  relations: {
+    ChildOf,
+    Targeting
+  }
+}))
+
+const Game = Schema.bind(schema)
+
+const RelationQuery = Game.Query.define({
+  selection: {
+    parent: Game.Query.optionalRelation(ChildOf),
+    children: Game.Query.optionalRelated(ChildOf)
+  }
+})
+```
+
+Hierarchy traversal is only available for hierarchy relations and stays explicit through `lookup`:
+
+```ts
+const result = lookup.descendants(rootId, ChildOf, { order: "depth" })
+if (result.ok) {
+  for (const childId of result.value) {
+    // ...
+  }
+}
+```
+
+Relationships model current world structure and ownership. They are not a substitute for durable handles, which are for storing long-lived targets across frames and resolving them later through checked lookup. For single-target gameplay state such as a focused interactable, a durable handle in a resource is usually the simpler model.
 
 ## Renderer integration
 
@@ -440,140 +476,20 @@ const SyncPixiSceneSystem = Game.System.define(
 )
 ```
 
-This is the same pattern used in [`src/examples/pixi.ts`](./src/examples/pixi.ts).
-
-For richer browser examples, the preferred pattern is still the same:
+This is the same pattern used in [`src/examples/pixi.ts`](./src/examples/pixi.ts). For richer browser examples:
 
 - keep host objects like Pixi sprites, textures, and containers outside ECS
-- use `Game.Query.optional(...)` to keep mixed render queries compact when several renderable kinds share one sync loop
-- use lifecycle reads to create and destroy host-owned objects incrementally when that produces a clearer sync boundary
+- use `Game.Query.optional(...)` when several renderable kinds genuinely fit one sync loop
+- use lifecycle reads to create and destroy host-owned objects incrementally
 
-## Architecture
+For larger scenes, it is often clearer to split host sync into a few small systems:
 
-Descriptors define nominal identities for components, resources, events, states, and services. Schemas close the world. Systems declare ECS access and service dependencies explicitly. Schedules order execution, define apply/event phases, and carry their runtime requirements. The runtime owns world state, but not the outer loop, and the app/runtime execution boundary is where those requirements are checked.
+- one system to apply camera or world-container transforms
+- one lifecycle-driven system to create host nodes
+- one lifecycle-driven system to destroy host nodes
+- one or more narrow sync systems for transforms, sprite frame selection, or host-only presentation
 
-The important rule is simple: if TypeScript cannot prove something honestly, the public API should not pretend it can. Internals may erase types when needed, but that should not leak through the external surface.
-
-## Examples
-
-The repo currently includes:
-
-- [`src/examples/smoke.ts`](./src/examples/smoke.ts) for the smallest end-to-end setup
-- [`src/examples/state-machine.ts`](./src/examples/state-machine.ts) for multiple machines, explicit transition bundles, and transition events
-- [`src/examples/top-down.ts`](./src/examples/top-down.ts) for a browser proof of concept with free movement, wall collision, camera follow, and proximity-based collection
-- [`src/examples/pixi.ts`](./src/examples/pixi.ts) for renderer/service integration
-- [`src/examples/pokemon.ts`](./src/examples/pokemon.ts) for ordered movement and collision
-- [`src/examples/snake.ts`](./src/examples/snake.ts) for events, lookup, spawn, and despawn flow
-- [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts) for a larger browser example with Pixi rendering and headless Matter-backed collision
-
-## Project organization
-
-For a larger game, the most readable structure so far is the same one used by [`src/examples/top-down/`](./src/examples/top-down/):
-
-- keep `schema.ts` as the single place for descriptors, bound `Game`, and state machines
-- keep authored content and constants separate from systems, for example in `content.ts` and `constants.ts`
-- group systems by behavior such as input, movement, interaction, animation, camera, and HUD instead of keeping one large file
-- keep queries in one module when several systems share them, so query semantics stay easy to inspect
-- keep renderer and browser host code outside ECS in dedicated modules like `host.ts` and `render/*`
-- keep `main.ts` thin: create the host, create the runtime, boot schedules, connect the outer loop
-
-This keeps the ECS side focused on simulation and orchestration, and the host side focused on rendering, input, assets, and browser lifecycle.
-
-## Relationships and hierarchy
-
-Relationships are explicit schema entries. General relations and hierarchy use separate paired constructors so the relation kind stays typed through commands, queries, and lookup.
-
-```ts
-const { relation: ChildOf } = Descriptor.defineHierarchy("ChildOf", "Children")
-const { relation: Targeting } = Descriptor.defineRelation("Targeting", "TargetedBy")
-
-const schema = Schema.build(Schema.fragment({
-  components: {
-    Position,
-    Unit
-  },
-  relations: {
-    ChildOf,
-    Targeting
-  }
-}))
-
-const Game = Schema.bind(schema)
-
-const RelationQuery = Game.Query.define({
-  selection: {
-    parent: Game.Query.optionalRelation(ChildOf),
-    children: Game.Query.optionalRelated(ChildOf)
-  }
-})
-```
-
-Hierarchy traversal is only available for hierarchy relations and stays explicit through `lookup`:
-
-```ts
-const result = lookup.descendants(rootId, ChildOf, { order: "depth" })
-if (result.ok) {
-  for (const childId of result.value) {
-    // ...
-  }
-}
-```
-
-Relationships express current world structure and ownership. They are not a substitute for durable handles: relations model structural links in the world, while handles are for storing long-lived targets across frames and resolving them later through checked lookup.
-
-## Current limits
-
-This is still an early implementation. The public types are stricter than the runtime internals, and the project is not aiming for full Bevy parity yet. Dependency closure happens at the runtime and app execution boundary, not through Effect-style local `provide` or layer graphs. Performance-oriented storage, observers, richer state transitions, and parallel scheduling are not the current focus.
-
-At this point the main pressure is less "missing ECS capability" and more "choosing the right existing abstraction clearly" as the public API grows.
-
-One important implementation rule for this library is how type optimization works. The public API is intentionally strict, root-bound, and explicit, but TypeScript and `tsgo` do have practical instantiation limits on very large composed values.
-
-The current codebase follows this rule:
-
-1. validate exact structure at the constructor boundary
-2. derive and carry the normalized runtime-facing type once
-3. widen only internal post-validation structure when that precision is no longer user-meaningful
-4. keep the public guarantees exact
-
-Concretely, the tradeoff looks like this:
-
-```ts
-const A = Game.System.define("A", { schema }, ...)
-const B = Game.System.define("B", { schema, after: [A] }, ...)
-
-const schedule = Game.Schedule.define({
-  systems: [A, B, /* many more systems */],
-  steps: [A, Game.Schedule.applyDeferred(), B, /* many more steps */]
-})
-```
-
-The parts that still matter after optimization are:
-
-- `B` really points to the exact `A` value in `after: [A]`
-- invalid direct references are rejected when defining the schedule
-- the carried requirements are correct
-- the bound root is preserved exactly
-- runtime compatibility is still checked later on
-
-What is allowed to relax internally is only this:
-
-- the schedule value does not need to preserve the full tuple-exact identity of every system and step forever through every later internal layer
-
-That is the type-optimization pattern to reuse in future work. If a similar compiler hotspot appears again, the acceptable fix is:
-
-- keep exact validation at the edge where the value is created
-- collapse the carried value to a cheaper normalized shape immediately afterward
-- preserve root safety, requirement safety, and explicit runtime failure semantics
-
-What is not an acceptable fix:
-
-- requiring user-facing casts
-- requiring explicit generic arguments in normal examples
-- requiring users to split schedules or features into pieces only to satisfy the compiler
-- weakening cross-root rejection or runtime requirement validation
-
-This is best understood as an internal compiler-cost tradeoff, not as a user-meaningful loss of safety.
+`optional(...)` is useful, but it should not force everything back into one mixed render pass if smaller changed- or lifecycle-driven systems are easier to reason about.
 
 ## Feature Composition
 
@@ -610,14 +526,99 @@ app.bootstrap()
 app.update()
 ```
 
-The important constraints are intentional:
+The important constraints are:
 
 - features are pure typed values, not imperative plugins
 - composition happens before `Schema.bind(...)`
 - dependencies are structural only: a feature can require another feature's schema slice, but does not receive that feature's built outputs directly
 - runtime requirements still come from schedules, so there is no second dependency declaration surface to keep in sync
 
-This keeps the Bevy-style goal of modular gameplay assembly, while staying inside this library's stricter guarantees: exact schema closure, exact root flow, explicit runtime requirements, and no user-facing casts or compiler-workaround scaffolding
+This keeps modular gameplay assembly inside the same guarantees as the rest of the library: schema closure, root flow, runtime requirements, and no user-facing casts or compiler-workaround scaffolding.
+
+## Architecture
+
+Descriptors define nominal identities for components, resources, events, states, and services. Schemas close the world. Systems declare ECS access and service dependencies explicitly. Schedules order execution, define apply/event phases, and carry their runtime requirements. The runtime owns world state, but not the outer loop, and the app/runtime execution boundary is where those requirements are checked.
+
+The important rule is simple: if TypeScript cannot prove something honestly, the public API should not pretend it can. Internals may erase types when needed, but that should not leak through the external surface.
+
+## Project organization
+
+For a larger game, the most readable structure so far is the same one used by [`src/examples/top-down/`](./src/examples/top-down/):
+
+- keep `schema.ts` as the single place for descriptors, bound `Game`, and state machines
+- keep authored content and constants separate from systems, for example in `content.ts` and `constants.ts`
+- group systems by behavior such as input, movement, interaction, animation, camera, and HUD instead of keeping one large file
+- keep queries in one module when several systems share them, so query semantics stay easy to inspect
+- keep renderer and browser host code outside ECS in dedicated modules like `host.ts` and `render/*`
+- keep `main.ts` thin: create the host, create the runtime, boot schedules, connect the outer loop
+- keep `runtime.ts` as the single source of initial resources and machine values
+- keep schedules explicit even when the project is modular; composition should not hide `applyDeferred()`, `applyStateTransitions()`, or `updateLifecycle()`
+
+This keeps the ECS side focused on simulation and orchestration, and the host side focused on rendering, input, assets, and browser lifecycle.
+
+## Examples
+
+The repo currently includes:
+
+- [`src/examples/smoke.ts`](./src/examples/smoke.ts) for the smallest end-to-end setup
+- [`src/examples/state-machine.ts`](./src/examples/state-machine.ts) for multiple machines, explicit transition bundles, and transition events
+- [`src/examples/top-down.ts`](./src/examples/top-down.ts) for a browser proof of concept with free movement, wall collision, camera follow, and proximity-based collection
+- [`src/examples/pixi.ts`](./src/examples/pixi.ts) for renderer/service integration
+- [`src/examples/pokemon.ts`](./src/examples/pokemon.ts) for ordered movement and collision
+- [`src/examples/snake.ts`](./src/examples/snake.ts) for events, lookup, spawn, and despawn flow
+- [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts) for a larger browser example with Pixi rendering and headless Matter-backed collision
+
+## Current limits
+
+This is still an early implementation. The public types are stricter than the runtime internals, and the project is not aiming for full Bevy parity yet. Dependency closure happens at the runtime and app execution boundary, not through Effect-style local `provide` or layer graphs. Performance-oriented storage, observers, richer state transitions, and parallel scheduling are not the current focus.
+
+At this point the main pressure is less "missing ECS capability" and more "choosing the right existing abstraction clearly" as the public API grows.
+
+One important implementation rule is how type optimization works. The public API stays strict, root-bound, and explicit, but TypeScript and `tsgo` do have practical instantiation limits on very large composed values.
+
+The current codebase follows this rule:
+
+1. validate exact structure at the constructor boundary
+2. derive and carry the normalized runtime-facing type once
+3. widen only internal post-validation structure when that precision is no longer user-meaningful
+4. keep the public guarantees exact
+
+Concretely, the tradeoff looks like this:
+
+```ts
+const A = Game.System.define("A", { schema }, ...)
+const B = Game.System.define("B", { schema, after: [A] }, ...)
+
+const schedule = Game.Schedule.define({
+  systems: [A, B, /* many more systems */],
+  steps: [A, Game.Schedule.applyDeferred(), B, /* many more steps */]
+})
+```
+
+After optimization, the important guarantees still need to hold:
+
+- `B` really points to the exact `A` value in `after: [A]`
+- invalid direct references are rejected when defining the schedule
+- carried requirements stay correct
+- the bound root stays correct
+- runtime compatibility is still checked later on
+
+The main thing allowed to relax internally is that a schedule value does not need to preserve the full tuple-exact identity of every system and step forever through every internal layer.
+
+If a similar compiler hotspot appears again, the acceptable fix is:
+
+- keep exact validation at the edge where the value is created
+- collapse the carried value to a cheaper normalized shape immediately afterward
+- preserve root safety, requirement safety, and explicit runtime failure semantics
+
+What is not an acceptable fix:
+
+- requiring user-facing casts
+- requiring explicit generic arguments in normal examples
+- requiring users to split schedules or features into pieces only to satisfy the compiler
+- weakening cross-root rejection or runtime requirement validation
+
+This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety.
 
 ## Out of scope for now
 

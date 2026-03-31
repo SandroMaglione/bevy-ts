@@ -11,8 +11,6 @@ export type CurrentPlayerFrameValue = {
 export type AnimationClockValue = {
   frameIndex: AnimationFrameIndex
   elapsed: number
-  lastFacing: FacingValue
-  lastLocomotion: LocomotionValue
 }
 export type InputStateValue = {
   up: boolean
