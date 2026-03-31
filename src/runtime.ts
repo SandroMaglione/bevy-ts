@@ -207,7 +207,7 @@ type IncompatibleKeys<Required extends object, Provided extends object> = {
 
 type CategoryRequirementErrors<
   Kind extends string,
-  ScheduleName extends string,
+  ScheduleLabel extends string,
   Required extends object,
   Provided extends object
 > =
@@ -215,14 +215,14 @@ type CategoryRequirementErrors<
     ? never
     : {
         readonly __runtimeRequirementError__: Kind
-        readonly __schedule__: ScheduleName
+        readonly __schedule__: ScheduleLabel
         readonly __missing__: MissingKeys<Required, Provided>
       })
   | ([IncompatibleKeys<Required, Provided>] extends [never]
     ? never
     : {
         readonly __runtimeRequirementError__: `${Kind} (incompatible)`
-        readonly __schedule__: ScheduleName
+        readonly __schedule__: ScheduleLabel
         readonly __missing__: IncompatibleKeys<Required, Provided>
       })
 

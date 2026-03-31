@@ -1119,6 +1119,21 @@ false negative at the execution boundary, where the compiler sometimes asks for
 the synthetic `__fixRuntimeRequirements__` error marker even though the machine
 requirements are satisfied.
 
+The internal directions already attempted here are:
+
+- validating execution boundaries against carried schedule requirements instead
+  of recomputing from broader schedule structure
+- deriving service and machine provisioning from the branded
+  `Runtime.services(...)` / `Runtime.machines(...)` values instead of parallel
+  free generic parameters
+- aligning `runSchedule(...)` more closely with the tuple-based validation path
+  used by `tick(...)`
+- reducing inference coupling around the execution gate with `NoInfer`
+- simplifying the schedule-label path in the synthetic requirement error type
+
+These changes helped reduce related compiler pressure, but they did not fully
+eliminate this one nondeterministic raw `tsgo` false negative.
+
 For now, the safe local workaround is to define the schedule value first and
 then pass that value to `runSchedule(...)` or `app.update(...)`. This keeps the
 public API strict and unchanged while avoiding the one unstable inline
