@@ -21,7 +21,6 @@ export const PlayerReadQuery = Game.Query.define({
 export const PlayerCameraQuery = Game.Query.define({
   selection: {
     position: Game.Query.read(Position),
-    velocity: Game.Query.read(Velocity),
     player: Game.Query.read(Player)
   }
 })

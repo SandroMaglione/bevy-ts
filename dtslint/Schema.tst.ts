@@ -541,6 +541,98 @@ describe("Schema", () => {
     )
   })
 
+  it("rejects undeclared query result fields across system and lookup query-match surfaces", () => {
+    const Root = Schema.defineRoot("ExactQueryRoot")
+    const Tagged = Descriptor.defineComponent<{ readonly kind: "tagged" }>()("Tagged")
+
+    const schema = Schema.build(Schema.fragment({
+      components: {
+        Position,
+        Velocity,
+        Tagged
+      },
+      relations: {
+        ChildOf
+      }
+    }))
+
+    const Game = Schema.bind(schema, Root)
+    const entityId = Entity.makeEntityId<typeof schema, typeof Root>(1)
+
+    const CameraTargetQuery = Game.Query.define({
+      selection: {
+        position: Game.Query.read(Position),
+        tagged: Game.Query.read(Tagged)
+      }
+    })
+
+    const ObserveSystem = Game.System.define(
+      "ObserveExactQueryMatches",
+      {
+        queries: {
+          player: CameraTargetQuery
+        }
+      },
+      ({ queries, lookup }) =>
+        Fx.sync(() => {
+          for (const match of queries.player.each()) {
+            match.data.position.get()
+            // @ts-expect-error!
+            match.data.velocity.get()
+          }
+
+          const single = queries.player.single()
+          if (single.ok) {
+            single.value.data.position.get()
+            // @ts-expect-error!
+            single.value.data.velocity.get()
+          }
+
+          const singleOptional = queries.player.singleOptional()
+          if (singleOptional.ok && singleOptional.value) {
+            singleOptional.value.data.position.get()
+            // @ts-expect-error!
+            singleOptional.value.data.velocity.get()
+
+            const handle = Game.Entity.handleAs(Position, singleOptional.value.entity.id)
+            const fromHandle = lookup.getHandle(handle, CameraTargetQuery)
+            if (fromHandle.ok) {
+              fromHandle.value.data.position.get()
+              // @ts-expect-error!
+              fromHandle.value.data.velocity.get()
+            }
+          }
+
+          const direct = lookup.get(entityId, CameraTargetQuery)
+          if (direct.ok) {
+            direct.value.data.position.get()
+            // @ts-expect-error!
+            direct.value.data.velocity.get()
+          }
+
+          const children = lookup.childMatches(entityId, ChildOf, CameraTargetQuery)
+          if (children.ok) {
+            for (const child of children.value) {
+              child.data.position.get()
+              // @ts-expect-error!
+              child.data.velocity.get()
+            }
+          }
+
+          const descendants = lookup.descendantMatches(entityId, ChildOf, CameraTargetQuery, { order: "depth" })
+          if (descendants.ok) {
+            for (const descendant of descendants.value) {
+              descendant.data.position.get()
+              // @ts-expect-error!
+              descendant.data.velocity.get()
+            }
+          }
+        })
+    )
+
+    expect(ObserveSystem).type.toBeAssignableTo<import("../src/schema.ts").Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
+  })
+
   it("supports durable handles with explicit roots and checked lookup resolution", () => {
     const Root = Schema.defineRoot("HandleRoot")
     const Target = Descriptor.defineComponent<{
