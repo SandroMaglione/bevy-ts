@@ -58,13 +58,11 @@ const makeRuntime = (
 export const createStateMachineRuntime = (
   host: BrowserHostValue,
   inputManager: StateMachineInputManager
-) => {
-  const runtime = makeRuntime(host, inputManager)
-  if (!runtime.ok) {
-    return Result.failure({
-      message: "Invalid state-machine arena."
-    })
-  }
-
-  return Result.success(runtime.value)
-}
+) =>
+  Result.match(makeRuntime(host, inputManager), {
+    onSuccess: Result.success,
+    onFailure: () =>
+      Result.failure({
+        message: "Invalid state-machine arena."
+      })
+  })

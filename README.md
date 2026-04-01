@@ -1158,36 +1158,28 @@ Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and 
 
 ### P0. Reduce branded/result boilerplate at ECS boundaries
 
-The current helper and branding story is much safer than before, but the main
-remaining friction is still at the ECS boundary:
+The helper and branding story is now materially stronger:
 
-- runtime bootstrap still does manual `Result` branching
-- multi-value construction still has repeated `Result.success(...)` wrapping
-- mixed validated and already-valid entries still add ceremony in draft
-  builders
+- `Runtime.makeResult(...)` removes manual bootstrap branching
+- `Result.match(...)` and `Result.all(...)` cover the minimal folding and
+  aggregation needs without introducing a larger functional surface
+- branded examples are flatter than before, but there is still some ceremony
+  when validated and already-valid values meet at ECS boundaries
 
 The next work should stay explicit and non-throwing. It should improve the
 construction boundary, not weaken it.
 
 Add these in order:
 
-1. Result-aware runtime bootstrap.
-   Add an explicit `Runtime.makeResult(...)` / `Game.Runtime.makeResult(...)`
-   path so examples can seed branded resources and states without local manual
-   branching before runtime creation.
-2. Small construction aggregation helpers.
-   Add only the minimum reusable helpers needed to combine a few explicit
-   constructor results cleanly, for example tuple-oriented aggregation for
-   2-4 values. Do not expand this into a full monadic `Result` surface.
-3. Better command assembly for mixed validated and already-valid entries.
-   Reduce the need for repeated `Result.success(Game.Command.entry(...))`
+1. Better command assembly for mixed validated and already-valid entries.
+   Reduce the remaining need for `Result.success(Game.Command.entry(...))`
    wrapping when draft builders mix branded values with plain structural
    components.
-4. Better example-facing constant-definition patterns.
+2. Better example-facing constant-definition patterns.
    Add stable helper shapes for validating constants once and reusing branded
    values afterward, so examples stop reconstructing obvious safe values
    repeatedly at spawn and reset boundaries.
-5. Only after the above, revisit descriptor-aware construction.
+3. Only after the above, revisit descriptor-aware construction.
    Do not expose descriptor-driven raw construction again until it works
    transparently through normal examples without inference regressions.
 

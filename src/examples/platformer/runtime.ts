@@ -52,15 +52,13 @@ const makeRuntime = (
 export const createPlatformerRuntime = (
   host: PlatformerHostValue,
   inputManager: PlatformerInputManager
-) => {
-  const runtime = makeRuntime(host, inputManager)
-  if (!runtime.ok) {
-    return Result.failure({
-      message: runtime.error.resources.Viewport
-        ? "Invalid platformer viewport."
-        : "Invalid platformer camera."
-    })
-  }
-
-  return Result.success(runtime.value)
-}
+) =>
+  Result.match(makeRuntime(host, inputManager), {
+    onSuccess: Result.success,
+    onFailure: (error) =>
+      Result.failure({
+        message: error.resources.Viewport
+          ? "Invalid platformer viewport."
+          : "Invalid platformer camera."
+      })
+  })

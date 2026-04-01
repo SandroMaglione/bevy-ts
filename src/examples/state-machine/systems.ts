@@ -43,8 +43,6 @@ import {
 } from "./schema.ts"
 import type { Vector } from "./types.ts"
 
-const success = <Value>(value: Value): Result.Result<Value, never> => Result.success(value)
-
 const clamp = (value: number, min: number, max: number): number => {
   const nextValue = Scalar.Finite.option(value)
   const nextMin = Scalar.Finite.option(min)
@@ -61,11 +59,16 @@ const distanceSquared = (left: Vector, right: Vector): number => {
 }
 
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
-  return Game.Command.spawnWithResult(
+  const entries = Result.all([
     Game.Command.entryResult(Position, Vector2.result(position)),
-    success(Game.Command.entry(Actor, { kind: "pickup" })),
-    success(Game.Command.entry(Pickup, {}))
-  )
+    Result.success(Game.Command.entry(Actor, { kind: "pickup" })),
+    Result.success(Game.Command.entry(Pickup, {}))
+  ] as const)
+  if (!entries.ok) {
+    return entries
+  }
+
+  return Result.success(Game.Command.spawnWith(...entries.value))
 }
 
 export const SpawnPlayerSystem = Game.System.define(
@@ -73,15 +76,15 @@ export const SpawnPlayerSystem = Game.System.define(
   {},
   ({ commands }) =>
     Fx.sync(() => {
-      const playerDraft = Game.Command.spawnWithResult(
+      const entries = Result.all([
         Game.Command.entryResult(Position, Vector2.result({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })),
-        success(Game.Command.entry(Actor, { kind: "player" })),
-        success(Game.Command.entry(Player, {}))
-      )
-      if (!playerDraft.ok) {
+        Result.success(Game.Command.entry(Actor, { kind: "player" })),
+        Result.success(Game.Command.entry(Player, {}))
+      ] as const)
+      if (!entries.ok) {
         return
       }
-      commands.spawn(playerDraft.value)
+      commands.spawn(Game.Command.spawnWith(...entries.value))
     })
 )
 

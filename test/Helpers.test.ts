@@ -3,6 +3,46 @@ import { describe, expect, it } from "vitest"
 import { Aabb, InputAxis, Result, Scalar, Size2, Vector2 } from "../src/index.ts"
 
 describe("helpers", () => {
+  it("matches explicit success and failure branches", () => {
+    expect(Result.match(Result.success(3), {
+      onSuccess: (value) => value + 1,
+      onFailure: () => 0
+    })).toBe(4)
+
+    expect(Result.match(Result.failure("invalid"), {
+      onSuccess: () => 0,
+      onFailure: (error) => error
+    })).toBe("invalid")
+  })
+
+  it("aggregates tuple and record results", () => {
+    expect(Result.all([
+      Result.success(1),
+      Result.success("two")
+    ] as const)).toEqual(Result.success([1, "two"]))
+
+    expect(Result.all({
+      x: Result.success(1),
+      y: Result.success("two")
+    })).toEqual(Result.success({
+      x: 1,
+      y: "two"
+    }))
+  })
+
+  it("returns the first failure while aggregating results", () => {
+    expect(Result.all([
+      Result.success(1),
+      Result.failure("boom"),
+      Result.failure("later")
+    ] as const)).toEqual(Result.failure("boom"))
+
+    expect(Result.all({
+      ok: Result.success(1),
+      fail: Result.failure("boom")
+    })).toEqual(Result.failure("boom"))
+  })
+
   it("rejects invalid scalar and geometry inputs", () => {
     expect(Scalar.Finite.result(Number.NaN).ok).toBe(false)
     expect(Size2.result({ width: -1, height: 2 }).ok).toBe(false)

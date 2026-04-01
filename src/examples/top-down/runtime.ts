@@ -83,15 +83,13 @@ const makeRuntime = (
 export const createTopDownRuntime = (
   host: TopDownHostValue,
   inputManager: TopDownInputManager
-) => {
-  const runtime = makeRuntime(host, inputManager)
-  if (!runtime.ok) {
-    return Result.failure({
-      message: runtime.error.resources.Viewport
-        ? "Invalid top-down viewport."
-        : "Invalid top-down camera."
-    })
-  }
-
-  return Result.success(runtime.value)
-}
+) =>
+  Result.match(makeRuntime(host, inputManager), {
+    onSuccess: Result.success,
+    onFailure: (error) =>
+      Result.failure({
+        message: error.resources.Viewport
+          ? "Invalid top-down viewport."
+          : "Invalid top-down camera."
+      })
+  })
