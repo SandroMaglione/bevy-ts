@@ -3,6 +3,20 @@
  *
  * Schedules order systems and define when deferred writes, events, lifecycle
  * buffers, relation failures, and machine transitions become visible.
+ *
+ * @module schedule
+ *
+ * @groupDescription Namespaces
+ * Grouped schedule helper types for ordering, transitions, and schedule-aware requirements.
+ *
+ * @groupDescription Interfaces
+ * Public schedule contracts for named and anonymous execution plans.
+ *
+ * @groupDescription Type Aliases
+ * Shared schedule step, transition, and requirement helper types.
+ *
+ * @groupDescription Functions
+ * Public constructors for schedules and explicit schedule marker steps.
  */
 import type { Label } from "./label.ts"
 import type { StateMachine } from "./machine.ts"

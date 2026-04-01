@@ -3,6 +3,17 @@
  *
  * The runtime owns ECS state and explicit service provisioning, and applies
  * deferred mutation only at schedule-controlled boundaries.
+ *
+ * @module runtime
+ *
+ * @groupDescription Interfaces
+ * Public runtime and runtime-view contracts that expose explicit execution boundaries.
+ *
+ * @groupDescription Type Aliases
+ * Shared runtime initialization, service, machine, and validation helper types.
+ *
+ * @groupDescription Functions
+ * Public runtime constructors and helpers for services, machines, and bootstrap input.
  */
 import * as Command from "./command.ts"
 import * as DescriptorModule from "./descriptor.ts"

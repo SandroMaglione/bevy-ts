@@ -12,6 +12,23 @@
  * 3. close the schema with `Schema.build(...)`
  * 4. bind one `Game` with `Schema.bind(...)`
  *
+ * @module descriptor
+ *
+ * @groupDescription Namespaces
+ * Grouped descriptor helper types for narrowing and reflecting descriptor metadata.
+ *
+ * @groupDescription Interfaces
+ * Public descriptor contracts and constructor-aware descriptor variants.
+ *
+ * @groupDescription Type Aliases
+ * Shared descriptor identities and helper types used throughout the ECS surface.
+ *
+ * @groupDescription Variables
+ * Stable runtime markers used to brand descriptor kinds and constructor-aware variants.
+ *
+ * @groupDescription Functions
+ * Authoring helpers for declaring components, resources, services, events, and states.
+ *
  * @example
  * ```ts
  * const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")

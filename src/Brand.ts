@@ -4,15 +4,27 @@
  * Brands let the library distinguish validated carried values from raw user
  * input without changing their runtime representation. Constructors built with
  * this module are always explicit and non-throwing.
+ *
+ * @module Brand
+ *
+ * @categoryDescription Brand Types
+ * The nominal markers and constructor contracts used by branded public values.
+ *
+ * @categoryDescription Constructors
+ * Helpers that build explicit non-throwing validators from raw input checks.
  */
 import * as internal from "./internal/brand.ts"
 
 /**
  * Public marker used to distinguish one validated domain from another.
+ *
+ * @category Brand Types
  */
 export type Brand<Key> = internal.PublicBrand<Key>
 /**
  * One value tagged with a stable public {@link Brand}.
+ *
+ * @category Brand Types
  */
 export type Branded<Value, Key> = internal.Branded<Value, Key>
 
@@ -22,6 +34,8 @@ export type Branded<Value, Key> = internal.Branded<Value, Key>
  * The constructor boundary is the only place raw input is accepted. After one
  * value has been validated, downstream helpers operate on the branded carried
  * type instead of revalidating plain structural data.
+ *
+ * @category Brand Types
  */
 export interface Constructor<Value, Raw, Error> {
   /**
@@ -43,6 +57,8 @@ export interface Constructor<Value, Raw, Error> {
 
 /**
  * Builds one explicit non-throwing constructor from a validation function.
+ *
+ * @category Constructors
  */
 export const refine: <Value, Raw, Error>(
   validate: (raw: Raw) => import("./Result.ts").Result<Value, Error>
@@ -52,6 +68,8 @@ export const refine: <Value, Raw, Error>(
  * Combines two constructors that validate the same carried value.
  *
  * The returned constructor succeeds only when both validations succeed.
+ *
+ * @category Constructors
  */
 export const all: <Value, Raw, ErrorA, ErrorB>(
   left: Constructor<Value, Raw, ErrorA>,

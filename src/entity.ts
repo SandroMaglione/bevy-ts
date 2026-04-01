@@ -3,6 +3,20 @@
  *
  * This module defines the nominal entity reference types used across queries,
  * commands, relations, and lookup APIs.
+ *
+ * @module entity
+ *
+ * @groupDescription Namespaces
+ * Entity-specific proof helpers that refine ids and handles through descriptor evidence.
+ *
+ * @groupDescription Interfaces
+ * Public contracts for current-runtime ids and long-lived storage-safe handles.
+ *
+ * @groupDescription Type Aliases
+ * Shared nominal entity identities, handle shapes, and proof helpers.
+ *
+ * @groupDescription Functions
+ * Explicit helpers for constructing and refining entity ids and handles.
  */
 import type { Brand } from "./internal/brand.ts"
 import type { Descriptor } from "./descriptor.ts"

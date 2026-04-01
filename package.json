@@ -29,7 +29,7 @@
     "test-types": "tstyche",
     "check": "pnpm typecheck && pnpm test-types && vitest run",
     "coverage": "vitest --coverage",
-    "docs:generate": "node scripts/docs.mjs && typedoc",
+    "docs:generate": "node scripts/docs.mjs && typedoc && node scripts/docs-api.mjs",
     "docs:dev": "pnpm docs:generate && vitepress dev docs",
     "docs:build": "pnpm docs:generate && vitepress build docs",
     "docs:preview": "vitepress preview docs",

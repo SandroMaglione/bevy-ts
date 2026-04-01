@@ -1,4 +1,24 @@
 /**
+ * Stable nominal labels used to identify schedules, systems, and sets.
+ *
+ * Labels provide human-readable names plus nominal identities so ordering and
+ * dependency relationships remain explicit without relying on open strings.
+ *
+ * @module label
+ *
+ * @groupDescription Namespaces
+ * Grouped label helpers for the different runtime-owned label domains.
+ *
+ * @groupDescription Interfaces
+ * Public label contracts shared by systems, schedules, and sets.
+ *
+ * @groupDescription Type Aliases
+ * Shared label identity and branding helpers.
+ *
+ * @groupDescription Functions
+ * Public constructors for stable nominal labels.
+ */
+/**
  * String-literal type id used to brand labels.
  */
 export type LabelTypeId = "~bevy-ts/Label"

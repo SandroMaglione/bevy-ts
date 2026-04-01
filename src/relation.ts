@@ -3,6 +3,20 @@
  *
  * Relations model directed entity links plus the explicit error surfaces used
  * when those links cannot be created or traversed.
+ *
+ * @module relation
+ *
+ * @groupDescription Namespaces
+ * Grouped relation helper types for edges, pairs, and traversal proofs.
+ *
+ * @groupDescription Interfaces
+ * Public relation contracts and traversal view shapes.
+ *
+ * @groupDescription Type Aliases
+ * Shared relation descriptor, edge, and traversal helper types.
+ *
+ * @groupDescription Functions
+ * Public constructors for relation descriptors and relation-aware traversal helpers.
  */
 import type { EntityId } from "./entity.ts"
 import type { Schema } from "./schema.ts"

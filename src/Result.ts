@@ -11,23 +11,45 @@
  * Use this when an operation can fail because of runtime data, but that
  * failure should remain visible and typed instead of being hidden behind
  * exceptions or implicit coercion.
+ *
+ * @module Result
+ *
+ * @categoryDescription Result Types
+ * The structural success and failure shapes used by non-throwing public APIs.
+ *
+ * @categoryDescription Constructors
+ * Small helpers that create explicit success or failure values.
+ *
+ * @categoryDescription Refinements
+ * Type guards that narrow one result to its successful or failed branch.
+ *
+ * @categoryDescription Operations
+ * Pure helpers that fold or aggregate explicit result values.
  */
 import * as internal from "./internal/result.ts"
 
 /**
  * Successful branch of a {@link Result}.
+ *
+ * @category Result Types
  */
 export type Success<out Value> = internal.Success<Value>
 /**
  * Failed branch of a {@link Result}.
+ *
+ * @category Result Types
  */
 export type Failure<out Error> = internal.Failure<Error>
 /**
  * Explicit success/failure value used by non-throwing public APIs.
+ *
+ * @category Result Types
  */
 export type Result<Value, Error> = internal.Result<Value, Error>
 /**
  * Return type produced by {@link match}.
+ *
+ * @category Result Types
  */
 export type MatchReturn<
   Value,
@@ -37,29 +59,41 @@ export type MatchReturn<
 > = internal.MatchReturn<Value, Error, SuccessReturn, FailureReturn>
 /**
  * Success shape produced by {@link all}.
+ *
+ * @category Result Types
  */
 export type AllSuccess<Input extends ReadonlyArray<Result<any, any>> | Readonly<Record<string, Result<any, any>>>> =
   internal.AllSuccess<Input>
 /**
  * Failure shape produced by {@link all}.
+ *
+ * @category Result Types
  */
 export type AllError<Input extends ReadonlyArray<Result<any, any>> | Readonly<Record<string, Result<any, any>>>> =
   internal.AllError<Input>
 
 /**
  * Creates the successful branch of a {@link Result}.
+ *
+ * @category Constructors
  */
 export const success: <Value>(value: Value) => Success<Value> = internal.success
 /**
  * Creates the failed branch of a {@link Result}.
+ *
+ * @category Constructors
  */
 export const failure: <Error>(error: Error) => Failure<Error> = internal.failure
 /**
  * Narrows one {@link Result} to its successful branch.
+ *
+ * @category Refinements
  */
 export const isSuccess: <Value, Error>(result: Result<Value, Error>) => result is Success<Value> = internal.isSuccess
 /**
  * Narrows one {@link Result} to its failed branch.
+ *
+ * @category Refinements
  */
 export const isFailure: <Value, Error>(result: Result<Value, Error>) => result is Failure<Error> = internal.isFailure
 /**
@@ -75,6 +109,8 @@ export const isFailure: <Value, Error>(result: Result<Value, Error>) => result i
  *   onFailure: () => "invalid"
  * })
  * ```
+ *
+ * @category Operations
  */
 export const match: <Value, Error, SuccessReturn, FailureReturn>(
   result: Result<Value, Error>,
@@ -99,6 +135,8 @@ export const match: <Value, Error, SuccessReturn, FailureReturn>(
  *   size: Size2.result({ width: 32, height: 16 })
  * })
  * ```
+ *
+ * @category Operations
  */
 export const all: <Input extends ReadonlyArray<Result<any, any>> | Readonly<Record<string, Result<any, any>>>>(
   input: Input

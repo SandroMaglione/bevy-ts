@@ -3,6 +3,20 @@
  *
  * State machines model queued discrete phase changes whose commit boundaries
  * matter to schedule execution.
+ *
+ * @module machine
+ *
+ * @groupDescription Namespaces
+ * Grouped machine helper types for conditions, transitions, and machine-aware requirements.
+ *
+ * @groupDescription Interfaces
+ * Public state-machine contracts and transition bundle shapes.
+ *
+ * @groupDescription Type Aliases
+ * Shared machine state, transition, and requirement helper types.
+ *
+ * @groupDescription Functions
+ * Public constructors for machines, conditions, and explicit transition bundles.
  */
 import type { Schedule } from "./schedule.ts"
 import type { Schema } from "./schema.ts"

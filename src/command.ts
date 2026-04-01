@@ -3,6 +3,20 @@
  *
  * Commands keep mutation explicit by staging world writes as values that are
  * flushed later by schedule boundaries.
+ *
+ * @module command
+ *
+ * @groupDescription Namespaces
+ * Type-level draft helpers that derive exact component proofs while command values are still staged.
+ *
+ * @groupDescription Interfaces
+ * Structural command-side contracts used by the deferred mutation layer.
+ *
+ * @groupDescription Type Aliases
+ * Explicit entry, error, and proof-folding shapes used by staged command builders.
+ *
+ * @groupDescription Functions
+ * Public command builders that stage entity and component mutations as explicit values.
  */
 import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"

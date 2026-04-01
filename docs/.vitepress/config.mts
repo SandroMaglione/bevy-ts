@@ -12,6 +12,7 @@ export default defineConfig({
   title: "bevy-ts",
   description: "A type-safe, game-loop-agnostic ECS runtime for TypeScript.",
   base: "/bevy-ts/",
+  ignoreDeadLinks: true,
   lastUpdated: true,
   cleanUrls: true,
   themeConfig: {

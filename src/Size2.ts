@@ -3,6 +3,17 @@
  *
  * Sizes model non-negative width/height pairs and are commonly used for
  * colliders, viewports, and AABB dimensions.
+ *
+ * @module Size2
+ *
+ * @categoryDescription Size Types
+ * Raw, branded, and error shapes for validated two-dimensional sizes.
+ *
+ * @categoryDescription Construction
+ * Non-throwing constructor boundaries that validate raw width and height input.
+ *
+ * @categoryDescription Accessors
+ * Pure readers and raw views over already-validated size values.
  */
 import type * as Brand from "./Brand.ts"
 import * as internal from "./internal/size2.ts"
@@ -11,6 +22,8 @@ import type * as Scalar from "./Scalar.ts"
 
 /**
  * Raw size input accepted by the public constructors.
+ *
+ * @category Size Types
  */
 export type Raw = {
   readonly width: number
@@ -19,6 +32,8 @@ export type Raw = {
 
 /**
  * Validated non-negative width/height pair.
+ *
+ * @category Size Types
  */
 export type Size2 = Brand.Branded<{
   readonly width: Scalar.NonNegative
@@ -27,6 +42,8 @@ export type Size2 = Brand.Branded<{
 
 /**
  * Structured size-construction failure.
+ *
+ * @category Size Types
  */
 export type Error = {
   readonly tag: "Size2/Invalid"
@@ -37,25 +54,37 @@ export type Error = {
 
 /**
  * Validates one raw size and returns an explicit result.
+ *
+ * @category Construction
  */
 export const result: (raw: Raw) => Result.Result<Size2, Error> = internal.result
 /**
  * Validates one raw size and returns `null` on failure.
+ *
+ * @category Construction
  */
 export const option: (raw: Raw) => Size2 | null = internal.option
 /**
  * Checks whether one raw size already satisfies the size invariants.
+ *
+ * @category Construction
  */
 export const is: (raw: Raw) => raw is Raw & Size2 = internal.is
 /**
  * Converts one branded size back to a fresh raw object.
+ *
+ * @category Accessors
  */
 export const toRaw: (size: Size2) => Raw = internal.toRaw
 /**
  * Reads the width component of one branded size.
+ *
+ * @category Accessors
  */
 export const width: (size: Size2) => Scalar.NonNegative = internal.width
 /**
  * Reads the height component of one branded size.
+ *
+ * @category Accessors
  */
 export const height: (size: Size2) => Scalar.NonNegative = internal.height

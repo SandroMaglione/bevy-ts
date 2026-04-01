@@ -3,6 +3,17 @@
  *
  * Systems declare exactly what they may read, write, emit, and depend on
  * before they are allowed to run inside one schedule.
+ *
+ * @module system
+ *
+ * @groupDescription Interfaces
+ * Public system contracts and runtime context view shapes derived from one system specification.
+ *
+ * @groupDescription Type Aliases
+ * Shared system dependency, context, and requirement helper types.
+ *
+ * @groupDescription Functions
+ * Public system authoring helpers for resources, events, lifecycle reads, and typed system definitions.
  */
 import type { Descriptor } from "./descriptor.ts"
 import type * as Entity from "./entity.ts"

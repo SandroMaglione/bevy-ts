@@ -5,6 +5,14 @@
  * familiar `bootstrap(...)` / `update(...)` shape on top of the same runtime
  * value, so host code can stay simple without hiding the underlying ECS model.
  *
+ * @module app
+ *
+ * @groupDescription Interfaces
+ * Public facade contracts that expose a minimal application-shaped wrapper over one runtime.
+ *
+ * @groupDescription Functions
+ * Helpers that wrap an existing runtime in a small `bootstrap` / `update` facade.
+ *
  * @example
  * ```ts
  * const runtime = Game.Runtime.make({

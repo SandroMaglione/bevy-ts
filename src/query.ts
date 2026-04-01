@@ -2,6 +2,20 @@
  * Query declarations, matching semantics, and typed cell access surfaces.
  *
  * Queries are the explicit entity-data access layer used by systems.
+ *
+ * @module query
+ *
+ * @groupDescription Namespaces
+ * Grouped proof helpers that derive precise component evidence from one query selection.
+ *
+ * @groupDescription Interfaces
+ * Public query contracts for selections, filters, matches, and read/write views.
+ *
+ * @groupDescription Type Aliases
+ * Shared query access, proof, and lifecycle helper types.
+ *
+ * @groupDescription Functions
+ * Query authoring helpers for selecting components and declaring explicit filters.
  */
 import type { Descriptor } from "./descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./entity.ts"

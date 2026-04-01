@@ -12,6 +12,23 @@
  * `Schema.Feature` lives on the same pre-bind layer. Features contribute schema
  * fragments and build schedules only after the final merged schema is known.
  *
+ * @module schema
+ *
+ * @groupDescription Namespaces
+ * Grouped schema helper types for fragments, bound game APIs, and feature composition.
+ *
+ * @groupDescription Interfaces
+ * Public schema and feature contracts used before and after binding one root game API.
+ *
+ * @groupDescription Type Aliases
+ * Shared schema registry, merge, feature, and binding helper types.
+ *
+ * @groupDescription Variables
+ * Stable schema-level runtime markers used to brand bound roots and feature outputs.
+ *
+ * @groupDescription Functions
+ * Public helpers for defining roots, building schemas, binding `Game`, and composing features.
+ *
  * @example
  * ```ts
  * const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")

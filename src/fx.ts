@@ -1,4 +1,25 @@
 /**
+ * Small explicit effect type used for systems and runtime orchestration.
+ *
+ * `Fx` models delayed computation with typed success, failure, and environment
+ * channels, but stays intentionally minimal instead of becoming a full effect
+ * system.
+ *
+ * @module fx
+ *
+ * @groupDescription Namespaces
+ * Grouped helper types that extract success, error, and environment information from effects.
+ *
+ * @groupDescription Interfaces
+ * Public effect contracts used by systems and runtime orchestration.
+ *
+ * @groupDescription Type Aliases
+ * Shared helper types derived from one `Fx` value.
+ *
+ * @groupDescription Functions
+ * Minimal constructors and combinators for explicit delayed computations.
+ */
+/**
  * String-literal type id used to mirror Effect's current `~effect/...` style.
  */
 export type FxTypeId = "~bevy-ts/Fx"
