@@ -1155,17 +1155,80 @@ Full Effect-style local `provide` or layer graphs are also out of scope because 
 Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and advanced parallel scheduler work remain useful future references, but they are not current priorities.
 
 
-### P1. Add stronger composition for explicit schedule phases
+## Roadmap
 
-Systems are enough as the smallest behavior abstraction, but larger examples
-still repeat the same phase assembly by hand. In
-[src/examples/platformer/schedules.ts:20](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L20)
+The main remaining improvements are about packaging explicit orchestration more
+cleanly without weakening the current safety model.
+
+### Sound explicit schedules without duplicated `systems` and `steps`
+
+The current schedule API still allows explicit schedules to declare both
+`systems` and `steps`. That makes examples like
+[src/examples/pixi.ts:272](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L272)
 and
-[src/examples/platformer/schedules.ts:45](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L45),
+[src/examples/platformer/schedules.ts:17](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L17)
+repeat the same systems twice.
+
+That duplication is not just noisy. Today, runtime execution comes from `steps`,
+while some type-level requirement derivation still comes from `systems`. If the
+two drift, a schedule can execute a step-system that is not fully represented in
+its carried requirements.
+
+The intended cleanup is to make `Schedule.define(...)` and `Schedule.named(...)`
+accept exactly one of:
+
+- `{ systems, sets? }` for the shorthand mode with implicit trailing markers
+- `{ steps, sets? }` for the explicit ordered mode
+
+with `sets` remaining optional in both modes.
+
+Ideal shape:
+
+```ts
+const setup = Game.Schedule.define({
+  systems: [setupSceneSystem, initCameraSystem]
+})
+
+const update = Game.Schedule.define({
+  steps: [
+    captureInputSystem,
+    gameplaySystem,
+    Game.Schedule.applyDeferred(),
+    Game.Schedule.updateLifecycle(),
+    syncRenderSystem
+  ]
+})
+```
+
+The important requirement is that explicit schedules become single-source-of-truth:
+
+- system membership should be derived from the system steps in `steps`
+- duplicate system steps should be rejected
+- schedule requirements should be derived from the same source the runtime executes
+
+An implementation attempt was started and then reverted. The intended result is
+still good, but the bound `Game.Schedule` surface and transition-schedule
+rebinding regressed badly:
+
+- machine-heavy examples started failing runtime requirement checks
+- the bound schema wrappers hit deep type instantiation in `schema.ts`
+- explicit-step examples like `pixi` and `platformer` also triggered deep
+  instantiation
+
+The next attempt should keep the same public goal, but rework the bound
+`schema.ts` schedule surface more carefully so root binding, transition
+requirements, and explicit-step requirement derivation stay aligned.
+
+### Reusable composition for explicit schedule phases
+
+Larger examples still repeat the same phase assembly by hand. In
+[src/examples/platformer/schedules.ts:17](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L17)
+and
+[src/examples/platformer/schedules.ts:39](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L39),
 the schedule has to restate simulation systems, explicit apply markers, and the
 host-sync phase in full. That is honest, but repetitive.
 
-The useful improvement is not hidden engine-owned phases. It is reusable typed
+The useful next step is not hidden engine-owned phases. It is reusable typed
 phase bundles or schedule fragments that still keep `applyDeferred()`,
 `applyStateTransitions()`, and `updateLifecycle()` explicit in the composed
 value.
@@ -1192,16 +1255,17 @@ const update = Game.Schedule.define({
 })
 ```
 
-### P2. Add reusable composition for transition-local work
+### Reusable composition for transition-local work
 
-Transition handling is explicit and good, but repetitive once restart/reset
-logic grows. In
-[src/examples/platformer/systems/state.ts:59](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L59),
-the restart flow has to manually despawn tagged entities, reset resources, and
-respawn authored content on `onEnter(Playing)`.
+Transition handling is explicit and good, but restart/reset flows become
+repetitive once they need to despawn content, reset resources, and respawn
+authored state. In
+[src/examples/platformer/systems/state.ts:49](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L49),
+the restart flow has to manually reset resources, despawn tagged entities, and
+rebuild the level on `onEnter(Playing)`.
 
 The improvement should stay generic: better reusable transition bundles or
-transition-scoped composition values, not a built-in gameplay reset feature.
+transition-scoped composition values, not built-in gameplay reset helpers.
 
 Ideal shape:
 
@@ -1215,36 +1279,19 @@ const restartBundle = Game.Schedule.transitionBundle({
 const transitions = Game.Schedule.transitions(restartBundle)
 ```
 
-### Deferred. Descriptor-aware construction at ECS boundaries
+### Reusable access/spec fragments for systems
 
-Descriptor-driven raw construction is still deferred. It was prototyped, but
-it is not yet stable across real query/system/example usage.
-
-It should not be exposed again until all of these hold:
-
-- constructor-aware descriptors work transparently in normal examples
-- query and system inference stays exact
-- no user-facing casts or workarounds are required
-- failure remains explicit and non-throwing
-
-The long-term goal remains the same: let explicit validated construction flow
-through command, write-cell, and runtime-bootstrap boundaries with less local
-glue, but only once it is genuinely stable.
-
-That should let projects package transition work as typed values the same way
-they already package systems and queries.
-
-### P2. Add reusable access/spec fragments for systems
-
-A lot of repetition comes from re-declaring similar `queries`, `resources`,
-`services`, and `nextMachines` shapes across systems. This shows up in
-[src/examples/platformer/systems/movement.ts](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/movement.ts),
-[src/examples/platformer/systems/state.ts](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts),
+A lot of repetition still comes from re-declaring similar `queries`,
+`resources`, `services`, and `nextMachines` shapes across systems. This shows
+up in
+[src/examples/platformer/systems/movement.ts:9](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/movement.ts#L9),
+[src/examples/platformer/systems/state.ts:8](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L8),
 and
-[src/examples/platformer/systems/render-sync.ts](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts).
+[src/examples/platformer/systems/render-sync.ts:7](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts#L7).
 
 The improvement should not be broader overloads or implicit access. It should
-be composition of explicit access fragments before `System.define(...)`.
+be composition of explicit access fragments before `System.define(...)`, so
+repeated specs can be authored once and reused.
 
 Ideal shape:
 
@@ -1268,21 +1315,19 @@ const ResolveMoveIntentSystem = Game.System.define(
 )
 ```
 
-This keeps access explicit while making repeated specs reusable typed values.
+### Easier packaging for explicit host-sync orchestration
 
-### P4. Make explicit host-sync orchestration easier to package
-
-The platformer render bridge follows the recommended pattern correctly, but the
-pattern itself is verbose. The lifecycle ordering in
-[src/examples/platformer/schedules.ts:61](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L61)
+The current render-sync pattern is correct, but verbose. The lifecycle ordering
+in
+[src/examples/platformer/schedules.ts:58](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L58)
 and the destroy/create/sync split in
 [src/examples/platformer/systems/render-sync.ts:7](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts#L7)
 are the right structure, but every project has to rebuild that packaging by
 hand.
 
-The core should still stay renderer-agnostic. The useful addition would be a
-better way to package the generic ECS pattern of “simulate, commit lifecycle,
-mirror external state” into reusable explicit values.
+The useful improvement is a better way to package the generic ECS pattern of
+“simulate, commit lifecycle, mirror external state” into reusable explicit
+values without pushing renderer-specific logic into the core.
 
 Ideal shape:
 
@@ -1305,6 +1350,3 @@ const update = Game.Schedule.define({
   ]
 })
 ```
-
-That would reduce copy-paste across browser examples without pushing Pixi,
-camera, or game-specific logic into the ECS core.
