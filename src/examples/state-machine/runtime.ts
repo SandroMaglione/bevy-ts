@@ -1,5 +1,5 @@
 import * as Result from "../../Result.ts"
-import * as Size2 from "../../Size2.ts"
+import { arena } from "./definitions.ts"
 import {
   Arena,
   BrowserHost,
@@ -18,9 +18,7 @@ import {
 import {
   COUNTDOWN_DURATION_SECONDS,
   PICKUP_GOAL,
-  ROUND_DURATION_SECONDS,
-  STAGE_HEIGHT,
-  STAGE_WIDTH
+  ROUND_DURATION_SECONDS
 } from "./constants.ts"
 import type { BrowserHostValue, StateMachineInputManager } from "./types.ts"
 
@@ -34,10 +32,7 @@ const makeRuntime = (
       Game.Runtime.service(BrowserHost, host)
     ),
     resources: {
-      Arena: Size2.result({
-        width: STAGE_WIDTH,
-        height: STAGE_HEIGHT
-      }),
+      Arena: arena,
       DeltaTime: Result.success(host.clock.deltaSeconds),
       Score: Result.success(0),
       PickupGoal: Result.success(PICKUP_GOAL),

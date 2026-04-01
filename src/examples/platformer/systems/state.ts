@@ -1,6 +1,6 @@
 import { Fx } from "../../../index.ts"
 
-import { levelBounds, levelSolids, playerSpawn } from "../content.ts"
+import { levelBounds, levelSolids } from "../content.ts"
 import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
 import { LevelEntityQuery, PlayerReadQuery } from "../queries.ts"
 import { Game, InputState, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
@@ -76,7 +76,7 @@ export const ResetWorldOnPlayingEnterSystem = Game.System.define(
         commands.despawn(match.entity.id)
       }
 
-      const playerDraft = makePlayerDraft(playerSpawn)
+      const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawn(playerDraft.value)
       }

@@ -1,4 +1,4 @@
-import { Aabb, InputAxis, Result, Scalar, Size2, Vector2 } from "../src/index.ts"
+import { Aabb, Definition, InputAxis, Result, Scalar, Size2, Vector2 } from "../src/index.ts"
 import { describe, expect, it } from "tstyche"
 
 describe("helpers", () => {
@@ -39,6 +39,21 @@ describe("helpers", () => {
     expect(vector).type.toBe<Result.Result<Vector2.Vector2, Vector2.Error>>()
     expect(size).type.toBe<Result.Result<Size2.Size2, Size2.Error>>()
     expect(finite).type.toBe<Result.Result<Scalar.Finite, Scalar.Error>>()
+  })
+
+  it("definition helpers preserve keyed success and failure shapes", () => {
+    const definitions = Definition.all({
+      position: Definition.entry(Vector2, { x: 1, y: 2 }),
+      size: Definition.entry(Size2, { width: 3, height: 4 })
+    })
+
+    expect(definitions).type.toBe<Result.Result<{
+      readonly position: Vector2.Vector2
+      readonly size: Size2.Size2
+    }, {
+      readonly position: Vector2.Error | null
+      readonly size: Size2.Error | null
+    }>>()
   })
 
   it("non-constructor helpers require branded values", () => {

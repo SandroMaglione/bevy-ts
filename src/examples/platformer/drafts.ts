@@ -1,6 +1,7 @@
 import * as Size2 from "../../Size2.ts"
 import * as Vector2 from "../../Vector2.ts"
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from "./constants.ts"
+import { playerCollider, playerSpawn, playerZeroVelocity } from "./definitions.ts"
 import type { LevelSolidLayout } from "./content.ts"
 import { Collider, Game, LevelEntity, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
 
@@ -41,11 +42,11 @@ const renderableForSolid = (
   }
 }
 
-export const makePlayerDraft = (spawn: { x: number; y: number }) => {
+export const makePlayerDraft = () => {
   return Game.Command.spawnWithMixed(
-    Game.Command.entryResult(Position, Vector2.result(spawn)),
-    Game.Command.entryResult(Velocity, Vector2.result({ x: 0, y: 0 })),
-    Game.Command.entryResult(Collider, Size2.result({ width: PLAYER_WIDTH, height: PLAYER_HEIGHT })),
+    Game.Command.entryResult(Position, playerSpawn),
+    Game.Command.entryResult(Velocity, playerZeroVelocity),
+    Game.Command.entryResult(Collider, playerCollider),
     Game.Command.entry(Renderable, {
       kind: "player",
       width: PLAYER_WIDTH,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Aabb, InputAxis, Result, Scalar, Size2, Vector2 } from "../src/index.ts"
+import { Aabb, Definition, InputAxis, Result, Scalar, Size2, Vector2 } from "../src/index.ts"
 
 describe("helpers", () => {
   it("matches explicit success and failure branches", () => {
@@ -41,6 +41,39 @@ describe("helpers", () => {
       ok: Result.success(1),
       fail: Result.failure("boom")
     })).toEqual(Result.failure("boom"))
+  })
+
+  it("defines reusable validated values with keyed failures", () => {
+    expect(Definition.entry(Vector2, { x: 1, y: 2 })).toEqual(
+      Vector2.result({ x: 1, y: 2 })
+    )
+
+    expect(Definition.all({
+      position: Definition.entry(Vector2, { x: 1, y: 2 }),
+      size: Definition.entry(Size2, { width: 3, height: 4 })
+    })).toEqual(Result.success({
+      position: Vector2.option({ x: 1, y: 2 }),
+      size: Size2.option({ width: 3, height: 4 })
+    }))
+
+    expect(Definition.all({
+      position: Definition.entry(Vector2, { x: Number.NaN, y: 2 }),
+      size: Definition.entry(Size2, { width: 3, height: 4 })
+    })).toEqual(Result.failure({
+      position: {
+        tag: "Vector2/Invalid",
+        x: {
+          tag: "Scalar/NotFinite",
+          value: Number.NaN
+        },
+        y: null,
+        input: {
+          x: Number.NaN,
+          y: 2
+        }
+      },
+      size: null
+    }))
   })
 
   it("rejects invalid scalar and geometry inputs", () => {

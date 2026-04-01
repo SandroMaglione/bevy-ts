@@ -1165,19 +1165,14 @@ The helper and branding story is now materially stronger:
   aggregation needs without introducing a larger functional surface
 - `Game.Command.spawnWithMixed(...)` removes the remaining mixed-entry
   `Result.success(Game.Command.entry(...))` lifting in draft builders
-- branded examples are flatter than before, but constants and repeated safe
-  literals are still sometimes reconstructed more often than necessary
+- `Definition.entry(...)` and `Definition.all(...)` let examples validate
+  reusable branded constants once and reuse them across drafts and runtime
+  bootstrap
 
-The next work should stay explicit and non-throwing. It should improve the
-construction boundary, not weaken it.
+The remaining construction-boundary improvement is still the same deferred
+long-term item:
 
-Add these in order:
-
-1. Better example-facing constant-definition patterns.
-   Add stable helper shapes for validating constants once and reusing branded
-   values afterward, so examples stop reconstructing obvious safe values
-   repeatedly at spawn and reset boundaries.
-2. Only after the above, revisit descriptor-aware construction.
+1. Revisit descriptor-aware construction only after it is genuinely stable.
    Do not expose descriptor-driven raw construction again until it works
    transparently through normal examples without inference regressions.
 

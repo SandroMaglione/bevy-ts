@@ -1,6 +1,6 @@
 import * as Result from "../../Result.ts"
 import * as Size2 from "../../Size2.ts"
-import * as Vector2 from "../../Vector2.ts"
+import { initialCamera } from "./definitions.ts"
 import {
   AnimationClock,
   Camera,
@@ -18,7 +18,6 @@ import {
   Viewport
 } from "./schema.ts"
 import { pickupLayout } from "./content.ts"
-import { WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 import type { InputStateValue, TopDownHostValue } from "./types.ts"
 
 export type TopDownInputManager = {
@@ -60,10 +59,7 @@ const makeRuntime = (
         width: host.application.screen.width,
         height: host.application.screen.height
       }),
-      Camera: Vector2.result({
-        x: WORLD_WIDTH * 0.5,
-        y: WORLD_HEIGHT * 0.5
-      }),
+      Camera: initialCamera,
       InputState: Result.success(makeEmptyInputState()),
       FocusedCollectable: Result.success(makeEmptyFocusedCollectable()),
       CollectedCount: Result.success(0),

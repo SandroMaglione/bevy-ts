@@ -2,6 +2,7 @@ import { Fx } from "../../index.ts"
 import * as Scalar from "../../Scalar.ts"
 import * as Vector2 from "../../Vector2.ts"
 import { PICKUP_POINTS } from "./content.ts"
+import { playerSpawn } from "./definitions.ts"
 import {
   COUNTDOWN_DURATION_SECONDS,
   NOTICE_DURATION_SECONDS,
@@ -71,7 +72,7 @@ export const SpawnPlayerSystem = Game.System.define(
   ({ commands }) =>
     Fx.sync(() => {
       const playerDraft = Game.Command.spawnWithMixed(
-        Game.Command.entryResult(Position, Vector2.result({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })),
+        Game.Command.entryResult(Position, playerSpawn),
         Game.Command.entry(Actor, { kind: "player" }),
         Game.Command.entry(Player, {})
       )
@@ -335,10 +336,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System.define(
     Fx.sync(() => {
       const player = queries.player.singleOptional()
       if (player.ok && player.value) {
-        player.value.data.position.setResult(Vector2.result({
-          x: STAGE_WIDTH * 0.5,
-          y: STAGE_HEIGHT * 0.5
-        }))
+        player.value.data.position.setResult(playerSpawn)
       }
 
       for (const pickup of queries.pickups.each()) {
