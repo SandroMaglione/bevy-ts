@@ -98,6 +98,45 @@ export type RuntimeStates<S extends Schema.Any> = Partial<{
   readonly [K in keyof Schema.States<S>]: Schema.StateValue<S, K>
 }>
 
+export type RuntimeResultResources<S extends Schema.Any> = Partial<{
+  readonly [K in keyof Schema.Resources<S>]: Result.Result<Schema.ResourceValue<S, K>, unknown>
+}>
+
+export type RuntimeResultStates<S extends Schema.Any> = Partial<{
+  readonly [K in keyof Schema.States<S>]: Result.Result<Schema.StateValue<S, K>, unknown>
+}>
+
+export type ValidatedRuntimeResources<
+  S extends Schema.Any,
+  Provided extends RuntimeResultResources<S>
+> = Simplify<{
+  readonly [K in keyof Provided]:
+    K extends keyof Schema.Resources<S> ? Schema.ResourceValue<S, K> : never
+}>
+
+export type ValidatedRuntimeStates<
+  S extends Schema.Any,
+  Provided extends RuntimeResultStates<S>
+> = Simplify<{
+  readonly [K in keyof Provided]:
+    K extends keyof Schema.States<S> ? Schema.StateValue<S, K> : never
+}>
+
+export type RuntimeConstructionError<
+  S extends Schema.Any,
+  Resources extends RuntimeResultResources<S>,
+  States extends RuntimeResultStates<S>
+> = Simplify<{
+  readonly resources: Partial<{
+    readonly [K in keyof Resources]:
+      Resources[K] extends Result.Result<any, infer Error> ? Error : never
+  }>
+  readonly states: Partial<{
+    readonly [K in keyof States]:
+      States[K] extends Result.Result<any, infer Error> ? Error : never
+  }>
+}>
+
 /**
  * One machine-backed runtime state provision.
  */
@@ -279,6 +318,10 @@ type InitialRegistryValues<R extends Registry> = Partial<{
   readonly [K in keyof R]: Descriptor.Value<R[K]>
 }>
 
+type ResultRegistryValues<R extends Registry> = Partial<{
+  readonly [K in keyof R]: Result.Result<Descriptor.Value<R[K]>, unknown>
+}>
+
 /**
  * Seeds a descriptor-keyed runtime store from one schema registry.
  *
@@ -302,6 +345,36 @@ const seedRegistryStore = <R extends Registry>(
       target.set(descriptor.key, initial)
     }
   }
+}
+
+const collectRegistryResults = <R extends Registry>(
+  registry: R,
+  provided: ResultRegistryValues<R> | undefined
+): Result.Result<InitialRegistryValues<R>, Partial<{ readonly [K in keyof R]: unknown }>> => {
+  if (!provided) {
+    return Result.success({})
+  }
+
+  const validated = {} as Partial<Record<keyof R, unknown>>
+  const errors = {} as Partial<Record<keyof R, unknown>>
+
+  for (const schemaKey of Object.keys(registry) as Array<keyof R>) {
+    const next = provided[schemaKey]
+    if (next === undefined) {
+      continue
+    }
+    if (!next.ok) {
+      errors[schemaKey] = next.error
+      continue
+    }
+    validated[schemaKey] = next.value
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return Result.failure(errors as Partial<{ readonly [K in keyof R]: unknown }>)
+  }
+
+  return Result.success(validated as InitialRegistryValues<R>)
 }
 
 /**
@@ -1782,6 +1855,53 @@ export const makeRuntime = <
   }
 
   return runtime
+}
+
+export const makeRuntimeResult = <
+  S extends Schema.Any,
+  const ProvidedServices extends RuntimeServices<any>,
+  const Resources extends RuntimeResultResources<S> = {},
+  const States extends RuntimeResultStates<S> = {},
+  Root = unknown,
+  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>
+>(options: {
+  readonly schema: S
+  readonly services: ProvidedServices
+  readonly resources?: Resources
+  readonly states?: States
+  readonly machines?: ProvidedMachines
+  readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
+}): Result.Result<
+  Runtime<
+    S,
+    Simplify<RuntimeServicesOf<ProvidedServices>>,
+    ValidatedRuntimeResources<S, Resources>,
+    ValidatedRuntimeStates<S, States>,
+    Root,
+    RuntimeMachinesOf<ProvidedMachines>
+  >,
+  RuntimeConstructionError<S, Resources, States>
+> => {
+  const resources = collectRegistryResults(options.schema.resources, options.resources)
+  const states = collectRegistryResults(options.schema.states, options.states)
+
+  if (!resources.ok || !states.ok) {
+    return Result.failure({
+      resources: resources.ok ? {} : resources.error,
+      states: states.ok ? {} : states.error
+    } as RuntimeConstructionError<S, Resources, States>)
+  }
+
+  return Result.success(
+    makeRuntime<S, ProvidedServices, ValidatedRuntimeResources<S, Resources>, ValidatedRuntimeStates<S, States>, Root, ProvidedMachines>({
+      schema: options.schema,
+      services: options.services,
+      resources: resources.value as ValidatedRuntimeResources<S, Resources>,
+      states: states.value as ValidatedRuntimeStates<S, States>,
+      ...(options.machines === undefined ? {} : { machines: options.machines }),
+      ...(options.machineDefinitions === undefined ? {} : { machineDefinitions: options.machineDefinitions })
+    })
+  )
 }
 
 /**

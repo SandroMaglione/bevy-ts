@@ -26,26 +26,28 @@ import type { BrowserHostValue, StateMachineInputManager } from "./types.ts"
 
 const makeRuntime = (
   host: BrowserHostValue,
-  inputManager: StateMachineInputManager,
-  arena: Size2.Size2
+  inputManager: StateMachineInputManager
 ) =>
-  Game.Runtime.make({
+  Game.Runtime.makeResult({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(BrowserHost, host)
     ),
     resources: {
-      Arena: arena,
-      DeltaTime: host.clock.deltaSeconds,
-      Score: 0,
-      PickupGoal: PICKUP_GOAL,
-      RoundTimeRemaining: ROUND_DURATION_SECONDS,
-      CountdownRemaining: COUNTDOWN_DURATION_SECONDS,
-      SpawnCursor: 0,
-      TransitionNotice: {
+      Arena: Size2.result({
+        width: STAGE_WIDTH,
+        height: STAGE_HEIGHT
+      }),
+      DeltaTime: Result.success(host.clock.deltaSeconds),
+      Score: Result.success(0),
+      PickupGoal: Result.success(PICKUP_GOAL),
+      RoundTimeRemaining: Result.success(ROUND_DURATION_SECONDS),
+      CountdownRemaining: Result.success(COUNTDOWN_DURATION_SECONDS),
+      SpawnCursor: Result.success(0),
+      TransitionNotice: Result.success({
         text: "",
         ttl: 0
-      }
+      })
     },
     machines: Game.Runtime.machines(
       Game.Runtime.machine(SessionState, "Title"),
@@ -56,16 +58,13 @@ const makeRuntime = (
 export const createStateMachineRuntime = (
   host: BrowserHostValue,
   inputManager: StateMachineInputManager
-): Result.Result<ReturnType<typeof makeRuntime>, { readonly message: string }> => {
-  const arena = Size2.result({
-    width: STAGE_WIDTH,
-    height: STAGE_HEIGHT
-  })
-  if (!arena.ok) {
+) => {
+  const runtime = makeRuntime(host, inputManager)
+  if (!runtime.ok) {
     return Result.failure({
       message: "Invalid state-machine arena."
     })
   }
 
-  return Result.success(makeRuntime(host, inputManager, arena.value))
+  return Result.success(runtime.value)
 }

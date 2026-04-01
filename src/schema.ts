@@ -828,6 +828,20 @@ export namespace Schema {
         readonly states?: States
         readonly machines?: ProvidedMachines
       }) => Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Resources, States, RuntimeMachinesOf<ProvidedMachines>>
+      makeResult: <
+        const ProvidedServices extends Runtime.RuntimeServices<any>,
+        const Resources extends Runtime.RuntimeResultResources<S> = {},
+        const States extends Runtime.RuntimeResultStates<S> = {},
+        const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>
+      >(options: {
+        readonly services: ProvidedServices
+        readonly resources?: Resources
+        readonly states?: States
+        readonly machines?: ProvidedMachines
+      }) => Result.Result<
+        Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Runtime.ValidatedRuntimeResources<S, Resources>, Runtime.ValidatedRuntimeStates<S, States>, RuntimeMachinesOf<ProvidedMachines>>,
+        Runtime.RuntimeConstructionError<S, Resources, States>
+      >
       service: typeof Runtime.service
       services: typeof Runtime.services
       machine: typeof Runtime.machine
@@ -1549,6 +1563,22 @@ export const bind = <S extends Schema.Any, Root = S>(
     machineDefinitions: definedMachines
   })
 
+  const makeRuntimeResult = <
+    const ProvidedServices extends Runtime.RuntimeServices<any>,
+    const Resources extends Runtime.RuntimeResultResources<S> = {},
+    const States extends Runtime.RuntimeResultStates<S> = {},
+    const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>
+  >(options: {
+    readonly services: ProvidedServices
+    readonly resources?: Resources
+    readonly states?: States
+    readonly machines?: ProvidedMachines
+  }) => Runtime.makeRuntimeResult<S, ProvidedServices, Resources, States, Root, ProvidedMachines>({
+    schema,
+    ...options,
+    machineDefinitions: definedMachines
+  })
+
   const runtimeMachine = <M extends BoundMachine>(
     machine: M,
     initial: Machine.StateMachine.Value<M>
@@ -1630,6 +1660,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     },
     Runtime: {
       make: makeRuntime,
+      makeResult: makeRuntimeResult,
       service: Runtime.service,
       services: Runtime.services,
       machine: runtimeMachine,

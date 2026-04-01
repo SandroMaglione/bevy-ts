@@ -1,4 +1,4 @@
-import { App, Descriptor, Fx, Schema } from "../src/index.ts"
+import { App, Descriptor, Fx, Result, Schema } from "../src/index.ts"
 import * as Runtime from "../src/runtime.ts"
 import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
@@ -117,6 +117,25 @@ describe("Runtime", () => {
         readonly CurrentPhase: "Running"
       }
     >>()
+  })
+
+  it("makeRuntimeResult unwraps validated resource and state seeds", () => {
+    const runtime = Runtime.makeRuntimeResult({
+      schema,
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: Result.success(1 / 60),
+        Counter: Result.success(0)
+      },
+      states: {
+        CurrentPhase: Result.success("Running" as const)
+      }
+    })
+
+    if (runtime.ok) {
+      runtime.value.runSchedule(resourceSchedule)
+      runtime.value.runSchedule(stateSchedule)
+    }
   })
 
   it("rejects descriptor-name keys that are not schema keys", () => {

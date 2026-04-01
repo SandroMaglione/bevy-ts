@@ -149,6 +149,52 @@ describe("Runtime resources and states", () => {
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
   })
 
+  it("makeRuntimeResult unwraps validated seeds and returns keyed failures", () => {
+    const runtime = Runtime.makeRuntimeResult({
+      schema,
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: Result.success(0.25),
+        Counter: Result.failure("bad-counter")
+      },
+      states: {
+        CurrentPhase: Result.failure("bad-phase")
+      }
+    })
+
+    expect(runtime).toEqual(Result.failure({
+      resources: {
+        Counter: "bad-counter"
+      },
+      states: {
+        CurrentPhase: "bad-phase"
+      }
+    }))
+  })
+
+  it("makeRuntimeResult succeeds with validated seeds", () => {
+    const runtime = Runtime.makeRuntimeResult({
+      schema,
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: Result.success(0.75),
+        Counter: Result.success(2)
+      },
+      states: {
+        CurrentPhase: Result.success("Running" as const)
+      }
+    })
+
+    expect(runtime.ok).toBe(true)
+    if (!runtime.ok) {
+      return
+    }
+
+    expect(readResourceValue(runtime.value, schema, Time)).toBe(0.75)
+    expect(readResourceValue(runtime.value, schema, Counter)).toBe(2)
+    expect(readStateValue(runtime.value, schema, Phase)).toBe("Running")
+  })
+
   it("lets one system read state and write resources in the same update", () => {
     const syncFromPhase = System.define(
       "RuntimeResources/SyncFromPhase",

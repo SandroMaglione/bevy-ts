@@ -47,28 +47,32 @@ export const makeInitialAnimationClock = () => ({
 
 const makeRuntime = (
   host: TopDownHostValue,
-  inputManager: TopDownInputManager,
-  viewport: Size2.Size2,
-  camera: Vector2.Vector2
+  inputManager: TopDownInputManager
 ) =>
-  Game.Runtime.make({
+  Game.Runtime.makeResult({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(TopDownHost, host)
     ),
     resources: {
-      DeltaTime: host.clock.deltaSeconds,
-      Viewport: viewport,
-      Camera: camera,
-      InputState: makeEmptyInputState(),
-      FocusedCollectable: makeEmptyFocusedCollectable(),
-      CollectedCount: 0,
-      TotalCollectables: pickupLayout.length,
-      AnimationClock: makeInitialAnimationClock(),
-      CurrentPlayerFrame: {
+      DeltaTime: Result.success(host.clock.deltaSeconds),
+      Viewport: Size2.result({
+        width: host.application.screen.width,
+        height: host.application.screen.height
+      }),
+      Camera: Vector2.result({
+        x: WORLD_WIDTH * 0.5,
+        y: WORLD_HEIGHT * 0.5
+      }),
+      InputState: Result.success(makeEmptyInputState()),
+      FocusedCollectable: Result.success(makeEmptyFocusedCollectable()),
+      CollectedCount: Result.success(0),
+      TotalCollectables: Result.success(pickupLayout.length),
+      AnimationClock: Result.success(makeInitialAnimationClock()),
+      CurrentPlayerFrame: Result.success({
         row: 1,
         column: 1
-      }
+      })
     },
     machines: Game.Runtime.machines(
       Game.Runtime.machine(Facing, "Down"),
@@ -79,26 +83,15 @@ const makeRuntime = (
 export const createTopDownRuntime = (
   host: TopDownHostValue,
   inputManager: TopDownInputManager
-): Result.Result<ReturnType<typeof makeRuntime>, { readonly message: string }> => {
-  const viewport = Size2.result({
-    width: host.application.screen.width,
-    height: host.application.screen.height
-  })
-  if (!viewport.ok) {
+) => {
+  const runtime = makeRuntime(host, inputManager)
+  if (!runtime.ok) {
     return Result.failure({
-      message: "Invalid top-down viewport."
+      message: runtime.error.resources.Viewport
+        ? "Invalid top-down viewport."
+        : "Invalid top-down camera."
     })
   }
 
-  const camera = Vector2.result({
-    x: WORLD_WIDTH * 0.5,
-    y: WORLD_HEIGHT * 0.5
-  })
-  if (!camera.ok) {
-    return Result.failure({
-      message: "Invalid top-down camera."
-    })
-  }
-
-  return Result.success(makeRuntime(host, inputManager, viewport.value, camera.value))
+  return Result.success(runtime.value)
 }

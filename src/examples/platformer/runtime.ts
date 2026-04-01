@@ -23,22 +23,26 @@ export const makeInitialPlayerContacts = (): PlayerContactsValue => ({
 
 const makeRuntime = (
   host: PlatformerHostValue,
-  inputManager: PlatformerInputManager,
-  viewport: Size2.Size2,
-  camera: Vector2.Vector2
+  inputManager: PlatformerInputManager
 ) =>
-  Game.Runtime.make({
+  Game.Runtime.makeResult({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(PlatformerHost, host)
     ),
     resources: {
-      DeltaTime: host.clock.deltaSeconds,
-      Viewport: viewport,
-      Camera: camera,
-      InputState: makeEmptyInputState(),
-      PlayerContacts: makeInitialPlayerContacts(),
-      LoseMessage: "You fell into a hole."
+      DeltaTime: Result.success(host.clock.deltaSeconds),
+      Viewport: Size2.result({
+        width: host.application.screen.width,
+        height: host.application.screen.height
+      }),
+      Camera: Vector2.result({
+        x: Math.min(host.application.screen.width * 0.5, levelBounds.width * 0.5),
+        y: Math.min(host.application.screen.height * 0.5, levelBounds.height * 0.5)
+      }),
+      InputState: Result.success(makeEmptyInputState()),
+      PlayerContacts: Result.success(makeInitialPlayerContacts()),
+      LoseMessage: Result.success("You fell into a hole.")
     },
     machines: Game.Runtime.machines(
       Game.Runtime.machine(SessionState, "Playing")
@@ -48,26 +52,15 @@ const makeRuntime = (
 export const createPlatformerRuntime = (
   host: PlatformerHostValue,
   inputManager: PlatformerInputManager
-): Result.Result<ReturnType<typeof makeRuntime>, { readonly message: string }> => {
-  const viewport = Size2.result({
-    width: host.application.screen.width,
-    height: host.application.screen.height
-  })
-  if (!viewport.ok) {
+) => {
+  const runtime = makeRuntime(host, inputManager)
+  if (!runtime.ok) {
     return Result.failure({
-      message: "Invalid platformer viewport."
+      message: runtime.error.resources.Viewport
+        ? "Invalid platformer viewport."
+        : "Invalid platformer camera."
     })
   }
 
-  const camera = Vector2.result({
-    x: Math.min(host.application.screen.width * 0.5, levelBounds.width * 0.5),
-    y: Math.min(host.application.screen.height * 0.5, levelBounds.height * 0.5)
-  })
-  if (!camera.ok) {
-    return Result.failure({
-      message: "Invalid platformer camera."
-    })
-  }
-
-  return Result.success(makeRuntime(host, inputManager, viewport.value, camera.value))
+  return Result.success(runtime.value)
 }
