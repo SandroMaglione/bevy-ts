@@ -352,7 +352,7 @@ export namespace Query {
     readonly [K in keyof T["selection"]]:
       T["selection"][K] extends ReadAccess<infer D> ? ReadCell<Descriptor.Value<D>>
       : T["selection"][K] extends OptionalReadAccess<infer D> ? OptionalReadCell<Descriptor.Value<D>>
-      : T["selection"][K] extends WriteAccess<infer D> ? WriteCell<Descriptor.Value<D>>
+      : T["selection"][K] extends WriteAccess<infer D> ? WriteCellForDescriptor<D>
       : T["selection"][K] extends Relation.RelationReadAccess<any, infer S extends Schema.Any, infer Root> ? ReadCell<EntityId<S, Root>>
       : T["selection"][K] extends Relation.OptionalRelationReadAccess<any, infer S extends Schema.Any, infer Root> ? OptionalReadCell<EntityId<S, Root>>
       : T["selection"][K] extends Relation.RelatedReadAccess<any, infer S extends Schema.Any, infer Root> ? ReadCell<ReadonlyArray<EntityId<S, Root>>>
@@ -435,6 +435,16 @@ export interface WriteCell<T> extends ReadCell<T> {
    */
   updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E>
 }
+
+export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
+  setRaw(raw: Raw): Result.Result<void, Error>
+  updateRaw(f: (current: T) => Raw): Result.Result<void, Error>
+}
+
+export type WriteCellForDescriptor<D extends ComponentDescriptor> =
+  D extends import("./descriptor.ts").ConstructedDescriptor<"component", string, infer Value, infer Raw, infer Error>
+    ? ConstructedWriteCell<Value, Raw, Error>
+    : WriteCell<Descriptor.Value<D>>
 
 /**
  * Present branch for a maybe-present query slot.

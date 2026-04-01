@@ -20,11 +20,14 @@
  * ```
  */
 export type DescriptorTypeId = "~bevy-ts/Descriptor"
+export type DescriptorConstructionTypeId = "~bevy-ts/DescriptorConstruction"
 
 /**
  * Runtime value for the descriptor type id.
  */
 const descriptorTypeId: DescriptorTypeId = "~bevy-ts/Descriptor"
+const descriptorConstructionTypeId: DescriptorConstructionTypeId = "~bevy-ts/DescriptorConstruction"
+const descriptorConstruction = Symbol("bevy-ts/DescriptorConstruction")
 
 /**
  * The public categories of nominal descriptors used by the engine.
@@ -53,6 +56,24 @@ export interface Descriptor<
   }
 }
 
+export interface ResultConstructor<Value, Raw, Error> {
+  readonly result: (raw: Raw) => import("./Result.ts").Result<Value, Error>
+}
+
+export interface ConstructedDescriptor<
+  out Kind extends DescriptorKind,
+  out Name extends string,
+  out Value,
+  Raw,
+  Error
+> extends Descriptor<Kind, Name, Value> {
+  readonly [descriptorConstruction]: ResultConstructor<Value, Raw, Error>
+  readonly [descriptorConstructionTypeId]: {
+    readonly _Raw: (_: never) => Raw
+    readonly _Error: (_: never) => Error
+  }
+}
+
 /**
  * Type-level helpers for working with descriptors.
  */
@@ -61,6 +82,7 @@ export namespace Descriptor {
    * Any supported descriptor.
    */
   export type Any = Descriptor<DescriptorKind, string, unknown>
+  export type AnyConstructed = ConstructedDescriptor<DescriptorKind, string, unknown, unknown, unknown>
   /**
    * Extracts the runtime value associated with a descriptor.
    */
@@ -69,6 +91,17 @@ export namespace Descriptor {
    * Extracts the descriptor name.
    */
   export type Name<T extends Any> = T extends Descriptor<infer _Kind, infer Name, infer _Value> ? Name : never
+  export type Raw<T extends Any> = T extends ConstructedDescriptor<infer _Kind, infer _Name, infer _Value, infer Raw, infer _Error>
+    ? Raw
+    : never
+  export type ConstructionError<T extends Any> =
+    T extends ConstructedDescriptor<infer _Kind, infer _Name, infer _Value, infer _Raw, infer Error>
+      ? Error
+      : never
+  export type Constructor<T extends Any> =
+    T extends ConstructedDescriptor<infer _Kind, infer _Name, infer Value, infer Raw, infer Error>
+      ? ResultConstructor<Value, Raw, Error>
+      : never
 }
 
 /**
@@ -86,6 +119,24 @@ const makeDescriptor = <Kind extends DescriptorKind, Name extends string, Value>
     name,
     key: Symbol.for(`bevy-ts/${kind}/${name}`)
   }) as Descriptor<Kind, Name, Value>
+
+const makeConstructedDescriptor = <
+  Kind extends DescriptorKind,
+  Name extends string,
+  Value,
+  Raw,
+  Error
+>(
+  kind: Kind,
+  name: Name,
+  constructor: ResultConstructor<Value, Raw, Error>
+): ConstructedDescriptor<Kind, Name, Value, Raw, Error> =>
+  ({
+    kind,
+    name,
+    key: Symbol.for(`bevy-ts/${kind}/${name}`),
+    [descriptorConstruction]: constructor
+  }) as ConstructedDescriptor<Kind, Name, Value, Raw, Error>
 
 /**
  * Defines a component descriptor.
@@ -105,6 +156,13 @@ export const defineComponent = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"component", Name, Value> => makeDescriptor("component", name)
 
+export const defineConstructedComponent = <Value, Raw, Error>(
+  constructor: ResultConstructor<Value, Raw, Error>
+) => <const Name extends string>(
+  name: Name
+): ConstructedDescriptor<"component", Name, Value, Raw, Error> =>
+  makeConstructedDescriptor("component", name, constructor)
+
 /**
  * Defines a resource descriptor.
  *
@@ -122,6 +180,13 @@ export const defineComponent = <Value>() => <const Name extends string>(
 export const defineResource = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"resource", Name, Value> => makeDescriptor("resource", name)
+
+export const defineConstructedResource = <Value, Raw, Error>(
+  constructor: ResultConstructor<Value, Raw, Error>
+) => <const Name extends string>(
+  name: Name
+): ConstructedDescriptor<"resource", Name, Value, Raw, Error> =>
+  makeConstructedDescriptor("resource", name, constructor)
 
 /**
  * Defines an event descriptor.
@@ -160,6 +225,13 @@ export const defineState = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"state", Name, Value> => makeDescriptor("state", name)
 
+export const defineConstructedState = <Value, Raw, Error>(
+  constructor: ResultConstructor<Value, Raw, Error>
+) => <const Name extends string>(
+  name: Name
+): ConstructedDescriptor<"state", Name, Value, Raw, Error> =>
+  makeConstructedDescriptor("state", name, constructor)
+
 /**
  * Defines a service descriptor.
  *
@@ -178,6 +250,21 @@ export const defineState = <Value>() => <const Name extends string>(
 export const defineService = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"service", Name, Value> => makeDescriptor("service", name)
+
+export const hasConstructor = (descriptor: Descriptor.Any): descriptor is Descriptor.AnyConstructed =>
+  descriptorConstruction in descriptor
+
+export function constructorOf<D extends Descriptor.AnyConstructed>(
+  descriptor: D
+): Descriptor.Constructor<D>
+export function constructorOf<D extends Descriptor.Any>(
+  descriptor: D
+): Descriptor.Constructor<D> | undefined
+export function constructorOf<D extends Descriptor.Any>(
+  descriptor: D
+): Descriptor.Constructor<D> | undefined {
+  return (hasConstructor(descriptor) ? descriptor[descriptorConstruction] : undefined) as Descriptor.Constructor<D> | undefined
+}
 
 /**
  * Defines the canonical parent/children relationship pair.

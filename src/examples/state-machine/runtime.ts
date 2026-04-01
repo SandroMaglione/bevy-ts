@@ -1,5 +1,4 @@
 import * as Result from "../../Result.ts"
-import { arena } from "./definitions.ts"
 import {
   Arena,
   BrowserHost,
@@ -25,30 +24,36 @@ import type { BrowserHostValue, StateMachineInputManager } from "./types.ts"
 const makeRuntime = (
   host: BrowserHostValue,
   inputManager: StateMachineInputManager
-) =>
-  Game.Runtime.makeResult({
+) => {
+  const machines = Game.Runtime.machines(
+    Game.Runtime.machine(SessionState, "Title"),
+    Game.Runtime.machine(RoundState, "Paused")
+  )
+
+  return Game.Runtime.makeConstructed({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(BrowserHost, host)
     ),
     resources: {
-      Arena: arena,
-      DeltaTime: Result.success(host.clock.deltaSeconds),
-      Score: Result.success(0),
-      PickupGoal: Result.success(PICKUP_GOAL),
-      RoundTimeRemaining: Result.success(ROUND_DURATION_SECONDS),
-      CountdownRemaining: Result.success(COUNTDOWN_DURATION_SECONDS),
-      SpawnCursor: Result.success(0),
-      TransitionNotice: Result.success({
+      Arena: {
+        width: host.application.screen.width,
+        height: host.application.screen.height
+      },
+      DeltaTime: host.clock.deltaSeconds,
+      Score: 0,
+      PickupGoal: PICKUP_GOAL,
+      RoundTimeRemaining: ROUND_DURATION_SECONDS,
+      CountdownRemaining: COUNTDOWN_DURATION_SECONDS,
+      SpawnCursor: 0,
+      TransitionNotice: {
         text: "",
         ttl: 0
-      })
+      }
     },
-    machines: Game.Runtime.machines(
-      Game.Runtime.machine(SessionState, "Title"),
-      Game.Runtime.machine(RoundState, "Paused")
-    )
+    machines
   })
+}
 
 export const createStateMachineRuntime = (
   host: BrowserHostValue,
@@ -56,8 +61,10 @@ export const createStateMachineRuntime = (
 ) =>
   Result.match(makeRuntime(host, inputManager), {
     onSuccess: Result.success,
-    onFailure: () =>
+    onFailure: (error) =>
       Result.failure({
-        message: "Invalid state-machine arena."
+        message: error.resources.Arena
+          ? "Invalid state-machine arena."
+          : "Invalid state-machine runtime resources."
       })
   })

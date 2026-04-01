@@ -1,6 +1,4 @@
 import * as Result from "../../Result.ts"
-import * as Size2 from "../../Size2.ts"
-import * as Vector2 from "../../Vector2.ts"
 import { levelBounds } from "./content.ts"
 import { Camera, DeltaTime, Game, InputManager, InputState, LoseMessage, PlatformerHost, PlayerContacts, SessionState, Viewport } from "./schema.ts"
 import type { InputStateValue, PlatformerHostValue, PlatformerInputManager, PlayerContactsValue } from "./types.ts"
@@ -25,24 +23,24 @@ const makeRuntime = (
   host: PlatformerHostValue,
   inputManager: PlatformerInputManager
 ) =>
-  Game.Runtime.makeResult({
+  Game.Runtime.makeConstructed({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(PlatformerHost, host)
     ),
     resources: {
-      DeltaTime: Result.success(host.clock.deltaSeconds),
-      Viewport: Size2.result({
+      DeltaTime: host.clock.deltaSeconds,
+      Viewport: {
         width: host.application.screen.width,
         height: host.application.screen.height
-      }),
-      Camera: Vector2.result({
+      },
+      Camera: {
         x: Math.min(host.application.screen.width * 0.5, levelBounds.width * 0.5),
         y: Math.min(host.application.screen.height * 0.5, levelBounds.height * 0.5)
-      }),
-      InputState: Result.success(makeEmptyInputState()),
-      PlayerContacts: Result.success(makeInitialPlayerContacts()),
-      LoseMessage: Result.success("You fell into a hole.")
+      },
+      InputState: makeEmptyInputState(),
+      PlayerContacts: makeInitialPlayerContacts(),
+      LoseMessage: "You fell into a hole."
     },
     machines: Game.Runtime.machines(
       Game.Runtime.machine(SessionState, "Playing")
@@ -59,6 +57,8 @@ export const createPlatformerRuntime = (
       Result.failure({
         message: error.resources.Viewport
           ? "Invalid platformer viewport."
-          : "Invalid platformer camera."
+          : error.resources.Camera
+            ? "Invalid platformer camera."
+            : "Invalid platformer runtime resources."
       })
   })

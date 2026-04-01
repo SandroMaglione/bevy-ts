@@ -24,8 +24,8 @@ export const PlanPlayerVelocitySystem = Game.System.define(
       }
 
       const direction = normalizeMovement(resources.input.get())
-      player.value.data.velocity.updateResult(() =>
-        Vector2.result({
+      player.value.data.velocity.updateRaw(() =>
+        ({
           x: direction.x * PLAYER_SPEED,
           y: direction.y * PLAYER_SPEED
         })
@@ -74,9 +74,9 @@ export const MovePlayerSystem = Game.System.define(
       }
       const nextY = resolveVerticalMovement(nextPosition.value, velocity.y * dt, collider, walls)
 
-      player.value.data.position.setResult(Vector2.result({
+      player.value.data.position.setRaw({
         x: nextX,
         y: nextY
-      }))
+      })
     })
 )

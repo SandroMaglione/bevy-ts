@@ -4,7 +4,7 @@ import type { Fx } from "./fx.ts"
 import * as Machine from "./machine.ts"
 import type * as Relation from "./relation.ts"
 import type { Query, QueryMatch } from "./query.ts"
-import type { ReadCell, WriteCell } from "./query.ts"
+import type { ConstructedWriteCell, ReadCell, WriteCell } from "./query.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
 import * as LabelModule from "./label.ts"
@@ -305,7 +305,10 @@ export interface ResourceReadView<T> extends ReadCell<T> {}
 /**
  * A mutable view over a resource value.
  */
-export interface ResourceWriteView<T> extends WriteCell<T> {}
+export type ResourceWriteView<D extends Descriptor<"resource", string, any>> =
+  D extends import("./descriptor.ts").ConstructedDescriptor<"resource", string, infer Value, infer Raw, infer Error>
+    ? ConstructedWriteCell<Value, Raw, Error>
+    : WriteCell<Descriptor.Value<D>>
 
 /**
  * A read-only view over a state value.
@@ -315,7 +318,10 @@ export interface StateReadView<T> extends ReadCell<T> {}
 /**
  * A mutable view over a state value.
  */
-export interface StateWriteView<T> extends WriteCell<T> {}
+export type StateWriteView<D extends Descriptor<"state", string, any>> =
+  D extends import("./descriptor.ts").ConstructedDescriptor<"state", string, infer Value, infer Raw, infer Error>
+    ? ConstructedWriteCell<Value, Raw, Error>
+    : WriteCell<Descriptor.Value<D>>
 
 /**
  * A read-only event stream view.
@@ -732,7 +738,7 @@ type RegistryKeyForDescriptor<
 type ResourceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["resources"]]:
     Spec["resources"][K] extends ResourceRead<infer D> ? ResourceReadView<Descriptor.Value<D>>
-    : Spec["resources"][K] extends ResourceWrite<infer D> ? ResourceWriteView<Descriptor.Value<D>>
+    : Spec["resources"][K] extends ResourceWrite<infer D> ? ResourceWriteView<D>
     : never
 }
 
@@ -760,7 +766,7 @@ type ServiceContext<Spec extends AnySystemSpec> = {
 type StateContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["states"]]:
     Spec["states"][K] extends StateRead<infer D> ? StateReadView<Descriptor.Value<D>>
-    : Spec["states"][K] extends StateWrite<infer D> ? StateWriteView<Descriptor.Value<D>>
+    : Spec["states"][K] extends StateWrite<infer D> ? StateWriteView<D>
     : never
 }
 

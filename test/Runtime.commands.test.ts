@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Fx, Result, Schema } from "../src/index.ts"
+import * as Vector2 from "../src/Vector2.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
 const Count = Descriptor.defineResource<number>()("Count")
 const LastX = Descriptor.defineResource<number>()("LastX")
+const SafePosition = Descriptor.defineConstructedComponent(Vector2)("SafePosition")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -18,6 +20,13 @@ const schema = Schema.build(Schema.fragment({
   }
 }))
 const Game = Schema.bind(schema)
+
+const constructedSchema = Schema.build(Schema.fragment({
+  components: {
+    SafePosition
+  }
+}))
+const ConstructedGame = Schema.bind(constructedSchema)
 
 const makeRuntime = () =>
   Game.Runtime.make({
@@ -183,6 +192,28 @@ describe("Runtime commands", () => {
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
+  })
+
+  it("entryRaw and insertRaw validate constructed component input explicitly", () => {
+    const invalidEntry = ConstructedGame.Command.entryRaw(SafePosition, { x: Number.NaN, y: 0 })
+    expect(invalidEntry.ok).toBe(false)
+
+    const spawned = ConstructedGame.Command.spawnWithMixed(
+      ConstructedGame.Command.entryRaw(SafePosition, { x: 1, y: 2 })
+    )
+
+    expect(spawned.ok).toBe(true)
+    if (!spawned.ok) {
+      return
+    }
+
+    const inserted = ConstructedGame.Command.insertRaw(
+      spawned.value,
+      SafePosition,
+      { x: 3, y: 4 }
+    )
+
+    expect(inserted.ok).toBe(true)
   })
 
   it("insert on an existing entity becomes visible after explicit applyDeferred in the same schedule", () => {

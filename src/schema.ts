@@ -187,9 +187,12 @@ type FeatureUpdateScheduleUnion<
 > = FeatureOutputRecord<Features, S, Root>[FeatureNames<Features>]["update"][number]
 
 type FeatureComponentDescriptor<S extends Schema.Any> = Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+type FeatureConstructedComponentDescriptor<S extends Schema.Any> = Extract<Schema.Components<S>[keyof Schema.Components<S>], import("./descriptor.ts").ConstructedDescriptor<"component", string, any, any, any>>
 type FeatureResourceDescriptor<S extends Schema.Any> = Extract<Schema.Resources<S>[keyof Schema.Resources<S>], Descriptor<"resource", string, any>>
+type FeatureConstructedResourceDescriptor<S extends Schema.Any> = Extract<Schema.Resources<S>[keyof Schema.Resources<S>], import("./descriptor.ts").ConstructedDescriptor<"resource", string, any, any, any>>
 type FeatureEventDescriptor<S extends Schema.Any> = Extract<Schema.Events<S>[keyof Schema.Events<S>], Descriptor<"event", string, any>>
 type FeatureStateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Schema.States<S>], Descriptor<"state", string, any>>
+type FeatureConstructedStateDescriptor<S extends Schema.Any> = Extract<Schema.States<S>[keyof Schema.States<S>], import("./descriptor.ts").ConstructedDescriptor<"state", string, any, any, any>>
 type FeatureRelationDescriptor<S extends Schema.Any> = Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>
 type RuntimeServicesOf<Provided extends Runtime.RuntimeServices<any>> =
   [Provided] extends [Runtime.RuntimeServices<infer Services>] ? Services : never
@@ -252,6 +255,10 @@ export interface FeatureBuildGame<
       descriptor: D,
       result: Result.Result<Descriptor.Value<D>, E>
     ) => Result.Result<Command.Entry<D>, E>
+    entryRaw: <D extends FeatureConstructedComponentDescriptor<Accessible>>(
+      descriptor: D,
+      raw: Descriptor.Raw<D>
+    ) => Result.Result<Command.Entry<D>, Descriptor.ConstructionError<D>>
     insert: <P extends Entity.ComponentProof, D extends FeatureComponentDescriptor<Accessible>>(
       draft: Entity.EntityDraft<Accessible, P, Root>,
       descriptor: D,
@@ -261,6 +268,11 @@ export interface FeatureBuildGame<
       draft: Entity.EntityDraft<Accessible, P, Root>,
       result: Result.Result<Command.Entry<D>, E>
     ) => Result.Result<Entity.EntityDraft<Accessible, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, E>
+    insertRaw: <P extends Entity.ComponentProof, D extends FeatureConstructedComponentDescriptor<Accessible>>(
+      draft: Entity.EntityDraft<Accessible, P, Root>,
+      descriptor: D,
+      raw: Descriptor.Raw<D>
+    ) => Result.Result<Entity.EntityDraft<Accessible, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, Descriptor.ConstructionError<D>>
     insertMany: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SchemaEntry<Accessible>>>(
       draft: Entity.EntityDraft<Accessible, P, Root>,
       ...entries: Entries
@@ -638,6 +650,10 @@ export namespace Schema {
         descriptor: D,
         result: Result.Result<Descriptor.Value<D>, E>
       ) => Result.Result<Command.Entry<D>, E>
+      entryRaw: <D extends Extract<ComponentDescriptor<S>, import("./descriptor.ts").ConstructedDescriptor<"component", string, any, any, any>>>(
+        descriptor: D,
+        raw: Descriptor.Raw<D>
+      ) => Result.Result<Command.Entry<D>, Descriptor.ConstructionError<D>>
       insert: <P extends Entity.ComponentProof, D extends ComponentDescriptor<S>>(
         draft: Entity.EntityDraft<S, P, Root>,
         descriptor: D,
@@ -647,6 +663,11 @@ export namespace Schema {
         draft: Entity.EntityDraft<S, P, Root>,
         result: Result.Result<Command.Entry<D>, E>
       ) => Result.Result<Entity.EntityDraft<S, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, E>
+      insertRaw: <P extends Entity.ComponentProof, D extends Extract<ComponentDescriptor<S>, import("./descriptor.ts").ConstructedDescriptor<"component", string, any, any, any>>>(
+        draft: Entity.EntityDraft<S, P, Root>,
+        descriptor: D,
+        raw: Descriptor.Raw<D>
+      ) => Result.Result<Entity.EntityDraft<S, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, Descriptor.ConstructionError<D>>
       insertMany: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SchemaEntry<S>>>(
         draft: Entity.EntityDraft<S, P, Root>,
         ...entries: Entries
@@ -847,6 +868,20 @@ export namespace Schema {
       }) => Result.Result<
         Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Runtime.ValidatedRuntimeResources<S, Resources>, Runtime.ValidatedRuntimeStates<S, States>, RuntimeMachinesOf<ProvidedMachines>>,
         Runtime.RuntimeConstructionError<S, Resources, States>
+      >
+      makeConstructed: <
+        const ProvidedServices extends Runtime.RuntimeServices<any>,
+        const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>,
+        const Resources extends Runtime.RuntimeConstructedResources<S> = {},
+        const States extends Runtime.RuntimeConstructedStates<S> = {}
+      >(options: {
+        readonly services: ProvidedServices
+        readonly resources?: Resources
+        readonly states?: States
+        readonly machines?: ProvidedMachines
+      }) => Result.Result<
+        Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Runtime.ValidatedConstructedRuntimeResources<S, Resources>, Runtime.ValidatedConstructedRuntimeStates<S, States>, RuntimeMachinesOf<ProvidedMachines>>,
+        Runtime.RuntimeConstructedConstructionError<S, Resources, States>
       >
       service: typeof Runtime.service
       services: typeof Runtime.services
@@ -1255,6 +1290,13 @@ export const bind = <S extends Schema.Any, Root = S>(
     result: Result.Result<Descriptor.Value<D>, E>
   ) => Command.entryResult(descriptor, result)
 
+  const commandEntryRaw = <
+    D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], import("./descriptor.ts").ConstructedDescriptor<"component", string, any, any, any>>
+  >(
+    descriptor: D,
+    raw: Descriptor.Raw<D>
+  ) => Command.entryRaw(descriptor, raw)
+
   const commandInsert = <
     P extends Entity.ComponentProof,
     D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
@@ -1272,6 +1314,15 @@ export const bind = <S extends Schema.Any, Root = S>(
     draft: Entity.EntityDraft<S, P, Root>,
     result: Result.Result<Command.Entry<D>, E>
   ) => Command.insertResult(draft, result)
+
+  const commandInsertRaw = <
+    P extends Entity.ComponentProof,
+    D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], import("./descriptor.ts").ConstructedDescriptor<"component", string, any, any, any>>
+  >(
+    draft: Entity.EntityDraft<S, P, Root>,
+    descriptor: D,
+    raw: Descriptor.Raw<D>
+  ) => Command.insertRaw(draft, descriptor, raw)
 
   const commandInsertMany = <
     P extends Entity.ComponentProof,
@@ -1298,6 +1349,22 @@ export const bind = <S extends Schema.Any, Root = S>(
   >(
     ...entries: Entries
   ) => Command.spawnWithMixed<S, Entries, Root>(...entries)
+
+  const makeRuntimeConstructed = <
+    const ProvidedServices extends Runtime.RuntimeServices<any>,
+    const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>,
+    const Resources extends Runtime.RuntimeConstructedResources<S> = {},
+    const States extends Runtime.RuntimeConstructedStates<S> = {}
+  >(options: {
+    readonly services: ProvidedServices
+    readonly resources?: Resources
+    readonly states?: States
+    readonly machines?: ProvidedMachines
+  }) => Runtime.makeRuntimeConstructed<S, ProvidedServices, ProvidedMachines, Resources, States, Root>({
+    schema,
+    ...options,
+    machineDefinitions: definedMachines
+  })
 
   const commandRelate = <
     P extends Entity.ComponentProof,
@@ -1620,8 +1687,10 @@ export const bind = <S extends Schema.Any, Root = S>(
       spawn: commandSpawn,
       entry: commandEntry,
       entryResult: commandEntryResult,
+      entryRaw: commandEntryRaw,
       insert: commandInsert,
       insertResult: commandInsertResult,
+      insertRaw: commandInsertRaw,
       insertMany: commandInsertMany,
       spawnWith: commandSpawnWith,
       spawnWithResult: commandSpawnWithResult,
@@ -1674,6 +1743,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     Runtime: {
       make: makeRuntime,
       makeResult: makeRuntimeResult,
+      makeConstructed: makeRuntimeConstructed,
       service: Runtime.service,
       services: Runtime.services,
       machine: runtimeMachine,

@@ -60,7 +60,7 @@ const distanceSquared = (left: Vector, right: Vector): number => {
 
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
   return Game.Command.spawnWithMixed(
-    Game.Command.entryResult(Position, Vector2.result(position)),
+    Game.Command.entryRaw(Position, position),
     Game.Command.entry(Actor, { kind: "pickup" }),
     Game.Command.entry(Pickup, {})
   )
@@ -240,10 +240,10 @@ export const MovePlayerSystem = Game.System.define(
       const arena = resources.arena.get()
       const position = player.value.data.position.get()
 
-      player.value.data.position.setResult(Vector2.result({
+      player.value.data.position.setRaw({
         x: clamp(position.x + movement.x * PLAYER_SPEED * dt, PLAYER_RADIUS, arena.width - PLAYER_RADIUS),
         y: clamp(position.y + movement.y * PLAYER_SPEED * dt, PLAYER_RADIUS, arena.height - PLAYER_RADIUS)
-      }))
+      })
     })
 )
 

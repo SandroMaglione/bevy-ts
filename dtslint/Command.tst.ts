@@ -1,15 +1,18 @@
 import { Descriptor, Entity, Result, Schema } from "../src/index.ts"
 import * as Command from "../src/command.ts"
+import * as Vector2 from "../src/Vector2.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
 const Time = Descriptor.defineResource<number>()("Time")
+const SafePosition = Descriptor.defineConstructedComponent(Vector2)("SafePosition")
 
 const schema = Schema.build(Schema.fragment({
   components: {
     Position,
-    Velocity
+    Velocity,
+    SafePosition
   },
   resources: {
     Time
@@ -81,5 +84,30 @@ describe("Command", () => {
       readonly Position: { x: number; y: number }
       readonly Velocity: { x: number; y: number }
     }, typeof schema>, readonly [null, unknown]>>()
+  })
+
+  it("entryRaw and insertRaw are available for constructed component descriptors", () => {
+    const Game = Schema.bind(schema)
+
+    const entry = Game.Command.entryRaw(SafePosition, { x: 0, y: 0 })
+    expect(entry).type.toBe<Result.Result<Command.Entry<typeof SafePosition>, Vector2.Error>>()
+
+    const inserted = Game.Command.insertRaw(
+      Game.Command.spawnWith([Position, { x: 1, y: 1 }]),
+      SafePosition,
+      { x: 2, y: 3 }
+    )
+
+    expect(inserted).type.toBe<Result.Result<Entity.EntityDraft<typeof schema, {
+      readonly Position: { x: number; y: number }
+      readonly SafePosition: Vector2.Vector2
+    }, typeof schema>, Vector2.Error>>()
+  })
+
+  it("entryRaw rejects plain component descriptors", () => {
+    const Game = Schema.bind(schema)
+
+    // @ts-expect-error!
+    Game.Command.entryRaw(Position, { x: 0, y: 0 })
   })
 })

@@ -1,6 +1,4 @@
 import * as Result from "../../Result.ts"
-import * as Size2 from "../../Size2.ts"
-import { initialCamera } from "./definitions.ts"
 import {
   AnimationClock,
   Camera,
@@ -47,34 +45,40 @@ export const makeInitialAnimationClock = () => ({
 const makeRuntime = (
   host: TopDownHostValue,
   inputManager: TopDownInputManager
-) =>
-  Game.Runtime.makeResult({
+) => {
+  const machines = Game.Runtime.machines(
+    Game.Runtime.machine(Facing, "Down"),
+    Game.Runtime.machine(Locomotion, "Idle")
+  )
+
+  return Game.Runtime.makeConstructed({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(TopDownHost, host)
     ),
     resources: {
-      DeltaTime: Result.success(host.clock.deltaSeconds),
-      Viewport: Size2.result({
+      DeltaTime: host.clock.deltaSeconds,
+      Viewport: {
         width: host.application.screen.width,
         height: host.application.screen.height
-      }),
-      Camera: initialCamera,
-      InputState: Result.success(makeEmptyInputState()),
-      FocusedCollectable: Result.success(makeEmptyFocusedCollectable()),
-      CollectedCount: Result.success(0),
-      TotalCollectables: Result.success(pickupLayout.length),
-      AnimationClock: Result.success(makeInitialAnimationClock()),
-      CurrentPlayerFrame: Result.success({
+      },
+      Camera: {
+        x: host.application.screen.width * 0.5,
+        y: host.application.screen.height * 0.5
+      },
+      InputState: makeEmptyInputState(),
+      FocusedCollectable: makeEmptyFocusedCollectable(),
+      CollectedCount: 0,
+      TotalCollectables: pickupLayout.length,
+      AnimationClock: makeInitialAnimationClock(),
+      CurrentPlayerFrame: {
         row: 1,
         column: 1
-      })
+      }
     },
-    machines: Game.Runtime.machines(
-      Game.Runtime.machine(Facing, "Down"),
-      Game.Runtime.machine(Locomotion, "Idle")
-    )
+    machines
   })
+}
 
 export const createTopDownRuntime = (
   host: TopDownHostValue,
@@ -86,6 +90,8 @@ export const createTopDownRuntime = (
       Result.failure({
         message: error.resources.Viewport
           ? "Invalid top-down viewport."
-          : "Invalid top-down camera."
+          : error.resources.Camera
+            ? "Invalid top-down camera."
+            : "Invalid top-down runtime resources."
       })
   })

@@ -1,3 +1,4 @@
+import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
 import type * as Relation from "./relation.ts"
@@ -59,6 +60,9 @@ export type Entry<D extends Descriptor<"component", string, any>> = readonly [D,
  */
 type SchemaComponentDescriptor<S extends Schema.Any> =
   Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
+
+type ConstructedSchemaComponentDescriptor<S extends Schema.Any> =
+  Extract<Schema.Components<S>[keyof Schema.Components<S>], DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>
 
 /**
  * Any component entry accepted by a schema-aware command API.
@@ -230,6 +234,13 @@ export const entryResult = <D extends Descriptor<"component", string, any>, Erro
     ? Result.success([descriptor, result.value] as Entry<D>)
     : Result.failure(result.error)
 
+export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>(
+  descriptor: D,
+  raw: Descriptor.Raw<D>
+): Result.Result<Entry<D>, Descriptor.ConstructionError<D>> => {
+  return entryResult(descriptor, DescriptorModule.constructorOf(descriptor)!.result(raw) as Result.Result<Descriptor.Value<D>, Descriptor.ConstructionError<D>>)
+}
+
 /**
  * Adds a component to an entity draft and returns a more precise draft type.
  *
@@ -287,6 +298,18 @@ export const insertResult = <
   result.ok
     ? Result.success(insert(draft, result.value[0], result.value[1]) as Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>)
     : Result.failure(result.error)
+
+export const insertRaw = <
+  S extends Schema.Any,
+  P extends Entity.ComponentProof,
+  D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>,
+  Root = unknown
+>(
+  draft: Entity.EntityDraft<S, P, Root>,
+  descriptor: D,
+  raw: Descriptor.Raw<D>
+): Result.Result<Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, Descriptor.ConstructionError<D>> =>
+  insertResult(draft, entryRaw(descriptor, raw))
 
 /**
  * Stages one outgoing relation edge on an entity draft.

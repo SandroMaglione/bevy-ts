@@ -1,10 +1,11 @@
 import * as Command from "./command.ts"
+import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
 import * as Fx from "./fx.ts"
 import type * as Machine from "./machine.ts"
 import * as Query from "./query.ts"
-import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
+import type { ConstructedWriteCell, QueryMatch, ReadCell, WriteCell } from "./query.ts"
 import * as Relation from "./relation.ts"
 import * as Result from "./Result.ts"
 import * as Schedule from "./schedule.ts"
@@ -106,6 +107,20 @@ export type RuntimeResultStates<S extends Schema.Any> = Partial<{
   readonly [K in keyof Schema.States<S>]: Result.Result<Schema.StateValue<S, K>, unknown>
 }>
 
+export type RuntimeConstructedResources<S extends Schema.Any> = Partial<{
+  readonly [K in keyof Schema.Resources<S>]:
+    Schema.Resources<S>[K] extends DescriptorModule.ConstructedDescriptor<"resource", string, any, infer Raw, any>
+      ? Raw
+      : Schema.ResourceValue<S, K>
+}>
+
+export type RuntimeConstructedStates<S extends Schema.Any> = Partial<{
+  readonly [K in keyof Schema.States<S>]:
+    Schema.States<S>[K] extends DescriptorModule.ConstructedDescriptor<"state", string, any, infer Raw, any>
+      ? Raw
+      : Schema.StateValue<S, K>
+}>
+
 export type ValidatedRuntimeResources<
   S extends Schema.Any,
   Provided extends RuntimeResultResources<S>
@@ -134,6 +149,45 @@ export type RuntimeConstructionError<
   readonly states: Partial<{
     readonly [K in keyof States]:
       States[K] extends Result.Result<any, infer Error> ? Error : never
+  }>
+}>
+
+export type ValidatedConstructedRuntimeResources<
+  S extends Schema.Any,
+  Provided extends RuntimeConstructedResources<S>
+> = Simplify<{
+  readonly [K in keyof Provided]:
+    K extends keyof Schema.Resources<S> ? Schema.ResourceValue<S, K> : never
+}>
+
+export type ValidatedConstructedRuntimeStates<
+  S extends Schema.Any,
+  Provided extends RuntimeConstructedStates<S>
+> = Simplify<{
+  readonly [K in keyof Provided]:
+    K extends keyof Schema.States<S> ? Schema.StateValue<S, K> : never
+}>
+
+export type RuntimeConstructedConstructionError<
+  S extends Schema.Any,
+  Resources extends RuntimeConstructedResources<S>,
+  States extends RuntimeConstructedStates<S>
+> = Simplify<{
+  readonly resources: Partial<{
+    readonly [K in keyof Resources]:
+      K extends keyof Schema.Resources<S>
+        ? Schema.Resources<S>[K] extends DescriptorModule.ConstructedDescriptor<"resource", string, any, any, infer Error>
+          ? Error
+          : never
+        : never
+  }>
+  readonly states: Partial<{
+    readonly [K in keyof States]:
+      K extends keyof Schema.States<S>
+        ? Schema.States<S>[K] extends DescriptorModule.ConstructedDescriptor<"state", string, any, any, infer Error>
+          ? Error
+          : never
+        : never
   }>
 }>
 
@@ -368,6 +422,45 @@ const collectRegistryResults = <R extends Registry>(
       continue
     }
     validated[schemaKey] = next.value
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return Result.failure(errors as Partial<{ readonly [K in keyof R]: unknown }>)
+  }
+
+  return Result.success(validated as InitialRegistryValues<R>)
+}
+
+const collectConstructedRegistryValues = <R extends Registry>(
+  registry: R,
+  provided: Partial<{ readonly [K in keyof R]: unknown }> | undefined
+): Result.Result<InitialRegistryValues<R>, Partial<{ readonly [K in keyof R]: unknown }>> => {
+  if (!provided) {
+    return Result.success({})
+  }
+
+  const validated = {} as Partial<Record<keyof R, unknown>>
+  const errors = {} as Partial<Record<keyof R, unknown>>
+
+  for (const [schemaKey, descriptor] of Object.entries(registry) as Array<[keyof R, R[keyof R]]>) {
+    const next = provided[schemaKey]
+    if (next === undefined) {
+      continue
+    }
+
+    const constructor = DescriptorModule.constructorOf(descriptor)
+    if (!constructor) {
+      validated[schemaKey] = next
+      continue
+    }
+
+    const result = constructor.result(next as never)
+    if (!result.ok) {
+      errors[schemaKey] = result.error
+      continue
+    }
+
+    validated[schemaKey] = result.value
   }
 
   if (Object.keys(errors).length > 0) {
@@ -936,28 +1029,67 @@ export const makeRuntime = <
   /**
    * Creates a writable cell view over an arbitrary storage source.
    */
-  const makeWriteCell = <T>(readValue: () => T, writeValue: (value: T) => void): WriteCell<T> => ({
-    get: readValue,
-    set: writeValue,
-    setResult<E>(result: Result.Result<T, E>): Result.Result<void, E> {
-      if (!result.ok) {
-        return Result.failure(result.error)
+  function makeWriteCell<T>(
+    readValue: () => T,
+    writeValue: (value: T) => void
+  ): WriteCell<T>
+  function makeWriteCell<T, Raw, Error>(
+    readValue: () => T,
+    writeValue: (value: T) => void,
+    constructor: DescriptorModule.ResultConstructor<T, Raw, Error>
+  ): ConstructedWriteCell<T, Raw, Error>
+  function makeWriteCell<T, Raw, Error>(
+    readValue: () => T,
+    writeValue: (value: T) => void,
+    constructor?: DescriptorModule.ResultConstructor<T, Raw, Error>
+  ): WriteCell<T> | ConstructedWriteCell<T, Raw, Error> {
+    const base: WriteCell<T> = {
+      get: readValue,
+      set: writeValue,
+      setResult<E>(result: Result.Result<T, E>): Result.Result<void, E> {
+        if (!result.ok) {
+          return Result.failure(result.error)
+        }
+        writeValue(result.value)
+        return Result.success(undefined)
+      },
+      update(f) {
+        writeValue(f(readValue()))
+      },
+      updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E> {
+        const result = f(readValue())
+        if (!result.ok) {
+          return Result.failure(result.error)
+        }
+        writeValue(result.value)
+        return Result.success(undefined)
       }
-      writeValue(result.value)
-      return Result.success(undefined)
-    },
-    update(f) {
-      writeValue(f(readValue()))
-    },
-    updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E> {
-      const result = f(readValue())
-      if (!result.ok) {
-        return Result.failure(result.error)
-      }
-      writeValue(result.value)
-      return Result.success(undefined)
     }
-  })
+
+    if (!constructor) {
+      return base
+    }
+
+    return {
+      ...base,
+      setRaw(raw) {
+        const result = constructor.result(raw)
+        if (!result.ok) {
+          return Result.failure(result.error)
+        }
+        writeValue(result.value)
+        return Result.success(undefined)
+      },
+      updateRaw(f) {
+        const result = constructor.result(f(readValue()))
+        if (!result.ok) {
+          return Result.failure(result.error)
+        }
+        writeValue(result.value)
+        return Result.success(undefined)
+      }
+    }
+  }
 
   const pushLifecycleEntity = (buffer: Map<symbol, Set<number>>, descriptorKey: symbol, entityId: number): void => {
     const entries = buffer.get(descriptorKey) ?? new Set<number>()
@@ -1110,13 +1242,25 @@ export const makeRuntime = <
           if (access.mode === "read") {
             data[slot] = makeReadCell(() => store.get(access.descriptor.key) as never)
           } else {
-            data[slot] = makeWriteCell(
-              () => store.get(access.descriptor.key) as never,
-              (value) => {
-                store.set(access.descriptor.key, value)
-                recordChangedComponent(access.descriptor.key, idValue)
-              }
-            )
+            const constructor = DescriptorModule.hasConstructor(access.descriptor)
+              ? DescriptorModule.constructorOf(access.descriptor)
+              : undefined
+            data[slot] = constructor === undefined
+              ? makeWriteCell(
+                  () => store.get(access.descriptor.key) as never,
+                  (value) => {
+                    store.set(access.descriptor.key, value)
+                    recordChangedComponent(access.descriptor.key, idValue)
+                  }
+                )
+              : makeWriteCell(
+                  () => store.get(access.descriptor.key) as never,
+                  (value) => {
+                    store.set(access.descriptor.key, value)
+                    recordChangedComponent(access.descriptor.key, idValue)
+                  },
+                  constructor
+                )
           }
         }
         if (!include) {
@@ -1236,14 +1380,28 @@ export const makeRuntime = <
         if (!store.has(access.descriptor.key)) {
           return Query.failure(Query.queryMismatchError(entityId.value))
         }
-        data[slot] = access.mode === "read"
-          ? makeReadCell(() => store.get(access.descriptor.key) as never)
-          : makeWriteCell(
+        if (access.mode === "read") {
+          data[slot] = makeReadCell(() => store.get(access.descriptor.key) as never)
+          continue
+        }
+        const constructor = DescriptorModule.hasConstructor(access.descriptor)
+          ? DescriptorModule.constructorOf(access.descriptor)
+          : undefined
+        data[slot] = constructor === undefined
+          ? makeWriteCell(
               () => store.get(access.descriptor.key) as never,
               (value) => {
                 store.set(access.descriptor.key, value)
                 recordChangedComponent(access.descriptor.key, entityId.value)
               }
+            )
+          : makeWriteCell(
+              () => store.get(access.descriptor.key) as never,
+              (value) => {
+                store.set(access.descriptor.key, value)
+                recordChangedComponent(access.descriptor.key, entityId.value)
+              },
+              constructor
             )
       }
       const readProof = Object.fromEntries(
@@ -1375,13 +1533,27 @@ export const makeRuntime = <
   /**
    * Creates a writable resource or state view.
    */
-  const makeResourceWriteView = <T>(descriptorKey: symbol, source: Map<symbol, unknown>): ResourceWriteView<T> =>
-    makeWriteCell(
-      () => source.get(descriptorKey) as T,
+  const makeResourceWriteView = <D extends Descriptor<"resource" | "state", string, any>>(
+    descriptor: D,
+    source: Map<symbol, unknown>
+  ) => {
+    if (DescriptorModule.hasConstructor(descriptor)) {
+      const constructor = DescriptorModule.constructorOf(descriptor)
+      return makeWriteCell(
+        () => source.get(descriptor.key) as Descriptor.Value<D>,
+        (value) => {
+          source.set(descriptor.key, value)
+        },
+        constructor
+      )
+    }
+    return makeWriteCell(
+      () => source.get(descriptor.key) as Descriptor.Value<D>,
       (value) => {
-        source.set(descriptorKey, value)
+        source.set(descriptor.key, value)
       }
     )
+  }
 
   /**
    * Creates a read-only event stream view.
@@ -1516,7 +1688,7 @@ export const makeRuntime = <
         key,
         access.mode === "read"
           ? makeResourceReadView(access.descriptor.key, resources)
-          : makeResourceWriteView(access.descriptor.key, resources)
+          : makeResourceWriteView(access.descriptor, resources)
       ])
     )
     const eventViews = Object.fromEntries(
@@ -1531,7 +1703,7 @@ export const makeRuntime = <
       Object.entries(system.spec.states as Record<string, any>).map(([key, access]) => [
         key,
         access.mode === "write"
-          ? makeResourceWriteView(access.descriptor.key, states)
+          ? makeResourceWriteView(access.descriptor, states)
           : makeResourceReadView(access.descriptor.key, states)
       ])
     )
@@ -1898,6 +2070,53 @@ export const makeRuntimeResult = <
       services: options.services,
       resources: resources.value as ValidatedRuntimeResources<S, Resources>,
       states: states.value as ValidatedRuntimeStates<S, States>,
+      ...(options.machines === undefined ? {} : { machines: options.machines }),
+      ...(options.machineDefinitions === undefined ? {} : { machineDefinitions: options.machineDefinitions })
+    })
+  )
+}
+
+export const makeRuntimeConstructed = <
+  S extends Schema.Any,
+  const ProvidedServices extends RuntimeServices<any>,
+  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>,
+  const Resources extends RuntimeConstructedResources<S> = {},
+  const States extends RuntimeConstructedStates<S> = {},
+  Root = unknown
+>(options: {
+  readonly schema: S
+  readonly services: ProvidedServices
+  readonly resources?: Resources
+  readonly states?: States
+  readonly machines?: ProvidedMachines
+  readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
+}): Result.Result<
+  Runtime<
+    S,
+    Simplify<RuntimeServicesOf<ProvidedServices>>,
+    ValidatedConstructedRuntimeResources<S, Resources>,
+    ValidatedConstructedRuntimeStates<S, States>,
+    Root,
+    RuntimeMachinesOf<ProvidedMachines>
+  >,
+  RuntimeConstructedConstructionError<S, Resources, States>
+> => {
+  const resources = collectConstructedRegistryValues(options.schema.resources, options.resources)
+  const states = collectConstructedRegistryValues(options.schema.states, options.states)
+
+  if (!resources.ok || !states.ok) {
+    return Result.failure({
+      resources: resources.ok ? {} : resources.error,
+      states: states.ok ? {} : states.error
+    } as RuntimeConstructedConstructionError<S, Resources, States>)
+  }
+
+  return Result.success(
+    makeRuntime<S, ProvidedServices, ValidatedConstructedRuntimeResources<S, Resources>, ValidatedConstructedRuntimeStates<S, States>, Root, ProvidedMachines>({
+      schema: options.schema,
+      services: options.services,
+      resources: resources.value as ValidatedConstructedRuntimeResources<S, Resources>,
+      states: states.value as ValidatedConstructedRuntimeStates<S, States>,
       ...(options.machines === undefined ? {} : { machines: options.machines }),
       ...(options.machineDefinitions === undefined ? {} : { machineDefinitions: options.machineDefinitions })
     })

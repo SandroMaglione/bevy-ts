@@ -11,9 +11,9 @@ import type {
 
 export const Root = Schema.defineRoot("TopDown")
 
-export const Position = Descriptor.defineComponent<Vector2.Vector2>()("TopDown/Position")
-export const Velocity = Descriptor.defineComponent<Vector2.Vector2>()("TopDown/Velocity")
-export const Collider = Descriptor.defineComponent<Size2.Size2>()("TopDown/Collider")
+export const Position = Descriptor.defineConstructedComponent(Vector2)("TopDown/Position")
+export const Velocity = Descriptor.defineConstructedComponent(Vector2)("TopDown/Velocity")
+export const Collider = Descriptor.defineConstructedComponent(Size2)("TopDown/Collider")
 export const Renderable = Descriptor.defineComponent<{
   kind: "player" | "wall" | "pickup"
   width: number
@@ -35,8 +35,8 @@ export type FocusedCollectableValue = {
 }
 
 export const DeltaTime = Descriptor.defineResource<number>()("TopDown/DeltaTime")
-export const Viewport = Descriptor.defineResource<Size2.Size2>()("TopDown/Viewport")
-export const Camera = Descriptor.defineResource<Vector2.Vector2>()("TopDown/Camera")
+export const Viewport = Descriptor.defineConstructedResource(Size2)("TopDown/Viewport")
+export const Camera = Descriptor.defineConstructedResource(Vector2)("TopDown/Camera")
 export const InputState = Descriptor.defineResource<InputStateValue>()("TopDown/InputState")
 export const FocusedCollectable = Descriptor.defineResource<FocusedCollectableValue>()("TopDown/FocusedCollectable")
 export const CollectedCount = Descriptor.defineResource<number>()("TopDown/CollectedCount")

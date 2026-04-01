@@ -1,5 +1,3 @@
-import * as Size2 from "../../Size2.ts"
-import * as Vector2 from "../../Vector2.ts"
 import { PLAYER_INTERACT_RADIUS, PLAYER_SIZE } from "./constants.ts"
 import { pickupCollider, playerCollider, playerSpawn, playerZeroVelocity } from "./definitions.ts"
 import {
@@ -15,8 +13,8 @@ import {
 
 export const makeWallDraft = (x: number, y: number, width: number, height: number) => {
   return Game.Command.spawnWithMixed(
-    Game.Command.entryResult(Position, Vector2.result({ x, y })),
-    Game.Command.entryResult(Collider, Size2.result({ width, height })),
+    Game.Command.entryRaw(Position, { x, y }),
+    Game.Command.entryRaw(Collider, { width, height }),
     Game.Command.entry(Renderable, {
       kind: "wall",
       width,
@@ -30,7 +28,7 @@ export const makeWallDraft = (x: number, y: number, width: number, height: numbe
 
 export const makePickupDraft = (x: number, y: number, label: string) => {
   return Game.Command.spawnWithMixed(
-    Game.Command.entryResult(Position, Vector2.result({ x, y })),
+    Game.Command.entryRaw(Position, { x, y }),
     Game.Command.entryResult(Collider, pickupCollider),
     Game.Command.entry(Renderable, {
       kind: "pickup",

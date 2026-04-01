@@ -1,6 +1,5 @@
 import { Fx } from "../../../index.ts"
 import * as Vector2 from "../../../Vector2.ts"
-
 import { GRAVITY, JUMP_VELOCITY, MAX_FALL_SPEED } from "../constants.ts"
 import { PlayerMovementQuery, SolidCollisionQuery } from "../queries.ts"
 import { DeltaTime, Game, InputState, PlayerContacts } from "../schema.ts"
@@ -32,8 +31,8 @@ export const ResolveMoveIntentSystem = Game.System.define(
         resources.contacts.get().grounded
       )
 
-      player.value.data.velocity.updateResult((velocity) =>
-        Vector2.result({
+      player.value.data.velocity.updateRaw((velocity) =>
+        ({
           x: nextVelocityX,
           y: velocity.y
         })
@@ -65,8 +64,8 @@ export const ApplyJumpSystem = Game.System.define(
         return
       }
 
-      player.value.data.velocity.updateResult((velocity) =>
-        Vector2.result({
+      player.value.data.velocity.updateRaw((velocity) =>
+        ({
           x: velocity.x,
           y: -JUMP_VELOCITY
         })
@@ -98,8 +97,8 @@ export const ApplyGravitySystem = Game.System.define(
         return
       }
 
-      player.value.data.velocity.updateResult((velocity) =>
-        Vector2.result({
+      player.value.data.velocity.updateRaw((velocity) =>
+        ({
           x: velocity.x,
           y: clamp(
             velocity.y + GRAVITY * resources.deltaTime.get(),
@@ -149,12 +148,12 @@ export const MovePlayerSystem = Game.System.define(
       }
       const verticalResult = resolveVerticalMovement(horizontalPosition.value, velocity.y * dt, collider, solids)
 
-      player.value.data.position.setResult(Vector2.result({
+      player.value.data.position.setRaw({
         x: horizontalResult.nextX,
         y: verticalResult.nextY
-      }))
+      })
 
-      player.value.data.velocity.setResult(Vector2.result({
+      player.value.data.velocity.setRaw({
         x:
           horizontalResult.blockedLeft || horizontalResult.blockedRight
             ? 0
@@ -163,7 +162,7 @@ export const MovePlayerSystem = Game.System.define(
           verticalResult.grounded || verticalResult.hitCeiling
             ? 0
             : velocity.y
-      }))
+      })
 
       resources.contacts.set({
         grounded: verticalResult.grounded,

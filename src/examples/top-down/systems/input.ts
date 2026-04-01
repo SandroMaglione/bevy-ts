@@ -1,6 +1,4 @@
 import { Fx } from "../../../index.ts"
-import * as Size2 from "../../../Size2.ts"
-
 import {
   DeltaTime,
   Game,
@@ -26,10 +24,10 @@ export const CaptureFrameContextSystem = Game.System.define(
   ({ resources, services }) =>
     Fx.sync(() => {
       resources.deltaTime.set(services.host.clock.deltaSeconds)
-      resources.viewport.setResult(Size2.result({
+      resources.viewport.setRaw({
         width: services.host.application.screen.width,
         height: services.host.application.screen.height
-      }))
+      })
       resources.input.set(services.inputManager.snapshot())
     })
 )

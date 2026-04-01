@@ -1154,34 +1154,6 @@ Full Effect-style local `provide` or layer graphs are also out of scope because 
 
 Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and advanced parallel scheduler work remain useful future references, but they are not current priorities.
 
-## Roadmap
-
-### P0. Reduce branded/result boilerplate at ECS boundaries
-
-The helper and branding story is now materially stronger:
-
-- `Runtime.makeResult(...)` removes manual bootstrap branching
-- `Result.match(...)` and `Result.all(...)` cover the minimal folding and
-  aggregation needs without introducing a larger functional surface
-- `Game.Command.spawnWithMixed(...)` removes the remaining mixed-entry
-  `Result.success(Game.Command.entry(...))` lifting in draft builders
-- `Definition.entry(...)` and `Definition.all(...)` let examples validate
-  reusable branded constants once and reuse them across drafts and runtime
-  bootstrap
-
-The remaining construction-boundary improvement is still the same deferred
-long-term item:
-
-1. Revisit descriptor-aware construction only after it is genuinely stable.
-   Do not expose descriptor-driven raw construction again until it works
-   transparently through normal examples without inference regressions.
-
-The target shape is still explicit:
-
-- raw values are validated once
-- failures stay in the return type
-- ECS APIs never throw
-- normal usage never requires casts
 
 ### P1. Add stronger composition for explicit schedule phases
 

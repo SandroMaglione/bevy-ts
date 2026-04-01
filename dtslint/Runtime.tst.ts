@@ -1,4 +1,6 @@
 import { App, Descriptor, Fx, Result, Schema } from "../src/index.ts"
+import * as Size2 from "../src/Size2.ts"
+import * as Vector2 from "../src/Vector2.ts"
 import * as Runtime from "../src/runtime.ts"
 import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
@@ -7,16 +9,20 @@ import { describe, expect, it } from "tstyche"
 const Time = Descriptor.defineResource<number>()("Time")
 const Counter = Descriptor.defineResource<number>()("Counter")
 const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
+const Viewport = Descriptor.defineConstructedResource(Size2)("Viewport")
+const Camera = Descriptor.defineConstructedState(Vector2)("Camera")
 const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
 const PrefixedLogger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("RuntimeTypes/Logger")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
     DeltaTime: Time,
-    Counter
+    Counter,
+    Viewport
   },
   states: {
-    CurrentPhase: Phase
+    CurrentPhase: Phase,
+    Camera
   }
 }))
 
@@ -136,6 +142,46 @@ describe("Runtime", () => {
       runtime.value.runSchedule(resourceSchedule)
       runtime.value.runSchedule(stateSchedule)
     }
+  })
+
+  it("makeRuntimeConstructed accepts raw values for constructed resources and states", () => {
+    const runtime = Runtime.makeRuntimeConstructed({
+      schema,
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: 1 / 60,
+        Counter: 0,
+        Viewport: {
+          width: 320,
+          height: 180
+        }
+      },
+      states: {
+        CurrentPhase: "Running",
+        Camera: {
+          x: 10,
+          y: 20
+        }
+      }
+    })
+
+    if (runtime.ok) {
+      runtime.value.runSchedule(resourceSchedule)
+      runtime.value.runSchedule(stateSchedule)
+    }
+  })
+
+  it("makeRuntimeConstructed rejects carried values for constructed resources that bypass raw validation", () => {
+    Runtime.makeRuntimeConstructed({
+      schema,
+      services: Runtime.services(),
+      resources: {
+        DeltaTime: 1 / 60,
+        Counter: 0,
+        // @ts-expect-error!
+        Viewport: Result.success({ width: 320, height: 180 })
+      }
+    })
   })
 
   it("rejects descriptor-name keys that are not schema keys", () => {

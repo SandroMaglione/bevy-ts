@@ -3,9 +3,9 @@ import * as Size2 from "../../Size2.ts"
 import * as Vector2 from "../../Vector2.ts"
 import type { InputStateValue, PlatformerHostValue, PlayerContactsValue } from "./types.ts"
 
-export const Position = Descriptor.defineComponent<Vector2.Vector2>()("Platformer/Position")
-export const Velocity = Descriptor.defineComponent<Vector2.Vector2>()("Platformer/Velocity")
-export const Collider = Descriptor.defineComponent<Size2.Size2>()("Platformer/Collider")
+export const Position = Descriptor.defineConstructedComponent(Vector2)("Platformer/Position")
+export const Velocity = Descriptor.defineConstructedComponent(Vector2)("Platformer/Velocity")
+export const Collider = Descriptor.defineConstructedComponent(Size2)("Platformer/Collider")
 export const Renderable = Descriptor.defineComponent<{
   kind: "player" | "ground" | "block" | "pipe"
   width: number
@@ -18,8 +18,8 @@ export const Solid = Descriptor.defineComponent<{}>()("Platformer/Solid")
 export const LevelEntity = Descriptor.defineComponent<{}>()("Platformer/LevelEntity")
 
 export const DeltaTime = Descriptor.defineResource<number>()("Platformer/DeltaTime")
-export const Viewport = Descriptor.defineResource<Size2.Size2>()("Platformer/Viewport")
-export const Camera = Descriptor.defineResource<Vector2.Vector2>()("Platformer/Camera")
+export const Viewport = Descriptor.defineConstructedResource(Size2)("Platformer/Viewport")
+export const Camera = Descriptor.defineConstructedResource(Vector2)("Platformer/Camera")
 export const InputState = Descriptor.defineResource<InputStateValue>()("Platformer/InputState")
 export const PlayerContacts = Descriptor.defineResource<PlayerContactsValue>()("Platformer/PlayerContacts")
 export const LoseMessage = Descriptor.defineResource<string>()("Platformer/LoseMessage")

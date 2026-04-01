@@ -1,6 +1,4 @@
 import { Fx } from "../../../index.ts"
-import * as Vector2 from "../../../Vector2.ts"
-
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../constants.ts"
 import { clamp } from "../math.ts"
 import { PlayerCameraQuery } from "../queries.ts"
@@ -33,9 +31,9 @@ export const SyncCameraSystem = Game.System.define(
       const minCameraY = halfViewHeight
       const maxCameraY = WORLD_HEIGHT - halfViewHeight
 
-      resources.camera.setResult(Vector2.result({
+      resources.camera.setRaw({
         x: minCameraX > maxCameraX ? WORLD_WIDTH * 0.5 : clamp(playerPosition.x, minCameraX, maxCameraX),
         y: minCameraY > maxCameraY ? WORLD_HEIGHT * 0.5 : clamp(playerPosition.y, minCameraY, maxCameraY)
-      }))
+      })
     })
 )
