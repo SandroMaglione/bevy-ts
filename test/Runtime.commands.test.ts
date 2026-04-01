@@ -318,4 +318,76 @@ describe("Runtime commands", () => {
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
     expect(readResourceValue(runtime, schema, LastX)).toBe(4)
   })
+
+  it("spawnWithMixed accepts plain and validated entries together", () => {
+    const spawn = Game.System.define(
+      "RuntimeCommands/SpawnWithMixed",
+      {
+        resources: {
+          count: Game.System.writeResource(Count),
+          lastX: Game.System.writeResource(LastX)
+        }
+      },
+      ({ commands, resources }) =>
+        Fx.sync(() => {
+          const invalidDraft = Game.Command.spawnWithMixed(
+            Game.Command.entry(Position, { x: 1, y: 2 }),
+            Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
+          )
+
+          expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
+
+          const validDraft = Game.Command.spawnWithMixed(
+            Game.Command.entry(Position, { x: 4, y: 5 }),
+            Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
+          )
+
+          if (!validDraft.ok) {
+            resources.count.set(-1)
+            return
+          }
+
+          commands.spawn(validDraft.value)
+          resources.count.set(1)
+          resources.lastX.set(4)
+        })
+    )
+
+    const observe = Game.System.define(
+      "RuntimeCommands/ObserveSpawnWithMixed",
+      {
+        queries: {
+          moving: Game.Query.define({
+            selection: {
+              position: Game.Query.read(Position),
+              velocity: Game.Query.read(Velocity)
+            }
+          })
+        },
+        resources: {
+          count: Game.System.writeResource(Count),
+          lastX: Game.System.writeResource(LastX)
+        }
+      },
+      ({ queries, resources }) =>
+        Fx.sync(() => {
+          const result = queries.moving.single()
+          resources.count.set(result.ok ? 1 : 0)
+          resources.lastX.set(result.ok ? result.value.data.position.get().x : -1)
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Game.Schedule.define({
+        systems: [spawn]
+      }),
+      Game.Schedule.define({
+        systems: [observe]
+      })
+    )
+
+    expect(readResourceValue(runtime, schema, Count)).toBe(1)
+    expect(readResourceValue(runtime, schema, LastX)).toBe(4)
+  })
 })

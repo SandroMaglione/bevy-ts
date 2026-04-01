@@ -271,6 +271,9 @@ export interface FeatureBuildGame<
     spawnWithResult: <const Entries extends ReadonlyArray<Result.Result<Command.SchemaEntry<Accessible>, any>>>(
       ...entries: Entries
     ) => Result.Result<Entity.EntityDraft<Accessible, Command.FoldResultEntries<Entries>, Root>, Command.ResultEntryErrors<Entries>>
+    spawnWithMixed: <const Entries extends ReadonlyArray<Command.MixedEntry<Accessible>>>(
+      ...entries: Entries
+    ) => Result.Result<Entity.EntityDraft<Accessible, Command.FoldMixedEntries<Entries>, Root>, Command.MixedEntryErrors<Entries>>
     relate: <P extends Entity.ComponentProof, R extends FeatureRelationDescriptor<Accessible>>(
       draft: Entity.EntityDraft<Accessible, P, Root>,
       relation: R,
@@ -654,6 +657,9 @@ export namespace Schema {
       spawnWithResult: <const Entries extends ReadonlyArray<Result.Result<Command.SchemaEntry<S>, any>>>(
         ...entries: Entries
       ) => Result.Result<Entity.EntityDraft<S, Command.FoldResultEntries<Entries>, Root>, Command.ResultEntryErrors<Entries>>
+      spawnWithMixed: <const Entries extends ReadonlyArray<Command.MixedEntry<S>>>(
+        ...entries: Entries
+      ) => Result.Result<Entity.EntityDraft<S, Command.FoldMixedEntries<Entries>, Root>, Command.MixedEntryErrors<Entries>>
       relate: <P extends Entity.ComponentProof, R extends RelationDescriptor<S>>(
         draft: Entity.EntityDraft<S, P, Root>,
         relation: R,
@@ -1287,6 +1293,12 @@ export const bind = <S extends Schema.Any, Root = S>(
     ...entries: Entries
   ) => Command.spawnWithResult<S, Entries, Root>(...entries)
 
+  const commandSpawnWithMixed = <
+    const Entries extends ReadonlyArray<Command.MixedEntry<S>>
+  >(
+    ...entries: Entries
+  ) => Command.spawnWithMixed<S, Entries, Root>(...entries)
+
   const commandRelate = <
     P extends Entity.ComponentProof,
     R extends RelationDescriptor<S>
@@ -1613,6 +1625,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       insertMany: commandInsertMany,
       spawnWith: commandSpawnWith,
       spawnWithResult: commandSpawnWithResult,
+      spawnWithMixed: commandSpawnWithMixed,
       relate: commandRelate
     },
     StateMachine: {

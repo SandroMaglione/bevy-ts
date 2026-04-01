@@ -1,5 +1,4 @@
 import { Fx } from "../../index.ts"
-import * as Result from "../../Result.ts"
 import * as Scalar from "../../Scalar.ts"
 import * as Vector2 from "../../Vector2.ts"
 import { PICKUP_POINTS } from "./content.ts"
@@ -59,16 +58,11 @@ const distanceSquared = (left: Vector, right: Vector): number => {
 }
 
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
-  const entries = Result.all([
+  return Game.Command.spawnWithMixed(
     Game.Command.entryResult(Position, Vector2.result(position)),
-    Result.success(Game.Command.entry(Actor, { kind: "pickup" })),
-    Result.success(Game.Command.entry(Pickup, {}))
-  ] as const)
-  if (!entries.ok) {
-    return entries
-  }
-
-  return Result.success(Game.Command.spawnWith(...entries.value))
+    Game.Command.entry(Actor, { kind: "pickup" }),
+    Game.Command.entry(Pickup, {})
+  )
 }
 
 export const SpawnPlayerSystem = Game.System.define(
@@ -76,15 +70,15 @@ export const SpawnPlayerSystem = Game.System.define(
   {},
   ({ commands }) =>
     Fx.sync(() => {
-      const entries = Result.all([
+      const playerDraft = Game.Command.spawnWithMixed(
         Game.Command.entryResult(Position, Vector2.result({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })),
-        Result.success(Game.Command.entry(Actor, { kind: "player" })),
-        Result.success(Game.Command.entry(Player, {}))
-      ] as const)
-      if (!entries.ok) {
+        Game.Command.entry(Actor, { kind: "player" }),
+        Game.Command.entry(Player, {})
+      )
+      if (!playerDraft.ok) {
         return
       }
-      commands.spawn(Game.Command.spawnWith(...entries.value))
+      commands.spawn(playerDraft.value)
     })
 )
 

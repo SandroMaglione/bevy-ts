@@ -68,4 +68,18 @@ describe("Command", () => {
 
     expect(entry).type.toBe<Result.Result<Command.Entry<typeof Position>, unknown>>()
   })
+
+  it("spawnWithMixed preserves proof typing and plain entry slots", () => {
+    const Game = Schema.bind(schema)
+
+    const draft = Game.Command.spawnWithMixed(
+      Game.Command.entry(Position, { x: 0, y: 0 }),
+      Game.Command.entryResult(Velocity, Result.success({ x: 1, y: 1 }))
+    )
+
+    expect(draft).type.toBe<Result.Result<Entity.EntityDraft<typeof schema, {
+      readonly Position: { x: number; y: number }
+      readonly Velocity: { x: number; y: number }
+    }, typeof schema>, readonly [null, unknown]>>()
+  })
 })

@@ -65,10 +65,19 @@ type SchemaComponentDescriptor<S extends Schema.Any> =
  */
 export type SchemaEntry<S extends Schema.Any> = Entry<SchemaComponentDescriptor<S>>
 
+export type MixedEntry<S extends Schema.Any> = SchemaEntry<S> | Result.Result<SchemaEntry<S>, any>
+
 type ResultValue<T> =
-  T extends Result.Result<infer Value extends readonly [Descriptor<"component", string, any>, unknown], any>
+  [T] extends [Result.Result<infer Value extends readonly [Descriptor<"component", string, any>, unknown], any>]
     ? Value
     : never
+
+type MixedEntryValue<T> =
+  [T] extends [Result.Result<infer Value extends readonly [Descriptor<"component", string, any>, unknown], any>]
+    ? Value
+    : [T] extends [readonly [Descriptor<"component", string, any>, unknown]]
+      ? T
+      : never
 
 export type FoldResultEntries<
   Entries extends ReadonlyArray<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>,
@@ -87,11 +96,34 @@ export type ResultEntryErrors<
     Entries[K] extends Result.Result<any, infer Error> ? Error | null : never
 }
 
+export type MixedEntryErrors<
+  Entries extends ReadonlyArray<MixedEntry<any>>
+> = {
+  readonly [K in keyof Entries]:
+    Entries[K] extends Result.Result<any, infer Error> ? Error | null : null
+}
+
 type SuccessfulResultEntries<
   Entries extends ReadonlyArray<Result.Result<SchemaEntry<any>, any>>
 > = Extract<{
   readonly [K in keyof Entries]: ResultValue<Entries[K]>
 }, ReadonlyArray<SchemaEntry<any>>>
+
+type SuccessfulMixedEntries<
+  Entries extends ReadonlyArray<MixedEntry<any>>
+> = Extract<{
+  readonly [K in keyof Entries]: MixedEntryValue<Entries[K]>
+}, ReadonlyArray<SchemaEntry<any>>>
+
+export type FoldMixedEntries<
+  Entries extends ReadonlyArray<MixedEntry<any>>,
+  P extends Entity.ComponentProof = {}
+> = Entries extends readonly [
+  infer Head extends MixedEntry<any>,
+  ...infer Tail extends Array<MixedEntry<any>>
+]
+  ? FoldMixedEntries<Tail, Draft.InsertEntry<P, MixedEntryValue<Head>>>
+  : P
 
 /**
  * A deferred world mutation.
@@ -358,6 +390,44 @@ export const spawnWithResult = <
   const successfulEntries = normalized as unknown as SuccessfulResultEntries<Entries> as ReadonlyArray<SchemaEntry<S>>
   return Result.success(
     spawnWith<S, Root, typeof successfulEntries>(...(successfulEntries as typeof successfulEntries)) as Entity.EntityDraft<S, FoldResultEntries<Entries>, Root>
+  )
+}
+
+export const spawnWithMixed = <
+  S extends Schema.Any,
+  const Entries extends ReadonlyArray<MixedEntry<S>>,
+  Root = unknown
+>(
+  ...entries: Entries
+): Result.Result<Entity.EntityDraft<S, FoldMixedEntries<Entries>, Root>, MixedEntryErrors<Entries>> => {
+  const normalized = [] as Array<SchemaEntry<S>>
+  const errors = [] as Array<unknown>
+  let hasFailure = false
+
+  for (const entry of entries) {
+    if ("ok" in entry) {
+      if (!entry.ok) {
+        hasFailure = true
+        errors.push(entry.error)
+        continue
+      }
+
+      normalized.push(entry.value)
+      errors.push(null)
+      continue
+    }
+
+    normalized.push(entry)
+    errors.push(null)
+  }
+
+  if (hasFailure) {
+    return Result.failure(errors as MixedEntryErrors<Entries>)
+  }
+
+  const successfulEntries = normalized as unknown as SuccessfulMixedEntries<Entries> as ReadonlyArray<SchemaEntry<S>>
+  return Result.success(
+    spawnWith<S, Root, typeof successfulEntries>(...(successfulEntries as typeof successfulEntries)) as Entity.EntityDraft<S, FoldMixedEntries<Entries>, Root>
   )
 }
 

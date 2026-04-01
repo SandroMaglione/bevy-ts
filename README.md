@@ -1163,23 +1163,21 @@ The helper and branding story is now materially stronger:
 - `Runtime.makeResult(...)` removes manual bootstrap branching
 - `Result.match(...)` and `Result.all(...)` cover the minimal folding and
   aggregation needs without introducing a larger functional surface
-- branded examples are flatter than before, but there is still some ceremony
-  when validated and already-valid values meet at ECS boundaries
+- `Game.Command.spawnWithMixed(...)` removes the remaining mixed-entry
+  `Result.success(Game.Command.entry(...))` lifting in draft builders
+- branded examples are flatter than before, but constants and repeated safe
+  literals are still sometimes reconstructed more often than necessary
 
 The next work should stay explicit and non-throwing. It should improve the
 construction boundary, not weaken it.
 
 Add these in order:
 
-1. Better command assembly for mixed validated and already-valid entries.
-   Reduce the remaining need for `Result.success(Game.Command.entry(...))`
-   wrapping when draft builders mix branded values with plain structural
-   components.
-2. Better example-facing constant-definition patterns.
+1. Better example-facing constant-definition patterns.
    Add stable helper shapes for validating constants once and reusing branded
    values afterward, so examples stop reconstructing obvious safe values
    repeatedly at spawn and reset boundaries.
-3. Only after the above, revisit descriptor-aware construction.
+2. Only after the above, revisit descriptor-aware construction.
    Do not expose descriptor-driven raw construction again until it works
    transparently through normal examples without inference regressions.
 
