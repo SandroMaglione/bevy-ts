@@ -1153,3 +1153,189 @@ Built-in camera systems, renderer scene graphs, asset pipelines, or sprite manag
 Full Effect-style local `provide` or layer graphs are also out of scope because dependency closure currently belongs at the runtime and app boundary, not at arbitrary local execution sites.
 
 Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and advanced parallel scheduler work remain useful future references, but they are not current priorities.
+
+## To fix
+
+- Query result typing should reject reads of undeclared selected fields inside
+  system callbacks. A concrete regression happened in
+  `src/examples/platformer/systems/camera.ts`, where the system read
+  `player.value.data.velocity` even though `PlayerCameraQuery` only selected
+  `position`. That reached runtime and produced `Cannot read properties of
+  undefined (reading 'get')` instead of failing at typecheck. This violates the
+  intended guarantee that systems only see the access they explicitly declare.
+
+## Roadmap
+
+### P0. Make query result typing exact inside system callbacks
+
+The most important gap is that query result typing still allowed a system to
+read data it did not declare. The concrete example is
+[src/examples/platformer/queries.ts:21](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/queries.ts#L21),
+where `PlayerCameraQuery` originally selected `position` only, while
+[src/examples/platformer/systems/camera.ts:21](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/camera.ts#L21)
+read `player.value.data.velocity`. That should have been a type error before it
+became a runtime failure.
+
+The core rule should be: `match.data` exposes exactly the declared selection,
+not a wider shape that happens to exist on the entity.
+
+Ideal shape:
+
+```ts
+const CameraTargetQuery = Game.Query.define({
+  selection: {
+    position: Game.Query.read(Position)
+  }
+})
+
+const SyncCameraSystem = Game.System.define("SyncCamera", {
+  queries: { player: CameraTargetQuery }
+}, ({ queries }) =>
+  Fx.sync(() => {
+    const player = queries.player.singleOptional()
+    if (!player.ok || !player.value) return
+
+    player.value.data.position.get()
+    // @ts-expect-error velocity was not selected
+    player.value.data.velocity.get()
+  })
+)
+```
+
+### P1. Add stronger composition for explicit schedule phases
+
+Systems are enough as the smallest behavior abstraction, but larger examples
+still repeat the same phase assembly by hand. In
+[src/examples/platformer/schedules.ts:20](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L20)
+and
+[src/examples/platformer/schedules.ts:45](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L45),
+the schedule has to restate simulation systems, explicit apply markers, and the
+host-sync phase in full. That is honest, but repetitive.
+
+The useful improvement is not hidden engine-owned phases. It is reusable typed
+phase bundles or schedule fragments that still keep `applyDeferred()`,
+`applyStateTransitions()`, and `updateLifecycle()` explicit in the composed
+value.
+
+Ideal shape:
+
+```ts
+const hostMirrorPhase = Game.Schedule.phase({
+  steps: [
+    Game.Schedule.updateLifecycle(),
+    destroyNodesSystem,
+    createNodesSystem,
+    syncTransformsSystem
+  ]
+})
+
+const update = Game.Schedule.define({
+  systems: [...simulationSystems, ...hostMirrorPhase.systems],
+  steps: [
+    ...simulationPhase.steps,
+    Game.Schedule.applyDeferred(),
+    hostMirrorPhase
+  ]
+})
+```
+
+### P2. Add reusable composition for transition-local work
+
+Transition handling is explicit and good, but repetitive once restart/reset
+logic grows. In
+[src/examples/platformer/systems/state.ts:59](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L59),
+the restart flow has to manually despawn tagged entities, reset resources, and
+respawn authored content on `onEnter(Playing)`.
+
+The improvement should stay generic: better reusable transition bundles or
+transition-scoped composition values, not a built-in gameplay reset feature.
+
+Ideal shape:
+
+```ts
+const restartBundle = Game.Schedule.transitionBundle({
+  onEnter: [Game.Schedule.onEnter(SessionState, "Playing", {
+    systems: [resetWorldSystem, respawnWorldSystem]
+  })]
+})
+
+const transitions = Game.Schedule.transitions(restartBundle)
+```
+
+That should let projects package transition work as typed values the same way
+they already package systems and queries.
+
+### P3. Add reusable access/spec fragments for systems
+
+A lot of repetition comes from re-declaring similar `queries`, `resources`,
+`services`, and `nextMachines` shapes across systems. This shows up in
+[src/examples/platformer/systems/movement.ts](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/movement.ts),
+[src/examples/platformer/systems/state.ts](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts),
+and
+[src/examples/platformer/systems/render-sync.ts](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts).
+
+The improvement should not be broader overloads or implicit access. It should
+be composition of explicit access fragments before `System.define(...)`.
+
+Ideal shape:
+
+```ts
+const playerMotionAccess = Game.System.spec({
+  queries: {
+    player: PlayerMovementQuery
+  },
+  resources: {
+    deltaTime: Game.System.readResource(DeltaTime),
+    input: Game.System.readResource(InputState)
+  }
+})
+
+const ResolveMoveIntentSystem = Game.System.define(
+  "ResolveMoveIntent",
+  playerMotionAccess,
+  ({ queries, resources }) => Fx.sync(() => {
+    // ...
+  })
+)
+```
+
+This keeps access explicit while making repeated specs reusable typed values.
+
+### P4. Make explicit host-sync orchestration easier to package
+
+The platformer render bridge follows the recommended pattern correctly, but the
+pattern itself is verbose. The lifecycle ordering in
+[src/examples/platformer/schedules.ts:61](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L61)
+and the destroy/create/sync split in
+[src/examples/platformer/systems/render-sync.ts:7](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts#L7)
+are the right structure, but every project has to rebuild that packaging by
+hand.
+
+The core should still stay renderer-agnostic. The useful addition would be a
+better way to package the generic ECS pattern of “simulate, commit lifecycle,
+mirror external state” into reusable explicit values.
+
+Ideal shape:
+
+```ts
+const renderMirrorPhase = Game.Schedule.phase({
+  requiresLifecycle: true,
+  systems: [
+    destroyRenderNodesSystem,
+    createRenderNodesSystem,
+    syncRenderableTransformsSystem
+  ]
+})
+
+const update = Game.Schedule.define({
+  systems: [...gameplaySystems, ...renderMirrorPhase.systems],
+  steps: [
+    ...gameplaySteps,
+    Game.Schedule.applyDeferred(),
+    renderMirrorPhase
+  ]
+})
+```
+
+That would reduce copy-paste across browser examples without pushing Pixi,
+camera, or game-specific logic into the ECS core.

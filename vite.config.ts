@@ -5,6 +5,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         pixi: "pixi.html",
+        platformer: "platformer.html",
         "top-down": "top-down.html"
       }
     }

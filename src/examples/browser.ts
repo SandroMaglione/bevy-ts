@@ -1,11 +1,18 @@
 import type { BrowserExampleHandle } from "./pixi.ts"
+import { startPlatformerExample } from "./platformer.ts"
 import { startPixiExample } from "./pixi.ts"
 import { startPokemonExample } from "./pokemon.ts"
 import { startSnakeExample } from "./snake.ts"
 import { startSpaceInvadersExample } from "./space-invaders.ts"
 import { startStateMachineExample } from "./state-machine.ts"
 
-type ExampleId = "pixi" | "pokemon" | "snake" | "space-invaders" | "state-machine"
+type ExampleId =
+  | "pixi"
+  | "platformer"
+  | "pokemon"
+  | "snake"
+  | "space-invaders"
+  | "state-machine"
 
 type ExampleDefinition = {
   readonly id: ExampleId
@@ -27,6 +34,16 @@ const examples: ReadonlyArray<ExampleDefinition> = [
       "Pixi owns the canvas and ticker. The ECS side owns descriptors, schema, resources, systems, schedules, and the sync step that projects ECS state into renderer-owned sprites.",
     meta: ["Setup schedule: spawn scene", "Update: input, motion, bounce, sync", "Renderer objects live outside ECS"],
     start: startPixiExample
+  },
+  {
+    id: "platformer",
+    label: "Platformer",
+    eyebrow: "Mario-like foundation",
+    title: "Explicit kinematic platforming with typed lose and restart flow.",
+    description:
+      "This example keeps the platformer controller deterministic and ECS-owned: input, jump, gravity, collision, loss detection, restart transitions, camera follow, and Pixi host sync all stay explicit so later coins, enemies, and power-ups can extend the same architecture.",
+    meta: ["Arrow keys or A/D move", "Space, W, or ArrowUp jumps", "Shift runs, holes trigger Lost, click restarts"],
+    start: startPlatformerExample
   },
   {
     id: "state-machine",
