@@ -12,6 +12,14 @@
  * failure should remain visible and typed instead of being hidden behind
  * exceptions or implicit coercion.
  *
+ * @example
+ * ```ts
+ * const built = Result.all({
+ *   position: Vector2.result({ x: 4, y: 8 }),
+ *   size: Size2.result({ width: 16, height: 16 })
+ * })
+ * ```
+ *
  * @module Result
  *
  * @categoryDescription Result Types

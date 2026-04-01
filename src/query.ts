@@ -3,6 +3,16 @@
  *
  * Queries are the explicit entity-data access layer used by systems.
  *
+ * @example
+ * ```ts
+ * const movers = Game.Query.define({
+ *   selection: {
+ *     position: Game.Query.write(Position),
+ *     velocity: Game.Query.read(Velocity)
+ *   }
+ * })
+ * ```
+ *
  * @module query
  *
  * @groupDescription Namespaces
@@ -461,11 +471,24 @@ export interface WriteCell<T> extends ReadCell<T> {
 export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
   /**
    * Validates one raw candidate and writes it only on success.
+   *
+   * @example
+   * ```ts
+   * data.position.setRaw({ x: 16, y: 24 })
+   * ```
    */
   setRaw(raw: Raw): Result.Result<void, Error>
   /**
    * Derives one raw candidate from the current value, validates it, and writes
    * it only on success.
+   *
+   * @example
+   * ```ts
+   * data.position.updateRaw((position) => ({
+   *   x: position.x + 1,
+   *   y: position.y
+   * }))
+   * ```
    */
   updateRaw(f: (current: T) => Raw): Result.Result<void, Error>
 }

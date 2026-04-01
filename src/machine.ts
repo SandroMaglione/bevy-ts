@@ -4,6 +4,12 @@
  * State machines model queued discrete phase changes whose commit boundaries
  * matter to schedule execution.
  *
+ * @example
+ * ```ts
+ * const GameFlow = Machine.define("GameFlow", ["Menu", "Playing"] as const)
+ * const isPlaying = Machine.inState(GameFlow, "Playing")
+ * ```
+ *
  * @module machine
  *
  * @groupDescription Namespaces

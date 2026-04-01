@@ -5,6 +5,14 @@
  * spawn points, collider sizes, arena bounds, or other constants that should
  * cross the validation boundary once and then remain branded afterward.
  *
+ * @example
+ * ```ts
+ * const player = Definition.all({
+ *   spawn: Definition.entry(Vector2, { x: 32, y: 48 }),
+ *   size: Definition.entry(Size2, { width: 16, height: 16 })
+ * })
+ * ```
+ *
  * @module Definition
  *
  * @categoryDescription Definition Types

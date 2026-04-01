@@ -4,6 +4,13 @@
  * Sizes model non-negative width/height pairs and are commonly used for
  * colliders, viewports, and AABB dimensions.
  *
+ * @example
+ * ```ts
+ * const viewport = Size2.result({ width: 800, height: 600 })
+ * if (!viewport.ok) return
+ * const width = Size2.width(viewport.value)
+ * ```
+ *
  * @module Size2
  *
  * @categoryDescription Size Types

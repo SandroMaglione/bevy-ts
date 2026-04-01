@@ -4,6 +4,12 @@
  * This module defines the nominal entity reference types used across queries,
  * commands, relations, and lookup APIs.
  *
+ * @example
+ * ```ts
+ * const handle = Game.Entity.handle(playerId)
+ * const positioned = Game.Entity.handleAs(Position, playerId)
+ * ```
+ *
  * @module entity
  *
  * @groupDescription Namespaces

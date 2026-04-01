@@ -4,6 +4,13 @@
  * Raw `{ x, y }` input is validated once at the constructor boundary. All
  * other helpers work on branded vectors only and remain pure and immutable.
  *
+ * @example
+ * ```ts
+ * const velocity = Vector2.result({ x: 3, y: 4 })
+ * if (!velocity.ok) return
+ * const direction = Vector2.normalizeOrZero(velocity.value)
+ * ```
+ *
  * @module Vector2
  *
  * @categoryDescription Vector Types

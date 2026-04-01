@@ -4,6 +4,16 @@
  * The runtime owns ECS state and explicit service provisioning, and applies
  * deferred mutation only at schedule-controlled boundaries.
  *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.makeConstructed({
+ *   services: Game.Runtime.services(),
+ *   resources: {
+ *     viewport: { width: 800, height: 600 }
+ *   }
+ * })
+ * ```
+ *
  * @module runtime
  *
  * @groupDescription Interfaces
@@ -2046,6 +2056,19 @@ export const makeRuntime = <
   return runtime
 }
 
+/**
+ * Builds one runtime from explicit result-wrapped resource and state values.
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.makeResult({
+ *   services: Game.Runtime.services(),
+ *   resources: {
+ *     viewport: Size2.result({ width: 800, height: 600 })
+ *   }
+ * })
+ * ```
+ */
 export const makeRuntimeResult = <
   S extends Schema.Any,
   const ProvidedServices extends RuntimeServices<any>,
@@ -2093,6 +2116,24 @@ export const makeRuntimeResult = <
   )
 }
 
+/**
+ * Builds one runtime from raw values routed through constructed resource and
+ * state descriptors.
+ *
+ * Use this when runtime bootstrap naturally starts from raw host or authored
+ * data and you want descriptor-carried validation to stay explicit at the
+ * bootstrap boundary.
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.makeConstructed({
+ *   services: Game.Runtime.services(),
+ *   resources: {
+ *     viewport: { width: 800, height: 600 }
+ *   }
+ * })
+ * ```
+ */
 export const makeRuntimeConstructed = <
   S extends Schema.Any,
   const ProvidedServices extends RuntimeServices<any>,
@@ -2147,6 +2188,16 @@ export const makeRuntimeConstructed = <
  * Use this when runtime bootstrap naturally starts from raw host or authored
  * data and you want descriptor-carried validation to stay explicit at the
  * bootstrap boundary.
+ *
+ * @example
+ * ```ts
+ * const runtime = Game.Runtime.makeConstructed({
+ *   services: Game.Runtime.services(),
+ *   resources: {
+ *     viewport: { width: 800, height: 600 }
+ *   }
+ * })
+ * ```
  */
 
 /**

@@ -5,6 +5,15 @@
  * input without changing their runtime representation. Constructors built with
  * this module are always explicit and non-throwing.
  *
+ * @example
+ * ```ts
+ * const Port = Brand.refine((raw: number) =>
+ *   raw > 0
+ *     ? Result.success(raw as Brand.Branded<number, "Port">)
+ *     : Result.failure({ tag: "InvalidPort", value: raw })
+ * )
+ * ```
+ *
  * @module Brand
  *
  * @categoryDescription Brand Types

@@ -6,6 +6,16 @@
  * gamepads, or host APIs. It only translates already-sampled booleans into the
  * compact movement values used by the examples.
  *
+ * @example
+ * ```ts
+ * const movement = InputAxis.vectorFromAxes({
+ *   left: false,
+ *   right: true,
+ *   up: false,
+ *   down: false
+ * })
+ * ```
+ *
  * @module InputAxis
  *
  * @categoryDescription Input Types

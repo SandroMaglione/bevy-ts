@@ -4,6 +4,15 @@
  * Systems declare exactly what they may read, write, emit, and depend on
  * before they are allowed to run inside one schedule.
  *
+ * @example
+ * ```ts
+ * const Tick = Game.System.define("Tick", {
+ *   resources: {
+ *     dt: Game.System.readResource(DeltaTime)
+ *   }
+ * }, ({ resources }) => Fx.sync(() => resources.dt.get()))
+ * ```
+ *
  * @module system
  *
  * @groupDescription Interfaces

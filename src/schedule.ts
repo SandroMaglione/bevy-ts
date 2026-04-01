@@ -4,6 +4,14 @@
  * Schedules order systems and define when deferred writes, events, lifecycle
  * buffers, relation failures, and machine transitions become visible.
  *
+ * @example
+ * ```ts
+ * const update = Game.Schedule.define({
+ *   systems: [move, sync],
+ *   steps: [move, Game.Schedule.applyDeferred(), sync]
+ * })
+ * ```
+ *
  * @module schedule
  *
  * @groupDescription Namespaces

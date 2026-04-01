@@ -4,6 +4,12 @@
  * Labels provide human-readable names plus nominal identities so ordering and
  * dependency relationships remain explicit without relying on open strings.
  *
+ * @example
+ * ```ts
+ * const update = Label.defineScheduleLabel("update")
+ * const physics = Label.defineSystemSetLabel("physics")
+ * ```
+ *
  * @module label
  *
  * @groupDescription Namespaces

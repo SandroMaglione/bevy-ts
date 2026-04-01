@@ -4,6 +4,12 @@
  * Relations model directed entity links plus the explicit error surfaces used
  * when those links cannot be created or traversed.
  *
+ * @example
+ * ```ts
+ * const Parent = Relation.defineHierarchy("Parent", "Children")
+ * const Target = Relation.define("Target", "TargetedBy")
+ * ```
+ *
  * @module relation
  *
  * @groupDescription Namespaces

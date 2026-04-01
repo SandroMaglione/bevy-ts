@@ -4,6 +4,14 @@
  * Commands keep mutation explicit by staging world writes as values that are
  * flushed later by schedule boundaries.
  *
+ * @example
+ * ```ts
+ * const draft = Game.Command.spawnWithMixed(
+ *   Game.Command.entryRaw(Position, { x: 8, y: 12 }),
+ *   Game.Command.entry(Player, {})
+ * )
+ * ```
+ *
  * @module command
  *
  * @groupDescription Namespaces
@@ -257,6 +265,11 @@ export const entryResult = <D extends Descriptor<"component", string, any>, Erro
 /**
  * Creates a typed component entry by validating raw input through a
  * constructed descriptor.
+ *
+ * @example
+ * ```ts
+ * const position = Game.Command.entryRaw(Position, { x: 10, y: 20 })
+ * ```
  */
 export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>(
   descriptor: D,
@@ -326,6 +339,15 @@ export const insertResult = <
 /**
  * Inserts one raw component value into a draft through a constructed
  * descriptor.
+ *
+ * @example
+ * ```ts
+ * const updated = Game.Command.insertRaw(
+ *   Game.Command.spawn(),
+ *   Position,
+ *   { x: 12, y: 18 }
+ * )
+ * ```
  */
 export const insertRaw = <
   S extends Schema.Any,
@@ -444,6 +466,18 @@ export const spawnWithResult = <
   )
 }
 
+/**
+ * Starts a staged entity definition from a mix of plain validated entries and
+ * explicit result-wrapped entries.
+ *
+ * @example
+ * ```ts
+ * const draft = Game.Command.spawnWithMixed(
+ *   Game.Command.entryRaw(Position, { x: 8, y: 12 }),
+ *   Game.Command.entry(Player, {})
+ * )
+ * ```
+ */
 export const spawnWithMixed = <
   S extends Schema.Any,
   const Entries extends ReadonlyArray<MixedEntry<S>>,

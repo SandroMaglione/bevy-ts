@@ -6,6 +6,14 @@
  * {@link Finite} and {@link NonNegative}. Once validated, downstream helpers
  * operate only on branded values.
  *
+ * @example
+ * ```ts
+ * const speed = Scalar.Finite.result(12)
+ * const limit = Scalar.Finite.result(8)
+ * if (!speed.ok || !limit.ok) return
+ * const clamped = Scalar.clamp(speed.value, limit.value, speed.value)
+ * ```
+ *
  * @module Scalar
  *
  * @categoryDescription Scalar Types

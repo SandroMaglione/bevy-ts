@@ -5,6 +5,14 @@
  * a non-negative size. Geometry helpers derive edges and overlap relationships
  * without mutating the original value.
  *
+ * @example
+ * ```ts
+ * const player = Aabb.result({
+ *   position: { x: 0, y: 0 },
+ *   size: { width: 16, height: 16 }
+ * })
+ * ```
+ *
  * @module Aabb
  *
  * @categoryDescription AABB Types

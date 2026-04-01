@@ -5,6 +5,12 @@
  * channels, but stays intentionally minimal instead of becoming a full effect
  * system.
  *
+ * @example
+ * ```ts
+ * const program = Fx.map(Fx.succeed(1), (value) => value + 1)
+ * const result = Fx.runSync(program)
+ * ```
+ *
  * @module fx
  *
  * @groupDescription Namespaces
