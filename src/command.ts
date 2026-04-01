@@ -234,6 +234,10 @@ export const entryResult = <D extends Descriptor<"component", string, any>, Erro
     ? Result.success([descriptor, result.value] as Entry<D>)
     : Result.failure(result.error)
 
+/**
+ * Creates a typed component entry by validating raw input through a
+ * constructed descriptor.
+ */
 export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>(
   descriptor: D,
   raw: Descriptor.Raw<D>
@@ -299,6 +303,10 @@ export const insertResult = <
     ? Result.success(insert(draft, result.value[0], result.value[1]) as Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>)
     : Result.failure(result.error)
 
+/**
+ * Inserts one raw component value into a draft through a constructed
+ * descriptor.
+ */
 export const insertRaw = <
   S extends Schema.Any,
   P extends Entity.ComponentProof,

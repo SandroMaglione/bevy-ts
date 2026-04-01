@@ -436,11 +436,27 @@ export interface WriteCell<T> extends ReadCell<T> {
   updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E>
 }
 
+/**
+ * Writable cell for data backed by a constructed descriptor.
+ *
+ * This extends the normal write-cell surface with explicit raw-validation
+ * helpers. It never appears for plain descriptors.
+ */
 export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
+  /**
+   * Validates one raw candidate and writes it only on success.
+   */
   setRaw(raw: Raw): Result.Result<void, Error>
+  /**
+   * Derives one raw candidate from the current value, validates it, and writes
+   * it only on success.
+   */
   updateRaw(f: (current: T) => Raw): Result.Result<void, Error>
 }
 
+/**
+ * Write-cell surface produced for one queried component descriptor.
+ */
 export type WriteCellForDescriptor<D extends ComponentDescriptor> =
   D extends import("./descriptor.ts").ConstructedDescriptor<"component", string, infer Value, infer Raw, infer Error>
     ? ConstructedWriteCell<Value, Raw, Error>

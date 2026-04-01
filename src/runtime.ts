@@ -2124,6 +2124,15 @@ export const makeRuntimeConstructed = <
 }
 
 /**
+ * Builds one runtime from raw values routed through constructed resource and
+ * state descriptors.
+ *
+ * Use this when runtime bootstrap naturally starts from raw host or authored
+ * data and you want descriptor-carried validation to stay explicit at the
+ * bootstrap boundary.
+ */
+
+/**
  * Builds the descriptor-backed runtime service environment.
  *
  * Use this instead of writing service objects keyed by strings manually. The

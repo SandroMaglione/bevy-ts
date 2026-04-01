@@ -56,10 +56,20 @@ export interface Descriptor<
   }
 }
 
+/**
+ * Minimal constructor contract carried by constructed descriptors.
+ */
 export interface ResultConstructor<Value, Raw, Error> {
   readonly result: (raw: Raw) => import("./Result.ts").Result<Value, Error>
 }
 
+/**
+ * Descriptor that also carries explicit raw-construction metadata.
+ *
+ * Outside raw-aware APIs this behaves like a normal descriptor. The extra
+ * constructor information is only used when a public entrypoint explicitly
+ * opts into raw validation.
+ */
 export interface ConstructedDescriptor<
   out Kind extends DescriptorKind,
   out Name extends string,
@@ -156,6 +166,14 @@ export const defineComponent = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"component", Name, Value> => makeDescriptor("component", name)
 
+/**
+ * Defines a component descriptor that also knows how to validate raw values.
+ *
+ * @example
+ * ```ts
+ * const Position = Descriptor.defineConstructedComponent(Vector2)("Position")
+ * ```
+ */
 export const defineConstructedComponent = <Value, Raw, Error>(
   constructor: ResultConstructor<Value, Raw, Error>
 ) => <const Name extends string>(
@@ -181,6 +199,9 @@ export const defineResource = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"resource", Name, Value> => makeDescriptor("resource", name)
 
+/**
+ * Defines a resource descriptor that also knows how to validate raw values.
+ */
 export const defineConstructedResource = <Value, Raw, Error>(
   constructor: ResultConstructor<Value, Raw, Error>
 ) => <const Name extends string>(
@@ -225,6 +246,9 @@ export const defineState = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"state", Name, Value> => makeDescriptor("state", name)
 
+/**
+ * Defines a state descriptor that also knows how to validate raw values.
+ */
 export const defineConstructedState = <Value, Raw, Error>(
   constructor: ResultConstructor<Value, Raw, Error>
 ) => <const Name extends string>(
@@ -251,9 +275,17 @@ export const defineService = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"service", Name, Value> => makeDescriptor("service", name)
 
+/**
+ * Checks whether one descriptor carries raw-construction metadata.
+ */
 export const hasConstructor = (descriptor: Descriptor.Any): descriptor is Descriptor.AnyConstructed =>
   descriptorConstruction in descriptor
 
+/**
+ * Returns the raw constructor carried by one descriptor when present.
+ *
+ * Plain descriptors return `undefined`.
+ */
 export function constructorOf<D extends Descriptor.AnyConstructed>(
   descriptor: D
 ): Descriptor.Constructor<D>
