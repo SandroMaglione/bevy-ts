@@ -1,9 +1,8 @@
 import type { Application, Container, Graphics } from "pixi.js"
+import type * as Size2Value from "../../Size2.ts"
+import type * as Vector2Value from "../../Vector2.ts"
 
-export type Vector = {
-  x: number
-  y: number
-}
+export type Vector = Vector2Value.Vector2
 
 export type NoticeValue = {
   text: string
@@ -38,3 +37,5 @@ export type StateMachineInputManager = {
   readonly consumeStart: () => boolean
   readonly consumePause: () => boolean
 }
+
+export type ArenaSize = Size2Value.Size2

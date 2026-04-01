@@ -1,6 +1,9 @@
 import type { Application, Container, Sprite, Texture } from "pixi.js"
+import type * as Size2Value from "../../Size2.ts"
+import type * as Vector2Value from "../../Vector2.ts"
 
-export type Vector2 = { x: number; y: number }
+export type Vector2 = Vector2Value.Vector2
+export type Size2 = Size2Value.Size2
 export type FacingValue = "Down" | "Left" | "Right" | "Up"
 export type LocomotionValue = "Idle" | "Walking"
 export type AnimationFrameIndex = 0 | 1 | 2 | 3 | 4 | 5

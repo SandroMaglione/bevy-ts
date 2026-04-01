@@ -1,4 +1,5 @@
 import { Fx } from "../../../index.ts"
+import * as Vector2 from "../../../Vector2.ts"
 
 import { levelBounds } from "../content.ts"
 import { PlayerCameraQuery } from "../queries.ts"
@@ -26,10 +27,10 @@ export const SyncCameraSystem = Game.System.define(
       const viewport = resources.viewport.get()
       const position = player.value.data.position.get()
 
-      resources.camera.set({
+      resources.camera.setResult(Vector2.result({
         x: clamp(position.x, viewport.width * 0.5, levelBounds.width - viewport.width * 0.5),
         y: clamp(position.y - 96, viewport.height * 0.5, levelBounds.height - viewport.height * 0.5)
-      })
+      }))
     })
 )
 

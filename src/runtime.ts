@@ -6,6 +6,7 @@ import type * as Machine from "./machine.ts"
 import * as Query from "./query.ts"
 import type { QueryMatch, ReadCell, WriteCell } from "./query.ts"
 import * as Relation from "./relation.ts"
+import * as Result from "./Result.ts"
 import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
 import type { ExecutableScheduleDefinition } from "./schedule.ts"
@@ -865,8 +866,23 @@ export const makeRuntime = <
   const makeWriteCell = <T>(readValue: () => T, writeValue: (value: T) => void): WriteCell<T> => ({
     get: readValue,
     set: writeValue,
+    setResult<E>(result: Result.Result<T, E>): Result.Result<void, E> {
+      if (!result.ok) {
+        return Result.failure(result.error)
+      }
+      writeValue(result.value)
+      return Result.success(undefined)
+    },
     update(f) {
       writeValue(f(readValue()))
+    },
+    updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E> {
+      const result = f(readValue())
+      if (!result.ok) {
+        return Result.failure(result.error)
+      }
+      writeValue(result.value)
+      return Result.success(undefined)
     }
   })
 

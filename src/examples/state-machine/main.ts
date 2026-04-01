@@ -3,14 +3,23 @@ import { createStateMachineBrowserHost } from "./host.ts"
 import { createStateMachineRuntime } from "./runtime.ts"
 import { setupSchedule, updateSchedule } from "./schedules.ts"
 
+const failedHandle = (): BrowserExampleHandle => ({
+  async destroy() {}
+})
+
 export const startStateMachineExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
   const browserHost = await createStateMachineBrowserHost(mount)
   const runtime = createStateMachineRuntime(browserHost.host, browserHost.inputManager)
-  runtime.initialize(setupSchedule)
+  if (!runtime.ok) {
+    await browserHost.destroy()
+    mount.textContent = runtime.error.message
+    return failedHandle()
+  }
+  runtime.value.initialize(setupSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     browserHost.host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
-    runtime.runSchedule(updateSchedule)
+    runtime.value.runSchedule(updateSchedule)
   }
 
   browserHost.host.application.ticker.add(tick)

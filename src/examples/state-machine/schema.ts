@@ -1,6 +1,9 @@
 import { Descriptor, Label, Schema } from "../../index.ts"
+import * as Size2 from "../../Size2.ts"
+import * as Vector2 from "../../Vector2.ts"
 import type {
   ActorKind,
+  ArenaSize,
   BrowserHostValue,
   NoticeValue,
   StateMachineInputManager,
@@ -12,7 +15,7 @@ export const Actor = Descriptor.defineComponent<{ kind: ActorKind }>()("StateMac
 export const Player = Descriptor.defineComponent<{}>()("StateMachineExample/Player")
 export const Pickup = Descriptor.defineComponent<{}>()("StateMachineExample/Pickup")
 
-export const Arena = Descriptor.defineResource<{ width: number; height: number }>()("StateMachineExample/Arena")
+export const Arena = Descriptor.defineResource<ArenaSize>()("StateMachineExample/Arena")
 export const DeltaTime = Descriptor.defineResource<number>()("StateMachineExample/DeltaTime")
 export const Score = Descriptor.defineResource<number>()("StateMachineExample/Score")
 export const PickupGoal = Descriptor.defineResource<number>()("StateMachineExample/PickupGoal")

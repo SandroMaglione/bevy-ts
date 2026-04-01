@@ -1,4 +1,5 @@
 import { Fx } from "../../../index.ts"
+import * as Vector2 from "../../../Vector2.ts"
 
 import { PLAYER_SPEED } from "../constants.ts"
 import { normalizeMovement, resolveHorizontalMovement, resolveVerticalMovement } from "../math.ts"
@@ -23,10 +24,12 @@ export const PlanPlayerVelocitySystem = Game.System.define(
       }
 
       const direction = normalizeMovement(resources.input.get())
-      player.value.data.velocity.set({
-        x: direction.x * PLAYER_SPEED,
-        y: direction.y * PLAYER_SPEED
-      })
+      player.value.data.velocity.updateResult(() =>
+        Vector2.result({
+          x: direction.x * PLAYER_SPEED,
+          y: direction.y * PLAYER_SPEED
+        })
+      )
     })
 )
 
@@ -62,15 +65,18 @@ export const MovePlayerSystem = Game.System.define(
       const position = player.value.data.position.get()
       const collider = player.value.data.collider.get()
       const nextX = resolveHorizontalMovement(position, velocity.x * dt, collider, walls)
-      const nextPosition = {
+      const nextPosition = Vector2.result({
         x: nextX,
         y: position.y
+      })
+      if (!nextPosition.ok) {
+        return
       }
-      const nextY = resolveVerticalMovement(nextPosition, velocity.y * dt, collider, walls)
+      const nextY = resolveVerticalMovement(nextPosition.value, velocity.y * dt, collider, walls)
 
-      player.value.data.position.set({
+      player.value.data.position.setResult(Vector2.result({
         x: nextX,
         y: nextY
-      })
+      }))
     })
 )

@@ -1,5 +1,6 @@
 import type { Descriptor } from "./descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./entity.ts"
+import type * as Result from "./Result.ts"
 import type * as Relation from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
@@ -422,9 +423,17 @@ export interface WriteCell<T> extends ReadCell<T> {
    */
   set(value: T): void
   /**
+   * Replaces the current value from an explicit result.
+   */
+  setResult<E>(result: Result.Result<T, E>): Result.Result<void, E>
+  /**
    * Updates the current value based on the previous one.
    */
   update(f: (current: T) => T): void
+  /**
+   * Updates the current value from an explicit result-producing callback.
+   */
+  updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E>
 }
 
 /**

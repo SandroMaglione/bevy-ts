@@ -1,26 +1,24 @@
+import * as Aabb from "../../Aabb.ts"
+import * as InputAxis from "../../InputAxis.ts"
+import * as Scalar from "../../Scalar.ts"
+import * as Vector2Module from "../../Vector2.ts"
 import { WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 import type { AnimationFrameIndex, InputStateValue, Vector2 } from "./types.ts"
 
-export const clamp = (value: number, min: number, max: number): number =>
-  Math.min(Math.max(value, min), max)
-
-export const lengthSquared = (vector: Vector2): number =>
-  vector.x * vector.x + vector.y * vector.y
-
-export const normalizeMovement = (input: InputStateValue): Vector2 => {
-  const x = (input.right ? 1 : 0) - (input.left ? 1 : 0)
-  const y = (input.down ? 1 : 0) - (input.up ? 1 : 0)
-  const magnitudeSquared = x * x + y * y
-  if (magnitudeSquared === 0) {
-    return { x: 0, y: 0 }
+export const clamp = (value: number, min: number, max: number): number => {
+  const nextValue = Scalar.Finite.option(value)
+  const nextMin = Scalar.Finite.option(min)
+  const nextMax = Scalar.Finite.option(max)
+  if (!nextValue || !nextMin || !nextMax) {
+    return value
   }
 
-  const magnitude = Math.sqrt(magnitudeSquared)
-  return {
-    x: x / magnitude,
-    y: y / magnitude
-  }
+  return Scalar.clamp(nextValue, nextMin, nextMax)
 }
+
+export const lengthSquared = (vector: Vector2): number => Vector2Module.lengthSquared(vector)
+
+export const normalizeMovement = (input: InputStateValue): Vector2 => InputAxis.vectorFromAxes(input)
 
 export const advanceFrameIndex = (frameIndex: AnimationFrameIndex): AnimationFrameIndex =>
   frameIndex === 5 ? 0 : (frameIndex + 1) as AnimationFrameIndex
@@ -30,9 +28,18 @@ export const intersects = (
   firstCollider: { width: number; height: number },
   secondPosition: Vector2,
   secondCollider: { width: number; height: number }
-): boolean =>
-  Math.abs(firstPosition.x - secondPosition.x) * 2 < firstCollider.width + secondCollider.width &&
-  Math.abs(firstPosition.y - secondPosition.y) * 2 < firstCollider.height + secondCollider.height
+): boolean => {
+  const first = Aabb.option({
+    position: firstPosition,
+    size: firstCollider
+  })
+  const second = Aabb.option({
+    position: secondPosition,
+    size: secondCollider
+  })
+
+  return !!first && !!second && Aabb.intersects(first, second)
+}
 
 export const resolveHorizontalMovement = (
   position: Vector2,
@@ -48,9 +55,12 @@ export const resolveHorizontalMovement = (
   let nextX = clamp(position.x + deltaX, halfWidth, WORLD_WIDTH - halfWidth)
 
   for (const wall of walls) {
-    const candidate = {
+    const candidate = Vector2Module.option({
       x: nextX,
       y: position.y
+    })
+    if (!candidate) {
+      continue
     }
     if (!intersects(candidate, collider, wall.position, wall.collider)) {
       continue
@@ -80,9 +90,12 @@ export const resolveVerticalMovement = (
   let nextY = clamp(position.y + deltaY, halfHeight, WORLD_HEIGHT - halfHeight)
 
   for (const wall of walls) {
-    const candidate = {
+    const candidate = Vector2Module.option({
       x: position.x,
       y: nextY
+    })
+    if (!candidate) {
+      continue
     }
     if (!intersects(candidate, collider, wall.position, wall.collider)) {
       continue

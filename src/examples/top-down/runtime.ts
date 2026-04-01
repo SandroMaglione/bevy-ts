@@ -1,3 +1,6 @@
+import * as Result from "../../Result.ts"
+import * as Size2 from "../../Size2.ts"
+import * as Vector2 from "../../Vector2.ts"
 import {
   AnimationClock,
   Camera,
@@ -42,9 +45,11 @@ export const makeInitialAnimationClock = () => ({
   elapsed: 0
 } as const)
 
-export const createTopDownRuntime = (
+const makeRuntime = (
   host: TopDownHostValue,
-  inputManager: TopDownInputManager
+  inputManager: TopDownInputManager,
+  viewport: Size2.Size2,
+  camera: Vector2.Vector2
 ) =>
   Game.Runtime.make({
     services: Game.Runtime.services(
@@ -53,14 +58,8 @@ export const createTopDownRuntime = (
     ),
     resources: {
       DeltaTime: host.clock.deltaSeconds,
-      Viewport: {
-        width: host.application.screen.width,
-        height: host.application.screen.height
-      },
-      Camera: {
-        x: WORLD_WIDTH * 0.5,
-        y: WORLD_HEIGHT * 0.5
-      },
+      Viewport: viewport,
+      Camera: camera,
       InputState: makeEmptyInputState(),
       FocusedCollectable: makeEmptyFocusedCollectable(),
       CollectedCount: 0,
@@ -76,3 +75,30 @@ export const createTopDownRuntime = (
       Game.Runtime.machine(Locomotion, "Idle")
     )
   })
+
+export const createTopDownRuntime = (
+  host: TopDownHostValue,
+  inputManager: TopDownInputManager
+): Result.Result<ReturnType<typeof makeRuntime>, { readonly message: string }> => {
+  const viewport = Size2.result({
+    width: host.application.screen.width,
+    height: host.application.screen.height
+  })
+  if (!viewport.ok) {
+    return Result.failure({
+      message: "Invalid top-down viewport."
+    })
+  }
+
+  const camera = Vector2.result({
+    x: WORLD_WIDTH * 0.5,
+    y: WORLD_HEIGHT * 0.5
+  })
+  if (!camera.ok) {
+    return Result.failure({
+      message: "Invalid top-down camera."
+    })
+  }
+
+  return Result.success(makeRuntime(host, inputManager, viewport.value, camera.value))
+}

@@ -1,4 +1,4 @@
-import { Descriptor, Entity, Schema } from "../src/index.ts"
+import { Descriptor, Entity, Result, Schema } from "../src/index.ts"
 import * as Command from "../src/command.ts"
 import { describe, expect, it } from "tstyche"
 
@@ -58,5 +58,14 @@ describe("Command", () => {
   it("rejects non-component descriptors", () => {
     // @ts-expect-error!
     Command.entry(Time, 1)
+  })
+
+  it("entryResult preserves the descriptor-bound value type", () => {
+    const entry = Command.entryResult(
+      Position,
+      Result.success({ x: 0, y: 0 })
+    )
+
+    expect(entry).type.toBe<Result.Result<Command.Entry<typeof Position>, unknown>>()
   })
 })

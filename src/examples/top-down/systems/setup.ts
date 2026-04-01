@@ -9,14 +9,23 @@ export const SetupWorldSystem = Game.System.define(
   {},
   ({ commands }) =>
     Fx.sync(() => {
-      commands.spawn(makePlayerDraft())
+      const playerDraft = makePlayerDraft()
+      if (playerDraft.ok) {
+        commands.spawn(playerDraft.value)
+      }
 
       for (const wall of wallLayout) {
-        commands.spawn(makeWallDraft(wall.x, wall.y, wall.width, wall.height))
+        const wallDraft = makeWallDraft(wall.x, wall.y, wall.width, wall.height)
+        if (wallDraft.ok) {
+          commands.spawn(wallDraft.value)
+        }
       }
 
       for (const pickup of pickupLayout) {
-        commands.spawn(makePickupDraft(pickup.x, pickup.y, pickup.label))
+        const pickupDraft = makePickupDraft(pickup.x, pickup.y, pickup.label)
+        if (pickupDraft.ok) {
+          commands.spawn(pickupDraft.value)
+        }
       }
     })
 )

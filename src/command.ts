@@ -1,6 +1,7 @@
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
 import type * as Relation from "./relation.ts"
+import * as Result from "./Result.ts"
 import type { Schema } from "./schema.ts"
 
 /**
@@ -63,6 +64,34 @@ type SchemaComponentDescriptor<S extends Schema.Any> =
  * Any component entry accepted by a schema-aware command API.
  */
 export type SchemaEntry<S extends Schema.Any> = Entry<SchemaComponentDescriptor<S>>
+
+type ResultValue<T> =
+  T extends Result.Result<infer Value extends readonly [Descriptor<"component", string, any>, unknown], any>
+    ? Value
+    : never
+
+export type FoldResultEntries<
+  Entries extends ReadonlyArray<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>,
+  P extends Entity.ComponentProof = {}
+> = Entries extends readonly [
+  infer Head extends Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>,
+  ...infer Tail extends Array<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>
+]
+  ? FoldResultEntries<Tail, Draft.InsertEntry<P, ResultValue<Head>>>
+  : P
+
+export type ResultEntryErrors<
+  Entries extends ReadonlyArray<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>
+> = {
+  readonly [K in keyof Entries]:
+    Entries[K] extends Result.Result<any, infer Error> ? Error | null : never
+}
+
+type SuccessfulResultEntries<
+  Entries extends ReadonlyArray<Result.Result<SchemaEntry<any>, any>>
+> = Extract<{
+  readonly [K in keyof Entries]: ResultValue<Entries[K]>
+}, ReadonlyArray<SchemaEntry<any>>>
 
 /**
  * A deferred world mutation.
@@ -161,6 +190,14 @@ export const entry = <D extends Descriptor<"component", string, any>>(
   value: Descriptor.Value<D>
 ): Entry<D> => [descriptor, value]
 
+export const entryResult = <D extends Descriptor<"component", string, any>, Error>(
+  descriptor: D,
+  result: Result.Result<Descriptor.Value<D>, Error>
+): Result.Result<Entry<D>, Error> =>
+  result.ok
+    ? Result.success([descriptor, result.value] as Entry<D>)
+    : Result.failure(result.error)
+
 /**
  * Adds a component to an entity draft and returns a more precise draft type.
  *
@@ -204,6 +241,20 @@ export const insertMany = <
   }
   return current as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root>
 }
+
+export const insertResult = <
+  S extends Schema.Any,
+  P extends Entity.ComponentProof,
+  D extends Descriptor<"component", string, any>,
+  Error = never,
+  Root = unknown
+>(
+  draft: Entity.EntityDraft<S, P, Root>,
+  result: Result.Result<Entry<D>, Error>
+): Result.Result<Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, Error> =>
+  result.ok
+    ? Result.success(insert(draft, result.value[0], result.value[1]) as Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>)
+    : Result.failure(result.error)
 
 /**
  * Stages one outgoing relation edge on an entity draft.
@@ -278,6 +329,37 @@ export const spawnWith = <
   ...entries: Entries
 ): Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root> =>
   insertMany(spawn<S, Root>(), ...entries)
+
+export const spawnWithResult = <
+  S extends Schema.Any,
+  const Entries extends ReadonlyArray<Result.Result<SchemaEntry<S>, any>>,
+  Root = unknown
+>(
+  ...entries: Entries
+): Result.Result<Entity.EntityDraft<S, FoldResultEntries<Entries>, Root>, ResultEntryErrors<Entries>> => {
+  const normalized = [] as Array<SchemaEntry<S>>
+  const errors = [] as Array<unknown>
+  let hasFailure = false
+
+  for (const entry of entries) {
+    if (entry.ok) {
+      normalized.push(entry.value)
+      errors.push(null)
+      continue
+    }
+    hasFailure = true
+    errors.push(entry.error)
+  }
+
+  if (hasFailure) {
+    return Result.failure(errors as ResultEntryErrors<Entries>)
+  }
+
+  const successfulEntries = normalized as unknown as SuccessfulResultEntries<Entries> as ReadonlyArray<SchemaEntry<S>>
+  return Result.success(
+    spawnWith<S, Root, typeof successfulEntries>(...(successfulEntries as typeof successfulEntries)) as Entity.EntityDraft<S, FoldResultEntries<Entries>, Root>
+  )
+}
 
 /**
  * Public command API exposed to systems.

@@ -119,7 +119,7 @@ export const resolveHorizontalMovement = (
   }
 
   return {
-    nextX,
+    nextX: nextX as HorizontalCollisionResult["nextX"],
     blockedLeft,
     blockedRight
   }
@@ -169,7 +169,7 @@ export const resolveVerticalMovement = (
   }
 
   return {
-    nextY,
+    nextY: nextY as VerticalCollisionResult["nextY"],
     grounded,
     hitCeiling
   }

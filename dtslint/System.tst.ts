@@ -1,4 +1,4 @@
-import { Descriptor, Fx, Schema } from "../src/index.ts"
+import { Descriptor, Fx, Result, Schema } from "../src/index.ts"
 import * as Query from "../src/query.ts"
 import * as System from "../src/system.ts"
 import type { Query as QueryTypes } from "../src/query.ts"
@@ -72,6 +72,8 @@ describe("System", () => {
           expect(states.phase.get()).type.toBe<"Running" | "Paused">()
           expect(services.logger).type.toBe<{ log: (message: string) => void }>()
           expect(events.tick.emit).type.toBe<(value: { dt: number }) => void>()
+          expect(states.phase.setResult(Result.success("Running"))).type.toBe<Result.Result<void, unknown>>()
+          expect(states.phase.updateResult(() => Result.success("Paused" as const))).type.toBe<Result.Result<void, unknown>>()
 
           // @ts-expect-error!
           resources.missing

@@ -4,6 +4,7 @@ import * as Runtime from "../src/runtime.ts"
 import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { readResourceValue, readStateValue } from "./utils/fixtures.ts"
+import * as Result from "../src/Result.ts"
 
 const Time = Descriptor.defineResource<number>()("Time")
 const Counter = Descriptor.defineResource<number>()("Counter")
@@ -90,6 +91,44 @@ describe("Runtime resources and states", () => {
       systems: [setRunning]
     }))
 
+    expect(readStateValue(runtime, schema, Phase)).toBe("Running")
+  })
+
+  it("setResult and updateResult only write successful values", () => {
+    const applyValidatedWrites = System.define(
+      "RuntimeResources/ApplyValidatedWrites",
+      {
+        schema,
+        resources: {
+          counter: System.writeResource(Counter)
+        },
+        states: {
+          phase: System.writeState(Phase)
+        }
+      },
+      ({ resources, states }) =>
+        Fx.sync(() => {
+          const failedSet = resources.counter.setResult(Result.failure("invalid"))
+          expect(failedSet).toEqual(Result.failure("invalid"))
+
+          const successfulSet = resources.counter.setResult(Result.success(3))
+          expect(successfulSet).toEqual(Result.success(undefined))
+
+          const failedUpdate = states.phase.updateResult(() => Result.failure("blocked"))
+          expect(failedUpdate).toEqual(Result.failure("blocked"))
+
+          const successfulUpdate = states.phase.updateResult(() => Result.success("Running" as const))
+          expect(successfulUpdate).toEqual(Result.success(undefined))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Schedule.define({
+      schema,
+      systems: [applyValidatedWrites]
+    }))
+
+    expect(readResourceValue(runtime, schema, Counter)).toBe(3)
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
   })
 

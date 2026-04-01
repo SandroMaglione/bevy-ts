@@ -1,9 +1,10 @@
 import type { Application, Container } from "pixi.js"
+import type * as Scalar from "../../Scalar.ts"
+import type * as Size2Value from "../../Size2.ts"
+import type * as Vector2Value from "../../Vector2.ts"
 
-export type Vector2 = {
-  x: number
-  y: number
-}
+export type Vector2 = Vector2Value.Vector2
+export type Size2 = Size2Value.Size2
 
 export type InputStateValue = {
   left: boolean
@@ -53,20 +54,17 @@ export type PlatformerInputManager = {
 
 export type CollisionBody = {
   position: Vector2
-  collider: {
-    width: number
-    height: number
-  }
+  collider: Size2
 }
 
 export type HorizontalCollisionResult = {
-  nextX: number
+  nextX: Scalar.Finite
   blockedLeft: boolean
   blockedRight: boolean
 }
 
 export type VerticalCollisionResult = {
-  nextY: number
+  nextY: Scalar.Finite
   grounded: boolean
   hitCeiling: boolean
 }

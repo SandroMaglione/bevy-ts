@@ -76,9 +76,15 @@ export const ResetWorldOnPlayingEnterSystem = Game.System.define(
         commands.despawn(match.entity.id)
       }
 
-      commands.spawn(makePlayerDraft(playerSpawn))
+      const playerDraft = makePlayerDraft(playerSpawn)
+      if (playerDraft.ok) {
+        commands.spawn(playerDraft.value)
+      }
       for (const solid of levelSolids) {
-        commands.spawn(makeSolidDraft(solid))
+        const solidDraft = makeSolidDraft(solid)
+        if (solidDraft.ok) {
+          commands.spawn(solidDraft.value)
+        }
       }
     })
 )

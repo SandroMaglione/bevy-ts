@@ -39,6 +39,7 @@ import * as System from "./system.ts"
 import type { Fx } from "./fx.ts"
 import type { Label } from "./label.ts"
 import type { Query } from "./query.ts"
+import type * as Result from "./Result.ts"
 
 /**
  * A mapping from schema names to nominal descriptors.
@@ -247,11 +248,19 @@ export interface FeatureBuildGame<
   readonly Command: {
     spawn: () => Entity.EntityDraft<Accessible, {}, Root>
     entry: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D, value: Descriptor.Value<D>) => Command.Entry<D>
+    entryResult: <D extends FeatureComponentDescriptor<Accessible>, E>(
+      descriptor: D,
+      result: Result.Result<Descriptor.Value<D>, E>
+    ) => Result.Result<Command.Entry<D>, E>
     insert: <P extends Entity.ComponentProof, D extends FeatureComponentDescriptor<Accessible>>(
       draft: Entity.EntityDraft<Accessible, P, Root>,
       descriptor: D,
       value: Descriptor.Value<D>
     ) => Entity.EntityDraft<Accessible, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>
+    insertResult: <P extends Entity.ComponentProof, D extends FeatureComponentDescriptor<Accessible>, E>(
+      draft: Entity.EntityDraft<Accessible, P, Root>,
+      result: Result.Result<Command.Entry<D>, E>
+    ) => Result.Result<Entity.EntityDraft<Accessible, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, E>
     insertMany: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SchemaEntry<Accessible>>>(
       draft: Entity.EntityDraft<Accessible, P, Root>,
       ...entries: Entries
@@ -259,6 +268,9 @@ export interface FeatureBuildGame<
     spawnWith: <const Entries extends ReadonlyArray<Command.SchemaEntry<Accessible>>>(
       ...entries: Entries
     ) => Entity.EntityDraft<Accessible, Command.Draft.FoldEntries<Entries>, Root>
+    spawnWithResult: <const Entries extends ReadonlyArray<Result.Result<Command.SchemaEntry<Accessible>, any>>>(
+      ...entries: Entries
+    ) => Result.Result<Entity.EntityDraft<Accessible, Command.FoldResultEntries<Entries>, Root>, Command.ResultEntryErrors<Entries>>
     relate: <P extends Entity.ComponentProof, R extends FeatureRelationDescriptor<Accessible>>(
       draft: Entity.EntityDraft<Accessible, P, Root>,
       relation: R,
@@ -619,11 +631,19 @@ export namespace Schema {
     readonly Command: {
       spawn: () => Entity.EntityDraft<S, {}, Root>
       entry: <D extends ComponentDescriptor<S>>(descriptor: D, value: Descriptor.Value<D>) => Command.Entry<D>
+      entryResult: <D extends ComponentDescriptor<S>, E>(
+        descriptor: D,
+        result: Result.Result<Descriptor.Value<D>, E>
+      ) => Result.Result<Command.Entry<D>, E>
       insert: <P extends Entity.ComponentProof, D extends ComponentDescriptor<S>>(
         draft: Entity.EntityDraft<S, P, Root>,
         descriptor: D,
         value: Descriptor.Value<D>
       ) => Entity.EntityDraft<S, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>
+      insertResult: <P extends Entity.ComponentProof, D extends ComponentDescriptor<S>, E>(
+        draft: Entity.EntityDraft<S, P, Root>,
+        result: Result.Result<Command.Entry<D>, E>
+      ) => Result.Result<Entity.EntityDraft<S, Command.Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, E>
       insertMany: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SchemaEntry<S>>>(
         draft: Entity.EntityDraft<S, P, Root>,
         ...entries: Entries
@@ -631,6 +651,9 @@ export namespace Schema {
       spawnWith: <const Entries extends ReadonlyArray<Command.SchemaEntry<S>>>(
         ...entries: Entries
       ) => Entity.EntityDraft<S, Command.Draft.FoldEntries<Entries>, Root>
+      spawnWithResult: <const Entries extends ReadonlyArray<Result.Result<Command.SchemaEntry<S>, any>>>(
+        ...entries: Entries
+      ) => Result.Result<Entity.EntityDraft<S, Command.FoldResultEntries<Entries>, Root>, Command.ResultEntryErrors<Entries>>
       relate: <P extends Entity.ComponentProof, R extends RelationDescriptor<S>>(
         draft: Entity.EntityDraft<S, P, Root>,
         relation: R,
@@ -1204,6 +1227,14 @@ export const bind = <S extends Schema.Any, Root = S>(
     value: Descriptor.Value<D>
   ) => Command.entry(descriptor, value)
 
+  const commandEntryResult = <
+    D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>,
+    E
+  >(
+    descriptor: D,
+    result: Result.Result<Descriptor.Value<D>, E>
+  ) => Command.entryResult(descriptor, result)
+
   const commandInsert = <
     P extends Entity.ComponentProof,
     D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
@@ -1212,6 +1243,15 @@ export const bind = <S extends Schema.Any, Root = S>(
     descriptor: D,
     value: Descriptor.Value<D>
   ) => Command.insert(draft, descriptor, value)
+
+  const commandInsertResult = <
+    P extends Entity.ComponentProof,
+    D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>,
+    E
+  >(
+    draft: Entity.EntityDraft<S, P, Root>,
+    result: Result.Result<Command.Entry<D>, E>
+  ) => Command.insertResult(draft, result)
 
   const commandInsertMany = <
     P extends Entity.ComponentProof,
@@ -1226,6 +1266,12 @@ export const bind = <S extends Schema.Any, Root = S>(
   >(
     ...entries: Entries
   ) => Command.spawnWith<S, Root, Entries>(...entries)
+
+  const commandSpawnWithResult = <
+    const Entries extends ReadonlyArray<Result.Result<Command.SchemaEntry<S>, any>>
+  >(
+    ...entries: Entries
+  ) => Command.spawnWithResult<S, Entries, Root>(...entries)
 
   const commandRelate = <
     P extends Entity.ComponentProof,
@@ -1531,9 +1577,12 @@ export const bind = <S extends Schema.Any, Root = S>(
     Command: {
       spawn: commandSpawn,
       entry: commandEntry,
+      entryResult: commandEntryResult,
       insert: commandInsert,
+      insertResult: commandInsertResult,
       insertMany: commandInsertMany,
       spawnWith: commandSpawnWith,
+      spawnWithResult: commandSpawnWithResult,
       relate: commandRelate
     },
     StateMachine: {

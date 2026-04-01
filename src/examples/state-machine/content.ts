@@ -1,6 +1,4 @@
-import type { Vector } from "./types.ts"
-
-export const PICKUP_POINTS: ReadonlyArray<Vector> = [
+export const PICKUP_POINTS = [
   { x: 104, y: 108 },
   { x: 214, y: 86 },
   { x: 326, y: 134 },

@@ -1,4 +1,5 @@
 import { Application, Container, Graphics } from "pixi.js"
+import * as InputAxis from "../../InputAxis.ts"
 
 import {
   PICKUP_RADIUS,
@@ -177,20 +178,16 @@ const makeHud = () => {
 }
 
 const normalizeMovement = (keys: Set<string>): Vector => {
-  const horizontal = (keys.has("ArrowRight") || keys.has("d") || keys.has("D") ? 1 : 0)
-    - (keys.has("ArrowLeft") || keys.has("a") || keys.has("A") ? 1 : 0)
-  const vertical = (keys.has("ArrowDown") || keys.has("s") || keys.has("S") ? 1 : 0)
-    - (keys.has("ArrowUp") || keys.has("w") || keys.has("W") ? 1 : 0)
-
-  if (horizontal === 0 && vertical === 0) {
-    return { x: 0, y: 0 }
-  }
-
-  const magnitude = Math.hypot(horizontal, vertical)
-  return {
-    x: horizontal / magnitude,
-    y: vertical / magnitude
-  }
+  return InputAxis.vectorFromAxisValues(
+    InputAxis.axis(
+      keys.has("ArrowLeft") || keys.has("a") || keys.has("A"),
+      keys.has("ArrowRight") || keys.has("d") || keys.has("D")
+    ),
+    InputAxis.axis(
+      keys.has("ArrowUp") || keys.has("w") || keys.has("W"),
+      keys.has("ArrowDown") || keys.has("s") || keys.has("S")
+    )
+  )
 }
 
 export const createStateMachineBrowserHost = async (mount: HTMLElement) => {

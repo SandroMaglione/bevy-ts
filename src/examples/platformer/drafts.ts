@@ -1,6 +1,11 @@
+import * as Result from "../../Result.ts"
+import * as Size2 from "../../Size2.ts"
+import * as Vector2 from "../../Vector2.ts"
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from "./constants.ts"
 import type { LevelSolidLayout } from "./content.ts"
 import { Collider, Game, LevelEntity, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
+
+const success = <Value>(value: Value): Result.Result<Value, never> => Result.success(value)
 
 const renderableForSolid = (
   layout: LevelSolidLayout
@@ -39,27 +44,29 @@ const renderableForSolid = (
   }
 }
 
-export const makePlayerDraft = (spawn: { x: number; y: number }) =>
-  Game.Command.spawnWith(
-    [Position, spawn],
-    [Velocity, { x: 0, y: 0 }],
-    [Collider, { width: PLAYER_WIDTH, height: PLAYER_HEIGHT }],
-    [Renderable, {
+export const makePlayerDraft = (spawn: { x: number; y: number }) => {
+  return Game.Command.spawnWithResult(
+    Game.Command.entryResult(Position, Vector2.result(spawn)),
+    Game.Command.entryResult(Velocity, Vector2.result({ x: 0, y: 0 })),
+    Game.Command.entryResult(Collider, Size2.result({ width: PLAYER_WIDTH, height: PLAYER_HEIGHT })),
+    success(Game.Command.entry(Renderable, {
       kind: "player",
       width: PLAYER_WIDTH,
       height: PLAYER_HEIGHT,
       color: 0xd94841,
       accent: 0xfff2d5
-    }],
-    [Player, {}],
-    [LevelEntity, {}]
+    })),
+    success(Game.Command.entry(Player, {})),
+    success(Game.Command.entry(LevelEntity, {}))
   )
+}
 
-export const makeSolidDraft = (layout: LevelSolidLayout) =>
-  Game.Command.spawnWith(
-    [Position, { x: layout.x, y: layout.y }],
-    [Collider, { width: layout.width, height: layout.height }],
-    [Renderable, renderableForSolid(layout)],
-    [Solid, {}],
-    [LevelEntity, {}]
+export const makeSolidDraft = (layout: LevelSolidLayout) => {
+  return Game.Command.spawnWithResult(
+    Game.Command.entryResult(Position, Vector2.result({ x: layout.x, y: layout.y })),
+    Game.Command.entryResult(Collider, Size2.result({ width: layout.width, height: layout.height })),
+    success(Game.Command.entry(Renderable, renderableForSolid(layout))),
+    success(Game.Command.entry(Solid, {})),
+    success(Game.Command.entry(LevelEntity, {}))
   )
+}

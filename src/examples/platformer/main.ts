@@ -4,14 +4,23 @@ import { createPlatformerBrowserHost } from "./host.ts"
 import { createPlatformerRuntime } from "./runtime.ts"
 import { setupSchedule, updateSchedule } from "./schedules.ts"
 
+const failedHandle = (): BrowserExampleHandle => ({
+  async destroy() {}
+})
+
 export const startPlatformerExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
   const browserHost = await createPlatformerBrowserHost(mount)
   const runtime = createPlatformerRuntime(browserHost.host, browserHost.inputManager)
-  runtime.initialize(setupSchedule)
+  if (!runtime.ok) {
+    await browserHost.destroy()
+    mount.textContent = runtime.error.message
+    return failedHandle()
+  }
+  runtime.value.initialize(setupSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     browserHost.host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, MAX_DELTA_SECONDS)
-    runtime.runSchedule(updateSchedule)
+    runtime.value.runSchedule(updateSchedule)
   }
 
   browserHost.host.application.ticker.add(tick)

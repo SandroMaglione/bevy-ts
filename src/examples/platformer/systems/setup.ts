@@ -18,10 +18,16 @@ export const SetupWorldSystem = Game.System.define(
       resources.contacts.set(makeInitialPlayerContacts())
       resources.loseMessage.set("You fell into a hole.")
 
-      commands.spawn(makePlayerDraft(playerSpawn))
+      const playerDraft = makePlayerDraft(playerSpawn)
+      if (playerDraft.ok) {
+        commands.spawn(playerDraft.value)
+      }
 
       for (const solid of levelSolids) {
-        commands.spawn(makeSolidDraft(solid))
+        const solidDraft = makeSolidDraft(solid)
+        if (solidDraft.ok) {
+          commands.spawn(solidDraft.value)
+        }
       }
     })
 )

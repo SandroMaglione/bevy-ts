@@ -1156,7 +1156,49 @@ Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and 
 
 ## Roadmap
 
-### P0. Add stronger composition for explicit schedule phases
+### P0. Reduce branded/result boilerplate at ECS boundaries
+
+The current helper and branding story is much safer than before, but the main
+remaining friction is still at the ECS boundary:
+
+- runtime bootstrap still does manual `Result` branching
+- multi-value construction still has repeated `Result.success(...)` wrapping
+- mixed validated and already-valid entries still add ceremony in draft
+  builders
+
+The next work should stay explicit and non-throwing. It should improve the
+construction boundary, not weaken it.
+
+Add these in order:
+
+1. Result-aware runtime bootstrap.
+   Add an explicit `Runtime.makeResult(...)` / `Game.Runtime.makeResult(...)`
+   path so examples can seed branded resources and states without local manual
+   branching before runtime creation.
+2. Small construction aggregation helpers.
+   Add only the minimum reusable helpers needed to combine a few explicit
+   constructor results cleanly, for example tuple-oriented aggregation for
+   2-4 values. Do not expand this into a full monadic `Result` surface.
+3. Better command assembly for mixed validated and already-valid entries.
+   Reduce the need for repeated `Result.success(Game.Command.entry(...))`
+   wrapping when draft builders mix branded values with plain structural
+   components.
+4. Better example-facing constant-definition patterns.
+   Add stable helper shapes for validating constants once and reusing branded
+   values afterward, so examples stop reconstructing obvious safe values
+   repeatedly at spawn and reset boundaries.
+5. Only after the above, revisit descriptor-aware construction.
+   Do not expose descriptor-driven raw construction again until it works
+   transparently through normal examples without inference regressions.
+
+The target shape is still explicit:
+
+- raw values are validated once
+- failures stay in the return type
+- ECS APIs never throw
+- normal usage never requires casts
+
+### P1. Add stronger composition for explicit schedule phases
 
 Systems are enough as the smallest behavior abstraction, but larger examples
 still repeat the same phase assembly by hand. In
@@ -1193,7 +1235,7 @@ const update = Game.Schedule.define({
 })
 ```
 
-### P1. Add reusable composition for transition-local work
+### P2. Add reusable composition for transition-local work
 
 Transition handling is explicit and good, but repetitive once restart/reset
 logic grows. In
@@ -1215,6 +1257,22 @@ const restartBundle = Game.Schedule.transitionBundle({
 
 const transitions = Game.Schedule.transitions(restartBundle)
 ```
+
+### Deferred. Descriptor-aware construction at ECS boundaries
+
+Descriptor-driven raw construction is still deferred. It was prototyped, but
+it is not yet stable across real query/system/example usage.
+
+It should not be exposed again until all of these hold:
+
+- constructor-aware descriptors work transparently in normal examples
+- query and system inference stays exact
+- no user-facing casts or workarounds are required
+- failure remains explicit and non-throwing
+
+The long-term goal remains the same: let explicit validated construction flow
+through command, write-cell, and runtime-bootstrap boundaries with less local
+glue, but only once it is genuinely stable.
 
 That should let projects package transition work as typed values the same way
 they already package systems and queries.

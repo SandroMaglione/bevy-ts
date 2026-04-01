@@ -1,4 +1,5 @@
 import { Fx } from "../../../index.ts"
+import * as Vector2 from "../../../Vector2.ts"
 
 import { GRAVITY, JUMP_VELOCITY, MAX_FALL_SPEED } from "../constants.ts"
 import { PlayerMovementQuery, SolidCollisionQuery } from "../queries.ts"
@@ -24,18 +25,19 @@ export const ResolveMoveIntentSystem = Game.System.define(
         return
       }
 
-      const velocity = player.value.data.velocity.get()
       const nextVelocityX = resolveHorizontalSpeed(
-        velocity.x,
+        player.value.data.velocity.get().x,
         resources.input.get(),
         resources.deltaTime.get(),
         resources.contacts.get().grounded
       )
 
-      player.value.data.velocity.set({
-        x: nextVelocityX,
-        y: velocity.y
-      })
+      player.value.data.velocity.updateResult((velocity) =>
+        Vector2.result({
+          x: nextVelocityX,
+          y: velocity.y
+        })
+      )
     })
 )
 
@@ -63,11 +65,12 @@ export const ApplyJumpSystem = Game.System.define(
         return
       }
 
-      const velocity = player.value.data.velocity.get()
-      player.value.data.velocity.set({
-        x: velocity.x,
-        y: -JUMP_VELOCITY
-      })
+      player.value.data.velocity.updateResult((velocity) =>
+        Vector2.result({
+          x: velocity.x,
+          y: -JUMP_VELOCITY
+        })
+      )
 
       resources.contacts.set({
         grounded: false,
@@ -95,15 +98,16 @@ export const ApplyGravitySystem = Game.System.define(
         return
       }
 
-      const velocity = player.value.data.velocity.get()
-      player.value.data.velocity.set({
-        x: velocity.x,
-        y: clamp(
-          velocity.y + GRAVITY * resources.deltaTime.get(),
-          -JUMP_VELOCITY,
-          MAX_FALL_SPEED
-        )
-      })
+      player.value.data.velocity.updateResult((velocity) =>
+        Vector2.result({
+          x: velocity.x,
+          y: clamp(
+            velocity.y + GRAVITY * resources.deltaTime.get(),
+            -JUMP_VELOCITY,
+            MAX_FALL_SPEED
+          )
+        })
+      )
     })
 )
 
@@ -136,18 +140,21 @@ export const MovePlayerSystem = Game.System.define(
       }))
 
       const horizontalResult = resolveHorizontalMovement(position, velocity.x * dt, collider, solids)
-      const horizontalPosition = {
+      const horizontalPosition = Vector2.result({
         x: horizontalResult.nextX,
         y: position.y
+      })
+      if (!horizontalPosition.ok) {
+        return
       }
-      const verticalResult = resolveVerticalMovement(horizontalPosition, velocity.y * dt, collider, solids)
+      const verticalResult = resolveVerticalMovement(horizontalPosition.value, velocity.y * dt, collider, solids)
 
-      player.value.data.position.set({
+      player.value.data.position.setResult(Vector2.result({
         x: horizontalResult.nextX,
         y: verticalResult.nextY
-      })
+      }))
 
-      player.value.data.velocity.set({
+      player.value.data.velocity.setResult(Vector2.result({
         x:
           horizontalResult.blockedLeft || horizontalResult.blockedRight
             ? 0
@@ -156,7 +163,7 @@ export const MovePlayerSystem = Game.System.define(
           verticalResult.grounded || verticalResult.hitCeiling
             ? 0
             : velocity.y
-      })
+      }))
 
       resources.contacts.set({
         grounded: verticalResult.grounded,

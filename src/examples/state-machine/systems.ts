@@ -1,4 +1,7 @@
 import { Fx } from "../../index.ts"
+import * as Result from "../../Result.ts"
+import * as Scalar from "../../Scalar.ts"
+import * as Vector2 from "../../Vector2.ts"
 import { PICKUP_POINTS } from "./content.ts"
 import {
   COUNTDOWN_DURATION_SECONDS,
@@ -40,34 +43,45 @@ import {
 } from "./schema.ts"
 import type { Vector } from "./types.ts"
 
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(Math.max(value, min), max)
+const success = <Value>(value: Value): Result.Result<Value, never> => Result.success(value)
 
-const distanceSquared = (left: Vector, right: Vector): number => {
-  const dx = left.x - right.x
-  const dy = left.y - right.y
-  return dx * dx + dy * dy
+const clamp = (value: number, min: number, max: number): number => {
+  const nextValue = Scalar.Finite.option(value)
+  const nextMin = Scalar.Finite.option(min)
+  const nextMax = Scalar.Finite.option(max)
+  if (!nextValue || !nextMin || !nextMax) {
+    return value
+  }
+
+  return Scalar.clamp(nextValue, nextMin, nextMax)
 }
 
-const makePickupDraft = (position: Vector) =>
-  Game.Command.spawnWith(
-    [Position, position],
-    [Actor, { kind: "pickup" }],
-    [Pickup, {}]
+const distanceSquared = (left: Vector, right: Vector): number => {
+  return Vector2.lengthSquared(Vector2.subtract(left, right))
+}
+
+const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
+  return Game.Command.spawnWithResult(
+    Game.Command.entryResult(Position, Vector2.result(position)),
+    success(Game.Command.entry(Actor, { kind: "pickup" })),
+    success(Game.Command.entry(Pickup, {}))
   )
+}
 
 export const SpawnPlayerSystem = Game.System.define(
   "StateMachineExample/SpawnPlayer",
   {},
   ({ commands }) =>
     Fx.sync(() => {
-      commands.spawn(
-        Game.Command.spawnWith(
-          [Position, { x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 }],
-          [Actor, { kind: "player" }],
-          [Player, {}]
-        )
+      const playerDraft = Game.Command.spawnWithResult(
+        Game.Command.entryResult(Position, Vector2.result({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })),
+        success(Game.Command.entry(Actor, { kind: "player" })),
+        success(Game.Command.entry(Player, {}))
       )
+      if (!playerDraft.ok) {
+        return
+      }
+      commands.spawn(playerDraft.value)
     })
 )
 
@@ -228,10 +242,10 @@ export const MovePlayerSystem = Game.System.define(
       const arena = resources.arena.get()
       const position = player.value.data.position.get()
 
-      player.value.data.position.set({
+      player.value.data.position.setResult(Vector2.result({
         x: clamp(position.x + movement.x * PLAYER_SPEED * dt, PLAYER_RADIUS, arena.width - PLAYER_RADIUS),
         y: clamp(position.y + movement.y * PLAYER_SPEED * dt, PLAYER_RADIUS, arena.height - PLAYER_RADIUS)
-      })
+      }))
     })
 )
 
@@ -324,10 +338,10 @@ export const ResetRoundOnCountdownEnterSystem = Game.System.define(
     Fx.sync(() => {
       const player = queries.player.singleOptional()
       if (player.ok && player.value) {
-        player.value.data.position.set({
+        player.value.data.position.setResult(Vector2.result({
           x: STAGE_WIDTH * 0.5,
           y: STAGE_HEIGHT * 0.5
-        })
+        }))
       }
 
       for (const pickup of queries.pickups.each()) {
@@ -338,7 +352,10 @@ export const ResetRoundOnCountdownEnterSystem = Game.System.define(
       const goal = resources.goal.get()
       for (let index = 0; index < goal; index += 1) {
         const point = PICKUP_POINTS[(cursor + index) % PICKUP_POINTS.length] ?? PICKUP_POINTS[0]!
-        commands.spawn(makePickupDraft(point))
+        const pickupDraft = makePickupDraft(point)
+        if (pickupDraft.ok) {
+          commands.spawn(pickupDraft.value)
+        }
       }
 
       resources.cursor.set((cursor + 1) % PICKUP_POINTS.length)
