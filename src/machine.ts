@@ -1,3 +1,9 @@
+/**
+ * Finite-state machine definitions and transition metadata.
+ *
+ * State machines model queued discrete phase changes whose commit boundaries
+ * matter to schedule execution.
+ */
 import type { Schedule } from "./schedule.ts"
 import type { Schema } from "./schema.ts"
 

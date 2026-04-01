@@ -1,3 +1,9 @@
+/**
+ * System declarations, typed requirements, and execution context.
+ *
+ * Systems declare exactly what they may read, write, emit, and depend on
+ * before they are allowed to run inside one schedule.
+ */
 import type { Descriptor } from "./descriptor.ts"
 import type * as Entity from "./entity.ts"
 import type { Fx } from "./fx.ts"
@@ -398,7 +404,8 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  *
  * This reads the committed lifecycle buffer, not immediate removals. Systems
  * usually pair this with `Game.Schedule.updateLifecycle()` and host cleanup
- * logic such as removing renderer-owned nodes.
+ * logic such as removing renderer-owned nodes. {@link readDespawned}
+ * complements this for whole-entity teardown.
  *
  * @example
  * ```ts
@@ -412,8 +419,6 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  *   }
  * }))
  * ```
- *
- * {@link readDespawned} complements this for whole-entity teardown.
  */
 export const readRemoved = <D extends Descriptor<"component", string, any>>(
   descriptor: D
@@ -435,7 +440,8 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
  *
  * This reads the committed despawn buffer after `Game.Schedule.updateLifecycle()`.
  * Use it when host-owned state must be destroyed even if no single removed
- * component is the canonical trigger.
+ * component is the canonical trigger. {@link readRemoved} is often used
+ * alongside this in authoritative host mirrors.
  *
  * @example
  * ```ts
@@ -449,8 +455,6 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
  *   }
  * }))
  * ```
- *
- * {@link readRemoved} is often used alongside this in authoritative host mirrors.
  */
 export const readDespawned = (): DespawnedRead => ({
   kind: "despawned"

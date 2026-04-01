@@ -1,3 +1,9 @@
+/**
+ * Runtime creation, world storage, and schedule execution.
+ *
+ * The runtime owns ECS state and explicit service provisioning, and applies
+ * deferred mutation only at schedule-controlled boundaries.
+ */
 import * as Command from "./command.ts"
 import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"

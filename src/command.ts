@@ -1,3 +1,9 @@
+/**
+ * Deferred command builders and typed entity-draft helpers.
+ *
+ * Commands keep mutation explicit by staging world writes as values that are
+ * flushed later by schedule boundaries.
+ */
 import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"

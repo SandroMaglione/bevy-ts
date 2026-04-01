@@ -1,3 +1,9 @@
+/**
+ * Relationship definitions, traversal helpers, and mutation failures.
+ *
+ * Relations model directed entity links plus the explicit error surfaces used
+ * when those links cannot be created or traversed.
+ */
 import type { EntityId } from "./entity.ts"
 import type { Schema } from "./schema.ts"
 

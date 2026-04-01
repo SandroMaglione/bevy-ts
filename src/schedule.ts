@@ -1,3 +1,9 @@
+/**
+ * Schedule definitions and explicit visibility-boundary markers.
+ *
+ * Schedules order systems and define when deferred writes, events, lifecycle
+ * buffers, relation failures, and machine transitions become visible.
+ */
 import type { Label } from "./label.ts"
 import type { StateMachine } from "./machine.ts"
 import type { Schema } from "./schema.ts"
@@ -630,7 +636,9 @@ export const updateEvents = (): EventUpdateStep => ({
  * This is the required boundary before lifecycle-driven host sync. Systems
  * using `Game.Query.added(...)`, `Game.Query.changed(...)`,
  * `Game.System.readRemoved(...)`, or `Game.System.readDespawned()` only observe
- * the current schedule's structural changes after this marker.
+ * the current schedule's structural changes after this marker. {@link extend}
+ * is the preferred wrapper when the host slice is just a prefix or suffix
+ * around a headless gameplay schedule.
  *
  * @example
  * ```ts
@@ -651,9 +659,6 @@ export const updateEvents = (): EventUpdateStep => ({
  *   ]
  * })
  * ```
- *
- * {@link extend} is the preferred wrapper when the host slice is just a prefix
- * or suffix around a headless gameplay schedule.
  */
 export const updateLifecycle = (): LifecycleUpdateStep => ({
   kind: "lifecycleUpdate"
@@ -865,6 +870,8 @@ export function named<
  * This is the preferred composition tool when browser or renderer work is a
  * pure prefix or suffix around gameplay. Keep using `Game.Schedule.define(...)`
  * when host work must be interleaved in the middle of the simulation steps.
+ * If the suffix depends on lifecycle filters or lifecycle reads, include
+ * `Game.Schedule.updateLifecycle()` explicitly in that suffix.
  *
  * @example
  * ```ts
@@ -878,9 +885,6 @@ export function named<
  *   ]
  * })
  * ```
- *
- * If the suffix depends on lifecycle filters or lifecycle reads, include
- * `Game.Schedule.updateLifecycle()` explicitly in that suffix.
  */
 export function extend<
   Base extends ScheduleDefinition<any, any, any>,

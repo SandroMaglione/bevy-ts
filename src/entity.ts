@@ -1,3 +1,9 @@
+/**
+ * Entity identities, proofs, and long-lived handles.
+ *
+ * This module defines the nominal entity reference types used across queries,
+ * commands, relations, and lookup APIs.
+ */
 import type { Brand } from "./internal/brand.ts"
 import type { Descriptor } from "./descriptor.ts"
 import type { StagedRelation } from "./relation.ts"

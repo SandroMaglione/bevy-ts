@@ -1,3 +1,8 @@
+/**
+ * Query declarations, matching semantics, and typed cell access surfaces.
+ *
+ * Queries are the explicit entity-data access layer used by systems.
+ */
 import type { Descriptor } from "./descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./entity.ts"
 import type * as Result from "./Result.ts"
@@ -165,7 +170,7 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
  *
  * This is the usual entrypoint for incremental host sync: create host-owned
  * nodes only after lifecycle visibility has been advanced for the current
- * schedule.
+ * schedule. {@link changed} complements this for later update passes.
  *
  * @example
  * ```ts
@@ -177,8 +182,6 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
  *   filters: [Game.Query.added(Renderable)]
  * })
  * ```
- *
- * {@link changed} complements this for later update passes.
  */
 export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter<D> => ({
   kind: "added",
@@ -194,7 +197,8 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
  *
  * Use this for narrow host-sync passes after initial creation, for example one
  * transform-sync system that should only touch entities whose position changed
- * since the last lifecycle boundary.
+ * since the last lifecycle boundary. {@link added} is the matching
+ * creation-side lifecycle filter.
  *
  * @example
  * ```ts
@@ -205,8 +209,6 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
  *   filters: [Game.Query.changed(Position)]
  * })
  * ```
- *
- * {@link added} is the matching creation-side lifecycle filter.
  */
 export const changed = <D extends ComponentDescriptor>(descriptor: D): ChangedFilter<D> => ({
   kind: "changed",
