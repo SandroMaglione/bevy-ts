@@ -211,7 +211,7 @@ type ConditionRequirements<C> =
   : C extends NotCondition<infer Inner> ? ConditionRequirements<Inner>
   : C extends AndCondition<infer Many> ? UnionToIntersection<ConditionRequirements<Many[number]>>
   : C extends OrCondition<infer Many> ? UnionToIntersection<ConditionRequirements<Many[number]>>
-  : {}
+  : never
 
 type UnionToIntersection<A> =
   (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never

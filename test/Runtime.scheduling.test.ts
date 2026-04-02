@@ -339,4 +339,83 @@ describe("Runtime scheduling", () => {
       } as never)
     ).toThrow("Extended schedule reuses base system")
   })
+
+  it("composes reusable phases into one flattened explicit schedule", () => {
+    const first = System.define(
+      "RuntimeScheduling/ComposeFirst",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "first"])
+        })
+    )
+
+    const second = System.define(
+      "RuntimeScheduling/ComposeSecond",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "second"])
+        })
+    )
+
+    const hostMirror = Schedule.phase({
+      schema,
+      steps: [
+        Schedule.updateLifecycle(),
+        second
+      ]
+    })
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Schedule.define({
+      schema,
+      ...Schedule.compose({
+        entries: [
+          first,
+          Schedule.applyDeferred(),
+          hostMirror
+        ]
+      })
+    }))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
+  })
+
+  it("rejects duplicate systems reused across composed entries", () => {
+    const duplicate = System.define(
+      "RuntimeScheduling/ComposeDuplicate",
+      {
+        schema,
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, "duplicate"])
+        })
+    )
+
+    const phase = Schedule.phase({
+      schema,
+      steps: [duplicate]
+    })
+
+    expect(() =>
+      Schedule.compose({
+        entries: [duplicate, phase]
+      })
+    ).toThrow("Duplicate system step in schedule composition")
+  })
 })

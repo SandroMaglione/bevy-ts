@@ -1157,15 +1157,77 @@ Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and 
 
 ## Roadmap
 
-The main remaining improvements are about packaging explicit orchestration more
-cleanly without weakening the current safety model.
+The remaining improvements are now narrower than before. The schedule/runtime
+core is in a much better state:
+
+- direct schedule execution no longer hits the old machine-requirement false
+  negatives
+- `Game.Schedule.phase(...)` and `Game.Schedule.compose(...)` exist and work on
+  ordinary schedules
+- [src/examples/pixi.ts:280](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L280)
+  uses reusable phases and composition again
+- [src/examples/top-down/schedules.ts:78](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/top-down/schedules.ts#L78)
+  is back to one exported `updateSchedule`
+- repeated `pnpm typecheck` runs are currently stable
+
+The remaining work is about removing the last compiler-sensitive schedule
+authoring edge and then continuing with higher-level composition.
+
+### Make the heaviest `define({...compose(...)})` path cheap enough
+
+The current broken link is not schedules in general anymore. It is the most
+expensive bound path:
+
+- a large bound explicit schedule
+- built from several reusable phases
+- passed into `Game.Schedule.define(...)` directly through one composed fragment
+
+On that path, TypeScript can still hit deep instantiation before runtime
+validation, even though the resulting schedule is valid. That is why
+[src/examples/pixi.ts:280](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L280)
+can use `...Game.Schedule.compose(...)` directly, while
+[src/examples/top-down/schedules.ts:78](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/top-down/schedules.ts#L78)
+still has to materialize the final `systems` and `steps` arrays from reusable
+phase values before calling `define(...)`.
+
+That state is stable enough to build on, because the example no longer needs to
+split gameplay and render work into separate runtime schedules. But it is still
+not the intended endpoint.
+
+Ideal shape:
+
+```ts
+const renderTail = Game.Schedule.compose({
+  entries: [animationPhase, cameraSyncPhase, renderSyncPhase]
+})
+
+const update = Game.Schedule.define({
+  ...Game.Schedule.compose({
+    entries: [
+      captureFrameContextSystem,
+      gameplaySystem,
+      Game.Schedule.applyDeferred(),
+      Game.Schedule.applyStateTransitions(),
+      renderTail
+    ]
+  })
+})
+```
+
+The next pass should keep the current public API and focus only on the internal
+carrier:
+
+- validate exact structure at `phase(...)` / `compose(...)`
+- carry normalized exact/runtime requirements on hidden metadata
+- let `define(...)` reuse that metadata without rebuilding heavy requirement
+  proofs from expanded bound arrays
+- keep root safety, exact runtime requirement safety, and explicit schedule
+  markers unchanged
 
 ### Sound explicit schedules without duplicated `systems` and `steps`
 
 The current schedule API still allows explicit schedules to declare both
-`systems` and `steps`. That makes examples like
-[src/examples/pixi.ts:272](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L272)
-and
+`systems` and `steps`. That still makes examples like
 [src/examples/platformer/schedules.ts:17](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L17)
 repeat the same systems twice.
 
@@ -1206,54 +1268,8 @@ The important requirement is that explicit schedules become single-source-of-tru
 - duplicate system steps should be rejected
 - schedule requirements should be derived from the same source the runtime executes
 
-An implementation attempt was started and then reverted. The intended result is
-still good, but the bound `Game.Schedule` surface and transition-schedule
-rebinding regressed badly:
-
-- machine-heavy examples started failing runtime requirement checks
-- the bound schema wrappers hit deep type instantiation in `schema.ts`
-- explicit-step examples like `pixi` and `platformer` also triggered deep
-  instantiation
-
-The next attempt should keep the same public goal, but rework the bound
-`schema.ts` schedule surface more carefully so root binding, transition
-requirements, and explicit-step requirement derivation stay aligned.
-
-### Reusable composition for explicit schedule phases
-
-Larger examples still repeat the same phase assembly by hand. In
-[src/examples/platformer/schedules.ts:17](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L17)
-and
-[src/examples/platformer/schedules.ts:39](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L39),
-the schedule has to restate simulation systems, explicit apply markers, and the
-host-sync phase in full. That is honest, but repetitive.
-
-The useful next step is not hidden engine-owned phases. It is reusable typed
-phase bundles or schedule fragments that still keep `applyDeferred()`,
-`applyStateTransitions()`, and `updateLifecycle()` explicit in the composed
-value.
-
-Ideal shape:
-
-```ts
-const hostMirrorPhase = Game.Schedule.phase({
-  steps: [
-    Game.Schedule.updateLifecycle(),
-    destroyNodesSystem,
-    createNodesSystem,
-    syncTransformsSystem
-  ]
-})
-
-const update = Game.Schedule.define({
-  systems: [...simulationSystems, ...hostMirrorPhase.systems],
-  steps: [
-    ...simulationPhase.steps,
-    Game.Schedule.applyDeferred(),
-    hostMirrorPhase
-  ]
-})
-```
+This work should only be retried after the heavy composed-define path above is
+cheap enough. Otherwise it keeps pushing on the same bound-schedule hotspot.
 
 ### Reusable composition for transition-local work
 
@@ -1317,7 +1333,7 @@ const ResolveMoveIntentSystem = Game.System.define(
 
 ### Easier packaging for explicit host-sync orchestration
 
-The current render-sync pattern is correct, but verbose. The lifecycle ordering
+The current render-sync pattern is correct, but still verbose. The lifecycle ordering
 in
 [src/examples/platformer/schedules.ts:58](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L58)
 and the destroy/create/sync split in
@@ -1325,28 +1341,37 @@ and the destroy/create/sync split in
 are the right structure, but every project has to rebuild that packaging by
 hand.
 
-The useful improvement is a better way to package the generic ECS pattern of
-“simulate, commit lifecycle, mirror external state” into reusable explicit
-values without pushing renderer-specific logic into the core.
+The useful improvement is now a layer above the current schedule primitives:
+
+- `Game.Schedule.phase(...)`
+- `Game.Schedule.compose(...)`
+- `Game.Schedule.extend(...)`
+
+The goal is a better way to package the generic ECS pattern of “simulate,
+commit lifecycle, mirror external state” into reusable explicit values without
+pushing renderer-specific logic into the core.
 
 Ideal shape:
 
 ```ts
 const renderMirrorPhase = Game.Schedule.phase({
-  requiresLifecycle: true,
-  systems: [
+  steps: [
+    Game.Schedule.updateLifecycle(),
     destroyRenderNodesSystem,
     createRenderNodesSystem,
     syncRenderableTransformsSystem
   ]
 })
 
-const update = Game.Schedule.define({
-  systems: [...gameplaySystems, ...renderMirrorPhase.systems],
+const renderMirrorSchedule = Game.Schedule.define({
+  systems: [
+    gameplaySystem,
+    ...renderMirrorPhase.systems
+  ],
   steps: [
-    ...gameplaySteps,
+    gameplaySystem,
     Game.Schedule.applyDeferred(),
-    renderMirrorPhase
+    ...renderMirrorPhase.steps
   ]
 })
 ```

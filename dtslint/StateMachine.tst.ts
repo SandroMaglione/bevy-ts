@@ -227,6 +227,39 @@ describe("StateMachine", () => {
     runtime.runSchedule(MachineSchedule)
   })
 
+  it("accepts direct inline schedule execution for disjunctive machine conditions", () => {
+    const IncrementWithOrCondition = Game.System.define(
+      "StateMachine/InlineRunSchedule",
+      {
+        when: [
+          Game.Condition.or(
+            Game.Condition.inState(AppState, "Menu"),
+            Game.Condition.inState(RoundState, "Live")
+          )
+        ],
+        resources: {
+          counter: System.writeResource(Counter)
+        }
+      },
+      () => Fx.sync<undefined, {}>(() => undefined)
+    )
+
+    const runtime = Game.Runtime.make({
+      services: Runtime.services(),
+      resources: {
+        Counter: 0
+      },
+      machines: Runtime.machines(
+        Runtime.machine(AppState, "Menu"),
+        Runtime.machine(RoundState, "Warmup")
+      )
+    })
+
+    runtime.runSchedule(Game.Schedule.define({
+      systems: [IncrementWithOrCondition]
+    }))
+  })
+
   it("rejects invalid multi-machine runtime initialization values", () => {
     Game.Runtime.make({
       services: Runtime.services(),

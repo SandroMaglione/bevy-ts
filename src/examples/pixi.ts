@@ -269,30 +269,33 @@ const SyncPixiTransformsSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define({
-  systems: [SetupSceneSystem, CreatePixiSpritesSystem],
+const lifecyclePhase = Game.Schedule.phase({
   steps: [
-    SetupSceneSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    CreatePixiSpritesSystem
+    Game.Schedule.updateLifecycle()
   ]
 })
 
+const setupSchedule = Game.Schedule.define({
+  ...Game.Schedule.compose({
+    entries: [
+      SetupSceneSystem,
+      Game.Schedule.applyDeferred(),
+      lifecyclePhase,
+      CreatePixiSpritesSystem
+    ]
+  })
+})
+
 const updateSchedule = Game.Schedule.define({
-  systems: [
-    CaptureFrameInputSystem,
-    IntegrateMotionSystem,
-    BounceWithinViewportSystem,
-    SyncPixiTransformsSystem
-  ],
-  steps: [
-    CaptureFrameInputSystem,
-    IntegrateMotionSystem,
-    BounceWithinViewportSystem,
-    Game.Schedule.updateLifecycle(),
-    SyncPixiTransformsSystem
-  ]
+  ...Game.Schedule.compose({
+    entries: [
+      CaptureFrameInputSystem,
+      IntegrateMotionSystem,
+      BounceWithinViewportSystem,
+      lifecyclePhase,
+      SyncPixiTransformsSystem
+    ]
+  })
 })
 
 /**

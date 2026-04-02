@@ -180,4 +180,40 @@ describe("Schedule", () => {
     // @ts-expect-error!
     extended.label
   })
+
+  it("creates reusable explicit phases", () => {
+    const hostMirror = Schedule.phase({
+      schema,
+      steps: [
+        Schedule.updateLifecycle(),
+        RenderSystem
+      ]
+    })
+
+    hostMirror.steps
+    hostMirror.systems
+  })
+
+  it("composes systems, markers, and phases into one schedule fragment", () => {
+    const hostMirror = Schedule.phase({
+      schema,
+      steps: [
+        Schedule.updateLifecycle(),
+        SuffixSystem
+      ]
+    })
+
+    const composed = Schedule.compose({
+      entries: [
+        PlainSystem,
+        Schedule.applyDeferred(),
+        hostMirror
+      ]
+    })
+
+    Schedule.define({
+      schema,
+      ...composed
+    })
+  })
 })

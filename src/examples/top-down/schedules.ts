@@ -21,12 +21,75 @@ import {
 } from "./systems/index.ts"
 import { Game } from "./schema.ts"
 
+const animationPhase = Game.Schedule.phase({
+  steps: [
+    ResetAnimationClockSystem,
+    AdvanceAnimationClockSystem,
+    ResolveCurrentPlayerFrameSystem
+  ]
+})
+
+const cameraSyncPhase = Game.Schedule.phase({
+  steps: [
+    SyncCameraSystem,
+    ApplyWorldCameraTransformSystem
+  ]
+})
+
+const renderSyncPhase = Game.Schedule.phase({
+  steps: [
+    Game.Schedule.updateLifecycle(),
+    DestroyRenderNodesSystem,
+    CreateRenderNodesSystem,
+    SyncRenderableTransformsSystem,
+    SyncPlayerSpriteSystem,
+    SyncPickupPresentationSystem,
+    SyncHudSystem
+  ]
+})
+
+const updateTailSystems = [
+  ...animationPhase.systems,
+  ...cameraSyncPhase.systems,
+  ...renderSyncPhase.systems
+]
+
+const updateTailSteps = [
+  ...animationPhase.steps,
+  ...cameraSyncPhase.steps,
+  ...renderSyncPhase.steps
+]
+
+const gameplaySystems = [
+  CaptureFrameContextSystem,
+  PlanPlayerVelocitySystem,
+  MovePlayerSystem,
+  UpdateFocusedCollectableSystem,
+  CollectFocusedCollectableSystem,
+  ResolveFacingSystem,
+  ResolveLocomotionSystem
+] as const
+
+const gameplaySteps = [
+  CaptureFrameContextSystem,
+  PlanPlayerVelocitySystem,
+  MovePlayerSystem,
+  UpdateFocusedCollectableSystem,
+  CollectFocusedCollectableSystem,
+  ResolveFacingSystem,
+  ResolveLocomotionSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.applyStateTransitions()
+] as const
+
 export const setupSchedule = Game.Schedule.define({
   systems: [
     SetupWorldSystem,
     SyncCameraSystem,
     ApplyWorldCameraTransformSystem,
+    DestroyRenderNodesSystem,
     CreateRenderNodesSystem,
+    SyncRenderableTransformsSystem,
     SyncPlayerSpriteSystem,
     SyncPickupPresentationSystem,
     SyncHudSystem
@@ -37,7 +100,9 @@ export const setupSchedule = Game.Schedule.define({
     SyncCameraSystem,
     ApplyWorldCameraTransformSystem,
     Game.Schedule.updateLifecycle(),
+    DestroyRenderNodesSystem,
     CreateRenderNodesSystem,
+    SyncRenderableTransformsSystem,
     SyncPlayerSpriteSystem,
     SyncPickupPresentationSystem,
     SyncHudSystem
@@ -46,46 +111,11 @@ export const setupSchedule = Game.Schedule.define({
 
 export const updateSchedule = Game.Schedule.define({
   systems: [
-    CaptureFrameContextSystem,
-    PlanPlayerVelocitySystem,
-    MovePlayerSystem,
-    UpdateFocusedCollectableSystem,
-    CollectFocusedCollectableSystem,
-    ResolveFacingSystem,
-    ResolveLocomotionSystem,
-    ResetAnimationClockSystem,
-    AdvanceAnimationClockSystem,
-    ResolveCurrentPlayerFrameSystem,
-    SyncCameraSystem,
-    ApplyWorldCameraTransformSystem,
-    DestroyRenderNodesSystem,
-    CreateRenderNodesSystem,
-    SyncRenderableTransformsSystem,
-    SyncPlayerSpriteSystem,
-    SyncPickupPresentationSystem,
-    SyncHudSystem
+    ...gameplaySystems,
+    ...updateTailSystems
   ],
   steps: [
-    CaptureFrameContextSystem,
-    PlanPlayerVelocitySystem,
-    MovePlayerSystem,
-    UpdateFocusedCollectableSystem,
-    CollectFocusedCollectableSystem,
-    ResolveFacingSystem,
-    ResolveLocomotionSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.applyStateTransitions(),
-    ResetAnimationClockSystem,
-    AdvanceAnimationClockSystem,
-    ResolveCurrentPlayerFrameSystem,
-    Game.Schedule.updateLifecycle(),
-    SyncCameraSystem,
-    ApplyWorldCameraTransformSystem,
-    DestroyRenderNodesSystem,
-    CreateRenderNodesSystem,
-    SyncRenderableTransformsSystem,
-    SyncPlayerSpriteSystem,
-    SyncPickupPresentationSystem,
-    SyncHudSystem
+    ...gameplaySteps,
+    ...updateTailSteps
   ]
 })

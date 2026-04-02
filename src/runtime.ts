@@ -312,6 +312,30 @@ type Simplify<A> = {
 type NormalizeRequirementObject<Required extends object> =
   [Required] extends [never] ? {} : Simplify<Required>
 
+type KnownObjectKeys<Value extends object> =
+  keyof Simplify<Value> extends infer Key
+    ? Key extends string
+      ? string extends Key
+        ? never
+        : Key
+      : Key extends number
+        ? number extends Key
+          ? never
+          : Key
+        : Key extends symbol
+          ? symbol extends Key
+            ? never
+            : Key
+          : never
+    : never
+
+type NormalizeMachineRequirementObject<Required extends object> =
+  [Required] extends [never]
+    ? {}
+    : {
+        readonly [K in KnownObjectKeys<Required>]: unknown
+      }
+
 /**
  * Produces a readable type-level label name.
  */
@@ -347,6 +371,20 @@ type CategoryRequirementErrors<
         readonly __missing__: IncompatibleKeys<Required, Provided>
       })
 
+type CategoryMissingRequirementErrors<
+  Kind extends string,
+  ScheduleLabel extends string,
+  Required extends object,
+  Provided extends object
+> =
+  [MissingKeys<Required, Provided>] extends [never]
+    ? never
+    : {
+        readonly __runtimeRequirementError__: Kind
+        readonly __schedule__: ScheduleLabel
+        readonly __missing__: MissingKeys<Required, Provided>
+      }
+
 type RequirementErrorsFor<
   Requirements extends RuntimeRequirements,
   ScheduleLabel extends string,
@@ -358,7 +396,7 @@ type RequirementErrorsFor<
   | CategoryRequirementErrors<"Missing or incompatible services", ScheduleLabel, NormalizeRequirementObject<Requirements["services"]>, Services>
   | CategoryRequirementErrors<"Missing or incompatible resources", ScheduleLabel, NormalizeRequirementObject<Requirements["resources"]>, Resources>
   | CategoryRequirementErrors<"Missing or incompatible states", ScheduleLabel, NormalizeRequirementObject<Requirements["states"]>, States>
-  | CategoryRequirementErrors<"Missing or incompatible machines", ScheduleLabel, NormalizeRequirementObject<Requirements["machines"]>, Machines>
+  | CategoryMissingRequirementErrors<"Missing machines", ScheduleLabel, NormalizeMachineRequirementObject<Requirements["machines"]>, Machines>
 
 type RequirementErrorsOfSchedule<
   Schedule extends ExecutableScheduleDefinition<any, any, any>,
@@ -367,7 +405,7 @@ type RequirementErrorsOfSchedule<
   States extends object,
   Machines extends object
 > = RequirementErrorsFor<
-  Schedule["requirements"],
+  Schedule.CarriedRuntimeRequirementsOf<Schedule>,
   ScheduleName<Schedule>,
   Services,
   Resources,
@@ -385,6 +423,18 @@ export type ValidateSchedules<
   ? unknown
   : {
       readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedules[number], Services, Resources, States, Machines>
+    }
+
+type ValidateSchedule<
+  Schedule extends ExecutableScheduleDefinition<any, any, any>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = [RequirementErrorsOfSchedule<Schedule, Services, Resources, States, Machines>] extends [never]
+  ? unknown
+  : {
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedule, Services, Resources, States, Machines>
     }
 
 export type AnyRequirements = RuntimeRequirements<any, any, any, any>
@@ -546,7 +596,7 @@ export interface Runtime<
    */
   readonly initialize: {
     <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>>(
-      ...schedules: Schedules & ValidateSchedules<NoInfer<Schedules>, Services, Resources, States, Machines>
+      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -561,7 +611,7 @@ export interface Runtime<
   readonly runSchedule: {
     <const Selected extends ExecutableScheduleDefinition<S, AnyRequirements, Root>>(
       schedule: Selected
-        & ValidateSchedules<readonly [NoInfer<Selected>], Services, Resources, States, Machines>
+        & ValidateSchedule<NoInfer<Selected>, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -573,7 +623,7 @@ export interface Runtime<
    */
   readonly tick: {
     <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>>(
-      ...schedules: Schedules & ValidateSchedules<NoInfer<Schedules>, Services, Resources, States, Machines>
+      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
     ): void
   }
 }
