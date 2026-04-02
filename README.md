@@ -1224,6 +1224,61 @@ carrier:
 - keep root safety, exact runtime requirement safety, and explicit schedule
   markers unchanged
 
+Latest failed attempt and current blocker:
+
+- A full pass was attempted to make `define(...)` prefer carried composition
+  metadata, while also preserving that metadata through bound `Game.Schedule`
+  wrappers in `src/schema.ts`.
+- The attempt did improve the diagnosis, but it was reverted because it was not
+  stable enough to keep.
+- What worked:
+  - `src/schedule.ts` already has the right direction internally:
+    `phase(...)` / `compose(...)` normalize and carry hidden exact/runtime
+    requirement metadata.
+  - The repo can return to the current green baseline cleanly after reverting
+    the attempted `schedule.ts` / `schema.ts` changes.
+- What failed:
+  - Preserving carried metadata through bound `Game.Schedule.define(...)` /
+    `named(...)` pushed compiler pressure into the bound helper signatures
+    themselves.
+  - Broad bound helper return types such as
+    `ScheduleCompositionDefinition<..., any, any>` are still a real problem, but
+    replacing them naively causes the compiler to evaluate too much structural
+    type information at once.
+  - Making `define(...)` infer from the whole options object helped the direct
+    compose path, but regressed ordinary handwritten schedules by making
+    overload applicability and reference validation too expensive.
+  - Annotating `Schema.bind(...)` with the full `Schema.Game<S, Root>` return
+    type made the problem worse by forcing the compiler to compare the entire
+    bound API implementation against the public interface on every use site.
+- Concrete regressions seen during this round:
+  - direct `Game.Schedule.define({ ...Game.Schedule.compose(...) })` still hit
+    `TS2589` in [src/examples/pixi.ts:278](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L278)
+  - the same pressure appeared in plain explicit schedules like
+    [src/examples/platformer/schedules.ts:20](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L20)
+    and unrelated schedule helpers like
+    [src/examples/pokemon.ts:517](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pokemon.ts#L517)
+  - the hot spot moved into the bound wrapper implementation itself around
+    `defineSchedule` / `namedSchedule` in `src/schema.ts`
+- Important conclusion from this round:
+  - the remaining problem is not only “make `schedule.ts` carry metadata”.
+  - the deeper blocker is the bound schema layer. `Schema.bind(...)` and the
+    bound `Game.Schedule.*` helpers still expose too much implementation shape
+    to the compiler.
+- The next attempt should avoid repeating this approach:
+  - do not start by changing `define(...)` inference again
+  - do not add a broad `Schema.bind(...): Schema.Game<S, Root>` annotation
+  - do not rely on overloaded structural function comparisons for bound schedule
+    helpers
+- More promising next direction:
+  - introduce explicit canonical callable/helper types for the bound schedule
+    methods and return those from `bind(...)`, so the bound API stops leaking
+    the raw implementation graph
+  - keep the current green runtime/schedule baseline unchanged while isolating
+    only the bound schedule helper surface
+  - only revisit direct carried-metadata reuse inside `define(...)` after that
+    bound-surface normalization exists
+
 ### Sound explicit schedules without duplicated `systems` and `steps`
 
 The current schedule API still allows explicit schedules to declare both
