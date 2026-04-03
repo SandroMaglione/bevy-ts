@@ -399,7 +399,7 @@ type RequirementErrorsFor<
   | CategoryMissingRequirementErrors<"Missing machines", ScheduleLabel, NormalizeMachineRequirementObject<Requirements["machines"]>, Machines>
 
 type RequirementErrorsOfSchedule<
-  Schedule extends ExecutableScheduleDefinition<any, any, any>,
+  Schedule extends ExecutableScheduleDefinition<any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -414,7 +414,24 @@ type RequirementErrorsOfSchedule<
 >
 
 export type ValidateSchedules<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = {
+  readonly [K in keyof Schedules]:
+    Schedules[K] & ValidateSchedule<
+      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any>>,
+      Services,
+      Resources,
+      States,
+      Machines
+    >
+}
+
+export type ValidateScheduleArray<
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -426,7 +443,7 @@ export type ValidateSchedules<
     }
 
 type ValidateSchedule<
-  Schedule extends ExecutableScheduleDefinition<any, any, any>,
+  Schedule extends ExecutableScheduleDefinition<any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -595,8 +612,8 @@ export interface Runtime<
    * repeating update loop.
    */
   readonly initialize: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>>(
-      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any>>>(
+      ...schedules: ValidateSchedules<Schedules, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -609,7 +626,7 @@ export interface Runtime<
    * of schedules.
    */
   readonly runSchedule: {
-    <const Selected extends ExecutableScheduleDefinition<S, AnyRequirements, Root>>(
+    <const Selected extends ExecutableScheduleDefinition<S, any, Root, any>>(
       schedule: Selected
         & ValidateSchedule<NoInfer<Selected>, Services, Resources, States, Machines>
     ): void
@@ -622,8 +639,8 @@ export interface Runtime<
    * updates produced by earlier schedules.
    */
   readonly tick: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>>(
-      ...schedules: Schedules & ValidateSchedules<Schedules, Services, Resources, States, Machines>
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any>>>(
+      ...schedules: ValidateSchedules<Schedules, Services, Resources, States, Machines>
     ): void
   }
 }
@@ -2023,15 +2040,10 @@ export const makeRuntime = <
     if (options.resetChangedMachines ?? true) {
       changedMachines = new Set()
     }
-    const setConditionByKey = new Map(
-      (schedule.sets ?? []).map((set: typeof schedule.sets[number]) => [set.label.key, set.when] as const)
-    )
     for (const step of schedule.steps) {
       if (Schedule.isSystemStep(step)) {
-        const blockedBySet = step.spec.inSets.some((set: import("./label.ts").Label.SystemSet) =>
-          (setConditionByKey.get(set.key) ?? []).some((condition) => !evaluateCondition(condition))
-        )
-        if (!blockedBySet) {
+        const blockedByWhen = step.spec.when.some((condition: Machine.Condition) => !evaluateCondition(condition))
+        if (!blockedByWhen) {
           deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
         }
         continue

@@ -172,7 +172,6 @@ export interface TransitionScheduleDefinition<
 > {
   readonly steps: ReadonlyArray<Schedule.Step>
   readonly systems: ReadonlyArray<unknown>
-  readonly sets: ReadonlyArray<unknown>
   readonly schema: S
   readonly requirements: Requirements
   readonly __schemaRoot?: Root | undefined

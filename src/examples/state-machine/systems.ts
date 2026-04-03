@@ -28,7 +28,7 @@ import {
   CountdownRemaining,
   DeltaTime,
   Game,
-  GameplaySet,
+  GameplayWhen,
   InputManager,
   Pickup,
   PickupGoal,
@@ -216,7 +216,7 @@ export const TickCountdownSystem = Game.System.define(
 export const MovePlayerSystem = Game.System.define(
   "StateMachineExample/MovePlayer",
   {
-    inSets: [GameplaySet],
+    when: GameplayWhen,
     queries: {
       player: PlayerQuery
     },
@@ -250,7 +250,7 @@ export const MovePlayerSystem = Game.System.define(
 export const CollectPickupsSystem = Game.System.define(
   "StateMachineExample/CollectPickups",
   {
-    inSets: [GameplaySet],
+    when: GameplayWhen,
     queries: {
       player: PlayerReadQuery,
       pickups: PickupQuery
@@ -279,7 +279,7 @@ export const CollectPickupsSystem = Game.System.define(
 export const TickRoundClockSystem = Game.System.define(
   "StateMachineExample/TickRoundClock",
   {
-    inSets: [GameplaySet],
+    when: GameplayWhen,
     resources: {
       deltaTime: Game.System.readResource(DeltaTime),
       roundTime: Game.System.writeResource(RoundTimeRemaining)
@@ -294,7 +294,7 @@ export const TickRoundClockSystem = Game.System.define(
 export const QueueOutcomeSystem = Game.System.define(
   "StateMachineExample/QueueOutcome",
   {
-    inSets: [GameplaySet],
+    when: GameplayWhen,
     resources: {
       score: Game.System.readResource(Score),
       goal: Game.System.readResource(PickupGoal),

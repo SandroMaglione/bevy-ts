@@ -107,16 +107,12 @@ Run those systems through explicit `bootstrap` and `update` schedules:
 ```ts
 import { App } from "./src/index.ts"
 
-const bootstrap = Game.Schedule.define({
-  entries: [SetupSystem]
-})
+const bootstrap = Game.Schedule.define([SetupSystem])
 
-const update = Game.Schedule.define({
-  entries: [
-    MoveSystem,
-    Game.Schedule.applyDeferred()
-  ]
-})
+const update = Game.Schedule.define([
+  MoveSystem,
+  Game.Schedule.applyDeferred()
+])
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
@@ -228,7 +224,7 @@ const TickSystem = Game.System.define(
     })
 )
 
-const tick = Game.Schedule.define({ entries: [TickSystem] })
+const tick = Game.Schedule.define([TickSystem])
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
@@ -318,34 +314,37 @@ Reference examples:
 
 ## Ordering systems
 
-Direct system references are the default ordering mechanism. Reusable sets stay explicit and typed.
+Schedule order is authored directly in the plan array. When a flow has a few
+clear phases, split those phases into small reusable schedules and compose them
+explicitly.
 
 ```ts
-import { Label } from "./src/index.ts"
+const inputSchedule = Game.Schedule.define([
+  InputSystem
+])
 
-const MovementSet = Label.defineSystemSetLabel("Movement")
+const gameplaySchedule = Game.Schedule.define([
+  ResolveIntentSystem,
+  MoveSystem,
+  Game.Schedule.applyDeferred()
+])
 
-const InputSystem = Game.System.define("Input", {
-  inSets: [MovementSet]
-}, ({}) => Fx.sync(() => {}))
+const renderSyncSchedule = Game.Schedule.define([
+  Game.Schedule.updateLifecycle(),
+  DestroyRenderNodesSystem,
+  CreateRenderNodesSystem,
+  SyncRenderableTransformsSystem
+])
 
-const MoveSystem = Game.System.define("Move", {
-  inSets: [MovementSet],
-  after: [InputSystem]
-}, ({}) => Fx.sync(() => {}))
-
-const update = Game.Schedule.define({
-  entries: [InputSystem, MoveSystem],
-  sets: [
-    Game.Schedule.configureSet({
-      label: MovementSet,
-      chain: true
-    })
-  ]
-})
+const update = Game.Schedule.define([
+  inputSchedule,
+  gameplaySchedule,
+  renderSyncSchedule
+])
 ```
 
-No runtime-relevant references are open strings. Systems are referenced directly, and reusable sets use typed labels.
+No runtime-relevant ordering is hidden behind labels or sets. The authored
+schedule is the execution order.
 
 ## State machines
 
@@ -416,7 +415,7 @@ The canonical pattern is:
 - transition bundles on the machine whose boundary owns the reset or entry work
 - later observation through `readTransitionEvent(...)`
 
-That is the pattern used in [`src/examples/state-machine.ts`](./src/examples/state-machine.ts):
+That is the pattern used in [`src/examples/state-machine/schedules.ts`](./src/examples/state-machine/schedules.ts):
 
 ```ts
 const SessionState = Game.StateMachine.define(
@@ -483,19 +482,15 @@ const ResetWorldSystem = Game.System.define(
 )
 
 const phaseTransitions = Game.Schedule.transitions(
-  Game.Schedule.onEnter(Phase, "Playing", {
-    entries: [ResetWorldSystem]
-  })
+  Game.Schedule.onEnter(Phase, "Playing", [ResetWorldSystem])
 )
 
-const update = Game.Schedule.define({
-  entries: [
-    QueueRestartSystem,
-    GameplaySystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.applyStateTransitions(phaseTransitions)
-  ]
-})
+const update = Game.Schedule.define([
+  QueueRestartSystem,
+  GameplaySystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.applyStateTransitions(phaseTransitions)
+])
 ```
 
 The important behavior is that restart is not immediate when input is pressed.
@@ -519,7 +514,7 @@ The reason is to preserve:
 Reference examples:
 
 - [`src/examples/snake.ts`](./src/examples/snake.ts)
-- [`src/examples/state-machine.ts`](./src/examples/state-machine.ts)
+- [`src/examples/state-machine/schedules.ts`](./src/examples/state-machine/schedules.ts)
 
 ### Apply transitions explicitly
 
@@ -527,25 +522,17 @@ Bundle transition handlers explicitly and attach them to the transition marker:
 
 ```ts
 const appTransitions = Game.Schedule.transitions(
-  Game.Schedule.onExit(AppState, "Playing", {
-    entries: [StopGameplayAudioSystem]
-  }),
-  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
-    entries: [PersistCheckpointSystem]
-  }),
-  Game.Schedule.onEnter(AppState, "Paused", {
-    entries: [ShowPauseOverlaySystem]
-  })
+  Game.Schedule.onExit(AppState, "Playing", [StopGameplayAudioSystem]),
+  Game.Schedule.onTransition(AppState, ["Playing", "Paused"] as const, [PersistCheckpointSystem]),
+  Game.Schedule.onEnter(AppState, "Paused", [ShowPauseOverlaySystem])
 )
 
-const update = Game.Schedule.define({
-  entries: [
-    PauseInputSystem,
-    // Pending state only becomes committed at this exact marker.
-    Game.Schedule.applyStateTransitions(appTransitions),
-    GameplaySystem
-  ]
-})
+const update = Game.Schedule.define([
+  PauseInputSystem,
+  // Pending state only becomes committed at this exact marker.
+  Game.Schedule.applyStateTransitions(appTransitions),
+  GameplaySystem
+])
 ```
 
 Queued state is invisible before `applyStateTransitions()` and visible after it.
@@ -574,22 +561,16 @@ const OnEnterPaused = Game.System.define(
 )
 
 const pauseTransitions = Game.Schedule.transitions(
-  Game.Schedule.onExit(AppState, "Playing", {
-    entries: [StopGameplayAudioSystem]
-  }),
-  Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
-    entries: [PersistCheckpointSystem]
-  }),
-  Game.Schedule.onEnter(AppState, "Paused", {
-    entries: [OnEnterPaused]
-  })
+  Game.Schedule.onExit(AppState, "Playing", [StopGameplayAudioSystem]),
+  Game.Schedule.onTransition(AppState, ["Playing", "Paused"] as const, [PersistCheckpointSystem]),
+  Game.Schedule.onEnter(AppState, "Paused", [OnEnterPaused])
 )
 ```
 
 The current order is:
 
 1. `onExit(previous)`
-2. `onTransition({ from, to })`
+2. `onTransition([from, to])`
 3. commit the new current state
 4. `onEnter(current)`
 
@@ -613,14 +594,12 @@ const ObserveTransitions = Game.System.define(
     })
 )
 
-const update = Game.Schedule.define({
-  entries: [
-    PauseInputSystem,
-    Game.Schedule.applyStateTransitions(appTransitions),
-    Game.Schedule.updateEvents(),
-    ObserveTransitions
-  ]
-})
+const update = Game.Schedule.define([
+  PauseInputSystem,
+  Game.Schedule.applyStateTransitions(appTransitions),
+  Game.Schedule.updateEvents(),
+  ObserveTransitions
+])
 ```
 
 This covers the common orchestration cases that are awkward without a typed FSM layer: menus, pause screens, turn phases, and similar mode-driven flows.
@@ -775,15 +754,13 @@ plus narrow update passes. This is the smallest pattern and is the right
 default for many renderer bridges.
 
 ```ts
-const browserUpdate = Game.Schedule.define({
-  entries: [
-    simulateSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    createNodesSystem,
-    syncTransformsSystem
-  ]
-})
+const browserUpdate = Game.Schedule.define([
+  simulateSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  createNodesSystem,
+  syncTransformsSystem
+])
 ```
 
 Typical pieces:
@@ -804,17 +781,15 @@ optional reconcile phases. This is clearer when the host can drift or when
 multiple render-side structures must stay in sync.
 
 ```ts
-const browserUpdate = Game.Schedule.define({
-  entries: [
-    simulateSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    destroyNodesSystem,
-    createNodesSystem,
-    syncTransformsSystem,
-    reconcileNodesSystem
-  ]
-})
+const browserUpdate = Game.Schedule.define([
+  simulateSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  destroyNodesSystem,
+  createNodesSystem,
+  syncTransformsSystem,
+  reconcileNodesSystem
+])
 ```
 
 Typical pieces:
@@ -828,7 +803,7 @@ Reference examples:
 
 - [`src/examples/snake.ts`](./src/examples/snake.ts)
 - [`src/examples/space-invaders.ts`](./src/examples/space-invaders.ts)
-- [`src/examples/state-machine.ts`](./src/examples/state-machine.ts)
+- [`src/examples/state-machine/schedules.ts`](./src/examples/state-machine/schedules.ts)
 
 ### Browser loop walkthrough
 
@@ -839,20 +814,18 @@ The practical browser shape is:
 3. run one update schedule that keeps simulation and host sync in explicit phases
 
 ```ts
-const updateSchedule = Game.Schedule.define({
-  entries: [
-    captureInputSystem,
-    simulationSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.applyStateTransitions(transitions),
-    Game.Schedule.updateEvents(),
-    Game.Schedule.updateLifecycle(),
-    commitTransitionEffectsSystem,
-    destroyNodesSystem,
-    createNodesSystem,
-    syncTransformsSystem
-  ]
-})
+const updateSchedule = Game.Schedule.define([
+  captureInputSystem,
+  simulationSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.applyStateTransitions(transitions),
+  Game.Schedule.updateEvents(),
+  Game.Schedule.updateLifecycle(),
+  commitTransitionEffectsSystem,
+  destroyNodesSystem,
+  createNodesSystem,
+  syncTransformsSystem
+])
 
 const tick = () => {
   runtime.runSchedule(updateSchedule)
@@ -930,77 +903,40 @@ typed failure instead of an exception.
 Author schedules with one public constructor:
 
 ```ts
-const gameplay = Game.Schedule.define({
-  entries: [
-    captureInputSystem,
-    gameplaySystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.applyStateTransitions(transitions)
-  ]
-})
+const gameplay = Game.Schedule.define([
+  captureInputSystem,
+  gameplaySystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.applyStateTransitions(transitions)
+])
 
-const renderSync = Game.Schedule.define({
-  entries: [
-    Game.Schedule.updateLifecycle(),
-    destroyRenderNodesSystem,
-    createRenderNodesSystem,
-    syncRenderableTransformsSystem
-  ]
-})
+const renderSync = Game.Schedule.define([
+  Game.Schedule.updateLifecycle(),
+  destroyRenderNodesSystem,
+  createRenderNodesSystem,
+  syncRenderableTransformsSystem
+])
 
-const update = Game.Schedule.define({
-  entries: [gameplay, renderSync]
-})
+const update = Game.Schedule.define([gameplay, renderSync])
 ```
 
-`entries` may contain:
+The plan array may contain:
 
 - systems
 - explicit schedule markers like `applyDeferred()`, `updateEvents()`, `updateLifecycle()`, and `applyStateTransitions(...)`
 - already-final schedules returned by `Game.Schedule.define(...)`
+- reusable fragments returned by `Game.Schedule.fragment(...)`
+- reusable phases returned by `Game.Schedule.phase(...)`
 
 The important rule is that schedule boundaries stay explicit. Deferred
 commands, lifecycle visibility, event refresh, and state transitions only
 advance when the corresponding marker runs.
 
-### Warning
-
-Some schedule structure checks intentionally happen when the schedule is built,
-not in the type surface. The clearest example is a system that references a set
-which the schedule never configures:
-
-```ts
-const RenderSet = Label.defineSystemSetLabel("Render")
-
-const DrawSystem = Game.System.define(
-  "Draw",
-  {
-    inSets: [RenderSet]
-  },
-  () => Fx.sync(() => undefined)
-)
-
-const update = Game.Schedule.define({
-  entries: [DrawSystem]
-})
-```
-
-This compiles, but constructing the schedule throws because `RenderSet` is
-missing from `sets`. The correct form is:
-
-```ts
-const update = Game.Schedule.define({
-  entries: [DrawSystem],
-  sets: [
-    Game.Schedule.configureSet({
-      label: RenderSet
-    })
-  ]
-})
-```
-
-The same runtime normalization path also rejects missing ordering targets and
-duplicate systems across composed entries.
+`Game.Schedule.define(...)`, `fragment(...)`, `phase(...)`, and `compose(...)`
+still normalize and validate structure when the schedule value is built. The
+main runtime-facing check there is duplicate system steps across the flattened
+plan. If the same system is accidentally included twice through nested
+composition, schedule construction throws immediately.
 
 ## Feature Composition
 
@@ -1074,7 +1010,7 @@ This keeps the ECS side focused on simulation and orchestration, and the host si
 The repo currently includes:
 
 - [`src/examples/smoke.ts`](./src/examples/smoke.ts) for the smallest end-to-end setup
-- [`src/examples/state-machine.ts`](./src/examples/state-machine.ts) for multiple machines, explicit transition bundles, and transition events
+- [`src/examples/state-machine/schedules.ts`](./src/examples/state-machine/schedules.ts) for multiple machines, explicit transition bundles, and transition events
 - [`src/examples/top-down.ts`](./src/examples/top-down.ts) for a browser proof of concept with free movement, wall collision, camera follow, and proximity-based collection
 - [`src/examples/pixi.ts`](./src/examples/pixi.ts) for renderer/service integration
 - [`src/examples/pokemon.ts`](./src/examples/pokemon.ts) for ordered movement and collision
@@ -1100,22 +1036,19 @@ Concretely, the tradeoff looks like this:
 
 ```ts
 const A = Game.System.define("A", { schema }, ...)
-const B = Game.System.define("B", { schema, after: [A] }, ...)
+const B = Game.System.define("B", { schema }, ...)
 
-const schedule = Game.Schedule.define({
-  entries: [
-    A,
-    Game.Schedule.applyDeferred(),
-    B,
-    /* many more steps */
-  ]
-})
+const schedule = Game.Schedule.define([
+  A,
+  Game.Schedule.applyDeferred(),
+  B,
+  /* many more steps */
+])
 ```
 
 After optimization, the important guarantees still need to hold:
 
-- `B` really points to the exact `A` value in `after: [A]`
-- invalid direct references are rejected when defining the schedule
+- authored step order stays exact
 - carried requirements stay correct
 - the bound root stays correct
 - runtime compatibility is still checked later on
@@ -1137,53 +1070,16 @@ What is not an acceptable fix:
 
 This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety.
 
-There is still one known raw-compiler edge case around direct schedule execution
-when the schedule's machine requirements come from deeply nested disjunctive
-conditions. The concrete failing shape is a direct call like:
+Direct inline schedule execution is supported:
 
 ```ts
-runtime.runSchedule(Game.Schedule.define({
-  entries: [increment]
-}))
+runtime.runSchedule(Game.Schedule.define([increment]))
+app.update(Game.Schedule.define([increment]))
 ```
 
-where `increment` is gated by a condition such as:
-
-```ts
-Game.Condition.or(
-  Game.Condition.inState(AppState, "Menu"),
-  Game.Condition.inState(RoundState, "Live")
-)
-```
-
-The schedule itself is valid, the carried runtime requirements are correct, and
-the runtime is provisioned correctly. The failure is a nondeterministic `tsgo`
-false negative at the execution boundary, where the compiler sometimes asks for
-the synthetic `__fixRuntimeRequirements__` error marker even though the machine
-requirements are satisfied.
-
-The internal directions already attempted here are:
-
-- validating execution boundaries against carried schedule requirements instead
-  of recomputing from broader schedule structure
-- deriving service and machine provisioning from the branded
-  `Runtime.services(...)` / `Runtime.machines(...)` values instead of parallel
-  free generic parameters
-- aligning `runSchedule(...)` more closely with the tuple-based validation path
-  used by `tick(...)`
-- reducing inference coupling around the execution gate with `NoInfer`
-- simplifying the schedule-label path in the synthetic requirement error type
-
-These changes helped reduce related compiler pressure, but they did not fully
-eliminate this one nondeterministic raw `tsgo` false negative.
-
-For now, the safe local workaround is to define the schedule value first and
-then pass that value to `runSchedule(...)` or `app.update(...)`. This keeps the
-public API strict and unchanged while avoiding the one unstable inline
-instantiation path. The remaining work, if this needs to be fully eliminated,
-is to make the execution-boundary machine-requirement gate cheaper without
-relaxing root safety, requirement safety, or explicit runtime-failure
-semantics.
+The execution boundary still validates the carried runtime requirements from the
+schedule value, but normal usage should not require extra variables or schedule
+splitting just to satisfy the compiler.
 
 ## Out of scope for now
 
@@ -1216,9 +1112,10 @@ Ideal shape:
 
 ```ts
 const restartBundle = Game.Schedule.transitions(
-  Game.Schedule.onEnter(SessionState, "Playing", {
-    entries: [resetWorldSystem, respawnWorldSystem]
-  })
+  Game.Schedule.onEnter(SessionState, "Playing", [
+    resetWorldSystem,
+    respawnWorldSystem
+  ])
 )
 ```
 
@@ -1276,20 +1173,16 @@ final schedules without pushing renderer-specific logic into the core.
 Ideal shape:
 
 ```ts
-const renderMirror = Game.Schedule.define({
-  entries: [
-    Game.Schedule.updateLifecycle(),
-    destroyRenderNodesSystem,
-    createRenderNodesSystem,
-    syncRenderableTransformsSystem
-  ]
-})
+const renderMirror = Game.Schedule.define([
+  Game.Schedule.updateLifecycle(),
+  destroyRenderNodesSystem,
+  createRenderNodesSystem,
+  syncRenderableTransformsSystem
+])
 
-const update = Game.Schedule.define({
-  entries: [
-    gameplaySystem,
-    Game.Schedule.applyDeferred(),
-    renderMirror
-  ]
-})
+const update = Game.Schedule.define([
+  gameplaySystem,
+  Game.Schedule.applyDeferred(),
+  renderMirror
+])
 ```

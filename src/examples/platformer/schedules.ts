@@ -17,8 +17,7 @@ import {
 } from "./systems/index.ts"
 import { Game, SessionState } from "./schema.ts"
 
-export const setupSchedule = Game.Schedule.define({
-  entries: [
+export const setupSchedule = Game.Schedule.define([
     SetupWorldSystem,
     Game.Schedule.applyDeferred(),
     SyncCameraSystem,
@@ -26,17 +25,15 @@ export const setupSchedule = Game.Schedule.define({
     Game.Schedule.updateLifecycle(),
     CreateRenderNodesSystem,
     SyncHudSystem
-  ]
-})
+  ])
 
 export const stateTransitions = Game.Schedule.transitions(
-  Game.Schedule.onEnter(SessionState, "Playing", {
-    entries: [ResetWorldOnPlayingEnterSystem]
-  })
+  Game.Schedule.onEnter(SessionState, "Playing", [
+    ResetWorldOnPlayingEnterSystem
+  ])
 )
 
-export const updateSchedule = Game.Schedule.define({
-  entries: [
+export const updateSchedule = Game.Schedule.define([
     CaptureFrameContextSystem,
     ResolveMoveIntentSystem,
     ApplyJumpSystem,
@@ -53,5 +50,4 @@ export const updateSchedule = Game.Schedule.define({
     CreateRenderNodesSystem,
     SyncRenderableTransformsSystem,
     SyncHudSystem
-  ]
-})
+  ])

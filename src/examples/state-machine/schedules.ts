@@ -18,27 +18,24 @@ import {
   TickRoundClockSystem,
   WriteTransitionNoticeSystem
 } from "./systems.ts"
-import { Game, GameplaySet, RoundState, SessionState } from "./schema.ts"
+import { Game, SessionState } from "./schema.ts"
 
-export const setupSchedule = Game.Schedule.define({
-  entries: [
+export const setupSchedule = Game.Schedule.define([
     SpawnPlayerSystem,
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateLifecycle(),
     CreateRenderNodesSystem,
     SyncHudSystem
-  ]
-})
+  ])
 
 export const stateTransitions = Game.Schedule.transitions(
-  Game.Schedule.onEnter(SessionState, "Countdown", {
+  Game.Schedule.onEnter(SessionState, "Countdown", [
     // Entering Countdown is the explicit reset boundary for the next round.
-    entries: [ResetRoundOnCountdownEnterSystem]
-  })
+    ResetRoundOnCountdownEnterSystem
+  ])
 )
 
-export const updateSchedule = Game.Schedule.define({
-  entries: [
+export const updateSchedule = Game.Schedule.define([
     CaptureFrameInputSystem,
     QueueStartFromTitleSystem,
     QueueRestartSystem,
@@ -60,14 +57,4 @@ export const updateSchedule = Game.Schedule.define({
     CreateRenderNodesSystem,
     SyncRenderableTransformsSystem,
     SyncHudSystem
-  ],
-  sets: [
-    Game.Schedule.configureSet({
-      label: GameplaySet,
-      when: [Game.Condition.and(
-        Game.Condition.inState(SessionState, "Round"),
-        Game.Condition.inState(RoundState, "Playing")
-      )]
-    })
-  ]
-})
+  ])

@@ -904,20 +904,15 @@ const DestroyPixiNodesSystem = Game.System.define(
     })
 )
 
-const gameplaySetupSchedule = Game.Schedule.define({
-  entries: [SpawnPlayerSystem]
-})
+const gameplaySetupSchedule = Game.Schedule.define([SpawnPlayerSystem])
 
-const setupSchedule = Game.Schedule.define({
-  entries: [
+const setupSchedule = Game.Schedule.define([
     gameplaySetupSchedule,
     CreateMatterBodiesSystem,
     CreatePixiNodesSystem
-  ]
-})
+  ])
 
-const updateSchedule = Game.Schedule.define({
-  entries: [
+const updateSchedule = Game.Schedule.define([
     CaptureFrameInputSystem,
     PlayerInputSystem,
     ShootingSystem,
@@ -940,8 +935,7 @@ const updateSchedule = Game.Schedule.define({
     DestroyMatterBodiesSystem,
     DestroyPixiNodesSystem,
     SyncPixiTransformsSystem
-  ]
-})
+  ])
 
 export const startSpaceInvadersExample = async (
   mount: HTMLElement

@@ -7,10 +7,6 @@ import { describe, it } from "tstyche"
 const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
 const Time = Descriptor.defineResource<number>()("Time")
 
-const MoveSet = Label.defineSystemSetLabel("Movement")
-const RenderSet = Label.defineSystemSetLabel("Render")
-const UpdateSchedule = Label.defineScheduleLabel("Update")
-
 const schema = Schema.build(Schema.fragment({
   components: {
     Position
@@ -24,7 +20,6 @@ const MovementSystem = System.define(
   "MovementSystem",
   {
     schema,
-    inSets: [MoveSet],
     queries: {
       position: Query.define({
         selection: {
@@ -36,13 +31,15 @@ const MovementSystem = System.define(
   () => Fx.sync<undefined, {}>(() => undefined)
 )
 
-const RenderSystem = System.define(
-  "RenderSystem",
+const ExplicitLabelSystem = System.define(
   {
+    label: Label.defineSystemLabel("ExplicitLabelSystem"),
     schema,
-    after: [MovementSystem, MoveSet]
+    resources: {
+      time: System.readResource(Time)
+    }
   },
-  () => Fx.sync<undefined, {}>(() => undefined)
+  ({ resources }) => Fx.sync(() => resources.time.get())
 )
 
 const PlainSystem = System.define(
@@ -62,138 +59,23 @@ const SuffixSystem = System.define(
 )
 
 describe("Schedule", () => {
-  it("accepts valid systems and configured sets", () => {
-    Schedule.define({
-      schema,
-      entries: [MovementSystem, RenderSystem],
-      sets: [
-        Schedule.configureSet({
-          label: MoveSet,
-          chain: true
-        })
-      ] as const
-    })
-  })
+  it("builds executable schedules from explicit authored plans", () => {
+    const schedule = Schedule.define([
+      MovementSystem,
+      Schedule.applyDeferred(),
+      ExplicitLabelSystem
+    ])
 
-  it("rejects systems assigned to missing sets", () => {
-    const MissingSetSystem = System.define(
-      "MissingSetSystem",
-      {
-        schema,
-        inSets: [RenderSet]
-      },
-      () => Fx.sync<undefined, {}>(() => undefined)
-    )
-
-    Schedule.define({
-      schema,
-      entries: [MovementSystem, MissingSetSystem],
-      sets: [
-        Schedule.configureSet({
-          label: MoveSet
-        })
-      ] as const
-    })
-  })
-
-  it("rejects direct system ordering references to systems outside the schedule", () => {
-    const MissingDependency = System.define(
-      "MissingDependency",
-      {
-        schema
-      },
-      () => Fx.sync<undefined, {}>(() => undefined)
-    )
-
-    const Dependent = System.define(
-      "Dependent",
-      {
-        schema,
-        after: [MissingDependency]
-      },
-      () => Fx.sync<undefined, {}>(() => undefined)
-    )
-
-    Schedule.define({
-      schema,
-      entries: [Dependent]
-    })
-  })
-
-  it("rejects system ordering references to unconfigured sets", () => {
-    const NeedsRenderSet = System.define(
-      "NeedsRenderSet",
-      {
-        schema,
-        after: [RenderSet]
-      },
-      () => Fx.sync<undefined, {}>(() => undefined)
-    )
-
-    Schedule.define({
-      schema,
-      entries: [MovementSystem, NeedsRenderSet],
-      sets: [
-        Schedule.configureSet({
-          label: MoveSet
-        })
-      ] as const
-    })
-  })
-
-  it("does not expose a label on anonymous schedules", () => {
-    const schedule = Schedule.define({
-      schema,
-      entries: [PlainSystem]
-    })
+    schedule.steps
+    schedule.systems
+    schedule.requirements
 
     // @ts-expect-error!
     schedule.label
   })
 
-  it("exposes a label on named schedules", () => {
-    const schedule = Schedule.define({
-      schema,
-      label: UpdateSchedule,
-      entries: [PlainSystem]
-    })
-
-    schedule.label
-  })
-
-  it("extends one base schedule with prefix and suffix steps", () => {
-    const base = Schedule.define({
-      schema,
-      entries: [PlainSystem]
-    })
-
-    const extended = Schedule.extend(base, {
-      before: [MovementSystem],
-      after: [Schedule.updateLifecycle(), SuffixSystem]
-    })
-
-    extended.steps
-    extended.systems
-
-    // @ts-expect-error!
-    extended.label
-  })
-
-  it("creates reusable explicit phases", () => {
-    const hostMirror = Schedule.define({
-      schema,
-      entries: [
-        Schedule.updateLifecycle(),
-        RenderSystem
-      ]
-    })
-
-    hostMirror.steps
-    hostMirror.systems
-  })
-
-  it("composes systems, markers, and phases into one schedule fragment", () => {
-    const hostMirror = Schedule.define({
+  it("creates reusable explicit fragments", () => {
+    const hostMirror = Schedule.fragment({
       schema,
       entries: [
         Schedule.updateLifecycle(),
@@ -201,13 +83,61 @@ describe("Schedule", () => {
       ]
     })
 
-    Schedule.define({
+    const schedule = Schedule.define([
+      PlainSystem,
+      Schedule.applyDeferred(),
+      hostMirror
+    ])
+
+    schedule.steps
+    schedule.systems
+  })
+
+  it("creates reusable explicit phases", () => {
+    const hostMirrorPhase = Schedule.phase({
       schema,
+      steps: [
+        Schedule.updateLifecycle(),
+        SuffixSystem
+      ]
+    })
+
+    const schedule = Schedule.define([
+      PlainSystem,
+      hostMirrorPhase
+    ])
+
+    schedule.steps
+    schedule.systems
+  })
+
+  it("composes systems, markers, and fragments into one schedule", () => {
+    const hostMirror = Schedule.fragment({
+      schema,
+      entries: [
+        Schedule.updateLifecycle(),
+        SuffixSystem
+      ]
+    })
+
+    const plan = Schedule.compose({
       entries: [
         PlainSystem,
         Schedule.applyDeferred(),
         hostMirror
       ]
     })
+
+    plan.steps
+    plan.systems
+
+    const schedule = Schedule.build([
+      PlainSystem,
+      Schedule.applyDeferred(),
+      hostMirror
+    ])
+
+    schedule.steps
+    schedule.systems
   })
 })

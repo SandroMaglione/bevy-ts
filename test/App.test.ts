@@ -49,15 +49,9 @@ describe("App", () => {
         })
     )
 
-    const updateSchedule = Schedule.define({
-      schema,
-      entries: [increment]
-    })
+    const updateSchedule = Schedule.define([increment])
 
-    const readSchedule = Schedule.define({
-      schema,
-      entries: [read]
-    })
+    const readSchedule = Schedule.define([read])
 
     const runtime = Runtime.makeRuntime({
       schema,
@@ -120,20 +114,11 @@ describe("App", () => {
         })
     )
 
-    const firstSchedule = Schedule.define({
-      schema,
-      entries: [first]
-    })
+    const firstSchedule = Schedule.define([first])
 
-    const secondSchedule = Schedule.define({
-      schema,
-      entries: [second]
-    })
+    const secondSchedule = Schedule.define([second])
 
-    const readSchedule = Schedule.define({
-      schema,
-      entries: [read]
-    })
+    const readSchedule = Schedule.define([read])
 
     const runtime = Runtime.makeRuntime({
       schema,
@@ -181,15 +166,9 @@ describe("App", () => {
         })
     )
 
-    const setupSchedule = Schedule.define({
-      schema,
-      entries: [setup]
-    })
+    const setupSchedule = Schedule.define([setup])
 
-    const readSchedule = Schedule.define({
-      schema,
-      entries: [read]
-    })
+    const readSchedule = Schedule.define([read])
 
     const runtime = Runtime.makeRuntime({
       schema,
@@ -232,10 +211,7 @@ describe("App", () => {
     })
 
     const app = App.makeApp(runtime)
-    const schedule = Schedule.define({
-      schema,
-      entries: [increment]
-    })
+    const schedule = Schedule.define([increment])
 
     app.update(schedule)
     app.update(schedule)
@@ -273,9 +249,7 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define({
-            entries: [bootstrap]
-          })]
+          bootstrap: [Game.Schedule.define([bootstrap])]
         }
       }
     })
@@ -322,12 +296,8 @@ describe("App", () => {
 
         return {
           update: [
-            Game.Schedule.define({
-              entries: [increment]
-            }),
-            Game.Schedule.define({
-              entries: [capture]
-            })
+            Game.Schedule.define([increment]),
+            Game.Schedule.define([capture])
           ]
         }
       }
@@ -397,8 +367,8 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define({ entries: [bootstrap] })],
-          update: [Game.Schedule.define({ entries: [update] })]
+          bootstrap: [Game.Schedule.define([bootstrap])],
+          update: [Game.Schedule.define([update])]
         }
       }
     })
@@ -434,8 +404,8 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define({ entries: [bootstrap] })],
-          update: [Game.Schedule.define({ entries: [update] })]
+          bootstrap: [Game.Schedule.define([bootstrap])],
+          update: [Game.Schedule.define([update])]
         }
       }
     })
@@ -527,9 +497,7 @@ const readCounter = (
   >
 ): number => {
   let captured = -1
-  runtime.runSchedule(Schedule.define({
-    schema,
-    entries: [System.define(
+  runtime.runSchedule(Schedule.define([System.define(
       "AppTest/ReadCounterHelperSystem",
       {
         schema,
@@ -541,7 +509,6 @@ const readCounter = (
         Fx.sync(() => {
           captured = resources.counter.get()
         })
-    )]
-  }))
+    )]))
   return captured
 }

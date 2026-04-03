@@ -38,10 +38,7 @@ export const readResourceValue = <
       })
   )
 
-  runtime.runSchedule(Schedule.define({
-    schema,
-    entries: [readSystem]
-  }) as never)
+  runtime.runSchedule(Schedule.define([readSystem]) as never)
 
   return captured
 }
@@ -79,10 +76,7 @@ export const readStateValue = <
       })
   )
 
-  runtime.runSchedule(Schedule.define({
-    schema,
-    entries: [readSystem]
-  }) as never)
+  runtime.runSchedule(Schedule.define([readSystem]) as never)
 
   return captured
 }

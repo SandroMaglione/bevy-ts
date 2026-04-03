@@ -156,11 +156,9 @@ type ValidateFeatureSelection<Features extends ReadonlyArray<AnyFeatureDefinitio
       }
 
 type RebindFeatureSchedule<ScheduleValue, S extends Schema.Any, Root> =
-  ScheduleValue extends Schedule.Schedule.Named<any, infer Requirements, infer LabelValue, any>
-    ? Schedule.Schedule.Named<S, Requirements, LabelValue, Root>
-    : ScheduleValue extends Schedule.Schedule.Anonymous<any, infer Requirements, any>
-      ? Schedule.Schedule.Anonymous<S, Requirements, Root>
-      : never
+  ScheduleValue extends Schedule.Schedule.Definition<any, infer Requirements, any, infer RuntimeRequirementValue>
+    ? Schedule.Schedule.Definition<S, Requirements, Root, RuntimeRequirementValue>
+    : never
 
 type FeatureScheduleArray<Output, Key extends "bootstrap" | "update"> =
   Key extends keyof Output
@@ -239,11 +237,8 @@ type BoundTransitionEntryValue<S extends Schema.Any, Root> =
 type BoundScheduleDefineResult<
   S extends Schema.Any,
   Root,
-  Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>,
-  L extends Label.Schedule | undefined = undefined
-> = [L] extends [Label.Schedule]
-  ? Schedule.NamedScheduleBuildFor<S, Extract<L, Label.Schedule>, Entries, Root>
-  : Schedule.AnonymousScheduleBuildFor<S, Entries, Root>
+  Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
+> = Schedule.AnonymousScheduleBuildFor<S, Entries, Root>
 
 type BoundTransitionScheduleResult<
   S extends Schema.Any,
@@ -364,20 +359,17 @@ export interface FeatureBuildGame<
   }
   readonly StateMachine: Schema.Game<Accessible, Root>["StateMachine"]
   readonly Condition: Schema.Game<Accessible, Root>["Condition"]
-  readonly System: {
-    define: <
-      const Name extends string,
-      const Queries extends Record<string, Query.Any<Root>> = {},
-      const Resources extends Record<string, System.ResourceRead<FeatureResourceDescriptor<Accessible>> | System.ResourceWrite<FeatureResourceDescriptor<Accessible>>> = {},
-      const Events extends Record<string, System.EventRead<FeatureEventDescriptor<Accessible>> | System.EventWrite<FeatureEventDescriptor<Accessible>>> = {},
-      const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
-      const States extends Record<string, System.StateRead<FeatureStateDescriptor<Accessible>> | System.StateWrite<FeatureStateDescriptor<Accessible>>> = {},
-      const InSets extends ReadonlyArray<Label.SystemSet> = [],
-      const After extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
-      const Before extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
-      const Machines extends Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>> = {},
-      const NextMachines extends Record<string, Machine.NextMachineWrite<Schema.BoundStateMachine<Root>>> = {},
-      const TransitionEvents extends Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>> = {},
+    readonly System: {
+      define: <
+        const Name extends string,
+        const Queries extends Record<string, Query.Any<Root>> = {},
+        const Resources extends Record<string, System.ResourceRead<FeatureResourceDescriptor<Accessible>> | System.ResourceWrite<FeatureResourceDescriptor<Accessible>>> = {},
+        const Events extends Record<string, System.EventRead<FeatureEventDescriptor<Accessible>> | System.EventWrite<FeatureEventDescriptor<Accessible>>> = {},
+        const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
+        const States extends Record<string, System.StateRead<FeatureStateDescriptor<Accessible>> | System.StateWrite<FeatureStateDescriptor<Accessible>>> = {},
+        const Machines extends Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>> = {},
+        const NextMachines extends Record<string, Machine.NextMachineWrite<Schema.BoundStateMachine<Root>>> = {},
+        const TransitionEvents extends Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>> = {},
       const Removed extends Record<string, System.RemovedRead<FeatureComponentDescriptor<Accessible>>> = {},
       const Despawned extends Record<string, System.DespawnedRead> = {},
       const RelationFailures extends Record<string, System.RelationFailureRead<FeatureRelationDescriptor<Accessible>>> = {},
@@ -388,9 +380,6 @@ export interface FeatureBuildGame<
     >(
       name: Name,
       spec: {
-        readonly inSets?: InSets
-        readonly after?: After
-        readonly before?: Before
         readonly queries?: Queries
         readonly resources?: Resources
         readonly events?: Events
@@ -405,15 +394,15 @@ export interface FeatureBuildGame<
         readonly when?: When
         readonly transitions?: Transitions
       },
-      run: (context: System.SystemContext<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+      run: (context: System.SystemContext<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
         A,
         E,
-        System.SystemDependencies<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+        System.SystemDependencies<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
       >
     ) => Schema.BoundSystem<
       Accessible,
       Root,
-      System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
+      System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
       A,
       E,
       Name
@@ -435,42 +424,23 @@ export interface FeatureBuildGame<
   }
   readonly Schedule: {
     define: <
-      const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>,
-      SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
-      L extends Label.Schedule | undefined = undefined
-    >(options: {
-      readonly entries: Entries
-      readonly sets?: ReadonlyArray<SetValue>
-      readonly label?: L
-    }) => BoundScheduleDefineResult<Accessible, Root, Entries, L>
+      const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
+    >(plan: readonly [...Entries]) => BoundScheduleDefineResult<Accessible, Root, Entries>
     transitions: <
       const Entries extends ReadonlyArray<BoundTransitionBundleInputValue<Accessible, Root>>
     >(...entries: Entries) => BoundTransitionBundleResult<Accessible, Root, Entries>
     onEnter: <
       M extends Schema.BoundStateMachine<Root>,
-      const Entries extends ReadonlyArray<BoundTransitionEntryValue<Accessible, Root>>,
-      const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-    >(machine: M, state: Machine.StateMachine.Value<M>, options: {
-      readonly entries: Entries
-      readonly sets?: ReadonlyArray<SetValue>
-    }) => BoundTransitionScheduleResult<Accessible, Root, M, Entries>
+      const Entries extends ReadonlyArray<BoundTransitionEntryValue<Accessible, Root>>
+    >(machine: M, state: Machine.StateMachine.Value<M>, plan: readonly [...Entries]) => BoundTransitionScheduleResult<Accessible, Root, M, Entries>
     onExit: <
       M extends Schema.BoundStateMachine<Root>,
-      const Entries extends ReadonlyArray<BoundTransitionEntryValue<Accessible, Root>>,
-      const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-    >(machine: M, state: Machine.StateMachine.Value<M>, options: {
-      readonly entries: Entries
-      readonly sets?: ReadonlyArray<SetValue>
-    }) => BoundTransitionScheduleResult<Accessible, Root, M, Entries>
+      const Entries extends ReadonlyArray<BoundTransitionEntryValue<Accessible, Root>>
+    >(machine: M, state: Machine.StateMachine.Value<M>, plan: readonly [...Entries]) => BoundTransitionScheduleResult<Accessible, Root, M, Entries>
     onTransition: <
       M extends Schema.BoundStateMachine<Root>,
-      const Entries extends ReadonlyArray<BoundTransitionEntryValue<Accessible, Root>>,
-      const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-    >(machine: M, transition: readonly [Machine.StateMachine.Value<M>, Machine.StateMachine.Value<M>], options: {
-      readonly entries: Entries
-      readonly sets?: ReadonlyArray<SetValue>
-    }) => BoundTransitionScheduleResult<Accessible, Root, M, Entries>
-    configureSet: Schema.Game<Accessible, Root>["Schedule"]["configureSet"]
+      const Entries extends ReadonlyArray<BoundTransitionEntryValue<Accessible, Root>>
+    >(machine: M, transition: readonly [Machine.StateMachine.Value<M>, Machine.StateMachine.Value<M>], plan: readonly [...Entries]) => BoundTransitionScheduleResult<Accessible, Root, M, Entries>
     applyDeferred: Schema.Game<Accessible, Root>["Schedule"]["applyDeferred"]
     updateEvents: Schema.Game<Accessible, Root>["Schedule"]["updateEvents"]
     updateLifecycle: Schema.Game<Accessible, Root>["Schedule"]["updateLifecycle"]
@@ -528,7 +498,7 @@ export interface ComposedFeatureProject<
       readonly resources?: Resources
       readonly states?: States
       readonly machines?: ProvidedMachines
-    } & Runtime.ValidateSchedules<
+    } & Runtime.ValidateScheduleArray<
       ReadonlyArray<FeatureBootstrapScheduleUnion<Features, S, Root> | FeatureUpdateScheduleUnion<Features, S, Root>>,
       RuntimeServicesOf<ProvidedServices>,
       Resources,
@@ -604,7 +574,7 @@ export namespace Schema {
     readonly spec: Spec & { readonly schema: S }
     readonly requirements: System.SystemRequirements<Spec>
     readonly __schemaRoot: Root
-    readonly ordering: System.SystemOrderingSpec<Spec["inSets"], Spec["after"], Spec["before"]>
+    readonly ordering: System.SystemOrderingSpec
     readonly run: (context: any) => Fx<A, E, any>
   }
 
@@ -775,9 +745,6 @@ export namespace Schema {
         const Events extends Record<string, System.EventRead<EventDescriptor<S>> | System.EventWrite<EventDescriptor<S>>> = {},
         const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
         const States extends Record<string, System.StateRead<StateDescriptor<S>> | System.StateWrite<StateDescriptor<S>>> = {},
-        const InSets extends ReadonlyArray<Label.SystemSet> = [],
-        const After extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
-        const Before extends ReadonlyArray<Schema.BoundSystem<any, Root, any, any, any> | Label.System | Label.SystemSet> = [],
         const Machines extends Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>> = {},
         const NextMachines extends Record<string, Machine.NextMachineWrite<Schema.BoundStateMachine<Root>>> = {},
         const TransitionEvents extends Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>> = {},
@@ -791,9 +758,6 @@ export namespace Schema {
       >(
         name: Name,
         spec: {
-          readonly inSets?: InSets
-          readonly after?: After
-          readonly before?: Before
           readonly queries?: Queries
           readonly resources?: Resources
           readonly events?: Events
@@ -808,10 +772,10 @@ export namespace Schema {
           readonly when?: When
           readonly transitions?: Transitions
         },
-        run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+        run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
           A,
           E,
-          System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+          System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
         >
       ) => Schema.BoundSystem<S, Root, any, A, E, Name>
       readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
@@ -831,42 +795,23 @@ export namespace Schema {
     }
     readonly Schedule: {
       define: <
-        const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>,
-        SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
-        L extends Label.Schedule | undefined = undefined
-      >(options: {
-        readonly entries: Entries
-        readonly sets?: ReadonlyArray<SetValue>
-        readonly label?: L
-      }) => BoundScheduleDefineResult<S, Root, Entries, L>
+    const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
+      >(plan: readonly [...Entries]) => BoundScheduleDefineResult<S, Root, Entries>
       transitions: <
         const Entries extends ReadonlyArray<BoundTransitionBundleInputValue<S, Root>>
       >(...entries: Entries) => BoundTransitionBundleResult<S, Root, Entries>
       onEnter: <
         M extends Schema.BoundStateMachine<Root>,
-        const Entries extends ReadonlyArray<BoundTransitionEntryValue<S, Root>>,
-        const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-      >(machine: M, state: Machine.StateMachine.Value<M>, options: {
-        readonly entries: Entries
-        readonly sets?: ReadonlyArray<SetValue>
-      }) => BoundTransitionScheduleResult<S, Root, M, Entries>
+        const Entries extends ReadonlyArray<BoundTransitionEntryValue<S, Root>>
+      >(machine: M, state: Machine.StateMachine.Value<M>, plan: readonly [...Entries]) => BoundTransitionScheduleResult<S, Root, M, Entries>
       onExit: <
         M extends Schema.BoundStateMachine<Root>,
-        const Entries extends ReadonlyArray<BoundTransitionEntryValue<S, Root>>,
-        const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-      >(machine: M, state: Machine.StateMachine.Value<M>, options: {
-        readonly entries: Entries
-        readonly sets?: ReadonlyArray<SetValue>
-      }) => BoundTransitionScheduleResult<S, Root, M, Entries>
+        const Entries extends ReadonlyArray<BoundTransitionEntryValue<S, Root>>
+      >(machine: M, state: Machine.StateMachine.Value<M>, plan: readonly [...Entries]) => BoundTransitionScheduleResult<S, Root, M, Entries>
       onTransition: <
         M extends Schema.BoundStateMachine<Root>,
-        const Entries extends ReadonlyArray<BoundTransitionEntryValue<S, Root>>,
-        const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-      >(machine: M, transition: readonly [Machine.StateMachine.Value<M>, Machine.StateMachine.Value<M>], options: {
-        readonly entries: Entries
-        readonly sets?: ReadonlyArray<SetValue>
-      }) => BoundTransitionScheduleResult<S, Root, M, Entries>
-      configureSet: typeof Schedule.configureSet
+        const Entries extends ReadonlyArray<BoundTransitionEntryValue<S, Root>>
+      >(machine: M, transition: readonly [Machine.StateMachine.Value<M>, Machine.StateMachine.Value<M>], plan: readonly [...Entries]) => BoundTransitionScheduleResult<S, Root, M, Entries>
       applyDeferred: typeof Schedule.applyDeferred
       updateEvents: typeof Schedule.updateEvents
       updateLifecycle: typeof Schedule.updateLifecycle
@@ -931,13 +876,8 @@ type QuerySelectionAccess<S extends Schema.Any, Root> =
   | Relation.SelectionAccess<S, Root>
 
 type RebindAnonymousSchedule<ScheduleValue, Root> =
-  ScheduleValue extends Schedule.Schedule.Anonymous<infer S, infer Requirements, any>
-    ? Schedule.Schedule.Anonymous<S, Requirements, Root>
-    : never
-
-type RebindNamedSchedule<ScheduleValue, Root> =
-  ScheduleValue extends Schedule.Schedule.Named<infer S, infer Requirements, infer L, any>
-    ? Schedule.Schedule.Named<S, Requirements, L, Root>
+  ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any>
+    ? Schedule.Schedule.Definition<S, Requirements, Root>
     : never
 
 type RebindSchedulePhase<PhaseValue, Root> =
@@ -946,7 +886,7 @@ type RebindSchedulePhase<PhaseValue, Root> =
     : never
 
 type RebindTransitionSchedule<ScheduleValue, M extends Machine.StateMachine.Any, Root> =
-  ScheduleValue extends Schedule.Schedule.Anonymous<infer S, infer Requirements, any>
+  ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any>
     ? Machine.TransitionScheduleDefinition<S, M, Requirements, Root>
     : never
 
@@ -1203,7 +1143,6 @@ export const bind = <S extends Schema.Any, Root = S>(
   _root: Root = schema as unknown as Root
 ) => {
   type BoundAnySystem = Schema.BoundSystem<any, Root, any, any, any>
-  type BoundOrderTarget = BoundAnySystem | Label.System | Label.SystemSet
   type BoundMachine = Schema.BoundStateMachine<Root>
   type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root>
   type BoundTransitionBundleInput = BoundTransitionBundleInputValue<S, Root>
@@ -1214,16 +1153,7 @@ export const bind = <S extends Schema.Any, Root = S>(
   type BoundScheduleEntry = BoundScheduleEntryValue<S, Root>
   type BoundTransitionStep = Exclude<BoundTransitionEntryValue<S, Root>, Schema.BoundSchedule<S, Root, any>>
   type BoundTransitionEntry = BoundTransitionEntryValue<S, Root>
-  type BoundScheduleOptions<
-    EntryValue extends BoundScheduleEntry,
-    SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-  > = {
-    readonly entries: ReadonlyArray<EntryValue>
-    readonly sets?: ReadonlyArray<SetValue>
-    readonly label?: Label.Schedule
-  }
   type BoundAnonymousScheduleFor<ScheduleValue> = RebindAnonymousSchedule<ScheduleValue, Root>
-  type BoundNamedScheduleFor<ScheduleValue> = RebindNamedSchedule<ScheduleValue, Root>
   type BoundTransitionScheduleFor<ScheduleValue, M extends BoundMachine> = RebindTransitionSchedule<ScheduleValue, M, Root>
   const definedMachines: Array<BoundMachine> = []
   const definedMachineNames = new Set<string>()
@@ -1248,9 +1178,6 @@ export const bind = <S extends Schema.Any, Root = S>(
     const Events extends Record<string, System.EventRead<EventDescriptor<S>> | System.EventWrite<EventDescriptor<S>>> = {},
     const Services extends Record<string, System.ServiceRead<Descriptor<"service", string, any>>> = {},
     const States extends Record<string, System.StateRead<StateDescriptor<S>> | System.StateWrite<StateDescriptor<S>>> = {},
-    const InSets extends ReadonlyArray<Label.SystemSet> = [],
-    const After extends ReadonlyArray<BoundOrderTarget> = [],
-    const Before extends ReadonlyArray<BoundOrderTarget> = [],
     const Machines extends Record<string, Machine.MachineRead<BoundMachine>> = {},
     const NextMachines extends Record<string, Machine.NextMachineWrite<BoundMachine>> = {},
     const TransitionEvents extends Record<string, Machine.TransitionEventRead<BoundMachine>> = {},
@@ -1264,9 +1191,6 @@ export const bind = <S extends Schema.Any, Root = S>(
   >(
     name: Name,
     spec: {
-      readonly inSets?: InSets
-      readonly after?: After
-      readonly before?: Before
       readonly queries?: Queries
       readonly resources?: Resources
       readonly events?: Events
@@ -1281,13 +1205,13 @@ export const bind = <S extends Schema.Any, Root = S>(
       readonly when?: When
       readonly transitions?: Transitions
     },
-    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+    run: (context: System.SystemContext<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
       A,
       E,
-      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+      System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
     >
   ) => {
-    const system = System.define<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, RelationFailures, When, Transitions, Root, A, E>(name, {
+    const system = System.define<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, RelationFailures, When, Transitions, Root, A, E>(name, {
       schema,
       ...spec
     }, run)
@@ -1442,28 +1366,9 @@ export const bind = <S extends Schema.Any, Root = S>(
   const systemReadRelationFailures = <R extends RelationDescriptor<S>>(relation: R) => System.readRelationFailures(relation)
 
   const defineSchedule = <
-    const Entries extends ReadonlyArray<BoundScheduleEntry>,
-    SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
-    L extends Label.Schedule | undefined = undefined
-  >(options: {
-    readonly entries: Entries
-    readonly sets?: ReadonlyArray<SetValue>
-    readonly label?: L
-  }) => {
-    const schedule = options.label === undefined
-      ? Schedule.define({
-          schema,
-          entries: options.entries,
-          ...(options.sets === undefined ? {} : { sets: options.sets })
-        })
-      : Schedule.define({
-          schema,
-          entries: options.entries,
-          ...(options.sets === undefined ? {} : { sets: options.sets }),
-          label: options.label
-        })
-    return schedule as BoundScheduleDefineResult<S, Root, Entries, L>
-  }
+    const Entries extends ReadonlyArray<BoundScheduleEntry>
+  >(plan: readonly [...Entries]) =>
+    Schedule.define(plan) as BoundScheduleDefineResult<S, Root, Entries>
 
   const defineMachine = <
     const Name extends string,
@@ -1480,17 +1385,9 @@ export const bind = <S extends Schema.Any, Root = S>(
 
   const makeTransitionSchedule = <
     const Entries extends ReadonlyArray<BoundTransitionEntry>,
-    SetValue extends Schedule.SystemSetConfig<any, any, any> = never,
     M extends BoundMachine = BoundMachine
-  >(transition: Machine.TransitionScheduleDefinition<S, M, any, Root>["transition"], options: {
-    readonly entries: Entries
-    readonly sets?: ReadonlyArray<SetValue>
-  }) => {
-    const schedule = Schedule.define({
-      schema,
-      entries: options.entries,
-      ...(options.sets === undefined ? {} : { sets: options.sets })
-    })
+  >(transition: Machine.TransitionScheduleDefinition<S, M, any, Root>["transition"], plan: readonly [...Entries]) => {
+    const schedule = Schedule.define(plan)
     const transitionSchedule = {
       ...schedule,
       transition
@@ -1513,28 +1410,20 @@ export const bind = <S extends Schema.Any, Root = S>(
    */
   const onEnter = <
     M extends BoundMachine,
-    const Entries extends ReadonlyArray<BoundTransitionEntry>,
-    const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-  >(machine: M, state: Machine.StateMachine.Value<M>, options: {
-    readonly entries: Entries
-    readonly sets?: ReadonlyArray<SetValue>
-  }) => makeTransitionSchedule<Entries, SetValue, M>({
+    const Entries extends ReadonlyArray<BoundTransitionEntry>
+  >(machine: M, state: Machine.StateMachine.Value<M>, plan: readonly [...Entries]) => makeTransitionSchedule<Entries, M>({
     machine,
     phase: "enter",
     state
-  }, options)
+  }, plan)
   const onExit = <
     M extends BoundMachine,
-    const Entries extends ReadonlyArray<BoundTransitionEntry>,
-    const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-  >(machine: M, state: Machine.StateMachine.Value<M>, options: {
-    readonly entries: Entries
-    readonly sets?: ReadonlyArray<SetValue>
-  }) => makeTransitionSchedule<Entries, SetValue, M>({
+    const Entries extends ReadonlyArray<BoundTransitionEntry>
+  >(machine: M, state: Machine.StateMachine.Value<M>, plan: readonly [...Entries]) => makeTransitionSchedule<Entries, M>({
     machine,
     phase: "exit",
     state
-  }, options)
+  }, plan)
 
   /**
    * Creates a transition schedule that runs only for one exact `from -> to` pair.
@@ -1544,20 +1433,13 @@ export const bind = <S extends Schema.Any, Root = S>(
    */
   const onTransition = <
     M extends BoundMachine,
-    const Entries extends ReadonlyArray<BoundTransitionEntry>,
-    const SetValue extends Schedule.SystemSetConfig<any, any, any> = never
-  >(machine: M, states: {
-    readonly from: Machine.StateMachine.Value<M>
-    readonly to: Machine.StateMachine.Value<M>
-  }, options: {
-    readonly entries: Entries
-    readonly sets?: ReadonlyArray<SetValue>
-  }) => makeTransitionSchedule<Entries, SetValue, M>({
+    const Entries extends ReadonlyArray<BoundTransitionEntry>
+  >(machine: M, transition: readonly [Machine.StateMachine.Value<M>, Machine.StateMachine.Value<M>], plan: readonly [...Entries]) => makeTransitionSchedule<Entries, M>({
     machine,
     phase: "transition",
-    from: states.from,
-    to: states.to
-  }, options)
+    from: transition[0],
+    to: transition[1]
+  }, plan)
 
   const makeRuntime = <
     const ProvidedServices extends Runtime.RuntimeServices<any>,
@@ -1663,7 +1545,6 @@ export const bind = <S extends Schema.Any, Root = S>(
       onEnter,
       onExit,
       onTransition,
-      configureSet: Schedule.configureSet,
       applyDeferred: Schedule.applyDeferred,
       updateEvents: Schedule.updateEvents,
       updateLifecycle: Schedule.updateLifecycle,

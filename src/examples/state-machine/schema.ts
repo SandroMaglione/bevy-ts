@@ -1,4 +1,4 @@
-import { Descriptor, Label, Schema } from "../../index.ts"
+import { Descriptor, Schema } from "../../index.ts"
 import * as Size2 from "../../Size2.ts"
 import * as Vector2 from "../../Vector2.ts"
 import type {
@@ -60,4 +60,7 @@ export const RoundState = Game.StateMachine.define(
   ["Playing", "Paused", "Victory", "Defeat"] as const
 )
 
-export const GameplaySet = Label.defineSystemSetLabel("StateMachineExample/Gameplay")
+export const GameplayWhen = [Game.Condition.and(
+  Game.Condition.inState(SessionState, "Round"),
+  Game.Condition.inState(RoundState, "Playing")
+)] as const

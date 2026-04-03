@@ -78,25 +78,13 @@ const PrefixedServiceSystem = System.define(
     })
 )
 
-const resourceSchedule = Schedule.define({
-  schema,
-  entries: [ResourceSystem]
-})
+const resourceSchedule = Schedule.define([ResourceSystem])
 
-const stateSchedule = Schedule.define({
-  schema,
-  entries: [StateSystem]
-})
+const stateSchedule = Schedule.define([StateSystem])
 
-const serviceSchedule = Schedule.define({
-  schema,
-  entries: [ServiceSystem]
-})
+const serviceSchedule = Schedule.define([ServiceSystem])
 
-const prefixedServiceSchedule = Schedule.define({
-  schema,
-  entries: [PrefixedServiceSystem]
-})
+const prefixedServiceSchedule = Schedule.define([PrefixedServiceSystem])
 
 describe("Runtime", () => {
   it("accepts initialization keyed by schema property names", () => {
@@ -389,9 +377,7 @@ describe("Runtime", () => {
           machines: {
             Mode
           },
-          update: [Game.Schedule.define({
-            entries: [update]
-          })]
+          update: [Game.Schedule.define([update])]
         }
       }
     })

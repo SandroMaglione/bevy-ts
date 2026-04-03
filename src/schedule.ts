@@ -26,10 +26,9 @@
  * @groupDescription Functions
  * Public constructors for schedules and explicit schedule marker steps.
  */
-import type { Label } from "./label.ts"
 import type { StateMachine } from "./machine.ts"
 import type { Schema } from "./schema.ts"
-import type { OrderTarget, RuntimeRequirements, SystemDefinition, SystemRequirements } from "./system.ts"
+import type { RuntimeRequirements, SystemDefinition, SystemRequirements } from "./system.ts"
 
 /**
  * Schedule construction and explicit runtime boundaries.
@@ -56,39 +55,6 @@ import type { OrderTarget, RuntimeRequirements, SystemDefinition, SystemRequirem
  * })
  * ```
  */
-
-/**
- * A typed set-level ordering configuration.
- *
- * This is the Bevy-inspired grouping layer used to order multiple systems as a
- * unit without falling back to string identifiers.
- */
-export interface SystemSetConfig<
-  out Set extends Label.SystemSet = Label.SystemSet,
-  out After extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>,
-  out Before extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>
-> {
-  /**
-   * Nominal identity of the configured system set.
-   */
-  readonly label: Set
-  /**
-   * Other systems or sets that must run before this set.
-   */
-  readonly after: After
-  /**
-   * Other systems or sets that must run after this set.
-   */
-  readonly before: Before
-  /**
-   * Typed conditions that must pass for this set to run.
-   */
-  readonly when: ReadonlyArray<StateMachine.AnyCondition>
-  /**
-   * Whether systems assigned to this set should run in declaration order.
-   */
-  readonly chain: boolean
-}
 
 /**
  * A typed schedule marker that applies all queued commands.
@@ -315,7 +281,7 @@ export interface ScheduleCompositionDefinition<
 }
 
 /**
- * Shared schedule shape used by both anonymous and named schedules.
+ * Shared executable schedule shape.
  *
  * Schedules are the unit the runtime executes. They can be called from any
  * external loop in any order you choose.
@@ -329,13 +295,9 @@ interface ScheduleBase<
    */
   readonly steps: ReadonlyArray<ScheduleStep>
   /**
-   * Systems included in this schedule, sorted by dependency order.
+   * Systems included in this schedule, in authored order.
    */
   readonly systems: ReadonlyArray<SystemDefinition<any, any, any>>
-  /**
-   * Typed set configurations applied to this schedule.
-   */
-  readonly sets: ReadonlyArray<SystemSetConfig>
   /**
    * The closed schema all systems in the schedule are expected to target.
    */
@@ -358,7 +320,7 @@ export interface ExecutableScheduleDefinition<
   out Root = unknown,
   out RuntimeRequirementValue extends RuntimeRequirements = NormalizeRuntimeRequirements<Requirements>
 > extends ScheduleBase<S, Requirements> {
-  readonly kind: "anonymous" | "named"
+  readonly kind: "schedule"
   readonly [scheduleProofTypeId]: ScheduleProof<
     ReadonlyArray<SystemDefinition<any, any, any>>,
     ReadonlyArray<ScheduleStep>,
@@ -369,71 +331,23 @@ export interface ExecutableScheduleDefinition<
   readonly __schemaRoot?: Root | undefined
 }
 
-/**
- * A directly executable schedule value with no external typed identity.
- *
- * Anonymous schedules are the default form. They can be passed to the runtime
- * and app directly, but they intentionally do not expose a schedule label.
- */
-export interface AnonymousScheduleDefinition<
-  S extends Schema.Any,
-  out Requirements extends RuntimeRequirements = RuntimeRequirements,
-  out Root = unknown,
-  out RuntimeRequirementValue extends RuntimeRequirements = NormalizeRuntimeRequirements<Requirements>
-> extends ExecutableScheduleDefinition<S, Requirements, Root, RuntimeRequirementValue> {
-  readonly kind: "anonymous"
-}
-
-/**
- * A directly executable schedule value with external typed identity.
- *
- * Named schedules are only needed when some other API must refer to the
- * schedule by a stable typed label outside the literal value itself.
- */
-export interface NamedScheduleDefinition<
-  S extends Schema.Any,
-  out Requirements extends RuntimeRequirements = RuntimeRequirements,
-  out L extends Label.Schedule = Label.Schedule,
-  out Root = unknown,
-  out RuntimeRequirementValue extends RuntimeRequirements = NormalizeRuntimeRequirements<Requirements>
-> extends ExecutableScheduleDefinition<S, Requirements, Root, RuntimeRequirementValue> {
-  readonly kind: "named"
-  readonly label: L
-}
-
-/**
- * Any supported schedule definition.
- */
 export type ScheduleDefinition<
   S extends Schema.Any,
   Requirements extends RuntimeRequirements = RuntimeRequirements,
   Root = unknown,
   RuntimeRequirementValue extends RuntimeRequirements = NormalizeRuntimeRequirements<Requirements>
-> = AnonymousScheduleDefinition<S, Requirements, Root, RuntimeRequirementValue> | NamedScheduleDefinition<S, Requirements, Label.Schedule, Root, RuntimeRequirementValue>
+> = ExecutableScheduleDefinition<S, Requirements, Root, RuntimeRequirementValue>
 
 /**
  * Type-level and value-level helpers for schedule construction.
  */
 export namespace Schedule {
-  /**
-   * Any anonymous schedule.
-   */
-  export type Anonymous<
+  export type Definition<
     S extends Schema.Any,
     Requirements extends RuntimeRequirements = RuntimeRequirements,
     Root = unknown,
     RuntimeRequirementValue extends RuntimeRequirements = NormalizeRuntimeRequirements<Requirements>
-  > = AnonymousScheduleDefinition<S, Requirements, Root, RuntimeRequirementValue>
-  /**
-   * Any named schedule.
-   */
-  export type Named<
-    S extends Schema.Any,
-    Requirements extends RuntimeRequirements = RuntimeRequirements,
-    L extends Label.Schedule = Label.Schedule,
-    Root = unknown,
-    RuntimeRequirementValue extends RuntimeRequirements = NormalizeRuntimeRequirements<Requirements>
-  > = NamedScheduleDefinition<S, Requirements, L, Root, RuntimeRequirementValue>
+  > = ScheduleDefinition<S, Requirements, Root, RuntimeRequirementValue>
   /**
    * Any supported execution step.
    */
@@ -469,8 +383,6 @@ export namespace Schedule {
 }
 
 type AnySystem = SystemDefinition<any, any, any>
-type AnySetConfig = SystemSetConfig<any, any, any>
-type AnyOrderTarget = OrderTarget
 export type AnyRuntimeRequirements = RuntimeRequirements<any, any, any, any>
 
 /**
@@ -517,6 +429,10 @@ type EntrySteps<Entry> =
     : Entry extends ScheduleStep
       ? Entry
       : never
+type EntrySchema<Entry> =
+  Entry extends { readonly schema: infer S extends Schema.Any }
+    ? S
+    : never
 type DirectEntrySystems<Entry> =
   Entry extends AnySystem
     ? Entry
@@ -614,22 +530,9 @@ export type AnonymousScheduleBuildFor<
   S extends Schema.Any,
   Entries extends ReadonlyArray<ScheduleEntry>,
   Root = unknown
-> = AnonymousScheduleDefinition<
+> = ScheduleDefinition<
   S,
   CompositionExactRequirements<Entries>,
-  Root,
-  NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
->
-
-export type NamedScheduleBuildFor<
-  S extends Schema.Any,
-  L extends Label.Schedule,
-  Entries extends ReadonlyArray<ScheduleEntry>,
-  Root = unknown
-> = NamedScheduleDefinition<
-  S,
-  CompositionExactRequirements<Entries>,
-  L,
   Root,
   NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
 >
@@ -729,159 +632,6 @@ type DuplicateExtensionSystemNames<
   | DuplicateNames<{
       readonly [K in keyof After]: After[K] extends AnySystem ? ScheduleSystemName<After[K]> : never
     } & ReadonlyArray<string>>
-
-type ScheduleSchemaOf<Base extends ScheduleDefinition<any, any, any>> =
-  Base extends ScheduleDefinition<infer S, any, any> ? S : never
-
-type ScheduleRootOf<Base extends ScheduleDefinition<any, any, any>> =
-  Base extends ScheduleDefinition<any, any, infer Root> ? Root : never
-
-type ScheduleRequirementsOf<Base extends ScheduleDefinition<any, any, any>> =
-  CarriedExactRequirementsOf<Base>
-
-type StepRequirementPart<Step, Category extends keyof RuntimeRequirements> =
-  Step extends { readonly requirements: infer Requirements }
-    ? Requirements extends RuntimeRequirements
-      ? Requirements[Category]
-      : Step extends ApplyStateTransitionsStep<infer Bundle, any>
-        ? Bundle extends TransitionBundleDefinition<any, any, infer TransitionRequirements, any>
-          ? TransitionRequirements[Category]
-          : never
-        : never
-    : Step extends ApplyStateTransitionsStep<infer Bundle, any>
-      ? Bundle extends TransitionBundleDefinition<any, any, infer TransitionRequirements, any>
-        ? TransitionRequirements[Category]
-        : never
-      : never
-
-type ExtensionRequirements<Step> = Simplify<RuntimeRequirements<
-  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "services">>>,
-  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "resources">>>,
-  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "states">>>,
-  Simplify<IntersectOrEmpty<StepRequirementPart<Step, "machines">>>
->>
-
-type MergeRequirements<
-  Base extends RuntimeRequirements,
-  Extra extends RuntimeRequirements
-> = Simplify<RuntimeRequirements<
-  Simplify<Base["services"] & Extra["services"]>,
-  Simplify<Base["resources"] & Extra["resources"]>,
-  Simplify<Base["states"] & Extra["states"]>,
-  Simplify<Base["machines"] & Extra["machines"]>
->>
-
-export type ExtendedScheduleFor<
-  Base extends ScheduleDefinition<any, any, any>,
-  BeforeStep extends ScheduleStep,
-  AfterStep extends ScheduleStep
-> = AnonymousScheduleDefinition<
-  ScheduleSchemaOf<Base>,
-  MergeRequirements<
-    ScheduleRequirementsOf<Base>,
-    ExtensionRequirements<BeforeStep | AfterStep>
-  >,
-  ScheduleRootOf<Base>
->
-
-/**
- * Extracts the union of internal system names included in one schedule.
- */
-type ScheduleSystemNames<Systems extends ReadonlyArray<AnySystem>> = ScheduleSystems<Systems>["name"]
-
-type ScheduleSetNames<Sets extends ReadonlyArray<AnySetConfig>> = Sets[number]["label"]["name"]
-
-/**
- * The union of all system-level ordering targets declared in one schedule.
- */
-type SystemOrderTargets<Systems extends ReadonlyArray<AnySystem>> =
-  ScheduleSystems<Systems>["ordering"]["after"][number]
-  | ScheduleSystems<Systems>["ordering"]["before"][number]
-
-type TargetSystemNames<Targets> =
-  Targets extends infer Target
-    ? Target extends { readonly ordering: { readonly label: Label.System }, readonly name: infer Name extends string }
-      ? Name
-      : Target extends Label.System
-        ? Target["name"]
-        : never
-    : never
-
-type TargetSetNames<Targets> =
-  Targets extends infer Target
-    ? Target extends Label.SystemSet
-      ? Target["name"]
-      : never
-    : never
-
-/**
- * Collects undeclared set memberships from `system.spec.inSets`.
- */
-type InvalidSystemMemberships<
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> = Exclude<ScheduleSystems<Systems>["ordering"]["inSets"][number]["name"], ScheduleSetNames<Sets>>
-
-/**
- * Collects undeclared ordering targets from system-level `after` / `before`.
- */
-type InvalidSystemOrderTargets<
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> =
-  | Exclude<TargetSystemNames<SystemOrderTargets<Systems>>, ScheduleSystemNames<Systems>>
-  | Exclude<TargetSetNames<SystemOrderTargets<Systems>>, ScheduleSetNames<Sets>>
-
-type HasInvalidSystemMemberships<
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> = [InvalidSystemMemberships<Systems, Sets>] extends [never] ? false : true
-
-type HasInvalidSystemOrderTargets<
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> = [InvalidSystemOrderTargets<Systems, Sets>] extends [never] ? false : true
-
-/**
- * Intersects schedule options with a required impossible property only when the
- * schedule contains unresolved typed references.
- */
-type ValidateScheduleOptions<
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> = HasInvalidSystemMemberships<Systems, Sets> extends false
-  ? HasInvalidSystemOrderTargets<Systems, Sets> extends false
-    ? {}
-    : {
-        readonly __fixScheduleReferences__: "Unknown ordering target in system.after/system.before"
-      }
-  : {
-      readonly __fixScheduleReferences__: "Unknown system set in system.inSets"
-    }
-
-/**
- * Creates a typed system-set configuration.
- *
- * Use sets to order groups of systems as one unit. Sets stay fully typed: no
- * open string references are allowed.
- */
-export const configureSet = <
-  const Set extends Label.SystemSet,
-  const After extends ReadonlyArray<OrderTarget> = [],
-  const Before extends ReadonlyArray<OrderTarget> = []
->(config: {
-  readonly label: Set
-  readonly after?: After
-  readonly before?: Before
-  readonly when?: ReadonlyArray<StateMachine.AnyCondition>
-  readonly chain?: boolean
-}): SystemSetConfig<Set, After, Before> => ({
-  label: config.label,
-  after: (config.after ?? []) as After,
-  before: (config.before ?? []) as Before,
-  when: config.when ?? [],
-  chain: config.chain ?? false
-})
 
 /**
  * Creates an explicit command-application marker step.
@@ -1126,77 +876,14 @@ export const phase = <
  * Builds one final executable schedule from explicit entries.
  *
  * `build(...)` is the only final schedule constructor. Systems are derived
- * from normalized entries and ordered once against configured sets.
+ * from the authored plan and kept in that exact order.
  */
 export function build<
-  S extends Schema.Any,
   const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = [],
 >(
-  options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-    readonly label?: undefined
-  }
-): AnonymousScheduleBuildFor<S, Entries>
-export function build<
-  S extends Schema.Any,
-  const L extends Label.Schedule,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = [],
->(
-  options: {
-    readonly schema: S
-    readonly label: L
-    readonly entries: Entries
-    readonly sets?: Sets
-  }
-): NamedScheduleBuildFor<S, L, Entries>
-export function build<
-  S extends Schema.Any,
-  const L extends Label.Schedule,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
->(
-  options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-    readonly label?: L
-  }
-): AnonymousScheduleBuildFor<S, Entries> | NamedScheduleBuildFor<S, L, Entries> {
-  const rawSteps = normalizeEntries(options.entries)
-  const steps = resolveScheduleSteps(rawSteps, options.sets ?? [])
-  const orderedSystems = collectUniqueSystems(steps)
-
-  const base = {
-    kind: options.label === undefined ? "anonymous" : "named",
-    steps,
-    systems: orderedSystems,
-    sets: options.sets ?? [],
-    schema: options.schema,
-    requirements: undefined as unknown as AnyRuntimeRequirements,
-    [scheduleProofTypeId]: {
-      systems: orderedSystems,
-      steps,
-      exactRequirements: undefined as unknown as CompositionExactRequirements<Entries>,
-      runtimeRequirements: undefined as unknown as NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
-    } as ScheduleProof<
-      ReadonlyArray<EntrySystems<Entries[number]>>,
-      ReadonlyArray<EntrySteps<Entries[number]>>,
-      CompositionExactRequirements<Entries>,
-      NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
-    >,
-    [scheduleRuntimeRequirementsTypeId]: undefined as unknown as NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
-  }
-
-  return options.label === undefined
-    ? base as AnonymousScheduleBuildFor<S, Entries>
-    : {
-        ...base,
-        label: options.label
-      } as NamedScheduleBuildFor<S, L, Entries>
+  plan: readonly [...Entries]
+): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
+  return define(plan)
 }
 
 /**
@@ -1278,134 +965,35 @@ export const applyStateTransitions = <
   bundle
 }) as ApplyStateTransitionsStep<Bundle>
 
-type BaseScheduleOptions<
-  S extends Schema.Any,
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> = {
-  readonly schema: S
-  readonly systems: Systems
-  readonly sets?: Sets
-} & ValidateScheduleOptions<Systems, Sets>
-
-type ScheduleOptionsWithSteps<
-  S extends Schema.Any,
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>,
-  Steps extends ReadonlyArray<ScheduleStep>
-> = BaseScheduleOptions<S, Systems, Sets> & {
-  readonly steps: Steps
-}
-
-type ScheduleOptionsWithoutSteps<
-  S extends Schema.Any,
-  Systems extends ReadonlyArray<AnySystem>,
-  Sets extends ReadonlyArray<AnySetConfig>
-> = BaseScheduleOptions<S, Systems, Sets> & {
-  readonly steps?: undefined
-}
-
 export type AnonymousScheduleFor<
   S extends Schema.Any,
   SystemValue extends AnySystem,
   StepValue extends ScheduleStep | undefined
-> = AnonymousScheduleDefinition<
+> = ScheduleDefinition<
   S,
   [StepValue] extends [undefined]
     ? SystemRequirementsForSchedule<ReadonlyArray<SystemValue>>
     : ScheduleRequirements<ReadonlyArray<SystemValue>, ReadonlyArray<Extract<StepValue, ScheduleStep>>>
 >
 
-export type NamedScheduleFor<
-  S extends Schema.Any,
-  L extends Label.Schedule,
-  SystemValue extends AnySystem,
-  StepValue extends ScheduleStep | undefined
-> = NamedScheduleDefinition<
-  S,
-  [StepValue] extends [undefined]
-    ? SystemRequirementsForSchedule<ReadonlyArray<SystemValue>>
-    : ScheduleRequirements<ReadonlyArray<SystemValue>, ReadonlyArray<Extract<StepValue, ScheduleStep>>>,
-  L
->
-
-type ScheduleRequirementsValue<ScheduleValue> =
-  ScheduleValue extends ExecutableScheduleDefinition<any, infer Requirements, any, any>
-    ? Requirements
-    : AnyRuntimeRequirements
-
 /**
- * Creates an anonymous schedule value from an ordered execution plan.
- *
- * When only `systems` are provided, the schedule uses the resolved system order
- * followed by an implicit `applyDeferred()`, `updateEvents()`,
- * `updateLifecycle()`, and `updateRelationFailures()` sequence.
- *
- * Use explicit `steps` when systems in the same schedule must observe
- * intermediate deferred, event, lifecycle, relation-failure, or transition
- * boundaries.
- *
- * @example
- * ```ts
- * const update = Game.Schedule.define({
- *   systems: [spawnEnemies, reactToSpawns],
- *   steps: [
- *     spawnEnemies,
- *     Game.Schedule.applyDeferred(),
- *     Game.Schedule.updateLifecycle(),
- *     reactToSpawns
- *   ]
- * })
- * ```
+ * Creates one explicit executable schedule from a plan array.
  */
 export function define<
-  S extends Schema.Any,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
+  const Entries extends ReadonlyArray<ScheduleEntry>
 >(
-  options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-    readonly label?: undefined
-  }
-): AnonymousScheduleBuildFor<S, Entries>
-export function define<
-  S extends Schema.Any,
-  const L extends Label.Schedule,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = [],
->(
-  options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-    readonly label: L
-  }
-): NamedScheduleBuildFor<S, L, Entries>
-export function define<
-  S extends Schema.Any,
-  const L extends Label.Schedule,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
->(
-  options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-    readonly label?: L
-  }
-): AnonymousScheduleBuildFor<S, Entries> | NamedScheduleBuildFor<S, L, Entries> {
-  const rawSteps = normalizeEntries(options.entries)
-  const steps = resolveScheduleSteps(rawSteps, options.sets ?? [])
-  const orderedSystems = collectUniqueSystems(steps)
+  plan: readonly [...Entries]
+): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
+  const schema = findPlanSchema(plan)
+  const steps = normalizeEntries(plan)
+  validateUniqueSystemSteps(steps, "schedule")
+  const systems = collectUniqueSystems(steps)
 
-  const base = {
-    kind: options.label === undefined ? "anonymous" : "named",
+  return {
+    kind: "schedule",
     steps,
-    systems: orderedSystems,
-    sets: options.sets ?? [],
-    schema: options.schema,
+    systems,
+    schema,
     requirements: undefined as unknown as AnyRuntimeRequirements,
     [scheduleProofTypeId]: undefined as unknown as ScheduleProof<
       ReadonlyArray<EntrySystems<Entries[number]>>,
@@ -1414,135 +1002,7 @@ export function define<
       NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
     >,
     [scheduleRuntimeRequirementsTypeId]: undefined as unknown as NormalizeRuntimeRequirements<CompositionExactRequirements<Entries>>
-  }
-
-  return options.label === undefined
-    ? base as AnonymousScheduleBuildFor<S, Entries>
-    : {
-        ...base,
-        label: options.label
-      } as NamedScheduleBuildFor<S, L, Entries>
-}
-
-/**
- * Creates a named schedule value from a typed label and an ordered execution plan.
- *
- * Use this only when some other API needs to refer to the schedule by a stable
- * external identity.
- */
-export function named<
-  S extends Schema.Any,
-  L extends Label.Schedule,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
->(
-  label: L, options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-  }
-): NamedScheduleBuildFor<S, L, Entries>
-export function named<
-  S extends Schema.Any,
-  L extends Label.Schedule,
-  const Entries extends ReadonlyArray<ScheduleEntry>,
-  const Sets extends ReadonlyArray<AnySetConfig> = []
->(
-  label: L, options: {
-    readonly schema: S
-    readonly entries: Entries
-    readonly sets?: Sets
-  }
-): NamedScheduleBuildFor<S, L, Entries> {
-  return define({
-    schema: options.schema,
-    entries: options.entries,
-    ...(options.sets === undefined ? {} : { sets: options.sets }),
-    label
-  })
-}
-
-/**
- * Creates an anonymous schedule by wrapping an existing base schedule with
- * explicit prefix and suffix steps.
- *
- * `extend(...)` is intentionally narrow:
- *
- * - `before` runs exactly before `base.steps`
- * - `after` runs exactly after `base.steps`
- * - `base.steps` stay unchanged
- * - no implicit markers are inserted
- *
- * Use this to keep one headless gameplay schedule as the source of truth, then
- * add host-only capture or sync phases around it.
- *
- * This is the preferred composition tool when browser or renderer work is a
- * pure prefix or suffix around gameplay. Keep using `Game.Schedule.define(...)`
- * when host work must be interleaved in the middle of the simulation steps.
- * If the suffix depends on lifecycle filters or lifecycle reads, include
- * `Game.Schedule.updateLifecycle()` explicitly in that suffix.
- *
- * @example
- * ```ts
- * const browserUpdate = Game.Schedule.extend(gameplayUpdate, {
- *   before: [CaptureInputSystem],
- *   after: [
- *     Game.Schedule.updateLifecycle(),
- *     DestroyNodesSystem,
- *     CreateNodesSystem,
- *     SyncNodesSystem
- *   ]
- * })
- * ```
- */
-export function extend<
-  Base extends ScheduleDefinition<any, any, any>,
-  BeforeStep extends ScheduleStep = never,
-  AfterStep extends ScheduleStep = never
->(
-  base: Base,
-  options: {
-    readonly before?: ReadonlyArray<BeforeStep>
-    readonly after?: ReadonlyArray<AfterStep>
-  }
-): ExtendedScheduleFor<Base, BeforeStep, AfterStep> {
-  const before = (options.before ?? []) as ReadonlyArray<BeforeStep>
-  const after = (options.after ?? []) as ReadonlyArray<AfterStep>
-  const baseSystemKeys = new Set(base.systems.map((system) => system.ordering.label.key))
-  const extensionSystemKeys = new Set<symbol>()
-
-  for (const step of [...before, ...after]) {
-    if (!isSystemStep(step)) {
-      continue
-    }
-    if (baseSystemKeys.has(step.ordering.label.key)) {
-      throw new Error(`Extended schedule reuses base system: ${step.ordering.label.name}`)
-    }
-    if (extensionSystemKeys.has(step.ordering.label.key)) {
-      throw new Error(`Extended schedule reuses extension system: ${step.ordering.label.name}`)
-    }
-    extensionSystemKeys.add(step.ordering.label.key)
-  }
-
-  const steps = [...before, ...base.steps, ...after] as ReadonlyArray<ScheduleStep>
-  const systems = collectUniqueSystems(steps)
-
-  return {
-    kind: "anonymous",
-    steps,
-    systems,
-    sets: base.sets,
-    schema: base.schema,
-    requirements: undefined as unknown as AnyRuntimeRequirements,
-    [scheduleProofTypeId]: undefined as unknown as ScheduleProof<
-      ReadonlyArray<SystemDefinition<any, any, any>>,
-      ReadonlyArray<ScheduleStep>,
-      ScheduleRequirementsValue<ExtendedScheduleFor<Base, BeforeStep, AfterStep>>,
-      NormalizeRuntimeRequirements<ScheduleRequirementsValue<ExtendedScheduleFor<Base, BeforeStep, AfterStep>>>
-    >,
-    [scheduleRuntimeRequirementsTypeId]: undefined as unknown as NormalizeRuntimeRequirements<ScheduleRequirementsValue<ExtendedScheduleFor<Base, BeforeStep, AfterStep>>>,
-    __schemaRoot: base.__schemaRoot
-  } as ExtendedScheduleFor<Base, BeforeStep, AfterStep>
+  } as AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries>
 }
 
 /**
@@ -1555,7 +1015,7 @@ const isScheduleEntry = (entry: ScheduleEntry): entry is ScheduleDefinition<any,
   typeof entry === "object"
   && entry !== null
   && "kind" in entry
-  && (entry.kind === "anonymous" || entry.kind === "named")
+  && entry.kind === "schedule"
 
 const isPhaseEntry = (entry: ScheduleEntry): entry is SchedulePhaseDefinition<any, any, any> =>
   "kind" in entry && entry.kind === "phase"
@@ -1575,6 +1035,21 @@ const normalizeEntries = (
         ? [...entry.steps]
         : [entry]
   )
+
+const findPlanSchema = <Entries extends ReadonlyArray<ScheduleEntry>>(
+  entries: Entries
+): EntrySchema<Entries[number]> => {
+  const owner = entries.find((entry) =>
+    (typeof entry === "object"
+      && entry !== null
+      && "schema" in entry)
+    || isSystemStep(entry)
+  )
+  if (!owner) {
+    throw new Error("Schedule plan must include at least one system, schedule, fragment, or phase to infer schema")
+  }
+  return (isSystemStep(owner) ? owner.spec.schema : owner.schema) as EntrySchema<Entries[number]>
+}
 
 const collectUniqueSystems = (
   steps: ReadonlyArray<ScheduleStep>
@@ -1606,184 +1081,4 @@ const validateUniqueSystemSteps = (
     }
     names.add(key)
   }
-}
-
-const resolveScheduleSteps = (
-  rawSteps: ReadonlyArray<ScheduleStep>,
-  setConfigs: ReadonlyArray<SystemSetConfig>
-): ReadonlyArray<ScheduleStep> => {
-  const resolved: Array<ScheduleStep> = []
-  let segment: Array<SystemDefinition<any, any, any>> = []
-
-  const flushSegment = (): void => {
-    if (segment.length === 0) {
-      return
-    }
-    validateUniqueSystemSteps(segment, "schedule")
-    resolved.push(...resolveSystems(segment, setConfigs))
-    segment = []
-  }
-
-  for (const step of rawSteps) {
-    if (isSystemStep(step)) {
-      segment.push(step)
-      continue
-    }
-    flushSegment()
-    resolved.push(step)
-  }
-
-  flushSegment()
-  return resolved
-}
-
-const resolveSystems = (
-  systems: ReadonlyArray<SystemDefinition<any, any, any>>,
-  setConfigs: ReadonlyArray<SystemSetConfig>
-): ReadonlyArray<SystemDefinition<any, any, any>> => {
-  const byKey = new Map<symbol, SystemDefinition<any, any, any>>()
-  const inputOrder = new Map<symbol, number>()
-  for (const [index, system] of systems.entries()) {
-    const key = system.ordering.label.key
-    if (byKey.has(key)) {
-      throw new Error(`Duplicate system label in schedule: ${system.ordering.label.name}`)
-    }
-    byKey.set(key, system)
-    inputOrder.set(key, index)
-  }
-
-  const setByKey = new Map<symbol, SystemSetConfig>()
-  for (const set of setConfigs) {
-    if (setByKey.has(set.label.key)) {
-      throw new Error(`Duplicate system set label in schedule: ${set.label.name}`)
-    }
-    setByKey.set(set.label.key, set)
-  }
-
-  const systemsInSet = new Map<symbol, Array<SystemDefinition<any, any, any>>>()
-  for (const set of setConfigs) {
-    systemsInSet.set(set.label.key, [])
-  }
-  for (const system of systems) {
-    for (const set of system.ordering.inSets) {
-      const members = systemsInSet.get(set.key)
-      if (!members) {
-        throw new Error(`Missing system set '${set.name}' referenced by '${system.ordering.label.name}'`)
-      }
-      members.push(system)
-    }
-  }
-
-  const dependencies = new Map<symbol, Set<symbol>>()
-  for (const system of systems) {
-    dependencies.set(system.ordering.label.key, new Set())
-  }
-
-  const resolveTargetSystems = (target: OrderTarget, sourceName: string): ReadonlyArray<SystemDefinition<any, any, any>> => {
-    if ("ordering" in target) {
-      const system = byKey.get(target.ordering.label.key)
-      if (!system) {
-        throw new Error(`Missing system dependency '${target.name}' referenced by '${sourceName}'`)
-      }
-      return [system]
-    }
-    if (target.kind === "system") {
-      const system = byKey.get(target.key)
-      if (!system) {
-        throw new Error(`Missing system dependency '${target.name}' referenced by '${sourceName}'`)
-      }
-      return [system]
-    }
-    const systems = systemsInSet.get(target.key)
-    if (!systems) {
-      throw new Error(`Missing system set dependency '${target.name}' referenced by '${sourceName}'`)
-    }
-    return systems
-  }
-
-  const addDependency = (
-    dependent: SystemDefinition<any, any, any>,
-    dependency: SystemDefinition<any, any, any>
-  ): void => {
-    if (dependent.ordering.label.key === dependency.ordering.label.key) {
-      return
-    }
-    dependencies.get(dependent.ordering.label.key)?.add(dependency.ordering.label.key)
-  }
-
-  for (const system of systems) {
-    for (const target of system.ordering.after) {
-      for (const dependency of resolveTargetSystems(target, system.ordering.label.name)) {
-        addDependency(system, dependency)
-      }
-    }
-    for (const target of system.ordering.before) {
-      for (const dependent of resolveTargetSystems(target, system.ordering.label.name)) {
-        addDependency(dependent, system)
-      }
-    }
-  }
-
-  for (const set of setConfigs) {
-    const members = systemsInSet.get(set.label.key) ?? []
-    if (set.chain) {
-      const orderedMembers = [...members].sort((left, right) =>
-        (inputOrder.get(left.ordering.label.key) ?? 0) - (inputOrder.get(right.ordering.label.key) ?? 0)
-      )
-      for (let index = 1; index < orderedMembers.length; index += 1) {
-        addDependency(orderedMembers[index]!, orderedMembers[index - 1]!)
-      }
-    }
-
-    for (const target of set.after) {
-      const targetSystems = resolveTargetSystems(target, set.label.name)
-      for (const member of members) {
-        for (const dependency of targetSystems) {
-          addDependency(member, dependency)
-        }
-      }
-    }
-
-    for (const target of set.before) {
-      const targetSystems = resolveTargetSystems(target, set.label.name)
-      for (const member of members) {
-        for (const dependent of targetSystems) {
-          addDependency(dependent, member)
-        }
-      }
-    }
-  }
-
-  const order: Array<SystemDefinition<any, any, any>> = []
-  const visited = new Set<symbol>()
-  const stack = new Set<symbol>()
-
-  const visit = (key: symbol): void => {
-    if (stack.has(key)) {
-      const system = byKey.get(key)
-      throw new Error(`Circular system dependency detected at '${system?.ordering.label.name ?? "unknown"}'`)
-    }
-    if (visited.has(key)) {
-      return
-    }
-    stack.add(key)
-    const deps = [...(dependencies.get(key) ?? [])].sort((left, right) =>
-      (inputOrder.get(left) ?? 0) - (inputOrder.get(right) ?? 0)
-    )
-    for (const dep of deps) {
-      visit(dep)
-    }
-    stack.delete(key)
-    visited.add(key)
-    order.push(byKey.get(key)!)
-  }
-
-  const orderedKeys = [...byKey.keys()].sort((left, right) =>
-    (inputOrder.get(left) ?? 0) - (inputOrder.get(right) ?? 0)
-  )
-  for (const key of orderedKeys) {
-    visit(key)
-  }
-
-  return order
 }

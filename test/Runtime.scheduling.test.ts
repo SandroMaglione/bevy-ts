@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Label, Schema } from "../src/index.ts"
+import { Descriptor, Fx, Schema } from "../src/index.ts"
 import * as Runtime from "../src/runtime.ts"
 import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
@@ -56,17 +56,11 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [increment]
-    }))
+    runtime.runSchedule(Schedule.define([increment]))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [append]
-    }))
+    runtime.runSchedule(Schedule.define([append]))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["ran"])
   })
 
@@ -101,20 +95,14 @@ describe("Runtime scheduling", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define({
-        schema,
-        entries: [first]
-      }),
-      Schedule.define({
-        schema,
-        entries: [second]
-      })
+      Schedule.define([first]),
+      Schedule.define([second])
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
-  it("orders systems by direct system references", () => {
+  it("preserves authored system order exactly", () => {
     const first = System.define(
       "RuntimeScheduling/DirectFirst",
       {
@@ -133,7 +121,6 @@ describe("Runtime scheduling", () => {
       "RuntimeScheduling/DirectSecond",
       {
         schema,
-        after: [first],
         resources: {
           log: System.writeResource(Log)
         }
@@ -145,22 +132,16 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [second, first]
-    }))
+    runtime.runSchedule(Schedule.define([second, first]))
 
-    expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["second", "first"])
   })
 
-  it("orders systems in chained sets by declaration order", () => {
-    const movement = Label.defineSystemSetLabel("RuntimeScheduling/Movement")
-
+  it("preserves authored order across multiple systems with no implicit grouping", () => {
     const first = System.define(
       "RuntimeScheduling/ChainedFirst",
       {
         schema,
-        inSets: [movement],
         resources: {
           log: System.writeResource(Log)
         }
@@ -175,7 +156,6 @@ describe("Runtime scheduling", () => {
       "RuntimeScheduling/ChainedSecond",
       {
         schema,
-        inSets: [movement],
         resources: {
           log: System.writeResource(Log)
         }
@@ -187,23 +167,14 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [first, second],
-      sets: [
-        Schedule.configureSet({
-          label: movement,
-          chain: true
-        })
-      ] as const
-    }))
+    runtime.runSchedule(Schedule.define([first, second]))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
-  it("throws a descriptive error for circular system dependencies", () => {
-    const First = System.define(
-      "RuntimeScheduling/CycleFirst",
+  it("keeps explicit marker boundaries while preserving authored order", () => {
+    const first = System.define(
+      "RuntimeScheduling/BoundaryFirst",
       {
         schema,
         resources: {
@@ -216,11 +187,10 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const Second = System.define(
-      "RuntimeScheduling/CycleSecond",
+    const second = System.define(
+      "RuntimeScheduling/BoundarySecond",
       {
         schema,
-        after: [First],
         resources: {
           log: System.writeResource(Log)
         }
@@ -231,113 +201,9 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const CyclicFirst = System.define(
-      "RuntimeScheduling/CycleFirst",
-      {
-        schema,
-        after: [Second],
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "cycle"])
-        })
-    )
-
     const runtime = makeRuntime()
-    expect(() =>
-      runtime.runSchedule(Schedule.define({
-        schema,
-        entries: [CyclicFirst, Second]
-      } as never) as never)
-    ).toThrow("Circular system dependency detected")
-  })
-
-  it("extends one base schedule with prefix and suffix steps in exact order", () => {
-    const before = System.define(
-      "RuntimeScheduling/Before",
-      {
-        schema,
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "before"])
-        })
-    )
-
-    const base = System.define(
-      "RuntimeScheduling/Base",
-      {
-        schema,
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "base"])
-        })
-    )
-
-    const after = System.define(
-      "RuntimeScheduling/After",
-      {
-        schema,
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "after"])
-        })
-    )
-
-    const runtime = makeRuntime()
-    const baseSchedule = Schedule.define({
-      schema,
-      entries: [base]
-    })
-    const extended = Schedule.extend(baseSchedule, {
-      before: [before],
-      after: [after]
-    })
-
-    runtime.runSchedule(extended)
-
-    expect(readResourceValue(runtime, schema, Log)).toEqual(["before", "base", "after"])
-  })
-
-  it("throws when extension steps reuse a base schedule system", () => {
-    const base = System.define(
-      "RuntimeScheduling/ExtendedBase",
-      {
-        schema,
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "base"])
-        })
-    )
-
-    const baseSchedule = Schedule.define({
-      schema,
-      entries: [base]
-    })
-
-    expect(() =>
-      Schedule.extend(baseSchedule as never, {
-        before: [base]
-      } as never)
-    ).toThrow("Extended schedule reuses base system")
+    runtime.runSchedule(Schedule.define([first, Schedule.updateLifecycle(), second]))
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
   it("composes reusable final schedules into one flattened explicit schedule", () => {
@@ -369,23 +235,17 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const hostMirror = Schedule.define({
-      schema,
-      entries: [
+    const hostMirror = Schedule.define([
         Schedule.updateLifecycle(),
         second
-      ]
-    })
+      ])
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [
+    runtime.runSchedule(Schedule.define([
         first,
         Schedule.applyDeferred(),
         hostMirror
-      ]
-    }))
+      ]))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
@@ -405,16 +265,10 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const phase = Schedule.define({
-      schema,
-      entries: [duplicate]
-    })
+    const phase = Schedule.define([duplicate])
 
     expect(() =>
-      Schedule.define({
-        schema,
-        entries: [duplicate, phase]
-      })
+      Schedule.define([duplicate, phase])
     ).toThrow("Duplicate system step in schedule")
   })
 })

@@ -263,7 +263,6 @@ const InputSystem = Game.System.define(
 const PlanMovementSystem = Game.System.define(
   "Pokemon/PlanMovement",
   {
-    after: [InputSystem],
     queries: {
       player: PlayerQuery
     }
@@ -295,7 +294,6 @@ const PlanMovementSystem = Game.System.define(
 const CollisionSystem = Game.System.define(
   "Pokemon/Collision",
   {
-    after: [PlanMovementSystem],
     queries: {
       player: PlayerQuery,
       solids: SolidQuery
@@ -346,7 +344,6 @@ const CollisionSystem = Game.System.define(
 const AdvanceMovementSystem = Game.System.define(
   "Pokemon/AdvanceMovement",
   {
-    after: [CollisionSystem],
     queries: {
       player: PlayerQuery
     },
@@ -510,36 +507,28 @@ const SyncPlayerNodeSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define({
-  entries: [SetupSystem]
-})
+const setupSchedule = Game.Schedule.define([SetupSystem])
 
-const browserSetupSchedule = Game.Schedule.define({
-  entries: [
+const browserSetupSchedule = Game.Schedule.define([
     setupSchedule,
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem
-  ]
-})
+  ])
 
-const updateSchedule = Game.Schedule.define({
-  entries: [
+const updateSchedule = Game.Schedule.define([
     InputSystem,
     PlanMovementSystem,
     CollisionSystem,
     AdvanceMovementSystem
-  ]
-})
+  ])
 
-const browserUpdateSchedule = Game.Schedule.define({
-  entries: [
+const browserUpdateSchedule = Game.Schedule.define([
     CaptureFrameInputSystem,
     updateSchedule,
     DestroyRenderNodesSystem,
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem
-  ]
-})
+  ])
 
 export const createPokemonExample = (input: {
   readonly direction: () => Direction | null

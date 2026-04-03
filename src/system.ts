@@ -645,24 +645,9 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
  * This keeps schedule-level type computation focused on the small ordering
  * surface instead of repeatedly expanding the full system spec.
  */
-export interface SystemOrderingSpec<
-  out InSets extends ReadonlyArray<Label.SystemSet> = ReadonlyArray<Label.SystemSet>,
-  out After extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>,
-  out Before extends ReadonlyArray<OrderTarget> = ReadonlyArray<OrderTarget>
-> {
+export interface SystemOrderingSpec {
   readonly label: Label.System
-  readonly inSets: InSets
-  readonly after: After
-  readonly before: Before
 }
-
-/**
- * An ordering target inside one schedule.
- *
- * Systems can order themselves relative to other system definitions or reusable
- * typed system sets. No open string references are allowed.
- */
-export type OrderTarget = SystemDefinition<any, any, any, any> | Label.System | Label.SystemSet
 
 /**
  * An explicit system specification.
@@ -677,9 +662,6 @@ export interface SystemSpec<
   out Events extends Record<string, EventAccess> = {},
   out Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
   out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  out InSets extends ReadonlyArray<Label.SystemSet> = readonly [],
-  out After extends ReadonlyArray<OrderTarget> = readonly [],
-  out Before extends ReadonlyArray<OrderTarget> = readonly [],
   out Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   out NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   out TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
@@ -691,9 +673,6 @@ export interface SystemSpec<
   out RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {}
 > {
   readonly label: Label.System
-  readonly inSets: InSets
-  readonly after: After
-  readonly before: Before
   readonly queries: Queries
   readonly resources: Resources
   readonly events: Events
@@ -721,9 +700,6 @@ export type AnySystemSpec = SystemSpec<
   any,
   any,
   any,
-  ReadonlyArray<Label.SystemSet>,
-  ReadonlyArray<OrderTarget>,
-  ReadonlyArray<OrderTarget>,
   any,
   any,
   any,
@@ -988,7 +964,7 @@ export interface SystemDefinition<
   /**
    * Compact schedule-ordering view derived from the system spec once.
    */
-  readonly ordering: SystemOrderingSpec<Spec["inSets"], Spec["after"], Spec["before"]>
+  readonly ordering: SystemOrderingSpec
   /**
    * The executable implementation of the system.
    */
@@ -1031,9 +1007,6 @@ export function define<
   const Events extends Record<string, EventAccess> = {},
   const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
   const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  const InSets extends ReadonlyArray<Label.SystemSet> = [],
-  const After extends ReadonlyArray<OrderTarget> = [],
-  const Before extends ReadonlyArray<OrderTarget> = [],
   const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
@@ -1050,9 +1023,6 @@ export function define<
   name: Name,
   spec: {
     readonly schema: S
-    readonly inSets?: InSets
-    readonly after?: After
-    readonly before?: Before
     readonly queries?: Queries
     readonly resources?: Resources
     readonly events?: Events
@@ -1067,12 +1037,12 @@ export function define<
     readonly when?: When
     readonly transitions?: Transitions
   },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
 
 /**
  * Legacy low-level overload that accepts an explicit system label.
@@ -1087,9 +1057,6 @@ export function define<
   const Events extends Record<string, EventAccess> = {},
   const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
   const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  const InSets extends ReadonlyArray<Label.SystemSet> = [],
-  const After extends ReadonlyArray<OrderTarget> = [],
-  const Before extends ReadonlyArray<OrderTarget> = [],
   const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
@@ -1106,9 +1073,6 @@ export function define<
   spec: {
     readonly label: Label.System
     readonly schema: S
-    readonly inSets?: InSets
-    readonly after?: After
-    readonly before?: Before
     readonly queries?: Queries
     readonly resources?: Resources
     readonly events?: Events
@@ -1123,12 +1087,12 @@ export function define<
     readonly when?: When
     readonly transitions?: Transitions
   },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
 
 export function define<
   S extends Schema.Any,
@@ -1137,9 +1101,6 @@ export function define<
   const Events extends Record<string, EventAccess> = {},
   const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
   const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  const InSets extends ReadonlyArray<Label.SystemSet> = [],
-  const After extends ReadonlyArray<OrderTarget> = [],
-  const Before extends ReadonlyArray<OrderTarget> = [],
   const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
   const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
@@ -1156,9 +1117,6 @@ export function define<
   nameOrSpec: string | {
     readonly label: Label.System
     readonly schema: S
-    readonly inSets?: InSets
-    readonly after?: After
-    readonly before?: Before
     readonly queries?: Queries
     readonly resources?: Resources
     readonly events?: Events
@@ -1176,9 +1134,6 @@ export function define<
   specOrRun:
     | {
         readonly schema: S
-        readonly inSets?: InSets
-        readonly after?: After
-        readonly before?: Before
         readonly queries?: Queries
         readonly resources?: Resources
         readonly events?: Events
@@ -1192,25 +1147,22 @@ export function define<
         readonly when?: When
         readonly transitions?: Transitions
       }
-      | ((context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, unknown, RelationFailures>>) => Fx<
+      | ((context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, unknown, RelationFailures>>) => Fx<
         A,
         E,
-        ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, unknown, RelationFailures>>
+        ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, unknown, RelationFailures>>
       >),
-  maybeRun?: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+  maybeRun?: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root> {
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root> {
   const named = typeof nameOrSpec === "string"
   const name = named ? nameOrSpec : nameOrSpec.label.name
   const spec = (named ? specOrRun : nameOrSpec) as {
     readonly label?: Label.System
     readonly schema: S
-    readonly inSets?: InSets
-    readonly after?: After
-    readonly before?: Before
     readonly queries?: Queries
     readonly resources?: Resources
     readonly events?: Events
@@ -1225,32 +1177,23 @@ export function define<
     readonly when?: When
     readonly transitions?: Transitions
   }
-  const run = (named ? maybeRun : specOrRun) as (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+  const run = (named ? maybeRun : specOrRun) as (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
   const label = spec.label ?? LabelModule.defineSystemLabel(name)
-  const inSets = (spec.inSets ?? []) as InSets
-  const after = (spec.after ?? []) as After
-  const before = (spec.before ?? []) as Before
 
   return {
     name,
-    requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>,
+    requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>,
     __schemaRoot: undefined as unknown as Root,
     ordering: {
-      label,
-      inSets,
-      after,
-      before
+      label
     },
     spec: {
       label,
       schema: spec.schema,
-      inSets,
-      after,
-      before,
       queries: (spec.queries ?? {}) as Queries,
       resources: (spec.resources ?? {}) as Resources,
       events: (spec.events ?? {}) as Events,
@@ -1268,7 +1211,7 @@ export function define<
     },
     run
   } as SystemDefinition<
-    SystemSpec<S, Queries, Resources, Events, Services, States, InSets, After, Before, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
+    SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
     A,
     E,
     Root,

@@ -75,10 +75,7 @@ describe("Runtime resources and states", () => {
         })
     )
 
-    const schedule = Schedule.define({
-      schema,
-      entries: [increment]
-    })
+    const schedule = Schedule.define([increment])
 
     const runtime = makeRuntime()
     runtime.runSchedule(schedule)
@@ -103,10 +100,7 @@ describe("Runtime resources and states", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [setRunning]
-    }))
+    runtime.runSchedule(Schedule.define([setRunning]))
 
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
   })
@@ -140,10 +134,7 @@ describe("Runtime resources and states", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [applyValidatedWrites]
-    }))
+    runtime.runSchedule(Schedule.define([applyValidatedWrites]))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(3)
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
@@ -190,10 +181,7 @@ describe("Runtime resources and states", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define({
-      schema,
-      entries: [applyConstructedWrites]
-    }))
+    runtime.runSchedule(Schedule.define([applyConstructedWrites]))
 
     expect(readResourceValue(runtime, schema, Viewport)).toEqual({ width: 800, height: 450 })
     expect(readStateValue(runtime, schema, Camera)).toEqual({ x: 5, y: 7 })
@@ -336,10 +324,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected syncFromPhase runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.define({
-      schema,
-      entries: [syncFromPhase]
-    }))
+    runtime.value.runSchedule(Schedule.define([syncFromPhase]))
 
     expect(readResourceValue(runtime.value, schema, Counter)).toBe(1)
   })
@@ -388,10 +373,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected logger runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.define({
-      schema,
-      entries: [logTime]
-    }))
+    runtime.value.runSchedule(Schedule.define([logTime]))
 
     expect(seen).toEqual(["dt=0.25"])
   })
@@ -440,10 +422,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected prefixed logger runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.define({
-      schema,
-      entries: [logTime]
-    }))
+    runtime.value.runSchedule(Schedule.define([logTime]))
 
     expect(seen).toEqual(["dt=0.125"])
   })
