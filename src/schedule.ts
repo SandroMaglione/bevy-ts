@@ -6,10 +6,11 @@
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define({
- *   systems: [move, sync],
- *   steps: [move, Game.Schedule.applyDeferred(), sync]
- * })
+ * const update = Game.Schedule.define(
+ *   move,
+ *   Game.Schedule.applyDeferred(),
+ *   sync
+ * )
  * ```
  *
  * @module schedule
@@ -45,14 +46,11 @@ import type { RuntimeRequirements, SystemDefinition, SystemRequirements } from "
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define({
- *   systems: [writeHits, reactToHits],
- *   steps: [
- *     writeHits,
- *     Game.Schedule.updateEvents(),
- *     reactToHits
- *   ]
- * })
+ * const update = Game.Schedule.define(
+ *   writeHits,
+ *   Game.Schedule.updateEvents(),
+ *   reactToHits
+ * )
  * ```
  */
 
@@ -645,14 +643,11 @@ type DuplicateExtensionSystemNames<
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define({
- *   systems: [simulateSystem, observeSpawnedSystem],
- *   steps: [
- *     simulateSystem,
- *     Game.Schedule.applyDeferred(),
- *     observeSpawnedSystem
- *   ]
- * })
+ * const update = Game.Schedule.define(
+ *   simulateSystem,
+ *   Game.Schedule.applyDeferred(),
+ *   observeSpawnedSystem
+ * )
  * ```
  */
 export const applyDeferred = (): ApplyDeferredStep => ({
@@ -672,14 +667,11 @@ export const applyDeferred = (): ApplyDeferredStep => ({
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define({
- *   systems: [emitTickSystem, observeTickSystem],
- *   steps: [
- *     emitTickSystem,
- *     Game.Schedule.updateEvents(),
- *     observeTickSystem
- *   ]
- * })
+ * const update = Game.Schedule.define(
+ *   emitTickSystem,
+ *   Game.Schedule.updateEvents(),
+ *   observeTickSystem
+ * )
  * ```
  */
 export const updateEvents = (): EventUpdateStep => ({
@@ -701,22 +693,14 @@ export const updateEvents = (): EventUpdateStep => ({
  *
  * @example
  * ```ts
- * const browserUpdate = Game.Schedule.define({
- *   systems: [
- *     simulationSystem,
- *     destroyNodesSystem,
- *     createNodesSystem,
- *     syncTransformsSystem
- *   ],
- *   steps: [
- *     simulationSystem,
- *     Game.Schedule.applyDeferred(),
- *     Game.Schedule.updateLifecycle(),
- *     destroyNodesSystem,
- *     createNodesSystem,
- *     syncTransformsSystem
- *   ]
- * })
+ * const browserUpdate = Game.Schedule.define(
+ *   simulationSystem,
+ *   Game.Schedule.applyDeferred(),
+ *   Game.Schedule.updateLifecycle(),
+ *   destroyNodesSystem,
+ *   createNodesSystem,
+ *   syncTransformsSystem
+ * )
  * ```
  */
 export const updateLifecycle = (): LifecycleUpdateStep => ({
@@ -881,9 +865,9 @@ export const phase = <
 export function build<
   const Entries extends ReadonlyArray<ScheduleEntry>,
 >(
-  plan: readonly [...Entries]
+  ...entries: Entries
 ): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
-  return define(plan)
+  return define(...entries)
 }
 
 /**
@@ -894,17 +878,16 @@ export function build<
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define({
- *   schema,
- *   ...Game.Schedule.compose({
- *     entries: [
- *       captureInputSystem,
- *       gameplaySystem,
- *       Game.Schedule.applyDeferred(),
- *       hostMirrorPhase
- *     ]
- *   })
+ * const plan = Game.Schedule.compose({
+ *   entries: [
+ *     captureInputSystem,
+ *     gameplaySystem,
+ *     Game.Schedule.applyDeferred(),
+ *     hostMirrorPhase
+ *   ]
  * })
+ *
+ * const update = Game.Schedule.build(...plan.steps)
  * ```
  */
 export const compose = <
@@ -942,20 +925,15 @@ export const compose = <
  * @example
  * ```ts
  * const transitions = Game.Schedule.transitions(
- *   Game.Schedule.onEnter(Phase, "Playing", {
- *     systems: [ResetWorldSystem]
- *   })
+ *   Game.Schedule.onEnter(Phase, "Playing", [ResetWorldSystem])
  * )
  *
- * const update = Game.Schedule.define({
- *   systems: [QueueRestartSystem, GameplaySystem],
- *   steps: [
- *     QueueRestartSystem,
- *     GameplaySystem,
- *     Game.Schedule.applyDeferred(),
- *     Game.Schedule.applyStateTransitions(transitions)
- *   ]
- * })
+ * const update = Game.Schedule.define(
+ *   QueueRestartSystem,
+ *   GameplaySystem,
+ *   Game.Schedule.applyDeferred(),
+ *   Game.Schedule.applyStateTransitions(transitions)
+ * )
  * ```
  */
 export const applyStateTransitions = <
@@ -977,15 +955,15 @@ export type AnonymousScheduleFor<
 >
 
 /**
- * Creates one explicit executable schedule from a plan array.
+ * Creates one explicit executable schedule from authored plan entries.
  */
 export function define<
   const Entries extends ReadonlyArray<ScheduleEntry>
 >(
-  plan: readonly [...Entries]
+  ...entries: Entries
 ): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
-  const schema = findPlanSchema(plan)
-  const steps = normalizeEntries(plan)
+  const schema = findPlanSchema(entries)
+  const steps = normalizeEntries(entries)
   validateUniqueSystemSteps(steps, "schedule")
   const systems = collectUniqueSystems(steps)
 

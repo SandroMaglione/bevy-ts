@@ -60,11 +60,11 @@ const SuffixSystem = System.define(
 
 describe("Schedule", () => {
   it("builds executable schedules from explicit authored plans", () => {
-    const schedule = Schedule.define([
+    const schedule = Schedule.define(
       MovementSystem,
       Schedule.applyDeferred(),
       ExplicitLabelSystem
-    ])
+    )
 
     schedule.steps
     schedule.systems
@@ -72,6 +72,13 @@ describe("Schedule", () => {
 
     // @ts-expect-error!
     schedule.label
+
+    // @ts-expect-error ScheduleEntry
+    Schedule.define([
+      MovementSystem,
+      Schedule.applyDeferred(),
+      ExplicitLabelSystem
+    ])
   })
 
   it("creates reusable explicit fragments", () => {
@@ -83,11 +90,11 @@ describe("Schedule", () => {
       ]
     })
 
-    const schedule = Schedule.define([
+    const schedule = Schedule.define(
       PlainSystem,
       Schedule.applyDeferred(),
       hostMirror
-    ])
+    )
 
     schedule.steps
     schedule.systems
@@ -102,10 +109,10 @@ describe("Schedule", () => {
       ]
     })
 
-    const schedule = Schedule.define([
+    const schedule = Schedule.define(
       PlainSystem,
       hostMirrorPhase
-    ])
+    )
 
     schedule.steps
     schedule.systems
@@ -131,11 +138,11 @@ describe("Schedule", () => {
     plan.steps
     plan.systems
 
-    const schedule = Schedule.build([
+    const schedule = Schedule.build(
       PlainSystem,
       Schedule.applyDeferred(),
       hostMirror
-    ])
+    )
 
     schedule.steps
     schedule.systems

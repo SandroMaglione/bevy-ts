@@ -299,20 +299,20 @@ const SyncPixiTransformsSystem = Game.System.define(
     }),
 );
 
-const setupSchedule = Game.Schedule.define([
-    SetupSceneSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    CreatePixiSpritesSystem,
-  ]);
+const setupSchedule = Game.Schedule.define(
+  SetupSceneSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  CreatePixiSpritesSystem,
+);
 
-const updateSchedule = Game.Schedule.define([
-    CaptureFrameInputSystem,
-    IntegrateMotionSystem,
-    BounceWithinViewportSystem,
-    Game.Schedule.updateLifecycle(),
-    SyncPixiTransformsSystem,
-  ]);
+const updateSchedule = Game.Schedule.define(
+  CaptureFrameInputSystem,
+  IntegrateMotionSystem,
+  BounceWithinViewportSystem,
+  Game.Schedule.updateLifecycle(),
+  SyncPixiTransformsSystem,
+);
 
 /**
  * Starts the bouncing Pixi integration demo inside a host container.

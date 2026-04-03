@@ -74,7 +74,7 @@ describe("Runtime query and lookup", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([observe]))
+    runtime.runSchedule(Schedule.define(observe))
 
     expect(readResourceValue(runtime, schema, Count)).toBe(0)
   })
@@ -103,7 +103,7 @@ describe("Runtime query and lookup", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([observe]))
+    runtime.runSchedule(Schedule.define(observe))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("NoEntities")
   })
@@ -145,8 +145,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
@@ -178,7 +178,7 @@ describe("Runtime query and lookup", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([observe]))
+    runtime.runSchedule(Schedule.define(observe))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
     expect(readResourceValue(runtime, schema, LastX)).toBe(-1)
@@ -231,8 +231,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
@@ -276,8 +276,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
@@ -329,8 +329,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity/QueryMismatch")
@@ -379,8 +379,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -437,8 +437,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(2)
@@ -496,8 +496,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([observe])
+      Schedule.define(spawn),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("Missing")
@@ -566,8 +566,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([spawn]),
-      Schedule.define([write, read])
+      Schedule.define(spawn),
+      Schedule.define(write, read)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(9)
@@ -648,16 +648,16 @@ describe("Runtime query and lookup", () => {
     })
 
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(5)
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
 
     runtime.tick(
-      Game.Schedule.define([destroy]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(destroy),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity")
@@ -770,15 +770,15 @@ describe("Runtime query and lookup", () => {
     })
 
     runtime.tick(
-      Game.Schedule.define([spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe])
+      Game.Schedule.define(spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(24)
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
 
     runtime.tick(
-      Game.Schedule.define([destroy]),
-      Game.Schedule.define([emitStored, Game.Schedule.updateEvents(), observe])
+      Game.Schedule.define(destroy),
+      Game.Schedule.define(emitStored, Game.Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity/MissingEntity")

@@ -425,7 +425,7 @@ export interface FeatureBuildGame<
   readonly Schedule: {
     define: <
       const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
-    >(plan: readonly [...Entries]) => BoundScheduleDefineResult<Accessible, Root, Entries>
+    >(...entries: Entries) => BoundScheduleDefineResult<Accessible, Root, Entries>
     transitions: <
       const Entries extends ReadonlyArray<BoundTransitionBundleInputValue<Accessible, Root>>
     >(...entries: Entries) => BoundTransitionBundleResult<Accessible, Root, Entries>
@@ -796,7 +796,7 @@ export namespace Schema {
     readonly Schedule: {
       define: <
     const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
-      >(plan: readonly [...Entries]) => BoundScheduleDefineResult<S, Root, Entries>
+      >(...entries: Entries) => BoundScheduleDefineResult<S, Root, Entries>
       transitions: <
         const Entries extends ReadonlyArray<BoundTransitionBundleInputValue<S, Root>>
       >(...entries: Entries) => BoundTransitionBundleResult<S, Root, Entries>
@@ -1367,8 +1367,8 @@ export const bind = <S extends Schema.Any, Root = S>(
 
   const defineSchedule = <
     const Entries extends ReadonlyArray<BoundScheduleEntry>
-  >(plan: readonly [...Entries]) =>
-    Schedule.define(plan) as BoundScheduleDefineResult<S, Root, Entries>
+  >(...entries: Entries) =>
+    Schedule.define(...entries) as BoundScheduleDefineResult<S, Root, Entries>
 
   const defineMachine = <
     const Name extends string,
@@ -1387,7 +1387,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     const Entries extends ReadonlyArray<BoundTransitionEntry>,
     M extends BoundMachine = BoundMachine
   >(transition: Machine.TransitionScheduleDefinition<S, M, any, Root>["transition"], plan: readonly [...Entries]) => {
-    const schedule = Schedule.define(plan)
+    const schedule = Schedule.define(...plan)
     const transitionSchedule = {
       ...schedule,
       transition

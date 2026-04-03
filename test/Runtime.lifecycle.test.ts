@@ -118,13 +118,13 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const lifecycleSchedule = Game.Schedule.define([
-        SpawnSystem,
-        Game.Schedule.applyDeferred(),
-        ObserveBeforeSystem,
-        Game.Schedule.updateLifecycle(),
-        ObserveAfterSystem
-      ])
+    const lifecycleSchedule = Game.Schedule.define(
+      SpawnSystem,
+      Game.Schedule.applyDeferred(),
+      ObserveBeforeSystem,
+      Game.Schedule.updateLifecycle(),
+      ObserveAfterSystem
+    )
     runtime.runSchedule(lifecycleSchedule)
 
     expect(readResourceValue(runtime, schema, AddedBefore)).toBe(0)
@@ -212,14 +212,14 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define([SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()])
-    const observeSchedule = Game.Schedule.define([
-          CleanupSystem,
-          Game.Schedule.applyDeferred(),
-          ObserveBeforeSystem,
-          Game.Schedule.updateLifecycle(),
-          ObserveAfterSystem
-        ])
+    const spawnSchedule = Game.Schedule.define(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
+    const observeSchedule = Game.Schedule.define(
+      CleanupSystem,
+      Game.Schedule.applyDeferred(),
+      ObserveBeforeSystem,
+      Game.Schedule.updateLifecycle(),
+      ObserveAfterSystem
+    )
     runtime.tick(spawnSchedule, observeSchedule)
 
     expect(readResourceValue(runtime, schema, RemovedBefore)).toBe(0)
@@ -270,14 +270,14 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define([SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()])
-    const clearSchedule = Game.Schedule.define([ObserveChanged])
+    const spawnSchedule = Game.Schedule.define(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
+    const clearSchedule = Game.Schedule.define(ObserveChanged)
     runtime.tick(spawnSchedule, clearSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(1)
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
 
-    const refreshSchedule = Game.Schedule.define([Game.Schedule.updateLifecycle(), ObserveChanged])
+    const refreshSchedule = Game.Schedule.define(Game.Schedule.updateLifecycle(), ObserveChanged)
     runtime.runSchedule(refreshSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(0)
@@ -357,15 +357,15 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define([SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()])
-    const observeSchedule = Game.Schedule.define([
-          Game.Schedule.updateLifecycle(),
-          OverwriteSystem,
-          Game.Schedule.applyDeferred(),
-          ObserveBeforeSystem,
-          Game.Schedule.updateLifecycle(),
-          ObserveAfterSystem
-        ])
+    const spawnSchedule = Game.Schedule.define(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
+    const observeSchedule = Game.Schedule.define(
+      Game.Schedule.updateLifecycle(),
+      OverwriteSystem,
+      Game.Schedule.applyDeferred(),
+      ObserveBeforeSystem,
+      Game.Schedule.updateLifecycle(),
+      ObserveAfterSystem
+    )
     runtime.tick(spawnSchedule, observeSchedule)
 
     expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)

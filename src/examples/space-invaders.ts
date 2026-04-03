@@ -904,38 +904,38 @@ const DestroyPixiNodesSystem = Game.System.define(
     })
 )
 
-const gameplaySetupSchedule = Game.Schedule.define([SpawnPlayerSystem])
+const gameplaySetupSchedule = Game.Schedule.define(SpawnPlayerSystem)
 
-const setupSchedule = Game.Schedule.define([
-    gameplaySetupSchedule,
-    CreateMatterBodiesSystem,
-    CreatePixiNodesSystem
-  ])
+const setupSchedule = Game.Schedule.define(
+  gameplaySetupSchedule,
+  CreateMatterBodiesSystem,
+  CreatePixiNodesSystem
+)
 
-const updateSchedule = Game.Schedule.define([
-    CaptureFrameInputSystem,
-    PlayerInputSystem,
-    ShootingSystem,
-    EnemySpawnSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    CreateMatterBodiesSystem,
-    CreatePixiNodesSystem,
-    MovementSystem,
-    ClampPlayerBoundsSystem,
-    EnemyDescentSystem,
-    SyncMatterBodyTransformsSystem,
-    EnemyBulletCollisionSystem,
-    // DestroyEnemy becomes readable only after this explicit event boundary.
-    Game.Schedule.updateEvents(),
-    EnemyDestroySystem,
-    CullingSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    DestroyMatterBodiesSystem,
-    DestroyPixiNodesSystem,
-    SyncPixiTransformsSystem
-  ])
+const updateSchedule = Game.Schedule.define(
+  CaptureFrameInputSystem,
+  PlayerInputSystem,
+  ShootingSystem,
+  EnemySpawnSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  CreateMatterBodiesSystem,
+  CreatePixiNodesSystem,
+  MovementSystem,
+  ClampPlayerBoundsSystem,
+  EnemyDescentSystem,
+  SyncMatterBodyTransformsSystem,
+  EnemyBulletCollisionSystem,
+  // DestroyEnemy becomes readable only after this explicit event boundary.
+  Game.Schedule.updateEvents(),
+  EnemyDestroySystem,
+  CullingSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  DestroyMatterBodiesSystem,
+  DestroyPixiNodesSystem,
+  SyncPixiTransformsSystem
+)
 
 export const startSpaceInvadersExample = async (
   mount: HTMLElement

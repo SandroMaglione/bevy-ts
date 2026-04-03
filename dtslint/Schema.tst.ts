@@ -134,7 +134,7 @@ describe("Schema", () => {
         })
     )
 
-    const update = Game.Schedule.define([MoveSystem])
+    const update = Game.Schedule.define(MoveSystem)
 
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services(),
@@ -193,7 +193,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule.define([ObserveSystem]))
+    App.makeApp(runtime).update(Game.Schedule.define(ObserveSystem))
   })
 
   it("supports a zero-or-one singleton read without widening successful matches", () => {
@@ -244,7 +244,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule.define([ObserveSystem]))
+    App.makeApp(runtime).update(Game.Schedule.define(ObserveSystem))
   })
 
   it("rejects non-component descriptors in query selection and structural filters", () => {
@@ -334,7 +334,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    const schedule = Game.Schedule.define([Game.Schedule.updateLifecycle(), ObserveLifecycleSystem])
+    const schedule = Game.Schedule.define(Game.Schedule.updateLifecycle(), ObserveLifecycleSystem)
 
     runtime.runSchedule(schedule)
   })
@@ -406,7 +406,7 @@ describe("Schema", () => {
       () => Fx.sync<undefined, any>(() => undefined)
     )
 
-    type GameBSystem = Parameters<typeof GameB.Schedule.define>[0][number]
+    type GameBSystem = Parameters<typeof GameB.Schedule.define>[number]
     // @ts-expect-error!
     const _invalidSystem: GameBSystem = SystemA
 
@@ -417,18 +417,18 @@ describe("Schema", () => {
       }
     })
 
-    const scheduleB = GameB.Schedule.define([SystemB])
+    const scheduleB = GameB.Schedule.define(SystemB)
 
     // @ts-expect-error!
     runtimeA.runSchedule(scheduleB)
 
-    const scheduleA = GameA.Schedule.define([SystemA])
+    const scheduleA = GameA.Schedule.define(SystemA)
+    type GameAScheduleEntry = Parameters<typeof GameA.Schedule.define>[number]
 
-    GameA.Schedule.define([
-      scheduleA,
-      // @ts-expect-error!
-      SystemB
-    ])
+    scheduleA
+
+    // @ts-expect-error!
+    const _invalidSystemForA: GameAScheduleEntry = SystemB
   })
 
   it("supports explicit relation query access and hierarchy-only lookup helpers", () => {
@@ -759,7 +759,7 @@ describe("Schema", () => {
         )
 
         return {
-          update: [Game.Schedule.define([Tick])]
+          update: [Game.Schedule.define(Tick)]
         }
       }
     })
@@ -803,7 +803,7 @@ describe("Schema", () => {
         )
 
         return {
-          update: [Game.Schedule.define([ApplyDamage])]
+          update: [Game.Schedule.define(ApplyDamage)]
         }
       }
     })

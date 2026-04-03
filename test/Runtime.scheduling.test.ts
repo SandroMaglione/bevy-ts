@@ -56,11 +56,11 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([increment]))
+    runtime.runSchedule(Schedule.define(increment))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
-    runtime.runSchedule(Schedule.define([append]))
+    runtime.runSchedule(Schedule.define(append))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["ran"])
   })
 
@@ -95,8 +95,8 @@ describe("Runtime scheduling", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([first]),
-      Schedule.define([second])
+      Schedule.define(first),
+      Schedule.define(second)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
@@ -132,7 +132,7 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([second, first]))
+    runtime.runSchedule(Schedule.define(second, first))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["second", "first"])
   })
@@ -167,7 +167,7 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([first, second]))
+    runtime.runSchedule(Schedule.define(first, second))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
@@ -202,7 +202,7 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([first, Schedule.updateLifecycle(), second]))
+    runtime.runSchedule(Schedule.define(first, Schedule.updateLifecycle(), second))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
@@ -235,17 +235,17 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const hostMirror = Schedule.define([
-        Schedule.updateLifecycle(),
-        second
-      ])
+    const hostMirror = Schedule.define(
+      Schedule.updateLifecycle(),
+      second
+    )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([
-        first,
-        Schedule.applyDeferred(),
-        hostMirror
-      ]))
+    runtime.runSchedule(Schedule.define(
+      first,
+      Schedule.applyDeferred(),
+      hostMirror
+    ))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
@@ -265,10 +265,10 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const phase = Schedule.define([duplicate])
+    const phase = Schedule.define(duplicate)
 
     expect(() =>
-      Schedule.define([duplicate, phase])
+      Schedule.define(duplicate, phase)
     ).toThrow("Duplicate system step in schedule")
   })
 })

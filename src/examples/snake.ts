@@ -908,21 +908,21 @@ const SyncHudSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define([
-    ResetGameSystem,
-    Game.Schedule.applyDeferred(),
-    EnsureFoodSystem,
-    Game.Schedule.applyDeferred()
-  ])
+const setupSchedule = Game.Schedule.define(
+  ResetGameSystem,
+  Game.Schedule.applyDeferred(),
+  EnsureFoodSystem,
+  Game.Schedule.applyDeferred()
+)
 
-const browserSetupSchedule = Game.Schedule.define([
-    setupSchedule,
-    Game.Schedule.updateLifecycle(),
-    CreateSnakeNodesSystem,
-    SyncSnakeNodeTransformsSystem,
-    ReconcileSnakeNodesSystem,
-    SyncHudSystem
-  ])
+const browserSetupSchedule = Game.Schedule.define(
+  setupSchedule,
+  Game.Schedule.updateLifecycle(),
+  CreateSnakeNodesSystem,
+  SyncSnakeNodeTransformsSystem,
+  ReconcileSnakeNodesSystem,
+  SyncHudSystem
+)
 
 const phaseTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(GamePhase, "Playing", [
@@ -931,34 +931,34 @@ const phaseTransitions = Game.Schedule.transitions(
   ])
 )
 
-const updateSchedule = Game.Schedule.define([
-    CapturePreviousPositionsSystem,
-    MoveHeadSystem,
-    MoveBodySystem,
-    DetectFoodCollisionSystem,
-    Game.Schedule.updateEvents(),
-    ResolveFoodEatenSystem,
-    Game.Schedule.applyDeferred(),
-    GrowSnakeSystem,
-    Game.Schedule.applyDeferred(),
-    DetectSelfCollisionSystem,
-    EnsureFoodSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.applyStateTransitions(phaseTransitions)
-  ])
+const updateSchedule = Game.Schedule.define(
+  CapturePreviousPositionsSystem,
+  MoveHeadSystem,
+  MoveBodySystem,
+  DetectFoodCollisionSystem,
+  Game.Schedule.updateEvents(),
+  ResolveFoodEatenSystem,
+  Game.Schedule.applyDeferred(),
+  GrowSnakeSystem,
+  Game.Schedule.applyDeferred(),
+  DetectSelfCollisionSystem,
+  EnsureFoodSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.applyStateTransitions(phaseTransitions)
+)
 
-const browserUpdateSchedule = Game.Schedule.define([
-    QueueRestartSystem,
-    BrowserInputSystem,
-    updateSchedule,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    DestroySnakeNodesSystem,
-    CreateSnakeNodesSystem,
-    SyncSnakeNodeTransformsSystem,
-    ReconcileSnakeNodesSystem,
-    SyncHudSystem
-  ])
+const browserUpdateSchedule = Game.Schedule.define(
+  QueueRestartSystem,
+  BrowserInputSystem,
+  updateSchedule,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  DestroySnakeNodesSystem,
+  CreateSnakeNodesSystem,
+  SyncSnakeNodeTransformsSystem,
+  ReconcileSnakeNodesSystem,
+  SyncHudSystem
+)
 
 export const createSnakeExample = () => {
   const runtime = Game.Runtime.make({

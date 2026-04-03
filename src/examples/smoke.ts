@@ -124,14 +124,14 @@ const ObserveTickSystem = Game.System.define(
     })
 )
 
-const bootstrap = Game.Schedule.define([SetupSystem])
+const bootstrap = Game.Schedule.define(SetupSystem)
 
-const update = Game.Schedule.define([
-    MoveSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateEvents(),
-    ObserveTickSystem
-  ])
+const update = Game.Schedule.define(
+  MoveSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateEvents(),
+  ObserveTickSystem
+)
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(

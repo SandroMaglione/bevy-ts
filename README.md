@@ -107,12 +107,12 @@ Run those systems through explicit `bootstrap` and `update` schedules:
 ```ts
 import { App } from "./src/index.ts"
 
-const bootstrap = Game.Schedule.define([SetupSystem])
+const bootstrap = Game.Schedule.define(SetupSystem)
 
-const update = Game.Schedule.define([
+const update = Game.Schedule.define(
   MoveSystem,
   Game.Schedule.applyDeferred()
-])
+)
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
@@ -224,7 +224,7 @@ const TickSystem = Game.System.define(
     })
 )
 
-const tick = Game.Schedule.define([TickSystem])
+const tick = Game.Schedule.define(TickSystem)
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
@@ -314,33 +314,31 @@ Reference examples:
 
 ## Ordering systems
 
-Schedule order is authored directly in the plan array. When a flow has a few
+Schedule order is authored directly in the schedule entries. When a flow has a few
 clear phases, split those phases into small reusable schedules and compose them
 explicitly.
 
 ```ts
-const inputSchedule = Game.Schedule.define([
-  InputSystem
-])
+const inputSchedule = Game.Schedule.define(InputSystem)
 
-const gameplaySchedule = Game.Schedule.define([
+const gameplaySchedule = Game.Schedule.define(
   ResolveIntentSystem,
   MoveSystem,
   Game.Schedule.applyDeferred()
-])
+)
 
-const renderSyncSchedule = Game.Schedule.define([
+const renderSyncSchedule = Game.Schedule.define(
   Game.Schedule.updateLifecycle(),
   DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
   SyncRenderableTransformsSystem
-])
+)
 
-const update = Game.Schedule.define([
+const update = Game.Schedule.define(
   inputSchedule,
   gameplaySchedule,
   renderSyncSchedule
-])
+)
 ```
 
 No runtime-relevant ordering is hidden behind labels or sets. The authored
@@ -485,12 +483,12 @@ const phaseTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(Phase, "Playing", [ResetWorldSystem])
 )
 
-const update = Game.Schedule.define([
+const update = Game.Schedule.define(
   QueueRestartSystem,
   GameplaySystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.applyStateTransitions(phaseTransitions)
-])
+)
 ```
 
 The important behavior is that restart is not immediate when input is pressed.
@@ -527,12 +525,12 @@ const appTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(AppState, "Paused", [ShowPauseOverlaySystem])
 )
 
-const update = Game.Schedule.define([
+const update = Game.Schedule.define(
   PauseInputSystem,
   // Pending state only becomes committed at this exact marker.
   Game.Schedule.applyStateTransitions(appTransitions),
   GameplaySystem
-])
+)
 ```
 
 Queued state is invisible before `applyStateTransitions()` and visible after it.
@@ -594,12 +592,12 @@ const ObserveTransitions = Game.System.define(
     })
 )
 
-const update = Game.Schedule.define([
+const update = Game.Schedule.define(
   PauseInputSystem,
   Game.Schedule.applyStateTransitions(appTransitions),
   Game.Schedule.updateEvents(),
   ObserveTransitions
-])
+)
 ```
 
 This covers the common orchestration cases that are awkward without a typed FSM layer: menus, pause screens, turn phases, and similar mode-driven flows.
@@ -754,13 +752,13 @@ plus narrow update passes. This is the smallest pattern and is the right
 default for many renderer bridges.
 
 ```ts
-const browserUpdate = Game.Schedule.define([
+const browserUpdate = Game.Schedule.define(
   simulateSystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateLifecycle(),
   createNodesSystem,
   syncTransformsSystem
-])
+)
 ```
 
 Typical pieces:
@@ -781,7 +779,7 @@ optional reconcile phases. This is clearer when the host can drift or when
 multiple render-side structures must stay in sync.
 
 ```ts
-const browserUpdate = Game.Schedule.define([
+const browserUpdate = Game.Schedule.define(
   simulateSystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateLifecycle(),
@@ -789,7 +787,7 @@ const browserUpdate = Game.Schedule.define([
   createNodesSystem,
   syncTransformsSystem,
   reconcileNodesSystem
-])
+)
 ```
 
 Typical pieces:
@@ -814,7 +812,7 @@ The practical browser shape is:
 3. run one update schedule that keeps simulation and host sync in explicit phases
 
 ```ts
-const updateSchedule = Game.Schedule.define([
+const updateSchedule = Game.Schedule.define(
   captureInputSystem,
   simulationSystem,
   Game.Schedule.applyDeferred(),
@@ -825,7 +823,7 @@ const updateSchedule = Game.Schedule.define([
   destroyNodesSystem,
   createNodesSystem,
   syncTransformsSystem
-])
+)
 
 const tick = () => {
   runtime.runSchedule(updateSchedule)
@@ -903,24 +901,24 @@ typed failure instead of an exception.
 Author schedules with one public constructor:
 
 ```ts
-const gameplay = Game.Schedule.define([
+const gameplay = Game.Schedule.define(
   captureInputSystem,
   gameplaySystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.applyStateTransitions(transitions)
-])
+)
 
-const renderSync = Game.Schedule.define([
+const renderSync = Game.Schedule.define(
   Game.Schedule.updateLifecycle(),
   destroyRenderNodesSystem,
   createRenderNodesSystem,
   syncRenderableTransformsSystem
-])
+)
 
-const update = Game.Schedule.define([gameplay, renderSync])
+const update = Game.Schedule.define(gameplay, renderSync)
 ```
 
-The plan array may contain:
+The authored entries may contain:
 
 - systems
 - explicit schedule markers like `applyDeferred()`, `updateEvents()`, `updateLifecycle()`, and `applyStateTransitions(...)`
@@ -1038,12 +1036,12 @@ Concretely, the tradeoff looks like this:
 const A = Game.System.define("A", { schema }, ...)
 const B = Game.System.define("B", { schema }, ...)
 
-const schedule = Game.Schedule.define([
+const schedule = Game.Schedule.define(
   A,
   Game.Schedule.applyDeferred(),
   B,
   /* many more steps */
-])
+)
 ```
 
 After optimization, the important guarantees still need to hold:
@@ -1073,8 +1071,8 @@ This is an internal compiler-cost tradeoff, not a user-meaningful loss of safety
 Direct inline schedule execution is supported:
 
 ```ts
-runtime.runSchedule(Game.Schedule.define([increment]))
-app.update(Game.Schedule.define([increment]))
+runtime.runSchedule(Game.Schedule.define(increment))
+app.update(Game.Schedule.define(increment))
 ```
 
 The execution boundary still validates the carried runtime requirements from the
@@ -1173,16 +1171,16 @@ final schedules without pushing renderer-specific logic into the core.
 Ideal shape:
 
 ```ts
-const renderMirror = Game.Schedule.define([
+const renderMirror = Game.Schedule.define(
   Game.Schedule.updateLifecycle(),
   destroyRenderNodesSystem,
   createRenderNodesSystem,
   syncRenderableTransformsSystem
-])
+)
 
-const update = Game.Schedule.define([
+const update = Game.Schedule.define(
   gameplaySystem,
   Game.Schedule.applyDeferred(),
   renderMirror
-])
+)
 ```

@@ -507,28 +507,28 @@ const SyncPlayerNodeSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define([SetupSystem])
+const setupSchedule = Game.Schedule.define(SetupSystem)
 
-const browserSetupSchedule = Game.Schedule.define([
-    setupSchedule,
-    CreateRenderNodesSystem,
-    SyncPlayerNodeSystem
-  ])
+const browserSetupSchedule = Game.Schedule.define(
+  setupSchedule,
+  CreateRenderNodesSystem,
+  SyncPlayerNodeSystem
+)
 
-const updateSchedule = Game.Schedule.define([
-    InputSystem,
-    PlanMovementSystem,
-    CollisionSystem,
-    AdvanceMovementSystem
-  ])
+const updateSchedule = Game.Schedule.define(
+  InputSystem,
+  PlanMovementSystem,
+  CollisionSystem,
+  AdvanceMovementSystem
+)
 
-const browserUpdateSchedule = Game.Schedule.define([
-    CaptureFrameInputSystem,
-    updateSchedule,
-    DestroyRenderNodesSystem,
-    CreateRenderNodesSystem,
-    SyncPlayerNodeSystem
-  ])
+const browserUpdateSchedule = Game.Schedule.define(
+  CaptureFrameInputSystem,
+  updateSchedule,
+  DestroyRenderNodesSystem,
+  CreateRenderNodesSystem,
+  SyncPlayerNodeSystem
+)
 
 export const createPokemonExample = (input: {
   readonly direction: () => Direction | null

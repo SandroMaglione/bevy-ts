@@ -112,8 +112,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("1/1/2/1/1")
@@ -181,9 +181,9 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([destroy]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(destroy),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingEntity/MissingRelation")
@@ -265,8 +265,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe(
@@ -332,9 +332,9 @@ describe("Runtime relationships", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define([spawn])
-    const relateSchedule = Game.Schedule.define([relate, Game.Schedule.applyDeferred(), observe])
-    const unrelateSchedule = Game.Schedule.define([unrelate, Game.Schedule.applyDeferred(), observe])
+    const spawnSchedule = Game.Schedule.define(spawn)
+    const relateSchedule = Game.Schedule.define(relate, Game.Schedule.applyDeferred(), observe)
+    const unrelateSchedule = Game.Schedule.define(unrelate, Game.Schedule.applyDeferred(), observe)
     runtime.tick(spawnSchedule, relateSchedule, unrelateSchedule)
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0")
@@ -424,8 +424,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([reorder, Game.Schedule.applyDeferred(), observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(reorder, Game.Schedule.applyDeferred(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("4,2,3/4,2,3/4,2,3")
@@ -507,8 +507,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("first/first,nested/MissingEntity")
@@ -589,14 +589,14 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([
-          relate,
-          observeBefore,
-          Game.Schedule.applyDeferred(),
-          Game.Schedule.updateRelationFailures(),
-          observeAfter
-        ])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(
+        relate,
+        observeBefore,
+        Game.Schedule.applyDeferred(),
+        Game.Schedule.updateRelationFailures(),
+        observeAfter
+      )
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("2/1/0")
@@ -664,8 +664,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0/0")
@@ -749,14 +749,14 @@ describe("Runtime relationships", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define([spawn])
-    const failureSchedule = Game.Schedule.define([
-        queueInvalid,
-        Game.Schedule.applyDeferred(),
-        readBefore,
-        Game.Schedule.updateRelationFailures(),
-        readAfter
-      ])
+    const spawnSchedule = Game.Schedule.define(spawn)
+    const failureSchedule = Game.Schedule.define(
+      queueInvalid,
+      Game.Schedule.applyDeferred(),
+      readBefore,
+      Game.Schedule.updateRelationFailures(),
+      readAfter
+    )
     runtime.tick(spawnSchedule, failureSchedule)
 
     expect(readResourceValue(runtime, schema, Summary)).toBe(
@@ -852,14 +852,14 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([
-          queueInvalid,
-          Game.Schedule.applyDeferred(),
-          readBefore,
-          Game.Schedule.updateRelationFailures(),
-          readAfter
-        ])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(
+        queueInvalid,
+        Game.Schedule.applyDeferred(),
+        readBefore,
+        Game.Schedule.updateRelationFailures(),
+        readAfter
+      )
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe(

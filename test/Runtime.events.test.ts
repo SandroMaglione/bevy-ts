@@ -61,8 +61,8 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([emit]),
-      Schedule.define([observe])
+      Schedule.define(emit),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([1])
@@ -101,7 +101,7 @@ describe("Runtime events", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([emit, readBefore]))
+    runtime.runSchedule(Schedule.define(emit, readBefore))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([0])
   })
@@ -139,7 +139,7 @@ describe("Runtime events", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([emit, Schedule.updateEvents(), readAfter]))
+    runtime.runSchedule(Schedule.define(emit, Schedule.updateEvents(), readAfter))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([3])
   })
@@ -179,7 +179,7 @@ describe("Runtime events", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define([emit, Schedule.updateEvents(), observe]))
+    runtime.runSchedule(Schedule.define(emit, Schedule.updateEvents(), observe))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([4, 5, 6])
   })
@@ -226,15 +226,15 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define([emitOne]),
-      Schedule.define([observe])
+      Schedule.define(emitOne),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([7])
 
     runtime.tick(
-      Schedule.define([emitNone]),
-      Schedule.define([observe])
+      Schedule.define(emitNone),
+      Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])

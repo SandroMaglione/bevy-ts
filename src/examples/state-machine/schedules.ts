@@ -20,13 +20,13 @@ import {
 } from "./systems.ts"
 import { Game, SessionState } from "./schema.ts"
 
-export const setupSchedule = Game.Schedule.define([
-    SpawnPlayerSystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    CreateRenderNodesSystem,
-    SyncHudSystem
-  ])
+export const setupSchedule = Game.Schedule.define(
+  SpawnPlayerSystem,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
+  CreateRenderNodesSystem,
+  SyncHudSystem
+)
 
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Countdown", [
@@ -35,26 +35,26 @@ export const stateTransitions = Game.Schedule.transitions(
   ])
 )
 
-export const updateSchedule = Game.Schedule.define([
-    CaptureFrameInputSystem,
-    QueueStartFromTitleSystem,
-    QueueRestartSystem,
-    QueuePauseSystem,
-    QueueResumeSystem,
-    TickCountdownSystem,
-    MovePlayerSystem,
-    CollectPickupsSystem,
-    TickRoundClockSystem,
-    QueueOutcomeSystem,
-    Game.Schedule.applyStateTransitions(stateTransitions),
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateEvents(),
-    // Host sync only becomes correct after lifecycle visibility is committed.
-    Game.Schedule.updateLifecycle(),
-    WriteTransitionNoticeSystem,
-    FadeTransitionNoticeSystem,
-    DestroyRenderNodesSystem,
-    CreateRenderNodesSystem,
-    SyncRenderableTransformsSystem,
-    SyncHudSystem
-  ])
+export const updateSchedule = Game.Schedule.define(
+  CaptureFrameInputSystem,
+  QueueStartFromTitleSystem,
+  QueueRestartSystem,
+  QueuePauseSystem,
+  QueueResumeSystem,
+  TickCountdownSystem,
+  MovePlayerSystem,
+  CollectPickupsSystem,
+  TickRoundClockSystem,
+  QueueOutcomeSystem,
+  Game.Schedule.applyStateTransitions(stateTransitions),
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateEvents(),
+  // Host sync only becomes correct after lifecycle visibility is committed.
+  Game.Schedule.updateLifecycle(),
+  WriteTransitionNoticeSystem,
+  FadeTransitionNoticeSystem,
+  DestroyRenderNodesSystem,
+  CreateRenderNodesSystem,
+  SyncRenderableTransformsSystem,
+  SyncHudSystem
+)

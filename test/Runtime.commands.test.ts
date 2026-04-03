@@ -82,8 +82,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -127,8 +127,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(0)
@@ -175,8 +175,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([lookup])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(lookup)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -253,8 +253,8 @@ describe("Runtime commands", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define([spawn])
-    const observeSchedule = Game.Schedule.define([insertVelocity, Game.Schedule.applyDeferred(), observe])
+    const spawnSchedule = Game.Schedule.define(spawn)
+    const observeSchedule = Game.Schedule.define(insertVelocity, Game.Schedule.applyDeferred(), observe)
 
     runtime.tick(spawnSchedule, observeSchedule)
 
@@ -321,8 +321,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -389,8 +389,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define([spawn]),
-      Game.Schedule.define([observe])
+      Game.Schedule.define(spawn),
+      Game.Schedule.define(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)

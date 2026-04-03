@@ -93,7 +93,7 @@ const PlayingOnlySystem = Game.System.define(
 )
 
 
-const MachineSchedule = Game.Schedule.define([ReaderSystem, WriterSystem])
+const MachineSchedule = Game.Schedule.define(ReaderSystem, WriterSystem)
 
 const EnterPlaying = Game.Schedule.onEnter(AppState, "Playing", [TransitionSystem])
 
@@ -184,11 +184,11 @@ describe("StateMachine", () => {
       OtherGame.Schedule.onEnter(OtherState, "Idle", [])
     )
 
-    Game.Schedule.define([
+    Game.Schedule.define(
       ReaderSystem,
       // @ts-expect-error!
       Game.Schedule.applyStateTransitions(OtherBundle)
-    ])
+    )
   })
 
   it("rejects runtimes that omit required machine initialization", () => {
@@ -245,7 +245,7 @@ describe("StateMachine", () => {
       )
     })
 
-    runtime.runSchedule(Game.Schedule.define([IncrementWithOrCondition]))
+    runtime.runSchedule(Game.Schedule.define(IncrementWithOrCondition))
   })
 
   it("rejects invalid multi-machine runtime initialization values", () => {
@@ -313,7 +313,7 @@ describe("StateMachine", () => {
       )
     ])
 
-    const schedule = Game.Schedule.define([WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService))])
+    const schedule = Game.Schedule.define(WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService)))
 
     const runtime = Game.Runtime.make({
       services: Runtime.services(),
@@ -339,10 +339,10 @@ describe("StateMachine", () => {
       Game.Schedule.onExit(AppState, "Paused", [TransitionSystem])
     )
 
-    const schedule = Game.Schedule.define([
+    const schedule = Game.Schedule.define(
       WriterSystem,
       Game.Schedule.applyStateTransitions(flattened)
-    ])
+    )
 
     schedule
   })
