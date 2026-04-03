@@ -905,36 +905,19 @@ const DestroyPixiNodesSystem = Game.System.define(
 )
 
 const gameplaySetupSchedule = Game.Schedule.define({
-  systems: [SpawnPlayerSystem]
+  entries: [SpawnPlayerSystem]
 })
 
-const setupSchedule = Game.Schedule.extend(gameplaySetupSchedule, {
-  after: [
+const setupSchedule = Game.Schedule.define({
+  entries: [
+    gameplaySetupSchedule,
     CreateMatterBodiesSystem,
     CreatePixiNodesSystem
   ]
 })
 
 const updateSchedule = Game.Schedule.define({
-  systems: [
-    CaptureFrameInputSystem,
-    PlayerInputSystem,
-    ShootingSystem,
-    EnemySpawnSystem,
-    CreateMatterBodiesSystem,
-    CreatePixiNodesSystem,
-    MovementSystem,
-    ClampPlayerBoundsSystem,
-    EnemyDescentSystem,
-    SyncMatterBodyTransformsSystem,
-    EnemyBulletCollisionSystem,
-    EnemyDestroySystem,
-    CullingSystem,
-    DestroyMatterBodiesSystem,
-    DestroyPixiNodesSystem,
-    SyncPixiTransformsSystem
-  ],
-  steps: [
+  entries: [
     CaptureFrameInputSystem,
     PlayerInputSystem,
     ShootingSystem,

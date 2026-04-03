@@ -21,8 +21,7 @@ import {
 import { Game, GameplaySet, RoundState, SessionState } from "./schema.ts"
 
 export const setupSchedule = Game.Schedule.define({
-  systems: [SpawnPlayerSystem, CreateRenderNodesSystem, SyncHudSystem],
-  steps: [
+  entries: [
     SpawnPlayerSystem,
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateLifecycle(),
@@ -34,39 +33,12 @@ export const setupSchedule = Game.Schedule.define({
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Countdown", {
     // Entering Countdown is the explicit reset boundary for the next round.
-    systems: [ResetRoundOnCountdownEnterSystem]
+    entries: [ResetRoundOnCountdownEnterSystem]
   })
 )
 
 export const updateSchedule = Game.Schedule.define({
-  systems: [
-    CaptureFrameInputSystem,
-    QueueStartFromTitleSystem,
-    QueueRestartSystem,
-    QueuePauseSystem,
-    QueueResumeSystem,
-    TickCountdownSystem,
-    MovePlayerSystem,
-    CollectPickupsSystem,
-    TickRoundClockSystem,
-    QueueOutcomeSystem,
-    WriteTransitionNoticeSystem,
-    FadeTransitionNoticeSystem,
-    DestroyRenderNodesSystem,
-    CreateRenderNodesSystem,
-    SyncRenderableTransformsSystem,
-    SyncHudSystem
-  ],
-  sets: [
-    Game.Schedule.configureSet({
-      label: GameplaySet,
-      when: [Game.Condition.and(
-        Game.Condition.inState(SessionState, "Round"),
-        Game.Condition.inState(RoundState, "Playing")
-      )]
-    })
-  ],
-  steps: [
+  entries: [
     CaptureFrameInputSystem,
     QueueStartFromTitleSystem,
     QueueRestartSystem,
@@ -88,5 +60,14 @@ export const updateSchedule = Game.Schedule.define({
     CreateRenderNodesSystem,
     SyncRenderableTransformsSystem,
     SyncHudSystem
+  ],
+  sets: [
+    Game.Schedule.configureSet({
+      label: GameplaySet,
+      when: [Game.Condition.and(
+        Game.Condition.inState(SessionState, "Round"),
+        Game.Condition.inState(RoundState, "Playing")
+      )]
+    })
   ]
 })

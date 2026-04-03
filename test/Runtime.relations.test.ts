@@ -113,10 +113,10 @@ describe("Runtime relationships", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -186,13 +186,13 @@ describe("Runtime relationships", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [destroy]
+        entries: [destroy]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -276,10 +276,10 @@ describe("Runtime relationships", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -347,15 +347,13 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     const spawnSchedule = Game.Schedule.define({
-      systems: [spawn]
+      entries: [spawn]
     })
     const relateSchedule = Game.Schedule.define({
-      systems: [relate],
-      steps: [relate, Game.Schedule.applyDeferred(), observe]
+      entries: [relate, Game.Schedule.applyDeferred(), observe]
     })
     const unrelateSchedule = Game.Schedule.define({
-      systems: [unrelate],
-        steps: [unrelate, Game.Schedule.applyDeferred(), observe]
+      entries: [unrelate, Game.Schedule.applyDeferred(), observe]
       })
     runtime.tick(spawnSchedule, relateSchedule, unrelateSchedule)
 
@@ -447,11 +445,10 @@ describe("Runtime relationships", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [reorder, observe],
-        steps: [reorder, Game.Schedule.applyDeferred(), observe]
+        entries: [reorder, Game.Schedule.applyDeferred(), observe]
       })
     )
 
@@ -534,8 +531,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define({ systems: [spawn] }),
-      Game.Schedule.define({ systems: [observe] })
+      Game.Schedule.define({ entries: [spawn] }),
+      Game.Schedule.define({ entries: [observe] })
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("first/first,nested/MissingEntity")
@@ -616,10 +613,9 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define({ systems: [spawn] }),
+      Game.Schedule.define({ entries: [spawn] }),
       Game.Schedule.define({
-        systems: [relate, observeBefore, observeAfter],
-        steps: [
+        entries: [
           relate,
           observeBefore,
           Game.Schedule.applyDeferred(),
@@ -694,10 +690,9 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define({ systems: [spawn] }),
+      Game.Schedule.define({ entries: [spawn] }),
       Game.Schedule.define({
-        systems: [clear, observe],
-        steps: [clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe]
+        entries: [clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe]
       })
     )
 
@@ -783,11 +778,10 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     const spawnSchedule = Game.Schedule.define({
-      systems: [spawn]
+      entries: [spawn]
     })
     const failureSchedule = Game.Schedule.define({
-      systems: [queueInvalid, readBefore, readAfter],
-      steps: [
+      entries: [
         queueInvalid,
         Game.Schedule.applyDeferred(),
         readBefore,
@@ -891,11 +885,10 @@ describe("Runtime relationships", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [queueInvalid, readBefore, readAfter],
-        steps: [
+        entries: [
           queueInvalid,
           Game.Schedule.applyDeferred(),
           readBefore,

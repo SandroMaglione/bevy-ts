@@ -58,14 +58,14 @@ describe("Runtime scheduling", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [increment]
+      entries: [increment]
     }))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [append]
+      entries: [append]
     }))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["ran"])
   })
@@ -103,11 +103,11 @@ describe("Runtime scheduling", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [first]
+        entries: [first]
       }),
       Schedule.define({
         schema,
-        systems: [second]
+        entries: [second]
       })
     )
 
@@ -147,7 +147,7 @@ describe("Runtime scheduling", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [second, first]
+      entries: [second, first]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
@@ -189,7 +189,7 @@ describe("Runtime scheduling", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [first, second],
+      entries: [first, second],
       sets: [
         Schedule.configureSet({
           label: movement,
@@ -250,7 +250,7 @@ describe("Runtime scheduling", () => {
     expect(() =>
       runtime.runSchedule(Schedule.define({
         schema,
-        systems: [CyclicFirst, Second]
+        entries: [CyclicFirst, Second]
       } as never) as never)
     ).toThrow("Circular system dependency detected")
   })
@@ -301,7 +301,7 @@ describe("Runtime scheduling", () => {
     const runtime = makeRuntime()
     const baseSchedule = Schedule.define({
       schema,
-      systems: [base]
+      entries: [base]
     })
     const extended = Schedule.extend(baseSchedule, {
       before: [before],
@@ -330,7 +330,7 @@ describe("Runtime scheduling", () => {
 
     const baseSchedule = Schedule.define({
       schema,
-      systems: [base]
+      entries: [base]
     })
 
     expect(() =>
@@ -340,7 +340,7 @@ describe("Runtime scheduling", () => {
     ).toThrow("Extended schedule reuses base system")
   })
 
-  it("composes reusable phases into one flattened explicit schedule", () => {
+  it("composes reusable final schedules into one flattened explicit schedule", () => {
     const first = System.define(
       "RuntimeScheduling/ComposeFirst",
       {
@@ -369,9 +369,9 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const hostMirror = Schedule.phase({
+    const hostMirror = Schedule.define({
       schema,
-      steps: [
+      entries: [
         Schedule.updateLifecycle(),
         second
       ]
@@ -380,13 +380,11 @@ describe("Runtime scheduling", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      ...Schedule.compose({
-        entries: [
-          first,
-          Schedule.applyDeferred(),
-          hostMirror
-        ]
-      })
+      entries: [
+        first,
+        Schedule.applyDeferred(),
+        hostMirror
+      ]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
@@ -407,15 +405,16 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const phase = Schedule.phase({
+    const phase = Schedule.define({
       schema,
-      steps: [duplicate]
+      entries: [duplicate]
     })
 
     expect(() =>
-      Schedule.compose({
+      Schedule.define({
+        schema,
         entries: [duplicate, phase]
       })
-    ).toThrow("Duplicate system step in schedule composition")
+    ).toThrow("Duplicate system step in schedule")
   })
 })

@@ -76,7 +76,7 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [observe]
+      entries: [observe]
     }))
 
     expect(readResourceValue(runtime, schema, Count)).toBe(0)
@@ -108,7 +108,7 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [observe]
+      entries: [observe]
     }))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("NoEntities")
@@ -153,11 +153,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -192,7 +192,7 @@ describe("Runtime query and lookup", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [observe]
+      entries: [observe]
     }))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
@@ -248,11 +248,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -299,11 +299,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -358,11 +358,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -414,11 +414,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -478,11 +478,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -543,11 +543,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -619,11 +619,11 @@ describe("Runtime query and lookup", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [spawn]
+        entries: [spawn]
       }),
       Schedule.define({
         schema,
-        systems: [write, read]
+        entries: [write, read]
       })
     )
 
@@ -706,10 +706,10 @@ describe("Runtime query and lookup", () => {
 
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -718,10 +718,10 @@ describe("Runtime query and lookup", () => {
 
     runtime.tick(
       Game.Schedule.define({
-        systems: [destroy]
+        entries: [destroy]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -836,8 +836,7 @@ describe("Runtime query and lookup", () => {
 
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn, observe],
-        steps: [spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe]
+        entries: [spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe]
       })
     )
 
@@ -846,11 +845,10 @@ describe("Runtime query and lookup", () => {
 
     runtime.tick(
       Game.Schedule.define({
-        systems: [destroy]
+        entries: [destroy]
       }),
       Game.Schedule.define({
-        systems: [emitStored, observe],
-        steps: [emitStored, Game.Schedule.updateEvents(), observe]
+        entries: [emitStored, Game.Schedule.updateEvents(), observe]
       })
     )
 

@@ -94,11 +94,11 @@ const PlayingOnlySystem = Game.System.define(
 
 
 const MachineSchedule = Game.Schedule.define({
-  systems: [ReaderSystem, WriterSystem]
+  entries: [ReaderSystem, WriterSystem]
 })
 
 const EnterPlaying = Game.Schedule.onEnter(AppState, "Playing", {
-  systems: [TransitionSystem]
+  entries: [TransitionSystem]
 })
 
 const TransitionBundle = Game.Schedule.transitions(EnterPlaying)
@@ -183,18 +183,18 @@ describe("StateMachine", () => {
 
     // @ts-expect-error!
     Game.Schedule.onEnter(OtherState, "Idle", {
-      systems: [ReaderSystem]
+      entries: [ReaderSystem]
     })
 
     const OtherBundle = OtherGame.Schedule.transitions(
       OtherGame.Schedule.onEnter(OtherState, "Idle", {
-        systems: []
+        entries: []
       })
     )
 
     Game.Schedule.define({
-      systems: [ReaderSystem],
-      steps: [
+      entries: [
+        ReaderSystem,
         // @ts-expect-error!
         Game.Schedule.applyStateTransitions(OtherBundle)
       ]
@@ -256,7 +256,7 @@ describe("StateMachine", () => {
     })
 
     runtime.runSchedule(Game.Schedule.define({
-      systems: [IncrementWithOrCondition]
+      entries: [IncrementWithOrCondition]
     }))
   })
 
@@ -297,7 +297,7 @@ describe("StateMachine", () => {
         to: "Playing"
       },
       {
-        systems: [TransitionSystem]
+        entries: [TransitionSystem]
       }
     )
 
@@ -306,7 +306,7 @@ describe("StateMachine", () => {
       // @ts-expect-error!
       "GameOver",
       {
-        systems: [TransitionSystem]
+        entries: [TransitionSystem]
       }
     )
   })
@@ -315,7 +315,7 @@ describe("StateMachine", () => {
     const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("StateMachine/Logger")
 
     const TransitionWithService = Game.Schedule.onEnter(AppState, "Playing", {
-      systems: [
+      entries: [
         Game.System.define(
           "StateMachine/TransitionServiceRequirement",
           {
@@ -335,8 +335,7 @@ describe("StateMachine", () => {
     })
 
     const schedule = Game.Schedule.define({
-      systems: [WriterSystem],
-      steps: [WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService))]
+      entries: [WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService))]
     })
 
     const runtime = Game.Runtime.make({
@@ -356,20 +355,19 @@ describe("StateMachine", () => {
   it("keeps transition event unions exact and allows bundle flattening", () => {
     const nested = Game.Schedule.transitions(
       Game.Schedule.onEnter(AppState, "Playing", {
-        systems: [TransitionSystem]
+        entries: [TransitionSystem]
       })
     )
 
     const flattened = Game.Schedule.transitions(
       nested,
       Game.Schedule.onExit(AppState, "Paused", {
-        systems: [TransitionSystem]
+        entries: [TransitionSystem]
       })
     )
 
     const schedule = Game.Schedule.define({
-      systems: [WriterSystem, TransitionEventSystem],
-      steps: [
+      entries: [
         WriterSystem,
         Game.Schedule.applyStateTransitions(flattened)
       ]
@@ -380,8 +378,8 @@ describe("StateMachine", () => {
 
   it("rejects nested transition-application markers in transition schedules", () => {
     Game.Schedule.onEnter(AppState, "Playing", {
-      systems: [TransitionSystem],
-      steps: [
+      entries: [
+        TransitionSystem,
         // @ts-expect-error!
         Game.Schedule.applyStateTransitions()
       ]

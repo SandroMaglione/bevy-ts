@@ -108,12 +108,11 @@ Run those systems through explicit `bootstrap` and `update` schedules:
 import { App } from "./src/index.ts"
 
 const bootstrap = Game.Schedule.define({
-  systems: [SetupSystem]
+  entries: [SetupSystem]
 })
 
 const update = Game.Schedule.define({
-  systems: [MoveSystem],
-  steps: [
+  entries: [
     MoveSystem,
     Game.Schedule.applyDeferred()
   ]
@@ -229,7 +228,7 @@ const TickSystem = Game.System.define(
     })
 )
 
-const tick = Game.Schedule.define({ systems: [TickSystem] })
+const tick = Game.Schedule.define({ entries: [TickSystem] })
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
@@ -336,7 +335,7 @@ const MoveSystem = Game.System.define("Move", {
 }, ({}) => Fx.sync(() => {}))
 
 const update = Game.Schedule.define({
-  systems: [InputSystem, MoveSystem],
+  entries: [InputSystem, MoveSystem],
   sets: [
     Game.Schedule.configureSet({
       label: MovementSet,
@@ -485,13 +484,12 @@ const ResetWorldSystem = Game.System.define(
 
 const phaseTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(Phase, "Playing", {
-    systems: [ResetWorldSystem]
+    entries: [ResetWorldSystem]
   })
 )
 
 const update = Game.Schedule.define({
-  systems: [QueueRestartSystem, GameplaySystem],
-  steps: [
+  entries: [
     QueueRestartSystem,
     GameplaySystem,
     Game.Schedule.applyDeferred(),
@@ -530,19 +528,18 @@ Bundle transition handlers explicitly and attach them to the transition marker:
 ```ts
 const appTransitions = Game.Schedule.transitions(
   Game.Schedule.onExit(AppState, "Playing", {
-    systems: [StopGameplayAudioSystem]
+    entries: [StopGameplayAudioSystem]
   }),
   Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
-    systems: [PersistCheckpointSystem]
+    entries: [PersistCheckpointSystem]
   }),
   Game.Schedule.onEnter(AppState, "Paused", {
-    systems: [ShowPauseOverlaySystem]
+    entries: [ShowPauseOverlaySystem]
   })
 )
 
 const update = Game.Schedule.define({
-  systems: [PauseInputSystem, GameplaySystem],
-  steps: [
+  entries: [
     PauseInputSystem,
     // Pending state only becomes committed at this exact marker.
     Game.Schedule.applyStateTransitions(appTransitions),
@@ -578,13 +575,13 @@ const OnEnterPaused = Game.System.define(
 
 const pauseTransitions = Game.Schedule.transitions(
   Game.Schedule.onExit(AppState, "Playing", {
-    systems: [StopGameplayAudioSystem]
+    entries: [StopGameplayAudioSystem]
   }),
   Game.Schedule.onTransition(AppState, { from: "Playing", to: "Paused" }, {
-    systems: [PersistCheckpointSystem]
+    entries: [PersistCheckpointSystem]
   }),
   Game.Schedule.onEnter(AppState, "Paused", {
-    systems: [OnEnterPaused]
+    entries: [OnEnterPaused]
   })
 )
 ```
@@ -617,8 +614,7 @@ const ObserveTransitions = Game.System.define(
 )
 
 const update = Game.Schedule.define({
-  systems: [PauseInputSystem, ObserveTransitions],
-  steps: [
+  entries: [
     PauseInputSystem,
     Game.Schedule.applyStateTransitions(appTransitions),
     Game.Schedule.updateEvents(),
@@ -744,7 +740,7 @@ This is the same pattern used in [`src/examples/pixi.ts`](./src/examples/pixi.ts
 - use lifecycle reads to create and destroy host-owned objects incrementally
 - place lifecycle-driven host sync only after `Game.Schedule.updateLifecycle()`
 
-For larger scenes, it is often clearer to split host sync into a few small systems:
+For larger scenes, it is often clearer to split host sync into a few small entries:
 
 - one system to apply camera or world-container transforms
 - one lifecycle-driven system to create host nodes
@@ -780,12 +776,7 @@ default for many renderer bridges.
 
 ```ts
 const browserUpdate = Game.Schedule.define({
-  systems: [
-    simulateSystem,
-    createNodesSystem,
-    syncTransformsSystem
-  ],
-  steps: [
+  entries: [
     simulateSystem,
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateLifecycle(),
@@ -814,14 +805,7 @@ multiple render-side structures must stay in sync.
 
 ```ts
 const browserUpdate = Game.Schedule.define({
-  systems: [
-    simulateSystem,
-    destroyNodesSystem,
-    createNodesSystem,
-    syncTransformsSystem,
-    reconcileNodesSystem
-  ],
-  steps: [
+  entries: [
     simulateSystem,
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateLifecycle(),
@@ -856,15 +840,7 @@ The practical browser shape is:
 
 ```ts
 const updateSchedule = Game.Schedule.define({
-  systems: [
-    captureInputSystem,
-    simulationSystem,
-    commitTransitionEffectsSystem,
-    destroyNodesSystem,
-    createNodesSystem,
-    syncTransformsSystem
-  ],
-  steps: [
+  entries: [
     captureInputSystem,
     simulationSystem,
     Game.Schedule.applyDeferred(),
@@ -949,20 +925,82 @@ readable, but the referenced entity may already have changed or disappeared.
 That is why re-resolution is required and why stale handles remain a normal
 typed failure instead of an exception.
 
-### When `Schedule.extend(...)` is the right tool
+## Schedules
 
-If the browser or renderer work is only a pure prefix or suffix around one
-headless gameplay schedule, prefer `Game.Schedule.extend(...)` over restating
-the gameplay steps manually.
+Author schedules with one public constructor:
 
-That is the right tool for:
+```ts
+const gameplay = Game.Schedule.define({
+  entries: [
+    captureInputSystem,
+    gameplaySystem,
+    Game.Schedule.applyDeferred(),
+    Game.Schedule.applyStateTransitions(transitions)
+  ]
+})
 
-- frame input capture before gameplay
-- host destroy/create/sync slices after gameplay
-- browser-only setup wrapping a headless setup schedule
+const renderSync = Game.Schedule.define({
+  entries: [
+    Game.Schedule.updateLifecycle(),
+    destroyRenderNodesSystem,
+    createRenderNodesSystem,
+    syncRenderableTransformsSystem
+  ]
+})
 
-Keep using a normal `Game.Schedule.define(...)` when host work must be
-interleaved in the middle of gameplay phases.
+const update = Game.Schedule.define({
+  entries: [gameplay, renderSync]
+})
+```
+
+`entries` may contain:
+
+- systems
+- explicit schedule markers like `applyDeferred()`, `updateEvents()`, `updateLifecycle()`, and `applyStateTransitions(...)`
+- already-final schedules returned by `Game.Schedule.define(...)`
+
+The important rule is that schedule boundaries stay explicit. Deferred
+commands, lifecycle visibility, event refresh, and state transitions only
+advance when the corresponding marker runs.
+
+### Warning
+
+Some schedule structure checks intentionally happen when the schedule is built,
+not in the type surface. The clearest example is a system that references a set
+which the schedule never configures:
+
+```ts
+const RenderSet = Label.defineSystemSetLabel("Render")
+
+const DrawSystem = Game.System.define(
+  "Draw",
+  {
+    inSets: [RenderSet]
+  },
+  () => Fx.sync(() => undefined)
+)
+
+const update = Game.Schedule.define({
+  entries: [DrawSystem]
+})
+```
+
+This compiles, but constructing the schedule throws because `RenderSet` is
+missing from `sets`. The correct form is:
+
+```ts
+const update = Game.Schedule.define({
+  entries: [DrawSystem],
+  sets: [
+    Game.Schedule.configureSet({
+      label: RenderSet
+    })
+  ]
+})
+```
+
+The same runtime normalization path also rejects missing ordering targets and
+duplicate systems across composed entries.
 
 ## Feature Composition
 
@@ -1026,7 +1064,8 @@ For a larger game, the most readable structure so far is the same one used by [`
 - keep `main.ts` thin: create the host, create the runtime, boot schedules, connect the outer loop
 - keep `runtime.ts` as the single source of initial resources and machine values
 - keep schedules explicit even when the project is modular; composition should not hide `applyDeferred()`, `applyStateTransitions()`, or `updateLifecycle()`
-- when a browser or host loop only needs to wrap a headless gameplay schedule with prefix or suffix phases, prefer `Game.Schedule.extend(...)` over restating the full gameplay schedule
+- when a browser or host loop needs reusable host sync, package it as a final
+  nested schedule instead of relying on separate phase/extend helpers
 
 This keeps the ECS side focused on simulation and orchestration, and the host side focused on rendering, input, assets, and browser lifecycle.
 
@@ -1064,8 +1103,12 @@ const A = Game.System.define("A", { schema }, ...)
 const B = Game.System.define("B", { schema, after: [A] }, ...)
 
 const schedule = Game.Schedule.define({
-  systems: [A, B, /* many more systems */],
-  steps: [A, Game.Schedule.applyDeferred(), B, /* many more steps */]
+  entries: [
+    A,
+    Game.Schedule.applyDeferred(),
+    B,
+    /* many more steps */
+  ]
 })
 ```
 
@@ -1100,7 +1143,7 @@ conditions. The concrete failing shape is a direct call like:
 
 ```ts
 runtime.runSchedule(Game.Schedule.define({
-  systems: [increment]
+  entries: [increment]
 }))
 ```
 
@@ -1157,178 +1200,9 @@ Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and 
 
 ## Roadmap
 
-The remaining improvements are now narrower than before. The schedule/runtime
-core is in a much better state:
-
-- direct schedule execution no longer hits the old machine-requirement false
-  negatives
-- `Game.Schedule.phase(...)` and `Game.Schedule.compose(...)` exist and work on
-  ordinary schedules
-- [src/examples/pixi.ts:280](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L280)
-  uses reusable phases and composition again
-- [src/examples/top-down/schedules.ts:78](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/top-down/schedules.ts#L78)
-  is back to one exported `updateSchedule`
-- repeated `pnpm typecheck` runs are currently stable
-
-The remaining work is about removing the last compiler-sensitive schedule
-authoring edge and then continuing with higher-level composition.
-
-### Make the heaviest `define({...compose(...)})` path cheap enough
-
-The current broken link is not schedules in general anymore. It is the most
-expensive bound path:
-
-- a large bound explicit schedule
-- built from several reusable phases
-- passed into `Game.Schedule.define(...)` directly through one composed fragment
-
-On that path, TypeScript can still hit deep instantiation before runtime
-validation, even though the resulting schedule is valid. That is why
-[src/examples/pixi.ts:280](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L280)
-can use `...Game.Schedule.compose(...)` directly, while
-[src/examples/top-down/schedules.ts:78](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/top-down/schedules.ts#L78)
-still has to materialize the final `systems` and `steps` arrays from reusable
-phase values before calling `define(...)`.
-
-That state is stable enough to build on, because the example no longer needs to
-split gameplay and render work into separate runtime schedules. But it is still
-not the intended endpoint.
-
-Ideal shape:
-
-```ts
-const renderTail = Game.Schedule.compose({
-  entries: [animationPhase, cameraSyncPhase, renderSyncPhase]
-})
-
-const update = Game.Schedule.define({
-  ...Game.Schedule.compose({
-    entries: [
-      captureFrameContextSystem,
-      gameplaySystem,
-      Game.Schedule.applyDeferred(),
-      Game.Schedule.applyStateTransitions(),
-      renderTail
-    ]
-  })
-})
-```
-
-The next pass should keep the current public API and focus only on the internal
-carrier:
-
-- validate exact structure at `phase(...)` / `compose(...)`
-- carry normalized exact/runtime requirements on hidden metadata
-- let `define(...)` reuse that metadata without rebuilding heavy requirement
-  proofs from expanded bound arrays
-- keep root safety, exact runtime requirement safety, and explicit schedule
-  markers unchanged
-
-Latest failed attempt and current blocker:
-
-- A full pass was attempted to make `define(...)` prefer carried composition
-  metadata, while also preserving that metadata through bound `Game.Schedule`
-  wrappers in `src/schema.ts`.
-- The attempt did improve the diagnosis, but it was reverted because it was not
-  stable enough to keep.
-- What worked:
-  - `src/schedule.ts` already has the right direction internally:
-    `phase(...)` / `compose(...)` normalize and carry hidden exact/runtime
-    requirement metadata.
-  - The repo can return to the current green baseline cleanly after reverting
-    the attempted `schedule.ts` / `schema.ts` changes.
-- What failed:
-  - Preserving carried metadata through bound `Game.Schedule.define(...)` /
-    `named(...)` pushed compiler pressure into the bound helper signatures
-    themselves.
-  - Broad bound helper return types such as
-    `ScheduleCompositionDefinition<..., any, any>` are still a real problem, but
-    replacing them naively causes the compiler to evaluate too much structural
-    type information at once.
-  - Making `define(...)` infer from the whole options object helped the direct
-    compose path, but regressed ordinary handwritten schedules by making
-    overload applicability and reference validation too expensive.
-  - Annotating `Schema.bind(...)` with the full `Schema.Game<S, Root>` return
-    type made the problem worse by forcing the compiler to compare the entire
-    bound API implementation against the public interface on every use site.
-- Concrete regressions seen during this round:
-  - direct `Game.Schedule.define({ ...Game.Schedule.compose(...) })` still hit
-    `TS2589` in [src/examples/pixi.ts:278](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pixi.ts#L278)
-  - the same pressure appeared in plain explicit schedules like
-    [src/examples/platformer/schedules.ts:20](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L20)
-    and unrelated schedule helpers like
-    [src/examples/pokemon.ts:517](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/pokemon.ts#L517)
-  - the hot spot moved into the bound wrapper implementation itself around
-    `defineSchedule` / `namedSchedule` in `src/schema.ts`
-- Important conclusion from this round:
-  - the remaining problem is not only “make `schedule.ts` carry metadata”.
-  - the deeper blocker is the bound schema layer. `Schema.bind(...)` and the
-    bound `Game.Schedule.*` helpers still expose too much implementation shape
-    to the compiler.
-- The next attempt should avoid repeating this approach:
-  - do not start by changing `define(...)` inference again
-  - do not add a broad `Schema.bind(...): Schema.Game<S, Root>` annotation
-  - do not rely on overloaded structural function comparisons for bound schedule
-    helpers
-- More promising next direction:
-  - introduce explicit canonical callable/helper types for the bound schedule
-    methods and return those from `bind(...)`, so the bound API stops leaking
-    the raw implementation graph
-  - keep the current green runtime/schedule baseline unchanged while isolating
-    only the bound schedule helper surface
-  - only revisit direct carried-metadata reuse inside `define(...)` after that
-    bound-surface normalization exists
-
-### Sound explicit schedules without duplicated `systems` and `steps`
-
-The current schedule API still allows explicit schedules to declare both
-`systems` and `steps`. That still makes examples like
-[src/examples/platformer/schedules.ts:17](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L17)
-repeat the same systems twice.
-
-That duplication is not just noisy. Today, runtime execution comes from `steps`,
-while some type-level requirement derivation still comes from `systems`. If the
-two drift, a schedule can execute a step-system that is not fully represented in
-its carried requirements.
-
-The intended cleanup is to make `Schedule.define(...)` and `Schedule.named(...)`
-accept exactly one of:
-
-- `{ systems, sets? }` for the shorthand mode with implicit trailing markers
-- `{ steps, sets? }` for the explicit ordered mode
-
-with `sets` remaining optional in both modes.
-
-Ideal shape:
-
-```ts
-const setup = Game.Schedule.define({
-  systems: [setupSceneSystem, initCameraSystem]
-})
-
-const update = Game.Schedule.define({
-  steps: [
-    captureInputSystem,
-    gameplaySystem,
-    Game.Schedule.applyDeferred(),
-    Game.Schedule.updateLifecycle(),
-    syncRenderSystem
-  ]
-})
-```
-
-The important requirement is that explicit schedules become single-source-of-truth:
-
-- system membership should be derived from the system steps in `steps`
-- duplicate system steps should be rejected
-- schedule requirements should be derived from the same source the runtime executes
-
-This work should only be retried after the heavy composed-define path above is
-cheap enough. Otherwise it keeps pushing on the same bound-schedule hotspot.
-
 ### Reusable composition for transition-local work
 
-Transition handling is explicit and good, but restart/reset flows become
+Transition handling is explicit and good, but restart/reset flows still become
 repetitive once they need to despawn content, reset resources, and respawn
 authored state. In
 [src/examples/platformer/systems/state.ts:49](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L49),
@@ -1341,13 +1215,11 @@ transition-scoped composition values, not built-in gameplay reset helpers.
 Ideal shape:
 
 ```ts
-const restartBundle = Game.Schedule.transitionBundle({
-  onEnter: [Game.Schedule.onEnter(SessionState, "Playing", {
-    systems: [resetWorldSystem, respawnWorldSystem]
-  })]
-})
-
-const transitions = Game.Schedule.transitions(restartBundle)
+const restartBundle = Game.Schedule.transitions(
+  Game.Schedule.onEnter(SessionState, "Playing", {
+    entries: [resetWorldSystem, respawnWorldSystem]
+  })
+)
 ```
 
 ### Reusable access/spec fragments for systems
@@ -1388,29 +1260,24 @@ const ResolveMoveIntentSystem = Game.System.define(
 
 ### Easier packaging for explicit host-sync orchestration
 
-The current render-sync pattern is correct, but still verbose. The lifecycle ordering
-in
+The current render-sync pattern is correct, but still verbose. The lifecycle
+ordering in
 [src/examples/platformer/schedules.ts:58](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L58)
 and the destroy/create/sync split in
 [src/examples/platformer/systems/render-sync.ts:7](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts#L7)
-are the right structure, but every project has to rebuild that packaging by
+are the right structure, but every project still has to package that pattern by
 hand.
 
-The useful improvement is now a layer above the current schedule primitives:
-
-- `Game.Schedule.phase(...)`
-- `Game.Schedule.compose(...)`
-- `Game.Schedule.extend(...)`
-
-The goal is a better way to package the generic ECS pattern of “simulate,
-commit lifecycle, mirror external state” into reusable explicit values without
-pushing renderer-specific logic into the core.
+The useful improvement is now above the current primitive surface, not a return
+to phase/compose/extend helpers. The goal is a better way to package the generic
+ECS pattern of “simulate, commit lifecycle, mirror external state” into reusable
+final schedules without pushing renderer-specific logic into the core.
 
 Ideal shape:
 
 ```ts
-const renderMirrorPhase = Game.Schedule.phase({
-  steps: [
+const renderMirror = Game.Schedule.define({
+  entries: [
     Game.Schedule.updateLifecycle(),
     destroyRenderNodesSystem,
     createRenderNodesSystem,
@@ -1418,15 +1285,11 @@ const renderMirrorPhase = Game.Schedule.phase({
   ]
 })
 
-const renderMirrorSchedule = Game.Schedule.define({
-  systems: [
-    gameplaySystem,
-    ...renderMirrorPhase.systems
-  ],
-  steps: [
+const update = Game.Schedule.define({
+  entries: [
     gameplaySystem,
     Game.Schedule.applyDeferred(),
-    ...renderMirrorPhase.steps
+    renderMirror
   ]
 })
 ```

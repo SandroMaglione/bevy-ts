@@ -125,12 +125,11 @@ const ObserveTickSystem = Game.System.define(
 )
 
 const bootstrap = Game.Schedule.define({
-  systems: [SetupSystem]
+  entries: [SetupSystem]
 })
 
 const update = Game.Schedule.define({
-  systems: [MoveSystem, ObserveTickSystem],
-  steps: [
+  entries: [
     MoveSystem,
     Game.Schedule.applyDeferred(),
     Game.Schedule.updateEvents(),

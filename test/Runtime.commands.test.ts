@@ -83,10 +83,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -132,10 +132,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -184,10 +184,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [lookup]
+        entries: [lookup]
       })
     )
 
@@ -266,11 +266,10 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     const spawnSchedule = Game.Schedule.define({
-      systems: [spawn]
+      entries: [spawn]
     })
     const observeSchedule = Game.Schedule.define({
-      systems: [insertVelocity, observe],
-      steps: [insertVelocity, Game.Schedule.applyDeferred(), observe]
+      entries: [insertVelocity, Game.Schedule.applyDeferred(), observe]
     })
 
     runtime.tick(spawnSchedule, observeSchedule)
@@ -339,10 +338,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -411,10 +410,10 @@ describe("Runtime commands", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule.define({
-        systems: [spawn]
+        entries: [spawn]
       }),
       Game.Schedule.define({
-        systems: [observe]
+        entries: [observe]
       })
     )
 

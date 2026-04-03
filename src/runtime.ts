@@ -2056,7 +2056,7 @@ export const makeRuntime = <
     }
     const lastStep = schedule.steps.at(-1)
     applyDeferred(deferred)
-    if ((!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") && hasPendingEvents()) {
+    if (!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") {
       updateEvents()
     }
     if ((!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "lifecycleUpdate") && hasPendingLifecycle()) {

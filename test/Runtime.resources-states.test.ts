@@ -77,7 +77,7 @@ describe("Runtime resources and states", () => {
 
     const schedule = Schedule.define({
       schema,
-      systems: [increment]
+      entries: [increment]
     })
 
     const runtime = makeRuntime()
@@ -105,7 +105,7 @@ describe("Runtime resources and states", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [setRunning]
+      entries: [setRunning]
     }))
 
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
@@ -142,7 +142,7 @@ describe("Runtime resources and states", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [applyValidatedWrites]
+      entries: [applyValidatedWrites]
     }))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(3)
@@ -192,7 +192,7 @@ describe("Runtime resources and states", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [applyConstructedWrites]
+      entries: [applyConstructedWrites]
     }))
 
     expect(readResourceValue(runtime, schema, Viewport)).toEqual({ width: 800, height: 450 })
@@ -338,7 +338,7 @@ describe("Runtime resources and states", () => {
 
     runtime.value.runSchedule(Schedule.define({
       schema,
-      systems: [syncFromPhase]
+      entries: [syncFromPhase]
     }))
 
     expect(readResourceValue(runtime.value, schema, Counter)).toBe(1)
@@ -390,7 +390,7 @@ describe("Runtime resources and states", () => {
 
     runtime.value.runSchedule(Schedule.define({
       schema,
-      systems: [logTime]
+      entries: [logTime]
     }))
 
     expect(seen).toEqual(["dt=0.25"])
@@ -442,7 +442,7 @@ describe("Runtime resources and states", () => {
 
     runtime.value.runSchedule(Schedule.define({
       schema,
-      systems: [logTime]
+      entries: [logTime]
     }))
 
     expect(seen).toEqual(["dt=0.125"])

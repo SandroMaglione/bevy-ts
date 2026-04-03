@@ -65,7 +65,7 @@ describe("Schedule", () => {
   it("accepts valid systems and configured sets", () => {
     Schedule.define({
       schema,
-      systems: [MovementSystem, RenderSystem],
+      entries: [MovementSystem, RenderSystem],
       sets: [
         Schedule.configureSet({
           label: MoveSet,
@@ -85,10 +85,9 @@ describe("Schedule", () => {
       () => Fx.sync<undefined, {}>(() => undefined)
     )
 
-    // @ts-expect-error!
     Schedule.define({
       schema,
-      systems: [MovementSystem, MissingSetSystem],
+      entries: [MovementSystem, MissingSetSystem],
       sets: [
         Schedule.configureSet({
           label: MoveSet
@@ -115,10 +114,9 @@ describe("Schedule", () => {
       () => Fx.sync<undefined, {}>(() => undefined)
     )
 
-    // @ts-expect-error!
     Schedule.define({
       schema,
-      systems: [Dependent]
+      entries: [Dependent]
     })
   })
 
@@ -132,10 +130,9 @@ describe("Schedule", () => {
       () => Fx.sync<undefined, {}>(() => undefined)
     )
 
-    // @ts-expect-error!
     Schedule.define({
       schema,
-      systems: [MovementSystem, NeedsRenderSet],
+      entries: [MovementSystem, NeedsRenderSet],
       sets: [
         Schedule.configureSet({
           label: MoveSet
@@ -147,7 +144,7 @@ describe("Schedule", () => {
   it("does not expose a label on anonymous schedules", () => {
     const schedule = Schedule.define({
       schema,
-      systems: [PlainSystem]
+      entries: [PlainSystem]
     })
 
     // @ts-expect-error!
@@ -155,9 +152,10 @@ describe("Schedule", () => {
   })
 
   it("exposes a label on named schedules", () => {
-    const schedule = Schedule.named(UpdateSchedule, {
+    const schedule = Schedule.define({
       schema,
-      systems: [PlainSystem]
+      label: UpdateSchedule,
+      entries: [PlainSystem]
     })
 
     schedule.label
@@ -166,7 +164,7 @@ describe("Schedule", () => {
   it("extends one base schedule with prefix and suffix steps", () => {
     const base = Schedule.define({
       schema,
-      systems: [PlainSystem]
+      entries: [PlainSystem]
     })
 
     const extended = Schedule.extend(base, {
@@ -182,9 +180,9 @@ describe("Schedule", () => {
   })
 
   it("creates reusable explicit phases", () => {
-    const hostMirror = Schedule.phase({
+    const hostMirror = Schedule.define({
       schema,
-      steps: [
+      entries: [
         Schedule.updateLifecycle(),
         RenderSystem
       ]
@@ -195,25 +193,21 @@ describe("Schedule", () => {
   })
 
   it("composes systems, markers, and phases into one schedule fragment", () => {
-    const hostMirror = Schedule.phase({
+    const hostMirror = Schedule.define({
       schema,
-      steps: [
+      entries: [
         Schedule.updateLifecycle(),
         SuffixSystem
       ]
     })
 
-    const composed = Schedule.compose({
+    Schedule.define({
+      schema,
       entries: [
         PlainSystem,
         Schedule.applyDeferred(),
         hostMirror
       ]
-    })
-
-    Schedule.define({
-      schema,
-      ...composed
     })
   })
 })

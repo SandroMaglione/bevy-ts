@@ -63,11 +63,11 @@ describe("Runtime events", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [emit]
+        entries: [emit]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -109,8 +109,7 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [emit, readBefore],
-      steps: [emit, readBefore]
+      entries: [emit, readBefore]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([0])
@@ -151,8 +150,7 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [emit, readAfter],
-      steps: [emit, Schedule.updateEvents(), readAfter]
+      entries: [emit, Schedule.updateEvents(), readAfter]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([3])
@@ -195,8 +193,7 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.runSchedule(Schedule.define({
       schema,
-      systems: [emit, observe],
-      steps: [emit, Schedule.updateEvents(), observe]
+      entries: [emit, Schedule.updateEvents(), observe]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([4, 5, 6])
@@ -246,11 +243,11 @@ describe("Runtime events", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [emitOne]
+        entries: [emitOne]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 
@@ -259,11 +256,11 @@ describe("Runtime events", () => {
     runtime.tick(
       Schedule.define({
         schema,
-        systems: [emitNone]
+        entries: [emitNone]
       }),
       Schedule.define({
         schema,
-        systems: [observe]
+        entries: [observe]
       })
     )
 

@@ -51,12 +51,12 @@ describe("App", () => {
 
     const updateSchedule = Schedule.define({
       schema,
-      systems: [increment]
+      entries: [increment]
     })
 
     const readSchedule = Schedule.define({
       schema,
-      systems: [read]
+      entries: [read]
     })
 
     const runtime = Runtime.makeRuntime({
@@ -122,17 +122,17 @@ describe("App", () => {
 
     const firstSchedule = Schedule.define({
       schema,
-      systems: [first]
+      entries: [first]
     })
 
     const secondSchedule = Schedule.define({
       schema,
-      systems: [second]
+      entries: [second]
     })
 
     const readSchedule = Schedule.define({
       schema,
-      systems: [read]
+      entries: [read]
     })
 
     const runtime = Runtime.makeRuntime({
@@ -183,12 +183,12 @@ describe("App", () => {
 
     const setupSchedule = Schedule.define({
       schema,
-      systems: [setup]
+      entries: [setup]
     })
 
     const readSchedule = Schedule.define({
       schema,
-      systems: [read]
+      entries: [read]
     })
 
     const runtime = Runtime.makeRuntime({
@@ -234,7 +234,7 @@ describe("App", () => {
     const app = App.makeApp(runtime)
     const schedule = Schedule.define({
       schema,
-      systems: [increment]
+      entries: [increment]
     })
 
     app.update(schedule)
@@ -274,7 +274,7 @@ describe("App", () => {
 
         return {
           bootstrap: [Game.Schedule.define({
-            systems: [bootstrap]
+            entries: [bootstrap]
           })]
         }
       }
@@ -323,10 +323,10 @@ describe("App", () => {
         return {
           update: [
             Game.Schedule.define({
-              systems: [increment]
+              entries: [increment]
             }),
             Game.Schedule.define({
-              systems: [capture]
+              entries: [capture]
             })
           ]
         }
@@ -397,8 +397,8 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define({ systems: [bootstrap] })],
-          update: [Game.Schedule.define({ systems: [update] })]
+          bootstrap: [Game.Schedule.define({ entries: [bootstrap] })],
+          update: [Game.Schedule.define({ entries: [update] })]
         }
       }
     })
@@ -434,8 +434,8 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define({ systems: [bootstrap] })],
-          update: [Game.Schedule.define({ systems: [update] })]
+          bootstrap: [Game.Schedule.define({ entries: [bootstrap] })],
+          update: [Game.Schedule.define({ entries: [update] })]
         }
       }
     })
@@ -529,7 +529,7 @@ const readCounter = (
   let captured = -1
   runtime.runSchedule(Schedule.define({
     schema,
-    systems: [System.define(
+    entries: [System.define(
       "AppTest/ReadCounterHelperSystem",
       {
         schema,

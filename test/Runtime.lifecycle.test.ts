@@ -119,8 +119,7 @@ describe("Runtime lifecycle", () => {
 
     const runtime = makeRuntime()
     const lifecycleSchedule = Game.Schedule.define({
-      systems: [SpawnSystem, ObserveBeforeSystem, ObserveAfterSystem],
-      steps: [
+      entries: [
         SpawnSystem,
         Game.Schedule.applyDeferred(),
         ObserveBeforeSystem,
@@ -216,12 +215,10 @@ describe("Runtime lifecycle", () => {
 
     const runtime = makeRuntime()
     const spawnSchedule = Game.Schedule.define({
-      systems: [SpawnSystem],
-      steps: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
+      entries: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
     })
     const observeSchedule = Game.Schedule.define({
-        systems: [CleanupSystem, ObserveBeforeSystem, ObserveAfterSystem],
-        steps: [
+        entries: [
           CleanupSystem,
           Game.Schedule.applyDeferred(),
           ObserveBeforeSystem,
@@ -280,12 +277,10 @@ describe("Runtime lifecycle", () => {
 
     const runtime = makeRuntime()
     const spawnSchedule = Game.Schedule.define({
-      systems: [SpawnSystem],
-      steps: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
+      entries: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
     })
     const clearSchedule = Game.Schedule.define({
-        systems: [ObserveChanged],
-        steps: [ObserveChanged]
+        entries: [ObserveChanged]
       })
     runtime.tick(spawnSchedule, clearSchedule)
 
@@ -293,8 +288,7 @@ describe("Runtime lifecycle", () => {
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
 
     const refreshSchedule = Game.Schedule.define({
-      systems: [ObserveChanged],
-      steps: [Game.Schedule.updateLifecycle(), ObserveChanged]
+      entries: [Game.Schedule.updateLifecycle(), ObserveChanged]
     })
     runtime.runSchedule(refreshSchedule)
 
@@ -376,12 +370,10 @@ describe("Runtime lifecycle", () => {
 
     const runtime = makeRuntime()
     const spawnSchedule = Game.Schedule.define({
-      systems: [SpawnSystem],
-      steps: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
+      entries: [SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()]
     })
     const observeSchedule = Game.Schedule.define({
-        systems: [OverwriteSystem, ObserveBeforeSystem, ObserveAfterSystem],
-        steps: [
+        entries: [
           Game.Schedule.updateLifecycle(),
           OverwriteSystem,
           Game.Schedule.applyDeferred(),

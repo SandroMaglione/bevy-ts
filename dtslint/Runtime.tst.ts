@@ -80,22 +80,22 @@ const PrefixedServiceSystem = System.define(
 
 const resourceSchedule = Schedule.define({
   schema,
-  systems: [ResourceSystem]
+  entries: [ResourceSystem]
 })
 
 const stateSchedule = Schedule.define({
   schema,
-  systems: [StateSystem]
+  entries: [StateSystem]
 })
 
 const serviceSchedule = Schedule.define({
   schema,
-  systems: [ServiceSystem]
+  entries: [ServiceSystem]
 })
 
 const prefixedServiceSchedule = Schedule.define({
   schema,
-  systems: [PrefixedServiceSystem]
+  entries: [PrefixedServiceSystem]
 })
 
 describe("Runtime", () => {
@@ -390,7 +390,7 @@ describe("Runtime", () => {
             Mode
           },
           update: [Game.Schedule.define({
-            systems: [update]
+            entries: [update]
           })]
         }
       }

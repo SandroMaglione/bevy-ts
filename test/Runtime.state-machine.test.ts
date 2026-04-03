@@ -59,7 +59,7 @@ describe("Runtime state machine", () => {
       )
     })
     runtime.runSchedule(Game.Schedule.define({
-      systems: [increment]
+      entries: [increment]
     }))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(0)
@@ -78,8 +78,7 @@ describe("Runtime state machine", () => {
     )
 
     const applyPlayingSchedule = Game.Schedule.define({
-      systems: [queuePlaying],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions(), increment]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions(), increment]
     })
 
     runtime.runSchedule(applyPlayingSchedule)
@@ -147,8 +146,7 @@ describe("Runtime state machine", () => {
       )
     })
     const transitionVisibilitySchedule = Game.Schedule.define({
-      systems: [queuePlaying, before, after],
-      steps: [queuePlaying, before, Game.Schedule.applyStateTransitions(), after]
+      entries: [queuePlaying, before, Game.Schedule.applyStateTransitions(), after]
     })
     runtime.runSchedule(transitionVisibilitySchedule)
 
@@ -225,16 +223,16 @@ describe("Runtime state machine", () => {
 
     const transitions = Game.Schedule.transitions(
       Game.Schedule.onExit(AppState, "Menu", {
-        systems: [exitSystem]
+        entries: [exitSystem]
       }),
       Game.Schedule.onTransition(AppState, {
         from: "Menu",
         to: "Playing"
       }, {
-        systems: [transitionSystem]
+        entries: [transitionSystem]
       }),
       Game.Schedule.onEnter(AppState, "Playing", {
-        systems: [enterSystem]
+        entries: [enterSystem]
       })
     )
 
@@ -250,8 +248,7 @@ describe("Runtime state machine", () => {
       )
     })
     const bundledTransitionSchedule = Game.Schedule.define({
-      systems: [queuePlaying],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions(transitions)]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions(transitions)]
     })
     runtime.runSchedule(bundledTransitionSchedule)
 
@@ -302,8 +299,7 @@ describe("Runtime state machine", () => {
       )
     })
     const changedSchedule = Game.Schedule.define({
-      systems: [queuePlaying, observeChanged],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions(), observeChanged]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions(), observeChanged]
     })
     runtime.runSchedule(changedSchedule)
 
@@ -353,7 +349,7 @@ describe("Runtime state machine", () => {
       )
     })
     runtime.runSchedule(Game.Schedule.define({
-      systems: [first, second],
+      entries: [first, second],
       sets: [
         Game.Schedule.configureSet({
           label: gameplay,
@@ -412,8 +408,7 @@ describe("Runtime state machine", () => {
       )
     })
     const gatedSchedule = Game.Schedule.define({
-      systems: [queueStates, gated],
-      steps: [queueStates, Game.Schedule.applyStateTransitions(), gated]
+      entries: [queueStates, Game.Schedule.applyStateTransitions(), gated]
     })
     runtime.runSchedule(gatedSchedule)
 
@@ -452,7 +447,7 @@ describe("Runtime state machine", () => {
       )
     })
     const incrementSchedule = Game.Schedule.define({
-      systems: [increment]
+      entries: [increment]
     })
     runtime.runSchedule(incrementSchedule)
 
@@ -516,10 +511,10 @@ describe("Runtime state machine", () => {
 
     const transitions = LocalGame.Schedule.transitions(
       LocalGame.Schedule.onEnter(LocalAppState, "Playing", {
-        systems: [appEnter]
+        entries: [appEnter]
       }),
       LocalGame.Schedule.onEnter(LocalRoundState, "Live", {
-        systems: [roundEnter]
+        entries: [roundEnter]
       })
     )
 
@@ -535,8 +530,7 @@ describe("Runtime state machine", () => {
       )
     })
     const localTransitionSchedule = LocalGame.Schedule.define({
-      systems: [queueStates],
-      steps: [queueStates, LocalGame.Schedule.applyStateTransitions(transitions)]
+      entries: [queueStates, LocalGame.Schedule.applyStateTransitions(transitions)]
     })
     runtime.runSchedule(localTransitionSchedule)
 
@@ -617,7 +611,7 @@ describe("Runtime state machine", () => {
 
     const transitions = LocalGame.Schedule.transitions(
       LocalGame.Schedule.onEnter(LocalAppState, "Playing", {
-        systems: [queueRoundDuringEnter]
+        entries: [queueRoundDuringEnter]
       })
     )
 
@@ -633,8 +627,7 @@ describe("Runtime state machine", () => {
       )
     })
     const localRoundSchedule = LocalGame.Schedule.define({
-      systems: [queueApp, observeRoundChange, observeRoundState],
-      steps: [queueApp, LocalGame.Schedule.applyStateTransitions(transitions), observeRoundChange, observeRoundState]
+      entries: [queueApp, LocalGame.Schedule.applyStateTransitions(transitions), observeRoundChange, observeRoundState]
     })
     runtime.runSchedule(localRoundSchedule)
 
@@ -644,8 +637,7 @@ describe("Runtime state machine", () => {
     ])
 
     const observeRoundSchedule = LocalGame.Schedule.define({
-      systems: [observeRoundChange, observeRoundState],
-      steps: [LocalGame.Schedule.applyStateTransitions(), observeRoundChange, observeRoundState]
+      entries: [LocalGame.Schedule.applyStateTransitions(), observeRoundChange, observeRoundState]
     })
     runtime.runSchedule(observeRoundSchedule)
 
@@ -689,22 +681,20 @@ describe("Runtime state machine", () => {
 
     const bundle = Game.Schedule.transitions(
       Game.Schedule.onEnter(AppState, "Playing", {
-        systems: [onEnterPlaying]
+        entries: [onEnterPlaying]
       })
     )
 
     const runtime = makeRuntime()
     const applyQueuedTransitionSchedule = Game.Schedule.define({
-      systems: [queuePlaying],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions()]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions()]
     })
     runtime.runSchedule(applyQueuedTransitionSchedule)
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
 
     const applyBundledTransitionSchedule = Game.Schedule.define({
-      systems: [queuePlaying],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions(bundle)]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions(bundle)]
     })
     runtime.runSchedule(applyBundledTransitionSchedule)
 
@@ -743,8 +733,7 @@ describe("Runtime state machine", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Game.Schedule.define({
-      systems: [queuePlaying, observe],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions(), observe]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions(), observe]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["Playing"])
@@ -784,8 +773,7 @@ describe("Runtime state machine", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Game.Schedule.define({
-      systems: [queuePlaying, readTransitionEvents],
-      steps: [
+      entries: [
         queuePlaying,
         Game.Schedule.applyStateTransitions(),
         readTransitionEvents,
@@ -866,8 +854,7 @@ describe("Runtime state machine", () => {
     })
 
     runtime.runSchedule(LocalGame.Schedule.define({
-      systems: [queueStates, readAppEvents, readRoundEvents],
-      steps: [
+      entries: [
         queueStates,
         LocalGame.Schedule.applyStateTransitions(),
         LocalGame.Schedule.updateEvents(),
@@ -914,7 +901,7 @@ describe("Runtime state machine", () => {
 
     const nested = Game.Schedule.transitions(
       Game.Schedule.onEnter(AppState, "Playing", {
-        systems: [logEnterPlaying]
+        entries: [logEnterPlaying]
       })
     )
 
@@ -922,8 +909,7 @@ describe("Runtime state machine", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Game.Schedule.define({
-      systems: [queuePlaying],
-      steps: [queuePlaying, Game.Schedule.applyStateTransitions(flattened)]
+      entries: [queuePlaying, Game.Schedule.applyStateTransitions(flattened)]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["enter:Playing"])
@@ -950,15 +936,13 @@ describe("Runtime state machine", () => {
     )
 
     const invalidEnter = Game.Schedule.onEnter(AppState, "Playing", {
-      systems: [noop],
-      steps: [Game.Schedule.applyStateTransitions()] as never
+      entries: [noop, Game.Schedule.applyStateTransitions()] as never
     })
 
     const runtime = makeRuntime()
     expect(() =>
       runtime.runSchedule(Game.Schedule.define({
-        systems: [queuePlaying],
-        steps: [queuePlaying, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(invalidEnter))]
+        entries: [queuePlaying, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(invalidEnter))]
       }))
     ).toThrow("Transition schedules cannot contain applyStateTransitions() steps")
   })
@@ -1006,8 +990,7 @@ describe("Runtime state machine", () => {
 
     const runtime = makeRuntime()
     runtime.runSchedule(Game.Schedule.define({
-      systems: [queueSame, readTransitionEvents],
-      steps: [queueSame, Game.Schedule.applyStateTransitions(), Game.Schedule.updateEvents(), readTransitionEvents]
+      entries: [queueSame, Game.Schedule.applyStateTransitions(), Game.Schedule.updateEvents(), readTransitionEvents]
     }))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])

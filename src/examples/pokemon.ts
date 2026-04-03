@@ -511,18 +511,19 @@ const SyncPlayerNodeSystem = Game.System.define(
 )
 
 const setupSchedule = Game.Schedule.define({
-  systems: [SetupSystem]
+  entries: [SetupSystem]
 })
 
-const browserSetupSchedule = Game.Schedule.extend(setupSchedule, {
-  after: [
+const browserSetupSchedule = Game.Schedule.define({
+  entries: [
+    setupSchedule,
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem
   ]
 })
 
 const updateSchedule = Game.Schedule.define({
-  systems: [
+  entries: [
     InputSystem,
     PlanMovementSystem,
     CollisionSystem,
@@ -530,11 +531,10 @@ const updateSchedule = Game.Schedule.define({
   ]
 })
 
-const browserUpdateSchedule = Game.Schedule.extend(updateSchedule, {
-  before: [CaptureFrameInputSystem],
-  after: [
-    // `updateSchedule` already includes the implicit lifecycle boundary because
-    // it uses the default `systems`-only schedule shape.
+const browserUpdateSchedule = Game.Schedule.define({
+  entries: [
+    CaptureFrameInputSystem,
+    updateSchedule,
     DestroyRenderNodesSystem,
     CreateRenderNodesSystem,
     SyncPlayerNodeSystem
