@@ -3,16 +3,16 @@ import { Descriptor, Fx, Schema } from "../src/index.ts"
 import * as Entity from "../src/entity.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("LifecyclePosition")
+const Position = Descriptor.Component<{ x: number; y: number }>()("LifecyclePosition")
 
-const AddedBefore = Descriptor.defineResource<number>()("AddedBefore")
-const AddedAfter = Descriptor.defineResource<number>()("AddedAfter")
-const ChangedBefore = Descriptor.defineResource<number>()("ChangedBefore")
-const ChangedAfter = Descriptor.defineResource<number>()("ChangedAfter")
-const RemovedBefore = Descriptor.defineResource<number>()("RemovedBefore")
-const RemovedAfter = Descriptor.defineResource<number>()("RemovedAfter")
-const DespawnedBefore = Descriptor.defineResource<number>()("DespawnedBefore")
-const DespawnedAfter = Descriptor.defineResource<number>()("DespawnedAfter")
+const AddedBefore = Descriptor.Resource<number>()("AddedBefore")
+const AddedAfter = Descriptor.Resource<number>()("AddedAfter")
+const ChangedBefore = Descriptor.Resource<number>()("ChangedBefore")
+const ChangedAfter = Descriptor.Resource<number>()("ChangedAfter")
+const RemovedBefore = Descriptor.Resource<number>()("RemovedBefore")
+const RemovedAfter = Descriptor.Resource<number>()("RemovedAfter")
+const DespawnedBefore = Descriptor.Resource<number>()("DespawnedBefore")
+const DespawnedAfter = Descriptor.Resource<number>()("DespawnedAfter")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -48,7 +48,7 @@ const makeRuntime = () => Game.Runtime.make({
 
 describe("Runtime lifecycle", () => {
   it("added and changed filters become visible only after updateLifecycle()", () => {
-    const SpawnSystem = Game.System.define(
+    const SpawnSystem = Game.System(
       "Lifecycle/Spawn",
       {},
       ({ commands }) =>
@@ -59,17 +59,17 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveBeforeSystem = Game.System.define(
+    const ObserveBeforeSystem = Game.System(
       "Lifecycle/ObserveBefore",
       {
         queries: {
-          added: Game.Query.define({
+          added: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
             filters: [Game.Query.added(Position)] as const
           }),
-          changed: Game.Query.define({
+          changed: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
@@ -88,17 +88,17 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveAfterSystem = Game.System.define(
+    const ObserveAfterSystem = Game.System(
       "Lifecycle/ObserveAfter",
       {
         queries: {
-          added: Game.Query.define({
+          added: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
             filters: [Game.Query.added(Position)] as const
           }),
-          changed: Game.Query.define({
+          changed: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
@@ -118,7 +118,7 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const lifecycleSchedule = Game.Schedule.define(
+    const lifecycleSchedule = Game.Schedule(
       SpawnSystem,
       Game.Schedule.applyDeferred(),
       ObserveBeforeSystem,
@@ -137,7 +137,7 @@ describe("Runtime lifecycle", () => {
     let removableId: number | undefined
     let doomedId: number | undefined
 
-    const SpawnSystem = Game.System.define(
+    const SpawnSystem = Game.System(
       "Lifecycle/SpawnForRemoval",
       {},
       ({ commands }) =>
@@ -151,7 +151,7 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const CleanupSystem = Game.System.define(
+    const CleanupSystem = Game.System(
       "Lifecycle/Cleanup",
       {},
       ({ commands }) =>
@@ -169,7 +169,7 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveBeforeSystem = Game.System.define(
+    const ObserveBeforeSystem = Game.System(
       "Lifecycle/ObserveRemovalBefore",
       {
         removed: {
@@ -190,7 +190,7 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveAfterSystem = Game.System.define(
+    const ObserveAfterSystem = Game.System(
       "Lifecycle/ObserveRemovalAfter",
       {
         removed: {
@@ -212,8 +212,8 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
-    const observeSchedule = Game.Schedule.define(
+    const spawnSchedule = Game.Schedule(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
+    const observeSchedule = Game.Schedule(
       CleanupSystem,
       Game.Schedule.applyDeferred(),
       ObserveBeforeSystem,
@@ -229,7 +229,7 @@ describe("Runtime lifecycle", () => {
   })
 
   it("refreshes readable lifecycle buffers instead of accumulating stale entries", () => {
-    const SpawnSystem = Game.System.define(
+    const SpawnSystem = Game.System(
       "Lifecycle/SpawnRefresh",
       {},
       ({ commands }) =>
@@ -240,17 +240,17 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveChanged = Game.System.define(
+    const ObserveChanged = Game.System(
       "Lifecycle/ObserveRefresh",
       {
         queries: {
-          added: Game.Query.define({
+          added: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
             filters: [Game.Query.added(Position)] as const
           }),
-          changed: Game.Query.define({
+          changed: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
@@ -270,14 +270,14 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
-    const clearSchedule = Game.Schedule.define(ObserveChanged)
+    const spawnSchedule = Game.Schedule(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
+    const clearSchedule = Game.Schedule(ObserveChanged)
     runtime.tick(spawnSchedule, clearSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(1)
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
 
-    const refreshSchedule = Game.Schedule.define(Game.Schedule.updateLifecycle(), ObserveChanged)
+    const refreshSchedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveChanged)
     runtime.runSchedule(refreshSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(0)
@@ -287,7 +287,7 @@ describe("Runtime lifecycle", () => {
   it("treats overwrite inserts on existing components as changed after updateLifecycle()", () => {
     let existingId: number | undefined
 
-    const SpawnSystem = Game.System.define(
+    const SpawnSystem = Game.System(
       "Lifecycle/SpawnForOverwrite",
       {},
       ({ commands }) =>
@@ -298,7 +298,7 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const OverwriteSystem = Game.System.define(
+    const OverwriteSystem = Game.System(
       "Lifecycle/OverwriteExisting",
       {},
       ({ commands }) =>
@@ -314,11 +314,11 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveBeforeSystem = Game.System.define(
+    const ObserveBeforeSystem = Game.System(
       "Lifecycle/ObserveOverwriteBefore",
       {
         queries: {
-          changed: Game.Query.define({
+          changed: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
@@ -335,11 +335,11 @@ describe("Runtime lifecycle", () => {
         })
     )
 
-    const ObserveAfterSystem = Game.System.define(
+    const ObserveAfterSystem = Game.System(
       "Lifecycle/ObserveOverwriteAfter",
       {
         queries: {
-          changed: Game.Query.define({
+          changed: Game.Query({
             selection: {
               position: Game.Query.read(Position)
             },
@@ -357,8 +357,8 @@ describe("Runtime lifecycle", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
-    const observeSchedule = Game.Schedule.define(
+    const spawnSchedule = Game.Schedule(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
+    const observeSchedule = Game.Schedule(
       Game.Schedule.updateLifecycle(),
       OverwriteSystem,
       Game.Schedule.applyDeferred(),

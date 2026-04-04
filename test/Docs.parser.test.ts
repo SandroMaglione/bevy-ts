@@ -81,8 +81,8 @@ describe("buildSiteCss", () => {
 describe("extractExampleApiUsages", () => {
   it("collects bound and direct namespace helper usages", () => {
     const usages = extractExampleApiUsages([
-      "const setup = Game.System.define(\"Setup\", {",
-      "  queries: { moving: Game.Query.define({ selection: { position: Game.Query.read(Position) } }) }",
+      "const setup = Game.System(\"Setup\", {",
+      "  queries: { moving: Game.Query({ selection: { position: Game.Query.read(Position) } }) }",
       "})",
       "const schema = Schema.build(Schema.fragment({}))",
       "const app = App.makeApp(runtime)",
@@ -90,10 +90,10 @@ describe("extractExampleApiUsages", () => {
     ].join("\n"))
 
     expect(usages).toEqual([
-      "system.define",
-      "query.define",
       "query.read",
       "machine.inState",
+      "system.System",
+      "query.Query",
       "schema.build",
       "schema.fragment",
       "app.makeApp"
@@ -104,11 +104,11 @@ describe("extractExampleApiUsages", () => {
 describe("collectExampleApiUsageCounts", () => {
   it("counts helper usage across multiple example sources", () => {
     const counts = collectExampleApiUsageCounts([
-      "Game.System.define(\"A\", {})\nGame.System.define(\"B\", {})",
-      "Schema.build(Schema.fragment({}))\nGame.System.define(\"C\", {})"
+      "Game.System(\"A\", {})\nGame.System(\"B\", {})",
+      "Schema.build(Schema.fragment({}))\nGame.System(\"C\", {})"
     ])
 
-    expect(counts.get("system.define")).toBe(3)
+    expect(counts.get("system.System")).toBe(3)
     expect(counts.get("schema.build")).toBe(1)
     expect(counts.get("schema.fragment")).toBe(1)
   })
@@ -118,20 +118,20 @@ describe("resolveKeyApiEntries", () => {
   it("keeps only documented helpers and sorts by usage then module and item order", () => {
     const entries = resolveKeyApiEntries(
       new Map([
-        ["system.define", 3],
+        ["system.System", 3],
         ["schema.build", 3],
         ["app.makeApp", 1],
         ["runtime.missing", 10]
       ]),
       [
         {
-          key: "system.define",
+          key: "system.System",
           moduleSlug: "system",
           moduleName: "system",
           modulePath: "src/system.ts",
           moduleOrder: 2,
-          itemName: "define",
-          itemAnchor: "define",
+          itemName: "System",
+          itemAnchor: "system",
           itemDescription: "Defines a system.",
           itemOrder: 5
         },
@@ -162,7 +162,7 @@ describe("resolveKeyApiEntries", () => {
 
     expect(entries.map((entry) => entry.key)).toEqual([
       "schema.build",
-      "system.define",
+      "system.System",
       "app.makeApp"
     ])
     expect(entries.map((entry) => entry.usageCount)).toEqual([3, 3, 1])
@@ -174,7 +174,7 @@ describe("createDocsRenderer", () => {
     const renderer = await createDocsRenderer()
 
     const markdownHtml = renderer.markdown.render([
-      "Inline `Game.System.define()`",
+      "Inline `Game.System()`",
       "",
       "```ts",
       "const value = 1",

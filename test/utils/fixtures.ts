@@ -24,7 +24,7 @@ export const readResourceValue = <
 ): Descriptor.Value<D> => {
   let captured!: Descriptor.Value<D>
 
-  const readSystem = System.define(
+  const readSystem = System.System(
     `Test/ReadResource/${descriptor.name}`,
     {
       schema,
@@ -38,7 +38,7 @@ export const readResourceValue = <
       })
   )
 
-  runtime.runSchedule(Schedule.define(readSystem) as never)
+  runtime.runSchedule(Schedule.Schedule(readSystem) as never)
 
   return captured
 }
@@ -62,7 +62,7 @@ export const readStateValue = <
 ): Descriptor.Value<D> => {
   let captured!: Descriptor.Value<D>
 
-  const readSystem = System.define(
+  const readSystem = System.System(
     `Test/ReadState/${descriptor.name}`,
     {
       schema,
@@ -76,7 +76,7 @@ export const readStateValue = <
       })
   )
 
-  runtime.runSchedule(Schedule.define(readSystem) as never)
+  runtime.runSchedule(Schedule.Schedule(readSystem) as never)
 
   return captured
 }

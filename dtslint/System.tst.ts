@@ -6,15 +6,15 @@ import * as System from "../src/system.ts"
 import type { Query as QueryTypes } from "../src/query.ts"
 import { describe, expect, it } from "tstyche"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-const Time = Descriptor.defineResource<number>()("Time")
-const TickEvent = Descriptor.defineEvent<{ dt: number }>()("TickEvent")
-const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
-const Logger = Descriptor.defineService<{ log: (message: string) => void }>()("Logger")
-const SafePosition = Descriptor.defineConstructedComponent(Vector2)("SafePosition")
-const Viewport = Descriptor.defineConstructedResource(Size2)("Viewport")
-const Camera = Descriptor.defineConstructedState(Vector2)("Camera")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
+const Time = Descriptor.Resource<number>()("Time")
+const TickEvent = Descriptor.Event<{ dt: number }>()("TickEvent")
+const Phase = Descriptor.State<"Running" | "Paused">()("Phase")
+const Logger = Descriptor.Service<{ log: (message: string) => void }>()("Logger")
+const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
+const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
+const Camera = Descriptor.ConstructedState(Vector2)("Camera")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -37,14 +37,14 @@ const schema = Schema.build(Schema.fragment({
 
 describe("System", () => {
   it("derives context from the explicit spec", () => {
-    const query = Query.define({
+    const query = Query.Query({
       selection: {
         position: Query.write(SafePosition),
         velocity: Query.read(Velocity)
       }
     })
 
-    const system = System.define(
+    const system = System.System(
       "Move",
       {
         schema,
@@ -106,7 +106,7 @@ describe("System", () => {
   })
 
   it("accepts reusable plain object access fragments without a wrapper", () => {
-    const query = Query.define({
+    const query = Query.Query({
       selection: {
         position: Query.write(SafePosition),
         velocity: Query.read(Velocity)
@@ -126,7 +126,7 @@ describe("System", () => {
       }
     } satisfies System.SystemAccessSpec
 
-    System.define(
+    System.System(
       "MoveA",
       {
         schema,
@@ -153,7 +153,7 @@ describe("System", () => {
         })
     )
 
-    System.define(
+    System.System(
       "MoveB",
       {
         schema,

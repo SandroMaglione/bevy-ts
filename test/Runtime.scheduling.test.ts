@@ -5,8 +5,8 @@ import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Counter = Descriptor.defineResource<number>()("Counter")
-const Log = Descriptor.defineResource<ReadonlyArray<string>>()("Log")
+const Counter = Descriptor.Resource<number>()("Counter")
+const Log = Descriptor.Resource<ReadonlyArray<string>>()("Log")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -27,7 +27,7 @@ const makeRuntime = () =>
 
 describe("Runtime scheduling", () => {
   it("runSchedule executes only the provided schedule", () => {
-    const increment = System.define(
+    const increment = System.System(
       "RuntimeScheduling/Increment",
       {
         schema,
@@ -41,7 +41,7 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const append = System.define(
+    const append = System.System(
       "RuntimeScheduling/AppendLog",
       {
         schema,
@@ -56,16 +56,16 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(increment))
+    runtime.runSchedule(Schedule.Schedule(increment))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
-    runtime.runSchedule(Schedule.define(append))
+    runtime.runSchedule(Schedule.Schedule(append))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["ran"])
   })
 
   it("tick executes schedules in the order provided", () => {
-    const first = System.define(
+    const first = System.System(
       "RuntimeScheduling/First",
       {
         schema,
@@ -79,7 +79,7 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const second = System.define(
+    const second = System.System(
       "RuntimeScheduling/Second",
       {
         schema,
@@ -95,15 +95,15 @@ describe("Runtime scheduling", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(first),
-      Schedule.define(second)
+      Schedule.Schedule(first),
+      Schedule.Schedule(second)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
   it("preserves authored system order exactly", () => {
-    const first = System.define(
+    const first = System.System(
       "RuntimeScheduling/DirectFirst",
       {
         schema,
@@ -117,7 +117,7 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const second = System.define(
+    const second = System.System(
       "RuntimeScheduling/DirectSecond",
       {
         schema,
@@ -132,13 +132,13 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(second, first))
+    runtime.runSchedule(Schedule.Schedule(second, first))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["second", "first"])
   })
 
   it("preserves authored order across multiple systems with no implicit grouping", () => {
-    const first = System.define(
+    const first = System.System(
       "RuntimeScheduling/ChainedFirst",
       {
         schema,
@@ -152,7 +152,7 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const second = System.define(
+    const second = System.System(
       "RuntimeScheduling/ChainedSecond",
       {
         schema,
@@ -167,13 +167,13 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(first, second))
+    runtime.runSchedule(Schedule.Schedule(first, second))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
   it("keeps explicit marker boundaries while preserving authored order", () => {
-    const first = System.define(
+    const first = System.System(
       "RuntimeScheduling/BoundaryFirst",
       {
         schema,
@@ -187,7 +187,7 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const second = System.define(
+    const second = System.System(
       "RuntimeScheduling/BoundarySecond",
       {
         schema,
@@ -202,12 +202,12 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(first, Schedule.updateLifecycle(), second))
+    runtime.runSchedule(Schedule.Schedule(first, Schedule.updateLifecycle(), second))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
   it("composes reusable final schedules into one flattened explicit schedule", () => {
-    const first = System.define(
+    const first = System.System(
       "RuntimeScheduling/ComposeFirst",
       {
         schema,
@@ -221,7 +221,7 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const second = System.define(
+    const second = System.System(
       "RuntimeScheduling/ComposeSecond",
       {
         schema,
@@ -235,13 +235,13 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const hostMirror = Schedule.define(
+    const hostMirror = Schedule.Schedule(
       Schedule.updateLifecycle(),
       second
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(
+    runtime.runSchedule(Schedule.Schedule(
       first,
       Schedule.applyDeferred(),
       hostMirror
@@ -251,7 +251,7 @@ describe("Runtime scheduling", () => {
   })
 
   it("rejects duplicate systems reused across composed entries", () => {
-    const duplicate = System.define(
+    const duplicate = System.System(
       "RuntimeScheduling/ComposeDuplicate",
       {
         schema,
@@ -265,10 +265,10 @@ describe("Runtime scheduling", () => {
         })
     )
 
-    const phase = Schedule.define(duplicate)
+    const phase = Schedule.Schedule(duplicate)
 
     expect(() =>
-      Schedule.define(duplicate, phase)
+      Schedule.Schedule(duplicate, phase)
     ).toThrow("Duplicate system step in schedule")
   })
 })

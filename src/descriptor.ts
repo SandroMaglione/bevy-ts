@@ -7,7 +7,7 @@
  *
  * The normal authoring flow is:
  *
- * 1. declare descriptors with `Descriptor.define...`
+ * 1. declare descriptors with `Descriptor.*`
  * 2. register them in `Schema.fragment(...)`
  * 3. close the schema with `Schema.build(...)`
  * 4. bind one `Game` with `Schema.bind(...)`
@@ -32,9 +32,9 @@
  *
  * @example
  * ```ts
- * const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
- * const DeltaTime = Descriptor.defineResource<number>()("DeltaTime")
- * const DamageTaken = Descriptor.defineEvent<{ amount: number }>()("DamageTaken")
+ * const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+ * const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
+ * const DamageTaken = Descriptor.Event<{ amount: number }>()("DamageTaken")
  * ```
  */
 export type DescriptorTypeId = "~bevy-ts/Descriptor"
@@ -177,10 +177,10 @@ const makeConstructedDescriptor = <
  *
  * @example
  * ```ts
- * const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
+ * const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
  * ```
  */
-export const defineComponent = <Value>() => <const Name extends string>(
+export const Component = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"component", Name, Value> => makeDescriptor("component", name)
 
@@ -189,10 +189,10 @@ export const defineComponent = <Value>() => <const Name extends string>(
  *
  * @example
  * ```ts
- * const Position = Descriptor.defineConstructedComponent(Vector2)("Position")
+ * const Position = Descriptor.ConstructedComponent(Vector2)("Position")
  * ```
  */
-export const defineConstructedComponent = <Value, Raw, Error>(
+export const ConstructedComponent = <Value, Raw, Error>(
   constructor: ResultConstructor<Value, Raw, Error>
 ) => <const Name extends string>(
   name: Name
@@ -210,17 +210,17 @@ export const defineConstructedComponent = <Value, Raw, Error>(
  *
  * @example
  * ```ts
- * const Score = Descriptor.defineResource<number>()("Score")
+ * const Score = Descriptor.Resource<number>()("Score")
  * ```
  */
-export const defineResource = <Value>() => <const Name extends string>(
+export const Resource = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"resource", Name, Value> => makeDescriptor("resource", name)
 
 /**
  * Defines a resource descriptor that also knows how to validate raw values.
  */
-export const defineConstructedResource = <Value, Raw, Error>(
+export const ConstructedResource = <Value, Raw, Error>(
   constructor: ResultConstructor<Value, Raw, Error>
 ) => <const Name extends string>(
   name: Name
@@ -238,10 +238,10 @@ export const defineConstructedResource = <Value, Raw, Error>(
  *
  * @example
  * ```ts
- * const Hit = Descriptor.defineEvent<{ target: number; amount: number }>()("Hit")
+ * const Hit = Descriptor.Event<{ target: number; amount: number }>()("Hit")
  * ```
  */
-export const defineEvent = <Value>() => <const Name extends string>(
+export const Event = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"event", Name, Value> => makeDescriptor("event", name)
 
@@ -253,21 +253,21 @@ export const defineEvent = <Value>() => <const Name extends string>(
  * Use this when you need one current world-level value and the boundary of
  * changing that value is not itself meaningful. If gameplay logic depends on
  * queued transitions, enter/exit handling, or `inState(...)` gating, prefer
- * `Game.StateMachine.define(...)` instead.
+ * `Game.StateMachine(...)` instead.
  *
  * @example
  * ```ts
- * const ActiveLocale = Descriptor.defineState<"en" | "it">()("ActiveLocale")
+ * const ActiveLocale = Descriptor.State<"en" | "it">()("ActiveLocale")
  * ```
  */
-export const defineState = <Value>() => <const Name extends string>(
+export const State = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"state", Name, Value> => makeDescriptor("state", name)
 
 /**
  * Defines a state descriptor that also knows how to validate raw values.
  */
-export const defineConstructedState = <Value, Raw, Error>(
+export const ConstructedState = <Value, Raw, Error>(
   constructor: ResultConstructor<Value, Raw, Error>
 ) => <const Name extends string>(
   name: Name
@@ -286,10 +286,10 @@ export const defineConstructedState = <Value, Raw, Error>(
  *
  * @example
  * ```ts
- * const Logger = Descriptor.defineService<{ log: (message: string) => void }>()("Logger")
+ * const Logger = Descriptor.Service<{ log: (message: string) => void }>()("Logger")
  * ```
  */
-export const defineService = <Value>() => <const Name extends string>(
+export const Service = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"service", Name, Value> => makeDescriptor("service", name)
 
@@ -325,7 +325,7 @@ export function constructorOf<D extends Descriptor.Any>(
  * Use hierarchy when the relationship must support ordered children,
  * ancestor/descendant traversal, and linked recursive despawn.
  */
-export const defineHierarchy = Relation.defineHierarchy
+export const Hierarchy = RelationModule.Hierarchy
 
 /**
  * Defines a general relationship pair with direct edges and reverse lookups.
@@ -334,5 +334,5 @@ export const defineHierarchy = Relation.defineHierarchy
  * reverse lookup, but not hierarchy-only behavior such as tree traversal or
  * child reordering.
  */
-export const defineRelation = Relation.defineRelation
-import * as Relation from "./relation.ts"
+export const Relation = RelationModule.Relation
+import * as RelationModule from "./relation.ts"

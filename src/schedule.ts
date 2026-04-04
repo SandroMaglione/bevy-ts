@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define(
+ * const update = Game.Schedule(
  *   move,
  *   Game.Schedule.applyDeferred(),
  *   sync
@@ -47,7 +47,7 @@ import type { RuntimeRequirements, SystemDefinition, SystemRequirements } from "
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define(
+ * const update = Game.Schedule(
  *   writeHits,
  *   Game.Schedule.updateEvents(),
  *   reactToHits
@@ -644,7 +644,7 @@ type DuplicateExtensionSystemNames<
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define(
+ * const update = Game.Schedule(
  *   simulateSystem,
  *   Game.Schedule.applyDeferred(),
  *   observeSpawnedSystem
@@ -668,7 +668,7 @@ export const applyDeferred = (): ApplyDeferredStep => ({
  *
  * @example
  * ```ts
- * const update = Game.Schedule.define(
+ * const update = Game.Schedule(
  *   emitTickSystem,
  *   Game.Schedule.updateEvents(),
  *   observeTickSystem
@@ -694,7 +694,7 @@ export const updateEvents = (): EventUpdateStep => ({
  *
  * @example
  * ```ts
- * const browserUpdate = Game.Schedule.define(
+ * const browserUpdate = Game.Schedule(
  *   simulationSystem,
  *   Game.Schedule.applyDeferred(),
  *   Game.Schedule.updateLifecycle(),
@@ -868,7 +868,7 @@ export function build<
 >(
   ...entries: Entries
 ): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
-  return define(...entries)
+  return Schedule(...entries)
 }
 
 /**
@@ -929,7 +929,7 @@ export const compose = <
  *   Game.Schedule.onEnter(Phase, "Playing", [ResetWorldSystem])
  * )
  *
- * const update = Game.Schedule.define(
+ * const update = Game.Schedule(
  *   QueueRestartSystem,
  *   GameplaySystem,
  *   Game.Schedule.applyDeferred(),
@@ -958,7 +958,7 @@ export type AnonymousScheduleFor<
 /**
  * Creates one explicit executable schedule from authored plan entries.
  */
-export function define<
+export function Schedule<
   const Entries extends ReadonlyArray<ScheduleEntry>
 >(
   ...entries: Entries

@@ -5,8 +5,8 @@ import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Log = Descriptor.defineResource<ReadonlyArray<number>>()("Log")
-const Ping = Descriptor.defineEvent<{ value: number }>()("Ping")
+const Log = Descriptor.Resource<ReadonlyArray<number>>()("Log")
+const Ping = Descriptor.Event<{ value: number }>()("Ping")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -28,7 +28,7 @@ const makeRuntime = () =>
 
 describe("Runtime events", () => {
   it("later schedules in one tick can observe events emitted by earlier schedules", () => {
-    const emit = System.define(
+    const emit = System.System(
       "RuntimeEvents/Emit",
       {
         schema,
@@ -42,7 +42,7 @@ describe("Runtime events", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeEvents/ObserveLaterSchedule",
       {
         schema,
@@ -61,15 +61,15 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(emit),
-      Schedule.define(observe)
+      Schedule.Schedule(emit),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([1])
   })
 
   it("does not expose newly emitted events before updateEvents in the same schedule", () => {
-    const emit = System.define(
+    const emit = System.System(
       "RuntimeEvents/EmitBefore",
       {
         schema,
@@ -83,7 +83,7 @@ describe("Runtime events", () => {
         })
     )
 
-    const readBefore = System.define(
+    const readBefore = System.System(
       "RuntimeEvents/ReadBefore",
       {
         schema,
@@ -101,13 +101,13 @@ describe("Runtime events", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(emit, readBefore))
+    runtime.runSchedule(Schedule.Schedule(emit, readBefore))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([0])
   })
 
   it("makes pending events readable after updateEvents in the same schedule", () => {
-    const emit = System.define(
+    const emit = System.System(
       "RuntimeEvents/EmitAfter",
       {
         schema,
@@ -121,7 +121,7 @@ describe("Runtime events", () => {
         })
     )
 
-    const readAfter = System.define(
+    const readAfter = System.System(
       "RuntimeEvents/ReadAfter",
       {
         schema,
@@ -139,13 +139,13 @@ describe("Runtime events", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(emit, Schedule.updateEvents(), readAfter))
+    runtime.runSchedule(Schedule.Schedule(emit, Schedule.updateEvents(), readAfter))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([3])
   })
 
   it("preserves event order within one update phase", () => {
-    const emit = System.define(
+    const emit = System.System(
       "RuntimeEvents/EmitMany",
       {
         schema,
@@ -161,7 +161,7 @@ describe("Runtime events", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeEvents/ObserveMany",
       {
         schema,
@@ -179,13 +179,13 @@ describe("Runtime events", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(emit, Schedule.updateEvents(), observe))
+    runtime.runSchedule(Schedule.Schedule(emit, Schedule.updateEvents(), observe))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([4, 5, 6])
   })
 
   it("refreshes readable events across updates instead of accumulating stale values", () => {
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeEvents/ObserveAcrossUpdates",
       {
         schema,
@@ -202,7 +202,7 @@ describe("Runtime events", () => {
         })
     )
 
-    const emitOne = System.define(
+    const emitOne = System.System(
       "RuntimeEvents/EmitOne",
       {
         schema,
@@ -216,7 +216,7 @@ describe("Runtime events", () => {
         })
     )
 
-    const emitNone = System.define(
+    const emitNone = System.System(
       "RuntimeEvents/EmitNone",
       {
         schema
@@ -226,15 +226,15 @@ describe("Runtime events", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(emitOne),
-      Schedule.define(observe)
+      Schedule.Schedule(emitOne),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([7])
 
     runtime.tick(
-      Schedule.define(emitNone),
-      Schedule.define(observe)
+      Schedule.Schedule(emitNone),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])

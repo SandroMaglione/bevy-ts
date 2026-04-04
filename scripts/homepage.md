@@ -20,15 +20,15 @@ Start by defining the ECS data you want to store. Components hold per-entity dat
 import { App, Descriptor, Fx, Schema } from "../index.ts"
 import { Application, Container, Sprite, Texture } from "pixi.js"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-const Renderable = Descriptor.defineComponent<{ size: number }>()("Renderable")
-const Tint = Descriptor.defineComponent<{ value: number }>()("Tint")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
+const Renderable = Descriptor.Component<{ size: number }>()("Renderable")
+const Tint = Descriptor.Component<{ value: number }>()("Tint")
 
-const DeltaTime = Descriptor.defineResource<number>()("DeltaTime")
-const Viewport = Descriptor.defineResource<{ width: number; height: number }>()("Viewport")
+const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
+const Viewport = Descriptor.Resource<{ width: number; height: number }>()("Viewport")
 
-const PixiHost = Descriptor.defineService<{
+const PixiHost = Descriptor.Service<{
   readonly application: Application
   readonly scene: Container
   readonly sprites: Map<number, Sprite>
@@ -71,7 +71,7 @@ Everything defined after this point is checked against the same closed world.
 Queries are explicit. You declare exactly which components are read or written, then optionally add lifecycle filters.
 
 ```ts
-const AddedRenderableQuery = Game.Query.define({
+const AddedRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable),
@@ -80,7 +80,7 @@ const AddedRenderableQuery = Game.Query.define({
   filters: [Game.Query.added(Renderable)]
 })
 
-const ChangedPositionQuery = Game.Query.define({
+const ChangedPositionQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position)
   },
@@ -102,7 +102,7 @@ A system declares its entire dependency surface up front. The callback only rece
 Start with setup. This system reads the Pixi screen size through the service and queues entity spawns.
 
 ```ts
-const SetupSceneSystem = Game.System.define(
+const SetupSceneSystem = Game.System(
   "SetupSceneSystem",
   {
     services: {
@@ -128,7 +128,7 @@ const SetupSceneSystem = Game.System.define(
 Now capture frame input from the host into ECS resources.
 
 ```ts
-const CaptureFrameInputSystem = Game.System.define(
+const CaptureFrameInputSystem = Game.System(
   "CaptureFrameInputSystem",
   {
     resources: {
@@ -153,11 +153,11 @@ const CaptureFrameInputSystem = Game.System.define(
 Then define pure simulation systems. They only touch ECS data, so they do not need direct renderer access.
 
 ```ts
-const IntegrateMotionSystem = Game.System.define(
+const IntegrateMotionSystem = Game.System(
   "IntegrateMotionSystem",
   {
     queries: {
-      moving: Game.Query.define({
+      moving: Game.Query({
         selection: {
           position: Game.Query.write(Position),
           velocity: Game.Query.read(Velocity)
@@ -192,7 +192,7 @@ The full example adds a `BounceWithinViewportSystem` as the next simulation step
 Rendering systems stay explicit too. One system creates Pixi sprites when ECS renderables appear. Another system syncs transforms when positions change.
 
 ```ts
-const CreatePixiSpritesSystem = Game.System.define(
+const CreatePixiSpritesSystem = Game.System(
   "CreatePixiSpritesSystem",
   {
     queries: {
@@ -239,14 +239,14 @@ The important part is not the constructor detail. The important part is the boun
 Schedules define when deferred writes and lifecycle signals become visible.
 
 ```ts
-const setupSchedule = Game.Schedule.define(
+const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateLifecycle(),
   CreatePixiSpritesSystem
 )
 
-const updateSchedule = Game.Schedule.define(
+const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,

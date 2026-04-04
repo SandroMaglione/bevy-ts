@@ -11,19 +11,19 @@ import type {
 
 export const Root = Schema.defineRoot("TopDown")
 
-export const Position = Descriptor.defineConstructedComponent(Vector2)("TopDown/Position")
-export const Velocity = Descriptor.defineConstructedComponent(Vector2)("TopDown/Velocity")
-export const Collider = Descriptor.defineConstructedComponent(Size2)("TopDown/Collider")
-export const Renderable = Descriptor.defineComponent<{
+export const Position = Descriptor.ConstructedComponent(Vector2)("TopDown/Position")
+export const Velocity = Descriptor.ConstructedComponent(Vector2)("TopDown/Velocity")
+export const Collider = Descriptor.ConstructedComponent(Size2)("TopDown/Collider")
+export const Renderable = Descriptor.Component<{
   kind: "player" | "wall" | "pickup"
   width: number
   height: number
   color: number
   accent: number
 }>()("TopDown/Renderable")
-export const Player = Descriptor.defineComponent<{}>()("TopDown/Player")
-export const Wall = Descriptor.defineComponent<{}>()("TopDown/Wall")
-export const Collectable = Descriptor.defineComponent<{
+export const Player = Descriptor.Component<{}>()("TopDown/Player")
+export const Wall = Descriptor.Component<{}>()("TopDown/Wall")
+export const Collectable = Descriptor.Component<{
   label: string
   radius: number
 }>()("TopDown/Collectable")
@@ -34,20 +34,20 @@ export type FocusedCollectableValue = {
   distance: number | null
 }
 
-export const DeltaTime = Descriptor.defineResource<number>()("TopDown/DeltaTime")
-export const Viewport = Descriptor.defineConstructedResource(Size2)("TopDown/Viewport")
-export const Camera = Descriptor.defineConstructedResource(Vector2)("TopDown/Camera")
-export const InputState = Descriptor.defineResource<InputStateValue>()("TopDown/InputState")
-export const FocusedCollectable = Descriptor.defineResource<FocusedCollectableValue>()("TopDown/FocusedCollectable")
-export const CollectedCount = Descriptor.defineResource<number>()("TopDown/CollectedCount")
-export const TotalCollectables = Descriptor.defineResource<number>()("TopDown/TotalCollectables")
-export const AnimationClock = Descriptor.defineResource<AnimationClockValue>()("TopDown/AnimationClock")
-export const CurrentPlayerFrame = Descriptor.defineResource<CurrentPlayerFrameValue>()("TopDown/CurrentPlayerFrame")
+export const DeltaTime = Descriptor.Resource<number>()("TopDown/DeltaTime")
+export const Viewport = Descriptor.ConstructedResource(Size2)("TopDown/Viewport")
+export const Camera = Descriptor.ConstructedResource(Vector2)("TopDown/Camera")
+export const InputState = Descriptor.Resource<InputStateValue>()("TopDown/InputState")
+export const FocusedCollectable = Descriptor.Resource<FocusedCollectableValue>()("TopDown/FocusedCollectable")
+export const CollectedCount = Descriptor.Resource<number>()("TopDown/CollectedCount")
+export const TotalCollectables = Descriptor.Resource<number>()("TopDown/TotalCollectables")
+export const AnimationClock = Descriptor.Resource<AnimationClockValue>()("TopDown/AnimationClock")
+export const CurrentPlayerFrame = Descriptor.Resource<CurrentPlayerFrameValue>()("TopDown/CurrentPlayerFrame")
 
-export const InputManager = Descriptor.defineService<{
+export const InputManager = Descriptor.Service<{
   readonly snapshot: () => InputStateValue
 }>()("TopDown/InputManager")
-export const TopDownHost = Descriptor.defineService<TopDownHostValue>()("TopDown/Host")
+export const TopDownHost = Descriptor.Service<TopDownHostValue>()("TopDown/Host")
 
 export const schema = Schema.build(
   Schema.fragment({
@@ -76,12 +76,12 @@ export const schema = Schema.build(
 
 export const Game = Schema.bind(schema, Root)
 
-export const Facing = Game.StateMachine.define(
+export const Facing = Game.StateMachine(
   "TopDown/Facing",
   ["Down", "Left", "Right", "Up"]
 )
 
-export const Locomotion = Game.StateMachine.define(
+export const Locomotion = Game.StateMachine(
   "TopDown/Locomotion",
   ["Idle", "Walking"]
 )

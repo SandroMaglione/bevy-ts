@@ -23,28 +23,28 @@ const MOVE_DURATION_SECONDS = 0.18
 type Direction = "up" | "down" | "left" | "right"
 type TilePosition = { col: number; row: number }
 
-const Position = Descriptor.defineComponent<TilePosition>()("Pokemon/Position")
-const Movement = Descriptor.defineComponent<{
+const Position = Descriptor.Component<TilePosition>()("Pokemon/Position")
+const Movement = Descriptor.Component<{
   direction: Direction | null
   from: TilePosition
   to: TilePosition
   progress: number
   isMoving: boolean
 }>()("Pokemon/Movement")
-const Renderable = Descriptor.defineComponent<{
+const Renderable = Descriptor.Component<{
   kind: "player" | "solid"
 }>()("Pokemon/Renderable")
-const Player = Descriptor.defineComponent<{}>()("Pokemon/Player")
-const Solid = Descriptor.defineComponent<{}>()("Pokemon/Solid")
+const Player = Descriptor.Component<{}>()("Pokemon/Player")
+const Solid = Descriptor.Component<{}>()("Pokemon/Solid")
 
-const GridSize = Descriptor.defineResource<{ cols: number; rows: number; tileSize: number }>()("Pokemon/GridSize")
-const DeltaTime = Descriptor.defineResource<number>()("Pokemon/DeltaTime")
+const GridSize = Descriptor.Resource<{ cols: number; rows: number; tileSize: number }>()("Pokemon/GridSize")
+const DeltaTime = Descriptor.Resource<number>()("Pokemon/DeltaTime")
 
-const InputManager = Descriptor.defineService<{
+const InputManager = Descriptor.Service<{
   readonly direction: () => Direction | null
 }>()("Pokemon/InputManager")
 
-const PixiHost = Descriptor.defineService<{
+const PixiHost = Descriptor.Service<{
   readonly application: Application
   readonly scene: Container
   readonly nodes: Map<number, Graphics>
@@ -71,7 +71,7 @@ const schema = Schema.build(
 
 const Game = Schema.bind(schema, Root)
 
-const PlayerQuery = Game.Query.define({
+const PlayerQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     movement: Game.Query.write(Movement),
@@ -79,14 +79,14 @@ const PlayerQuery = Game.Query.define({
   }
 })
 
-const SolidQuery = Game.Query.define({
+const SolidQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     solid: Game.Query.read(Solid)
   }
 })
 
-const AddedRenderableQuery = Game.Query.define({
+const AddedRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable)
@@ -94,7 +94,7 @@ const AddedRenderableQuery = Game.Query.define({
   filters: [Game.Query.added(Renderable)]
 })
 
-const PlayerRenderableQuery = Game.Query.define({
+const PlayerRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     movement: Game.Query.read(Movement),
@@ -191,7 +191,7 @@ const makeSolidDraft = (position: TilePosition) =>
     [Solid, {}]
   )
 
-const SetupSystem = Game.System.define(
+const SetupSystem = Game.System(
   "Pokemon/Setup",
   {},
   ({ commands }) =>
@@ -211,7 +211,7 @@ const SetupSystem = Game.System.define(
     })
 )
 
-const CaptureFrameInputSystem = Game.System.define(
+const CaptureFrameInputSystem = Game.System(
   "Pokemon/CaptureFrameInput",
   {
     resources: {
@@ -227,7 +227,7 @@ const CaptureFrameInputSystem = Game.System.define(
     })
 )
 
-const InputSystem = Game.System.define(
+const InputSystem = Game.System(
   "Pokemon/Input",
   {
     queries: {
@@ -260,7 +260,7 @@ const InputSystem = Game.System.define(
     })
 )
 
-const PlanMovementSystem = Game.System.define(
+const PlanMovementSystem = Game.System(
   "Pokemon/PlanMovement",
   {
     queries: {
@@ -291,7 +291,7 @@ const PlanMovementSystem = Game.System.define(
     })
 )
 
-const CollisionSystem = Game.System.define(
+const CollisionSystem = Game.System(
   "Pokemon/Collision",
   {
     queries: {
@@ -341,7 +341,7 @@ const CollisionSystem = Game.System.define(
     })
 )
 
-const AdvanceMovementSystem = Game.System.define(
+const AdvanceMovementSystem = Game.System(
   "Pokemon/AdvanceMovement",
   {
     queries: {
@@ -388,7 +388,7 @@ const AdvanceMovementSystem = Game.System.define(
     })
 )
 
-const DestroyRenderNodesSystem = Game.System.define(
+const DestroyRenderNodesSystem = Game.System(
   "Pokemon/DestroyRenderNodes",
   {
     removed: {
@@ -427,7 +427,7 @@ const DestroyRenderNodesSystem = Game.System.define(
     })
 )
 
-const CreateRenderNodesSystem = Game.System.define(
+const CreateRenderNodesSystem = Game.System(
   "Pokemon/CreateRenderNodes",
   {
     queries: {
@@ -465,7 +465,7 @@ const CreateRenderNodesSystem = Game.System.define(
     })
 )
 
-const SyncPlayerNodeSystem = Game.System.define(
+const SyncPlayerNodeSystem = Game.System(
   "Pokemon/SyncPlayerNode",
   {
     queries: {
@@ -507,22 +507,22 @@ const SyncPlayerNodeSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define(SetupSystem)
+const setupSchedule = Game.Schedule(SetupSystem)
 
-const browserSetupSchedule = Game.Schedule.define(
+const browserSetupSchedule = Game.Schedule(
   setupSchedule,
   CreateRenderNodesSystem,
   SyncPlayerNodeSystem
 )
 
-const updateSchedule = Game.Schedule.define(
+const updateSchedule = Game.Schedule(
   InputSystem,
   PlanMovementSystem,
   CollisionSystem,
   AdvanceMovementSystem
 )
 
-const browserUpdateSchedule = Game.Schedule.define(
+const browserUpdateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   updateSchedule,
   DestroyRenderNodesSystem,

@@ -4,7 +4,7 @@ import { PlayerCameraQuery } from "../queries.ts"
 import { Camera, Game, PlatformerHost, Viewport } from "../schema.ts"
 import { clamp } from "../math.ts"
 
-export const SyncCameraSystem = Game.System.define(
+export const SyncCameraSystem = Game.System(
   "Platformer/SyncCamera",
   {
     queries: {
@@ -32,7 +32,7 @@ export const SyncCameraSystem = Game.System.define(
     })
 )
 
-export const ApplyWorldCameraTransformSystem = Game.System.define(
+export const ApplyWorldCameraTransformSystem = Game.System(
   "Platformer/ApplyWorldCameraTransform",
   {
     resources: {

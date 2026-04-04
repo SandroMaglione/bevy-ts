@@ -20,7 +20,7 @@ import {
 } from "./systems.ts"
 import { Game, SessionState } from "./schema.ts"
 
-export const setupSchedule = Game.Schedule.define(
+export const setupSchedule = Game.Schedule(
   SpawnPlayerSystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateLifecycle(),
@@ -35,7 +35,7 @@ export const stateTransitions = Game.Schedule.transitions(
   ])
 )
 
-export const updateSchedule = Game.Schedule.define(
+export const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   QueueStartFromTitleSystem,
   QueueRestartSystem,

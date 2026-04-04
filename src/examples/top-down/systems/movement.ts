@@ -6,7 +6,7 @@ import { normalizeMovement, resolveHorizontalMovement, resolveVerticalMovement }
 import { PlayerMovementQuery, WallCollisionQuery } from "../queries.ts"
 import { DeltaTime, Game, InputState } from "../schema.ts"
 
-export const PlanPlayerVelocitySystem = Game.System.define(
+export const PlanPlayerVelocitySystem = Game.System(
   "TopDown/PlanPlayerVelocity",
   {
     queries: {
@@ -33,7 +33,7 @@ export const PlanPlayerVelocitySystem = Game.System.define(
     })
 )
 
-export const MovePlayerSystem = Game.System.define(
+export const MovePlayerSystem = Game.System(
   "TopDown/MovePlayer",
   {
     queries: {

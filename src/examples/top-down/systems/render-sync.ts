@@ -17,7 +17,7 @@ import {
 } from "../schema.ts"
 import { destroyRenderNode, ensureNode, textureForCurrentFrame } from "../render/nodes.ts"
 
-export const ApplyWorldCameraTransformSystem = Game.System.define(
+export const ApplyWorldCameraTransformSystem = Game.System(
   "TopDown/ApplyWorldCameraTransform",
   {
     resources: {
@@ -37,7 +37,7 @@ export const ApplyWorldCameraTransformSystem = Game.System.define(
     })
 )
 
-export const DestroyRenderNodesSystem = Game.System.define(
+export const DestroyRenderNodesSystem = Game.System(
   "TopDown/DestroyRenderNodes",
   {
     removed: {
@@ -78,7 +78,7 @@ export const DestroyRenderNodesSystem = Game.System.define(
     })
 )
 
-export const CreateRenderNodesSystem = Game.System.define(
+export const CreateRenderNodesSystem = Game.System(
   "TopDown/CreateRenderNodes",
   {
     queries: {
@@ -108,7 +108,7 @@ export const CreateRenderNodesSystem = Game.System.define(
     })
 )
 
-export const SyncRenderableTransformsSystem = Game.System.define(
+export const SyncRenderableTransformsSystem = Game.System(
   "TopDown/SyncRenderableTransforms",
   {
     queries: {
@@ -136,7 +136,7 @@ export const SyncRenderableTransformsSystem = Game.System.define(
     })
 )
 
-export const SyncPlayerSpriteSystem = Game.System.define(
+export const SyncPlayerSpriteSystem = Game.System(
   "TopDown/SyncPlayerSprite",
   {
     queries: {
@@ -170,7 +170,7 @@ export const SyncPlayerSpriteSystem = Game.System.define(
     })
 )
 
-export const SyncPickupPresentationSystem = Game.System.define(
+export const SyncPickupPresentationSystem = Game.System(
   "TopDown/SyncPickupPresentation",
   {
     queries: {

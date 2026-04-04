@@ -6,8 +6,8 @@
  *
  * @example
  * ```ts
- * const Parent = Relation.defineHierarchy("Parent", "Children")
- * const Target = Relation.define("Target", "TargetedBy")
+ * const Parent = Relation.Hierarchy("Parent", "Children")
+ * const Target = Relation.Relation("Target", "TargetedBy")
  * ```
  *
  * @module relation
@@ -333,7 +333,7 @@ const makePair = <
   }
 }
 
-export const defineHierarchy = <
+export const Hierarchy = <
   const Name extends string,
   const RelatedName extends string
 >(
@@ -341,7 +341,7 @@ export const defineHierarchy = <
   relatedName: RelatedName
 ) => makePair("hierarchy", name, relatedName)
 
-export const defineRelation = <
+export const Relation = <
   const Name extends string,
   const RelatedName extends string
 >(

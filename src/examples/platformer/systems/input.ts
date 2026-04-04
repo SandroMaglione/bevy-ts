@@ -1,7 +1,7 @@
 import { Fx } from "../../../index.ts"
 import { DeltaTime, Game, InputManager, InputState, PlatformerHost, Viewport } from "../schema.ts"
 
-export const CaptureFrameContextSystem = Game.System.define(
+export const CaptureFrameContextSystem = Game.System(
   "Platformer/CaptureFrameContext",
   {
     resources: {

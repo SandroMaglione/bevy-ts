@@ -5,7 +5,7 @@
  *
  * @example
  * ```ts
- * const movers = Game.Query.define({
+ * const movers = Game.Query({
  *   selection: {
  *     position: Game.Query.write(Position),
  *     velocity: Game.Query.read(Velocity)
@@ -52,7 +52,7 @@ type ComponentDescriptor = Descriptor<"component", string, unknown>
  *
  * @example
  * ```ts
- * const Moving = Game.Query.define({
+ * const Moving = Game.Query({
  *   selection: {
  *     position: Game.Query.write(Position),
  *     velocity: Game.Query.read(Velocity),
@@ -175,7 +175,7 @@ export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess
  *
  * @example
  * ```ts
- * const query = Game.Query.define({
+ * const query = Game.Query({
  *   selection: {
  *     sprite: Game.Query.optional(Sprite)
  *   }
@@ -199,7 +199,7 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
  *
  * @example
  * ```ts
- * const AddedRenderableQuery = Game.Query.define({
+ * const AddedRenderableQuery = Game.Query({
  *   selection: {
  *     position: Game.Query.read(Position),
  *     renderable: Game.Query.read(Renderable)
@@ -227,7 +227,7 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
  *
  * @example
  * ```ts
- * const MovedQuery = Game.Query.define({
+ * const MovedQuery = Game.Query({
  *   selection: {
  *     position: Game.Query.read(Position)
  *   },
@@ -599,7 +599,7 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  *
  * @example
  * ```ts
- * const Moving = Game.Query.define({
+ * const Moving = Game.Query({
  *   selection: {
  *     position: Game.Query.write(Position),
  *     velocity: Game.Query.read(Velocity)
@@ -609,7 +609,7 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * })
  * ```
  */
-export const define = <
+export const Query = <
   const Selection extends Record<string, SelectionAccess<any, Root>>,
   const With extends ReadonlyArray<ComponentDescriptor> = [],
   const Without extends ReadonlyArray<ComponentDescriptor> = [],

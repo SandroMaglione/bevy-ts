@@ -4,7 +4,7 @@ import { clamp } from "../math.ts"
 import { PlayerCameraQuery } from "../queries.ts"
 import { Camera, Game, Viewport } from "../schema.ts"
 
-export const SyncCameraSystem = Game.System.define(
+export const SyncCameraSystem = Game.System(
   "TopDown/SyncCamera",
   {
     queries: {

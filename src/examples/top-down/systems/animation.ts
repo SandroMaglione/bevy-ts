@@ -12,7 +12,7 @@ import {
   Locomotion
 } from "../schema.ts"
 
-export const ResolveFacingSystem = Game.System.define(
+export const ResolveFacingSystem = Game.System(
   "TopDown/ResolveFacing",
   {
     queries: {
@@ -49,7 +49,7 @@ export const ResolveFacingSystem = Game.System.define(
     })
 )
 
-export const ResolveLocomotionSystem = Game.System.define(
+export const ResolveLocomotionSystem = Game.System(
   "TopDown/ResolveLocomotion",
   {
     queries: {
@@ -73,7 +73,7 @@ export const ResolveLocomotionSystem = Game.System.define(
     })
 )
 
-export const ResetAnimationClockSystem = Game.System.define(
+export const ResetAnimationClockSystem = Game.System(
   "TopDown/ResetAnimationClock",
   {
     when: [
@@ -95,7 +95,7 @@ export const ResetAnimationClockSystem = Game.System.define(
     })
 )
 
-export const AdvanceAnimationClockSystem = Game.System.define(
+export const AdvanceAnimationClockSystem = Game.System(
   "TopDown/AdvanceAnimationClock",
   {
     resources: {
@@ -134,7 +134,7 @@ export const AdvanceAnimationClockSystem = Game.System.define(
     })
 )
 
-export const ResolveCurrentPlayerFrameSystem = Game.System.define(
+export const ResolveCurrentPlayerFrameSystem = Game.System(
   "TopDown/ResolveCurrentPlayerFrame",
   {
     resources: {

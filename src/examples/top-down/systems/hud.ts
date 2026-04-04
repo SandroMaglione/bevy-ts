@@ -10,7 +10,7 @@ import {
   TotalCollectables
 } from "../schema.ts"
 
-export const SyncHudSystem = Game.System.define(
+export const SyncHudSystem = Game.System(
   "TopDown/SyncHud",
   {
     resources: {

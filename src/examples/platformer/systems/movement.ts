@@ -5,7 +5,7 @@ import { PlayerMovementQuery, SolidCollisionQuery } from "../queries.ts"
 import { DeltaTime, Game, InputState, PlayerContacts } from "../schema.ts"
 import { clamp, resolveHorizontalMovement, resolveHorizontalSpeed, resolveVerticalMovement } from "../math.ts"
 
-export const ResolveMoveIntentSystem = Game.System.define(
+export const ResolveMoveIntentSystem = Game.System(
   "Platformer/ResolveMoveIntent",
   {
     queries: {
@@ -40,7 +40,7 @@ export const ResolveMoveIntentSystem = Game.System.define(
     })
 )
 
-export const ApplyJumpSystem = Game.System.define(
+export const ApplyJumpSystem = Game.System(
   "Platformer/ApplyJump",
   {
     queries: {
@@ -80,7 +80,7 @@ export const ApplyJumpSystem = Game.System.define(
     })
 )
 
-export const ApplyGravitySystem = Game.System.define(
+export const ApplyGravitySystem = Game.System(
   "Platformer/ApplyGravity",
   {
     queries: {
@@ -110,7 +110,7 @@ export const ApplyGravitySystem = Game.System.define(
     })
 )
 
-export const MovePlayerSystem = Game.System.define(
+export const MovePlayerSystem = Game.System(
   "Platformer/MovePlayer",
   {
     queries: {

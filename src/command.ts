@@ -409,7 +409,7 @@ export const relate = <
  *
  * @example
  * ```ts
- * const SetupSystem = Game.System.define("Setup", {}, ({ commands }) =>
+ * const SetupSystem = Game.System("Setup", {}, ({ commands }) =>
  *   Fx.sync(() => {
  *     commands.spawn(
  *       Game.Command.spawnWith(

@@ -23,27 +23,27 @@ type SnakeHud = {
   readonly footer: HTMLParagraphElement
 }
 
-const Position = Descriptor.defineComponent<GridPosition>()("Snake/Position")
-const PreviousPosition = Descriptor.defineComponent<GridPosition>()("Snake/PreviousPosition")
-const Velocity = Descriptor.defineComponent<GridPosition>()("Snake/Velocity")
-const SnakeHead = Descriptor.defineComponent<{}>()("Snake/Head")
-const SnakeBody = Descriptor.defineComponent<{ isTail: boolean }>()("Snake/Body")
-const Food = Descriptor.defineComponent<{}>()("Snake/Food")
-const { relation: ChildOf } = Descriptor.defineHierarchy("Snake/ChildOf", "Snake/Children")
+const Position = Descriptor.Component<GridPosition>()("Snake/Position")
+const PreviousPosition = Descriptor.Component<GridPosition>()("Snake/PreviousPosition")
+const Velocity = Descriptor.Component<GridPosition>()("Snake/Velocity")
+const SnakeHead = Descriptor.Component<{}>()("Snake/Head")
+const SnakeBody = Descriptor.Component<{ isTail: boolean }>()("Snake/Body")
+const Food = Descriptor.Component<{}>()("Snake/Food")
+const { relation: ChildOf } = Descriptor.Hierarchy("Snake/ChildOf", "Snake/Children")
 
-const FoodEaten = Descriptor.defineEvent<{ entity: Entity.Handle<typeof Root, typeof Food> }>()("Snake/FoodEaten")
+const FoodEaten = Descriptor.Event<{ entity: Entity.Handle<typeof Root, typeof Food> }>()("Snake/FoodEaten")
 
-const Score = Descriptor.defineResource<number>()("Snake/Score")
-const PendingGrowth = Descriptor.defineResource<number>()("Snake/PendingGrowth")
-const SpawnSeed = Descriptor.defineResource<number>()("Snake/SpawnSeed")
-const GameOverReason = Descriptor.defineResource<GameOverReasonValue>()("Snake/GameOverReason")
+const Score = Descriptor.Resource<number>()("Snake/Score")
+const PendingGrowth = Descriptor.Resource<number>()("Snake/PendingGrowth")
+const SpawnSeed = Descriptor.Resource<number>()("Snake/SpawnSeed")
+const GameOverReason = Descriptor.Resource<GameOverReasonValue>()("Snake/GameOverReason")
 
-const InputManager = Descriptor.defineService<{
+const InputManager = Descriptor.Service<{
   readonly consumeDirection: () => GridPosition | null
   readonly consumeRestart: () => boolean
 }>()("Snake/InputManager")
 
-const PixiHost = Descriptor.defineService<{
+const PixiHost = Descriptor.Service<{
   readonly scene: Container
   readonly nodes: Map<number, Graphics>
   readonly tileSize: number
@@ -82,9 +82,9 @@ const schema = Schema.build(
 )
 
 const Game = Schema.bind(schema, Root)
-const GamePhase = Game.StateMachine.define("Phase", ["Playing", "GameOver"])
+const GamePhase = Game.StateMachine("Phase", ["Playing", "GameOver"])
 
-const HeadQuery = Game.Query.define({
+const HeadQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     previousPosition: Game.Query.write(PreviousPosition),
@@ -93,7 +93,7 @@ const HeadQuery = Game.Query.define({
   }
 })
 
-const BodyQuery = Game.Query.define({
+const BodyQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     previousPosition: Game.Query.write(PreviousPosition),
@@ -101,14 +101,14 @@ const BodyQuery = Game.Query.define({
   }
 })
 
-const FoodQuery = Game.Query.define({
+const FoodQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     food: Game.Query.read(Food)
   }
 })
 
-const OccupiedCellQuery = Game.Query.define({
+const OccupiedCellQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     head: Game.Query.optional(SnakeHead),
@@ -117,7 +117,7 @@ const OccupiedCellQuery = Game.Query.define({
   }
 })
 
-const AddedRenderNodeQuery = Game.Query.define({
+const AddedRenderNodeQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     head: Game.Query.optional(SnakeHead),
@@ -127,7 +127,7 @@ const AddedRenderNodeQuery = Game.Query.define({
   filters: [Game.Query.added(Position)]
 })
 
-const ChangedRenderNodeQuery = Game.Query.define({
+const ChangedRenderNodeQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     head: Game.Query.optional(SnakeHead),
@@ -357,16 +357,16 @@ const placeNode = (
   )
 }
 
-const ResetGameSystem = Game.System.define(
+const ResetGameSystem = Game.System(
   "Snake/ResetGame",
   {
     queries: {
-      head: Game.Query.define({
+      head: Game.Query({
         selection: {
           head: Game.Query.read(SnakeHead)
         }
       }),
-      body: Game.Query.define({
+      body: Game.Query({
         selection: {
           body: Game.Query.read(SnakeBody)
         }
@@ -403,7 +403,7 @@ const ResetGameSystem = Game.System.define(
     })
 )
 
-const QueueRestartSystem = Game.System.define(
+const QueueRestartSystem = Game.System(
   "Snake/QueueRestart",
   {
     when: [Game.Condition.inState(GamePhase, "GameOver")],
@@ -423,7 +423,7 @@ const QueueRestartSystem = Game.System.define(
     })
 )
 
-const CapturePreviousPositionsSystem = Game.System.define(
+const CapturePreviousPositionsSystem = Game.System(
   "Snake/CapturePreviousPositions",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -448,7 +448,7 @@ const CapturePreviousPositionsSystem = Game.System.define(
     })
 )
 
-const BrowserInputSystem = Game.System.define(
+const BrowserInputSystem = Game.System(
   "Snake/BrowserInput",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -481,7 +481,7 @@ const BrowserInputSystem = Game.System.define(
     })
 )
 
-const MoveHeadSystem = Game.System.define(
+const MoveHeadSystem = Game.System(
   "Snake/MoveHead",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -505,7 +505,7 @@ const MoveHeadSystem = Game.System.define(
     })
 )
 
-const MoveBodySystem = Game.System.define(
+const MoveBodySystem = Game.System(
   "Snake/MoveBody",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -535,12 +535,12 @@ const MoveBodySystem = Game.System.define(
     })
 )
 
-const DetectFoodCollisionSystem = Game.System.define(
+const DetectFoodCollisionSystem = Game.System(
   "Snake/DetectFoodCollision",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
     queries: {
-      head: Game.Query.define({
+      head: Game.Query({
         selection: {
           position: Game.Query.read(Position),
           head: Game.Query.read(SnakeHead)
@@ -572,7 +572,7 @@ const DetectFoodCollisionSystem = Game.System.define(
     })
 )
 
-const ResolveFoodEatenSystem = Game.System.define(
+const ResolveFoodEatenSystem = Game.System(
   "Snake/ResolveFoodEaten",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -601,7 +601,7 @@ const ResolveFoodEatenSystem = Game.System.define(
     })
 )
 
-const GrowSnakeSystem = Game.System.define(
+const GrowSnakeSystem = Game.System(
   "Snake/Grow",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -647,18 +647,18 @@ const GrowSnakeSystem = Game.System.define(
     })
 )
 
-const DetectSelfCollisionSystem = Game.System.define(
+const DetectSelfCollisionSystem = Game.System(
   "Snake/DetectSelfCollision",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
     queries: {
-      head: Game.Query.define({
+      head: Game.Query({
         selection: {
           position: Game.Query.read(Position),
           head: Game.Query.read(SnakeHead)
         }
       }),
-      body: Game.Query.define({
+      body: Game.Query({
         selection: {
           position: Game.Query.read(Position),
           body: Game.Query.read(SnakeBody)
@@ -690,7 +690,7 @@ const DetectSelfCollisionSystem = Game.System.define(
     })
 )
 
-const EnsureFoodSystem = Game.System.define(
+const EnsureFoodSystem = Game.System(
   "Snake/EnsureFood",
   {
     when: [Game.Condition.inState(GamePhase, "Playing")],
@@ -749,7 +749,7 @@ const EnsureFoodSystem = Game.System.define(
     })
 )
 
-const DestroySnakeNodesSystem = Game.System.define(
+const DestroySnakeNodesSystem = Game.System(
   "Snake/DestroyRenderNodes",
   {
     despawned: {
@@ -774,7 +774,7 @@ const DestroySnakeNodesSystem = Game.System.define(
     })
 )
 
-const CreateSnakeNodesSystem = Game.System.define(
+const CreateSnakeNodesSystem = Game.System(
   "Snake/CreateRenderNodes",
   {
     queries: {
@@ -805,7 +805,7 @@ const CreateSnakeNodesSystem = Game.System.define(
     })
 )
 
-const SyncSnakeNodeTransformsSystem = Game.System.define(
+const SyncSnakeNodeTransformsSystem = Game.System(
   "Snake/SyncRenderNodeTransforms",
   {
     queries: {
@@ -836,7 +836,7 @@ const SyncSnakeNodeTransformsSystem = Game.System.define(
     })
 )
 
-const ReconcileSnakeNodesSystem = Game.System.define(
+const ReconcileSnakeNodesSystem = Game.System(
   "Snake/ReconcileRenderNodes",
   {
     queries: {
@@ -865,7 +865,7 @@ const ReconcileSnakeNodesSystem = Game.System.define(
     })
 )
 
-const SyncHudSystem = Game.System.define(
+const SyncHudSystem = Game.System(
   "Snake/SyncHud",
   {
     resources: {
@@ -908,14 +908,14 @@ const SyncHudSystem = Game.System.define(
     })
 )
 
-const setupSchedule = Game.Schedule.define(
+const setupSchedule = Game.Schedule(
   ResetGameSystem,
   Game.Schedule.applyDeferred(),
   EnsureFoodSystem,
   Game.Schedule.applyDeferred()
 )
 
-const browserSetupSchedule = Game.Schedule.define(
+const browserSetupSchedule = Game.Schedule(
   setupSchedule,
   Game.Schedule.updateLifecycle(),
   CreateSnakeNodesSystem,
@@ -931,7 +931,7 @@ const phaseTransitions = Game.Schedule.transitions(
   ])
 )
 
-const updateSchedule = Game.Schedule.define(
+const updateSchedule = Game.Schedule(
   CapturePreviousPositionsSystem,
   MoveHeadSystem,
   MoveBodySystem,
@@ -947,7 +947,7 @@ const updateSchedule = Game.Schedule.define(
   Game.Schedule.applyStateTransitions(phaseTransitions)
 )
 
-const browserUpdateSchedule = Game.Schedule.define(
+const browserUpdateSchedule = Game.Schedule(
   QueueRestartSystem,
   BrowserInputSystem,
   updateSchedule,

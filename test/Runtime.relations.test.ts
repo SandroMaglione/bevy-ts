@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest"
 import { Descriptor, Entity, Fx, Schema } from "../src/index.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Name = Descriptor.defineComponent<{ value: string }>()("Name")
-const Summary = Descriptor.defineResource<string>()("Summary")
-const { relation: ChildOf } = Descriptor.defineHierarchy("ChildOf", "Children")
-const { relation: Targeting } = Descriptor.defineRelation("Targeting", "TargetedBy")
+const Name = Descriptor.Component<{ value: string }>()("Name")
+const Summary = Descriptor.Resource<string>()("Summary")
+const { relation: ChildOf } = Descriptor.Hierarchy("ChildOf", "Children")
+const { relation: Targeting } = Descriptor.Relation("Targeting", "TargetedBy")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -36,7 +36,7 @@ describe("Runtime relationships", () => {
     let childId: Entity.EntityId<typeof schema, any> | undefined
     let archerId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnRelations",
       {},
       ({ commands }) =>
@@ -66,17 +66,17 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveRelations",
       {
         queries: {
-          parents: Game.Query.define({
+          parents: Game.Query({
             selection: {
               parent: Game.Query.readRelation(ChildOf)
             },
             withRelations: [ChildOf]
           }),
-          hasChildren: Game.Query.define({
+          hasChildren: Game.Query({
             selection: {
               children: Game.Query.readRelated(ChildOf)
             },
@@ -112,8 +112,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("1/1/2/1/1")
@@ -124,7 +124,7 @@ describe("Runtime relationships", () => {
     let childId: Entity.EntityId<typeof schema, any> | undefined
     let archerId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnHierarchyForDespawn",
       {},
       ({ commands }) =>
@@ -147,7 +147,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const destroy = Game.System.define(
+    const destroy = Game.System(
       "DestroyRoot",
       {},
       ({ commands }) =>
@@ -158,7 +158,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveDespawn",
       {
         resources: {
@@ -181,9 +181,9 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(destroy),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(destroy),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingEntity/MissingRelation")
@@ -193,7 +193,7 @@ describe("Runtime relationships", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnGeneralCycle",
       {},
       ({ commands }) =>
@@ -216,11 +216,11 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveOptionalRelations",
       {
         queries: {
-          optionalTargets: Game.Query.define({
+          optionalTargets: Game.Query({
             selection: {
               name: Game.Query.read(Name),
               target: Game.Query.optionalRelation(Targeting),
@@ -265,8 +265,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe(
@@ -278,7 +278,7 @@ describe("Runtime relationships", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnLiveRelationEntities",
       {},
       ({ commands }) =>
@@ -288,7 +288,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const relate = Game.System.define(
+    const relate = Game.System(
       "RelateLiveEntities",
       {},
       ({ commands }) =>
@@ -299,7 +299,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const unrelate = Game.System.define(
+    const unrelate = Game.System(
       "UnrelateLiveEntities",
       {},
       ({ commands }) =>
@@ -310,7 +310,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveLiveRelationMutation",
       {
         resources: {
@@ -332,9 +332,9 @@ describe("Runtime relationships", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define(spawn)
-    const relateSchedule = Game.Schedule.define(relate, Game.Schedule.applyDeferred(), observe)
-    const unrelateSchedule = Game.Schedule.define(unrelate, Game.Schedule.applyDeferred(), observe)
+    const spawnSchedule = Game.Schedule(spawn)
+    const relateSchedule = Game.Schedule(relate, Game.Schedule.applyDeferred(), observe)
+    const unrelateSchedule = Game.Schedule(unrelate, Game.Schedule.applyDeferred(), observe)
     runtime.tick(spawnSchedule, relateSchedule, unrelateSchedule)
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0")
@@ -346,7 +346,7 @@ describe("Runtime relationships", () => {
     let secondId: Entity.EntityId<typeof schema, any> | undefined
     let thirdId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnHierarchyForReorder",
       {},
       ({ commands }) =>
@@ -376,7 +376,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const reorder = Game.System.define(
+    const reorder = Game.System(
       "ReorderHierarchyChildren",
       {},
       ({ commands }) =>
@@ -388,11 +388,11 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveHierarchyReorder",
       {
         queries: {
-          hasChildren: Game.Query.define({
+          hasChildren: Game.Query({
             selection: {
               children: Game.Query.readRelated(ChildOf)
             },
@@ -424,8 +424,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(reorder, Game.Schedule.applyDeferred(), observe)
+      Game.Schedule(spawn),
+      Game.Schedule(reorder, Game.Schedule.applyDeferred(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("4,2,3/4,2,3/4,2,3")
@@ -435,13 +435,13 @@ describe("Runtime relationships", () => {
     let rootId: Entity.EntityId<typeof schema, any> | undefined
     let branchId: Entity.EntityId<typeof schema, any> | undefined
 
-    const NamedQuery = Game.Query.define({
+    const NamedQuery = Game.Query({
       selection: {
         name: Game.Query.read(Name)
       }
     })
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnHierarchyMatchTraversal",
       {},
       ({ commands }) =>
@@ -471,7 +471,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveHierarchyMatchTraversal",
       {
         resources: {
@@ -507,8 +507,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("first/first,nested/MissingEntity")
@@ -518,7 +518,7 @@ describe("Runtime relationships", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnSuccessfulRelationMutation",
       {},
       ({ commands }) =>
@@ -528,7 +528,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const relate = Game.System.define(
+    const relate = Game.System(
       "QueueSuccessfulRelationMutation",
       {},
       ({ commands }) =>
@@ -540,7 +540,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observeBefore = Game.System.define(
+    const observeBefore = Game.System(
       "ObserveSuccessfulRelationMutationBeforeFlush",
       {
         relationFailures: {
@@ -561,7 +561,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observeAfter = Game.System.define(
+    const observeAfter = Game.System(
       "ObserveSuccessfulRelationMutationAfterFlush",
       {
         relationFailures: {
@@ -589,8 +589,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(
+      Game.Schedule(spawn),
+      Game.Schedule(
         relate,
         observeBefore,
         Game.Schedule.applyDeferred(),
@@ -606,7 +606,7 @@ describe("Runtime relationships", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnForRepeatedUnrelate",
       {},
       ({ commands }) =>
@@ -622,7 +622,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const clear = Game.System.define(
+    const clear = Game.System(
       "RepeatedUnrelate",
       {},
       ({ commands }) =>
@@ -636,7 +636,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "ObserveRepeatedUnrelate",
       {
         relationFailures: {
@@ -664,8 +664,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe)
+      Game.Schedule(spawn),
+      Game.Schedule(clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0/0")
@@ -675,7 +675,7 @@ describe("Runtime relationships", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnFailureEntities",
       {},
       ({ commands }) =>
@@ -685,7 +685,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const queueInvalid = Game.System.define(
+    const queueInvalid = Game.System(
       "QueueInvalidRelations",
       {},
       ({ commands }) =>
@@ -699,7 +699,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const readBefore = Game.System.define(
+    const readBefore = Game.System(
       "ReadRelationFailuresBeforeFlush",
       {
         relationFailures: {
@@ -716,7 +716,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const readAfter = Game.System.define(
+    const readAfter = Game.System(
       "ReadRelationFailuresAfterFlush",
       {
         relationFailures: {
@@ -749,8 +749,8 @@ describe("Runtime relationships", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define(spawn)
-    const failureSchedule = Game.Schedule.define(
+    const spawnSchedule = Game.Schedule(spawn)
+    const failureSchedule = Game.Schedule(
       queueInvalid,
       Game.Schedule.applyDeferred(),
       readBefore,
@@ -770,7 +770,7 @@ describe("Runtime relationships", () => {
     let secondId: Entity.EntityId<typeof schema, any> | undefined
     let unrelatedId: Entity.EntityId<typeof schema, any> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "SpawnHierarchyForReorderFailure",
       {},
       ({ commands }) =>
@@ -794,7 +794,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const queueInvalid = Game.System.define(
+    const queueInvalid = Game.System(
       "QueueInvalidReorders",
       {},
       ({ commands }) =>
@@ -809,7 +809,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const readBefore = Game.System.define(
+    const readBefore = Game.System(
       "ReadReorderFailuresBeforeFlush",
       {
         relationFailures: {
@@ -825,7 +825,7 @@ describe("Runtime relationships", () => {
         })
     )
 
-    const readAfter = Game.System.define(
+    const readAfter = Game.System(
       "ReadReorderFailuresAfterFlush",
       {
         relationFailures: {
@@ -852,8 +852,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(
+      Game.Schedule(spawn),
+      Game.Schedule(
         queueInvalid,
         Game.Schedule.applyDeferred(),
         readBefore,

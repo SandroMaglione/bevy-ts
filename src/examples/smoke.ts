@@ -7,18 +7,18 @@
  */
 import { App, Descriptor, Fx, Schema } from "../index.ts"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Smoke/Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Smoke/Velocity")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Smoke/Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Smoke/Velocity")
 
-const Time = Descriptor.defineResource<number>()("Smoke/Time")
-const TickCount = Descriptor.defineResource<number>()("Smoke/TickCount")
+const Time = Descriptor.Resource<number>()("Smoke/Time")
+const TickCount = Descriptor.Resource<number>()("Smoke/TickCount")
 
-const TickEvent = Descriptor.defineEvent<{
+const TickEvent = Descriptor.Event<{
   readonly tick: number
   readonly dt: number
 }>()("Smoke/TickEvent")
 
-const Logger = Descriptor.defineService<{
+const Logger = Descriptor.Service<{
   readonly log: (message: string) => void
 }>()("Smoke/Logger")
 
@@ -39,16 +39,16 @@ const schema = Schema.build(Schema.fragment({
 const Game = Schema.bind(schema)
 // `Phase` is a machine because the queued transition boundary matters for
 // gameplay flow. A plain state descriptor would not model that boundary.
-const Phase = Game.StateMachine.define("Phase", ["Running", "Paused"])
+const Phase = Game.StateMachine("Phase", ["Running", "Paused"])
 
-const MovingQuery = Game.Query.define({
+const MovingQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     velocity: Game.Query.read(Velocity)
   }
 })
 
-const SetupSystem = Game.System.define(
+const SetupSystem = Game.System(
   "Smoke/Setup",
   {},
   ({ commands }) =>
@@ -62,7 +62,7 @@ const SetupSystem = Game.System.define(
     })
 )
 
-const MoveSystem = Game.System.define(
+const MoveSystem = Game.System(
   "Smoke/Move",
   {
     when: [Game.Condition.inState(Phase, "Running")],
@@ -106,7 +106,7 @@ const MoveSystem = Game.System.define(
     })
 )
 
-const ObserveTickSystem = Game.System.define(
+const ObserveTickSystem = Game.System(
   "Smoke/ObserveTick",
   {
     events: {
@@ -124,9 +124,9 @@ const ObserveTickSystem = Game.System.define(
     })
 )
 
-const bootstrap = Game.Schedule.define(SetupSystem)
+const bootstrap = Game.Schedule(SetupSystem)
 
-const update = Game.Schedule.define(
+const update = Game.Schedule(
   MoveSystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateEvents(),

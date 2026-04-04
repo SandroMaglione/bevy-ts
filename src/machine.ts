@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * const GameFlow = Machine.define("GameFlow", ["Menu", "Playing"] as const)
+ * const GameFlow = Machine.StateMachine("GameFlow", ["Menu", "Playing"] as const)
  * const isPlaying = Machine.inState(GameFlow, "Playing")
  * ```
  *
@@ -241,14 +241,14 @@ export type MachineRequirementsFromConditions<C extends ReadonlyArray<Condition>
  * This is the intended default for gameplay phases and other discrete modes
  * where the transition boundary itself matters.
  *
- * Prefer a machine over `Descriptor.defineState(...)` when code depends on:
+ * Prefer a machine over `Descriptor.State(...)` when code depends on:
  *
  * - queued `nextState(...)` writes
  * - explicit `applyStateTransitions(...)`
  * - `inState(...)` gating
  * - transition events or enter/exit schedules
  */
-export const define = <
+export const StateMachine = <
   const Name extends string,
   const Values extends readonly [StateValue, ...StateValue[]],
   Root = unknown

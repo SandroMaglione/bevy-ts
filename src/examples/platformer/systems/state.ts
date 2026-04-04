@@ -6,7 +6,7 @@ import { LevelEntityQuery, PlayerReadQuery } from "../queries.ts"
 import { Game, InputState, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
-export const QueueLossSystem = Game.System.define(
+export const QueueLossSystem = Game.System(
   "Platformer/QueueLoss",
   {
     when: [Game.Condition.inState(SessionState, "Playing")],
@@ -37,7 +37,7 @@ export const QueueLossSystem = Game.System.define(
     })
 )
 
-export const QueueRestartSystem = Game.System.define(
+export const QueueRestartSystem = Game.System(
   "Platformer/QueueRestart",
   {
     when: [Game.Condition.inState(SessionState, "Lost")],
@@ -56,7 +56,7 @@ export const QueueRestartSystem = Game.System.define(
     })
 )
 
-export const ResetWorldResourcesOnPlayingEnterSystem = Game.System.define(
+export const ResetWorldResourcesOnPlayingEnterSystem = Game.System(
   "Platformer/ResetWorldResourcesOnPlayingEnter",
   {
     resources: {
@@ -71,7 +71,7 @@ export const ResetWorldResourcesOnPlayingEnterSystem = Game.System.define(
     })
 )
 
-export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System.define(
+export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
   "Platformer/DespawnLevelEntitiesOnPlayingEnter",
   {
     queries: {
@@ -86,7 +86,7 @@ export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System.define(
     })
 )
 
-export const SpawnWorldOnPlayingEnterSystem = Game.System.define(
+export const SpawnWorldOnPlayingEnterSystem = Game.System(
   "Platformer/SpawnWorldOnPlayingEnter",
   {},
   ({ commands }) =>

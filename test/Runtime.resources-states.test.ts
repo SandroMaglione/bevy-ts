@@ -8,13 +8,13 @@ import * as System from "../src/system.ts"
 import { readResourceValue, readStateValue } from "./utils/fixtures.ts"
 import * as Result from "../src/Result.ts"
 
-const Time = Descriptor.defineResource<number>()("Time")
-const Counter = Descriptor.defineResource<number>()("Counter")
-const Phase = Descriptor.defineState<"Boot" | "Running">()("Phase")
-const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
-const PrefixedLogger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("RuntimeResources/Logger")
-const Viewport = Descriptor.defineConstructedResource(Size2)("Viewport")
-const Camera = Descriptor.defineConstructedState(Vector2)("Camera")
+const Time = Descriptor.Resource<number>()("Time")
+const Counter = Descriptor.Resource<number>()("Counter")
+const Phase = Descriptor.State<"Boot" | "Running">()("Phase")
+const Logger = Descriptor.Service<{ readonly log: (message: string) => void }>()("Logger")
+const PrefixedLogger = Descriptor.Service<{ readonly log: (message: string) => void }>()("RuntimeResources/Logger")
+const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
+const Camera = Descriptor.ConstructedState(Vector2)("Camera")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -61,7 +61,7 @@ describe("Runtime resources and states", () => {
   })
 
   it("persists resource writes across updates", () => {
-    const increment = System.define(
+    const increment = System.System(
       "RuntimeResources/Increment",
       {
         schema,
@@ -75,7 +75,7 @@ describe("Runtime resources and states", () => {
         })
     )
 
-    const schedule = Schedule.define(increment)
+    const schedule = Schedule.Schedule(increment)
 
     const runtime = makeRuntime()
     runtime.runSchedule(schedule)
@@ -85,7 +85,7 @@ describe("Runtime resources and states", () => {
   })
 
   it("persists state writes across updates", () => {
-    const setRunning = System.define(
+    const setRunning = System.System(
       "RuntimeResources/SetRunning",
       {
         schema,
@@ -100,13 +100,13 @@ describe("Runtime resources and states", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(setRunning))
+    runtime.runSchedule(Schedule.Schedule(setRunning))
 
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
   })
 
   it("setResult and updateResult only write successful values", () => {
-    const applyValidatedWrites = System.define(
+    const applyValidatedWrites = System.System(
       "RuntimeResources/ApplyValidatedWrites",
       {
         schema,
@@ -134,14 +134,14 @@ describe("Runtime resources and states", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(applyValidatedWrites))
+    runtime.runSchedule(Schedule.Schedule(applyValidatedWrites))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(3)
     expect(readStateValue(runtime, schema, Phase)).toBe("Running")
   })
 
   it("setRaw and updateRaw only write successful constructed values", () => {
-    const applyConstructedWrites = System.define(
+    const applyConstructedWrites = System.System(
       "RuntimeResources/ApplyConstructedWrites",
       {
         schema,
@@ -181,7 +181,7 @@ describe("Runtime resources and states", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(applyConstructedWrites))
+    runtime.runSchedule(Schedule.Schedule(applyConstructedWrites))
 
     expect(readResourceValue(runtime, schema, Viewport)).toEqual({ width: 800, height: 450 })
     expect(readStateValue(runtime, schema, Camera)).toEqual({ x: 5, y: 7 })
@@ -289,7 +289,7 @@ describe("Runtime resources and states", () => {
   })
 
   it("lets one system read state and write resources in the same update", () => {
-    const syncFromPhase = System.define(
+    const syncFromPhase = System.System(
       "RuntimeResources/SyncFromPhase",
       {
         schema,
@@ -324,7 +324,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected syncFromPhase runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.define(syncFromPhase))
+    runtime.value.runSchedule(Schedule.Schedule(syncFromPhase))
 
     expect(readResourceValue(runtime.value, schema, Counter)).toBe(1)
   })
@@ -332,7 +332,7 @@ describe("Runtime resources and states", () => {
   it("reads a provided service during schedule execution", () => {
     const seen: Array<string> = []
 
-    const logTime = System.define(
+    const logTime = System.System(
       "RuntimeResources/LogTime",
       {
         schema,
@@ -373,7 +373,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected logger runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.define(logTime))
+    runtime.value.runSchedule(Schedule.Schedule(logTime))
 
     expect(seen).toEqual(["dt=0.25"])
   })
@@ -381,7 +381,7 @@ describe("Runtime resources and states", () => {
   it("resolves provided services from descriptor identity even when the service name is prefixed", () => {
     const seen: Array<string> = []
 
-    const logTime = System.define(
+    const logTime = System.System(
       "RuntimeResources/LogTimePrefixed",
       {
         schema,
@@ -422,7 +422,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected prefixed logger runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.define(logTime))
+    runtime.value.runSchedule(Schedule.Schedule(logTime))
 
     expect(seen).toEqual(["dt=0.125"])
   })

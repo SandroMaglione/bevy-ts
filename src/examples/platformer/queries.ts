@@ -1,6 +1,6 @@
 import { Collider, Game, LevelEntity, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
 
-export const PlayerMovementQuery = Game.Query.define({
+export const PlayerMovementQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     velocity: Game.Query.write(Velocity),
@@ -9,7 +9,7 @@ export const PlayerMovementQuery = Game.Query.define({
   }
 })
 
-export const PlayerReadQuery = Game.Query.define({
+export const PlayerReadQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     velocity: Game.Query.read(Velocity),
@@ -18,14 +18,14 @@ export const PlayerReadQuery = Game.Query.define({
   }
 })
 
-export const PlayerCameraQuery = Game.Query.define({
+export const PlayerCameraQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     player: Game.Query.read(Player)
   }
 })
 
-export const SolidCollisionQuery = Game.Query.define({
+export const SolidCollisionQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     collider: Game.Query.read(Collider),
@@ -33,13 +33,13 @@ export const SolidCollisionQuery = Game.Query.define({
   }
 })
 
-export const LevelEntityQuery = Game.Query.define({
+export const LevelEntityQuery = Game.Query({
   selection: {
     levelEntity: Game.Query.read(LevelEntity)
   }
 })
 
-export const AddedRenderableQuery = Game.Query.define({
+export const AddedRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable)
@@ -47,7 +47,7 @@ export const AddedRenderableQuery = Game.Query.define({
   filters: [Game.Query.added(Renderable)]
 })
 
-export const ChangedRenderableTransformQuery = Game.Query.define({
+export const ChangedRenderableTransformQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable)

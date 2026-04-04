@@ -2,13 +2,13 @@ import { App, Descriptor, Entity, Fx, Schema } from "../src/index.ts"
 import * as Public from "../src/index.ts"
 import { describe, expect, it } from "tstyche"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Time = Descriptor.defineResource<number>()("Time")
-const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
-const TickEvent = Descriptor.defineEvent<{ dt: number }>()("TickEvent")
-const Velocity = Descriptor.defineComponent<{ dx: number; dy: number }>()("Velocity")
-const { relation: ChildOf } = Descriptor.defineHierarchy("ChildOf", "Children")
-const { relation: Targeting } = Descriptor.defineRelation("Targeting", "TargetedBy")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Time = Descriptor.Resource<number>()("Time")
+const Phase = Descriptor.State<"Running" | "Paused">()("Phase")
+const TickEvent = Descriptor.Event<{ dt: number }>()("TickEvent")
+const Velocity = Descriptor.Component<{ dx: number; dy: number }>()("Velocity")
+const { relation: ChildOf } = Descriptor.Hierarchy("ChildOf", "Children")
+const { relation: Targeting } = Descriptor.Relation("Targeting", "TargetedBy")
 
 describe("Schema", () => {
   it("does not export top-level runtime authoring namespaces from the public barrel", () => {
@@ -88,7 +88,7 @@ describe("Schema", () => {
 
     const right = Schema.fragment({
       resources: {
-        DeltaTime: Descriptor.defineResource<number>()("OtherTime")
+        DeltaTime: Descriptor.Resource<number>()("OtherTime")
       }
     })
 
@@ -111,11 +111,11 @@ describe("Schema", () => {
 
     const Game = Schema.bind(schema)
 
-    const MoveSystem = Game.System.define(
+    const MoveSystem = Game.System(
       "Move",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.write(Position)
             }
@@ -134,7 +134,7 @@ describe("Schema", () => {
         })
     )
 
-    const update = Game.Schedule.define(MoveSystem)
+    const update = Game.Schedule(MoveSystem)
 
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services(),
@@ -159,11 +159,11 @@ describe("Schema", () => {
 
     const Game = Schema.bind(schema)
 
-    const ObserveSystem = Game.System.define(
+    const ObserveSystem = Game.System(
       "ObserveOptional",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.optional(Velocity)
@@ -193,7 +193,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule.define(ObserveSystem))
+    App.makeApp(runtime).update(Game.Schedule(ObserveSystem))
   })
 
   it("supports a zero-or-one singleton read without widening successful matches", () => {
@@ -205,14 +205,14 @@ describe("Schema", () => {
     }))
 
     const Game = Schema.bind(schema)
-    const MovingQuery = Game.Query.define({
+    const MovingQuery = Game.Query({
       selection: {
         position: Game.Query.write(Position),
         velocity: Game.Query.read(Velocity)
       }
     })
 
-    const ObserveSystem = Game.System.define(
+    const ObserveSystem = Game.System(
       "ObserveSingleOptional",
       {
         queries: {
@@ -244,7 +244,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule.define(ObserveSystem))
+    App.makeApp(runtime).update(Game.Schedule(ObserveSystem))
   })
 
   it("rejects non-component descriptors in query selection and structural filters", () => {
@@ -263,7 +263,7 @@ describe("Schema", () => {
     Game.Query.read(Time)
     // @ts-expect-error!
     Game.Query.optional(Time)
-    Game.Query.define({
+    Game.Query({
       selection: {
         position: Game.Query.read(Position)
       },
@@ -272,7 +272,7 @@ describe("Schema", () => {
         Time
       ]
     })
-    Game.Query.define({
+    Game.Query({
       selection: {
         position: Game.Query.read(Position)
       },
@@ -296,11 +296,11 @@ describe("Schema", () => {
 
     const Game = Schema.bind(schema)
 
-    const ObserveLifecycleSystem = Game.System.define(
+    const ObserveLifecycleSystem = Game.System(
       "ObserveLifecycle",
       {
         queries: {
-          moved: Game.Query.define({
+          moved: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.optional(Velocity)
@@ -334,7 +334,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    const schedule = Game.Schedule.define(Game.Schedule.updateLifecycle(), ObserveLifecycleSystem)
+    const schedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveLifecycleSystem)
 
     runtime.runSchedule(schedule)
   })
@@ -378,11 +378,11 @@ describe("Schema", () => {
     const GameA = Schema.bind(schemaA)
     const GameB = Schema.bind(schemaB)
 
-    const SystemA = GameA.System.define(
+    const SystemA = GameA.System(
       "A",
       {
         queries: {
-          moving: GameA.Query.define({
+          moving: GameA.Query({
             selection: {
               position: GameA.Query.read(Position)
             }
@@ -392,11 +392,11 @@ describe("Schema", () => {
       () => Fx.sync<undefined, any>(() => undefined)
     )
 
-    const SystemB = GameB.System.define(
+    const SystemB = GameB.System(
       "B",
       {
         queries: {
-          moving: GameB.Query.define({
+          moving: GameB.Query({
             selection: {
               velocity: GameB.Query.read(Velocity)
             }
@@ -406,7 +406,7 @@ describe("Schema", () => {
       () => Fx.sync<undefined, any>(() => undefined)
     )
 
-    type GameBSystem = Parameters<typeof GameB.Schedule.define>[number]
+    type GameBSystem = Parameters<typeof GameB.Schedule>[number]
     // @ts-expect-error!
     const _invalidSystem: GameBSystem = SystemA
 
@@ -417,13 +417,13 @@ describe("Schema", () => {
       }
     })
 
-    const scheduleB = GameB.Schedule.define(SystemB)
+    const scheduleB = GameB.Schedule(SystemB)
 
     // @ts-expect-error!
     runtimeA.runSchedule(scheduleB)
 
-    const scheduleA = GameA.Schedule.define(SystemA)
-    type GameAScheduleEntry = Parameters<typeof GameA.Schedule.define>[number]
+    const scheduleA = GameA.Schedule(SystemA)
+    type GameAScheduleEntry = Parameters<typeof GameA.Schedule>[number]
 
     scheduleA
 
@@ -445,7 +445,7 @@ describe("Schema", () => {
     const Game = Schema.bind(schema)
     const entityId = Entity.makeEntityId<typeof schema, typeof Game.schema>(1)
 
-    const query = Game.Query.define({
+    const query = Game.Query({
       selection: {
         parent: Game.Query.readRelation(ChildOf),
         children: Game.Query.optionalRelated(ChildOf),
@@ -460,7 +460,7 @@ describe("Schema", () => {
       readonly target: import("../src/relation.ts").OptionalRelationReadAccess<typeof Targeting, typeof schema, typeof Game.schema>
     }, readonly [], readonly [], readonly [], readonly [typeof ChildOf], readonly [], readonly [], readonly [], typeof Game.schema>>()
 
-    const ObserveSystem = Game.System.define(
+    const ObserveSystem = Game.System(
       "ObserveRelations",
       {
         relationFailures: {
@@ -529,7 +529,7 @@ describe("Schema", () => {
 
   it("rejects undeclared query result fields across system and lookup query-match surfaces", () => {
     const Root = Schema.defineRoot("ExactQueryRoot")
-    const Tagged = Descriptor.defineComponent<{ readonly kind: "tagged" }>()("Tagged")
+    const Tagged = Descriptor.Component<{ readonly kind: "tagged" }>()("Tagged")
 
     const schema = Schema.build(Schema.fragment({
       components: {
@@ -545,14 +545,14 @@ describe("Schema", () => {
     const Game = Schema.bind(schema, Root)
     const entityId = Entity.makeEntityId<typeof schema, typeof Root>(1)
 
-    const CameraTargetQuery = Game.Query.define({
+    const CameraTargetQuery = Game.Query({
       selection: {
         position: Game.Query.read(Position),
         tagged: Game.Query.read(Tagged)
       }
     })
 
-    const ObserveSystem = Game.System.define(
+    const ObserveSystem = Game.System(
       "ObserveExactQueryMatches",
       {
         queries: {
@@ -621,7 +621,7 @@ describe("Schema", () => {
 
   it("supports durable handles with explicit roots and checked lookup resolution", () => {
     const Root = Schema.defineRoot("HandleRoot")
-    const Target = Descriptor.defineComponent<{
+    const Target = Descriptor.Component<{
       target: Entity.Handle<typeof Root, typeof Position> | null
     }>()("Target")
 
@@ -634,20 +634,20 @@ describe("Schema", () => {
 
     const Game = Schema.bind(schema, Root)
 
-    const PositionQuery = Game.Query.define({
+    const PositionQuery = Game.Query({
       selection: {
         position: Game.Query.read(Position)
       }
     })
 
-    const TargetQuery = Game.Query.define({
+    const TargetQuery = Game.Query({
       selection: {
         target: Game.Query.read(Target),
         position: Game.Query.read(Position)
       }
     })
 
-    const ObserveSystem = Game.System.define(
+    const ObserveSystem = Game.System(
       "ObserveHandles",
       {
         queries: {
@@ -676,7 +676,7 @@ describe("Schema", () => {
             const fromRefQualified = Game.Entity.handleAsFrom(Position, match.entity)
             expect(fromRefQualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
 
-            const WithQuery = Game.Query.define({
+            const WithQuery = Game.Query({
               selection: {
                 target: Game.Query.read(Target)
               },
@@ -688,7 +688,7 @@ describe("Schema", () => {
             // @ts-expect-error!
             lookup.get(current, PositionQuery)
 
-            const WrongQuery = Game.Query.define({
+            const WrongQuery = Game.Query({
               selection: {
                 target: Game.Query.read(Target)
               }
@@ -697,7 +697,7 @@ describe("Schema", () => {
             // @ts-expect-error!
             lookup.getHandle(current, WrongQuery)
 
-            const OptionalOnlyQuery = Game.Query.define({
+            const OptionalOnlyQuery = Game.Query({
               selection: {
                 target: Game.Query.read(Target),
                 position: Game.Query.optional(Position)
@@ -707,7 +707,7 @@ describe("Schema", () => {
             // @ts-expect-error!
             lookup.getHandle(current, OptionalOnlyQuery)
 
-            const RelatedOnlyQuery = Game.Query.define({
+            const RelatedOnlyQuery = Game.Query({
               selection: {
                 target: Game.Query.read(Target)
               },
@@ -717,7 +717,7 @@ describe("Schema", () => {
             // @ts-expect-error!
             lookup.getHandle(current, RelatedOnlyQuery)
 
-            const LifecycleOnlyQuery = Game.Query.define({
+            const LifecycleOnlyQuery = Game.Query({
               selection: {
                 target: Game.Query.read(Target)
               },
@@ -735,8 +735,8 @@ describe("Schema", () => {
 
   it("supports pre-bind typed feature composition with structural dependencies", () => {
     const Root = Schema.defineRoot("FeatureRoot")
-    const Health = Descriptor.defineComponent<{ current: number }>()("Health")
-    const Damage = Descriptor.defineEvent<{ amount: number }>()("Damage")
+    const Health = Descriptor.Component<{ current: number }>()("Health")
+    const Damage = Descriptor.Event<{ amount: number }>()("Damage")
 
     const Core = Schema.Feature.define("Core", {
       schema: Schema.fragment({
@@ -745,7 +745,7 @@ describe("Schema", () => {
         }
       }),
       build: (Game) => {
-        const Tick = Game.System.define(
+        const Tick = Game.System(
           "Feature/CoreTick",
           {
             resources: {
@@ -759,7 +759,7 @@ describe("Schema", () => {
         )
 
         return {
-          update: [Game.Schedule.define(Tick)]
+          update: [Game.Schedule(Tick)]
         }
       }
     })
@@ -775,11 +775,11 @@ describe("Schema", () => {
       }),
       requires: [Core] as const,
       build: (Game) => {
-        const ApplyDamage = Game.System.define(
+        const ApplyDamage = Game.System(
           "Feature/ApplyDamage",
           {
             queries: {
-              units: Game.Query.define({
+              units: Game.Query({
                 selection: {
                   health: Game.Query.write(Health)
                 }
@@ -803,7 +803,7 @@ describe("Schema", () => {
         )
 
         return {
-          update: [Game.Schedule.define(ApplyDamage)]
+          update: [Game.Schedule(ApplyDamage)]
         }
       }
     })

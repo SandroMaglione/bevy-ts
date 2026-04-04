@@ -9,7 +9,7 @@ import {
   Wall
 } from "./schema.ts"
 
-export const PlayerMovementQuery = Game.Query.define({
+export const PlayerMovementQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     velocity: Game.Query.write(Velocity),
@@ -18,21 +18,21 @@ export const PlayerMovementQuery = Game.Query.define({
   }
 })
 
-export const PlayerVelocityQuery = Game.Query.define({
+export const PlayerVelocityQuery = Game.Query({
   selection: {
     velocity: Game.Query.read(Velocity),
     player: Game.Query.read(Player)
   }
 })
 
-export const PlayerCameraQuery = Game.Query.define({
+export const PlayerCameraQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     player: Game.Query.read(Player)
   }
 })
 
-export const WallCollisionQuery = Game.Query.define({
+export const WallCollisionQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     collider: Game.Query.read(Collider),
@@ -40,7 +40,7 @@ export const WallCollisionQuery = Game.Query.define({
   }
 })
 
-export const CollectableQuery = Game.Query.define({
+export const CollectableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     collider: Game.Query.read(Collider),
@@ -48,7 +48,7 @@ export const CollectableQuery = Game.Query.define({
   }
 })
 
-export const AddedRenderableQuery = Game.Query.define({
+export const AddedRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable)
@@ -56,7 +56,7 @@ export const AddedRenderableQuery = Game.Query.define({
   filters: [Game.Query.added(Renderable)]
 })
 
-export const ChangedRenderableTransformQuery = Game.Query.define({
+export const ChangedRenderableTransformQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable)
@@ -64,14 +64,14 @@ export const ChangedRenderableTransformQuery = Game.Query.define({
   filters: [Game.Query.changed(Position)]
 })
 
-export const PlayerRenderQuery = Game.Query.define({
+export const PlayerRenderQuery = Game.Query({
   selection: {
     renderable: Game.Query.read(Renderable),
     player: Game.Query.read(Player)
   }
 })
 
-export const PickupRenderQuery = Game.Query.define({
+export const PickupRenderQuery = Game.Query({
   selection: {
     collectable: Game.Query.read(Collectable),
     pickup: Game.Query.read(Renderable)

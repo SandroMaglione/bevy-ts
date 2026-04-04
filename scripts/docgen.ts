@@ -964,6 +964,18 @@ export const extractExampleApiUsages = (content: string): ReadonlyArray<string> 
     usages.push(`${moduleSlug}.${member}`)
   }
 
+  for (const match of content.matchAll(/\bGame\.(Query|Schedule|StateMachine|System)\s*\(/g)) {
+    const namespace = match[1]
+    if (!namespace) {
+      continue
+    }
+    const moduleSlug = BOUND_NAMESPACE_TO_MODULE_SLUG[namespace]
+    if (!moduleSlug) {
+      continue
+    }
+    usages.push(`${moduleSlug}.${namespace}`)
+  }
+
   for (const match of content.matchAll(/\b(App|Definition|Descriptor|Entity|Result|Schema)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
     const namespace = match[1]
     const member = match[2]

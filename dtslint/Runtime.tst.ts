@@ -6,13 +6,13 @@ import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { describe, expect, it } from "tstyche"
 
-const Time = Descriptor.defineResource<number>()("Time")
-const Counter = Descriptor.defineResource<number>()("Counter")
-const Phase = Descriptor.defineState<"Running" | "Paused">()("Phase")
-const Viewport = Descriptor.defineConstructedResource(Size2)("Viewport")
-const Camera = Descriptor.defineConstructedState(Vector2)("Camera")
-const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("Logger")
-const PrefixedLogger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("RuntimeTypes/Logger")
+const Time = Descriptor.Resource<number>()("Time")
+const Counter = Descriptor.Resource<number>()("Counter")
+const Phase = Descriptor.State<"Running" | "Paused">()("Phase")
+const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
+const Camera = Descriptor.ConstructedState(Vector2)("Camera")
+const Logger = Descriptor.Service<{ readonly log: (message: string) => void }>()("Logger")
+const PrefixedLogger = Descriptor.Service<{ readonly log: (message: string) => void }>()("RuntimeTypes/Logger")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -26,7 +26,7 @@ const schema = Schema.build(Schema.fragment({
   }
 }))
 
-const ResourceSystem = System.define(
+const ResourceSystem = System.System(
   "RuntimeTypes/Resource",
   {
     schema,
@@ -38,7 +38,7 @@ const ResourceSystem = System.define(
     Fx.sync(() => resources.time.get())
 )
 
-const StateSystem = System.define(
+const StateSystem = System.System(
   "RuntimeTypes/State",
   {
     schema,
@@ -50,7 +50,7 @@ const StateSystem = System.define(
     Fx.sync(() => states.phase.get())
 )
 
-const ServiceSystem = System.define(
+const ServiceSystem = System.System(
   "RuntimeTypes/Service",
   {
     schema,
@@ -64,7 +64,7 @@ const ServiceSystem = System.define(
     })
 )
 
-const PrefixedServiceSystem = System.define(
+const PrefixedServiceSystem = System.System(
   "RuntimeTypes/PrefixedService",
   {
     schema,
@@ -78,13 +78,13 @@ const PrefixedServiceSystem = System.define(
     })
 )
 
-const resourceSchedule = Schedule.define(ResourceSystem)
+const resourceSchedule = Schedule.Schedule(ResourceSystem)
 
-const stateSchedule = Schedule.define(StateSystem)
+const stateSchedule = Schedule.Schedule(StateSystem)
 
-const serviceSchedule = Schedule.define(ServiceSystem)
+const serviceSchedule = Schedule.Schedule(ServiceSystem)
 
-const prefixedServiceSchedule = Schedule.define(PrefixedServiceSystem)
+const prefixedServiceSchedule = Schedule.Schedule(PrefixedServiceSystem)
 
 describe("Runtime", () => {
   it("accepts initialization keyed by schema property names", () => {
@@ -346,9 +346,9 @@ describe("Runtime", () => {
       schema: Schema.fragment({}),
       requires: [Core] as const,
       build: (Game) => {
-        const Mode = Game.StateMachine.define("Mode", ["Idle", "Live"] as const)
+        const Mode = Game.StateMachine("Mode", ["Idle", "Live"] as const)
 
-        const update = Game.System.define(
+        const update = Game.System(
           "RuntimeTypes/FeatureMode",
           {
             resources: {
@@ -377,7 +377,7 @@ describe("Runtime", () => {
           machines: {
             Mode
           },
-          update: [Game.Schedule.define(update)]
+          update: [Game.Schedule(update)]
         }
       }
     })

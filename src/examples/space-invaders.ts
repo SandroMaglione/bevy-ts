@@ -49,31 +49,31 @@ type MatterHostValue = {
   bodies: Map<number, Matter.Body>
 }
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("SpaceInvaders/Position")
-const Velocity = Descriptor.defineComponent<{ vx: number; vy: number; speed: number }>()("SpaceInvaders/Velocity")
-const RenderBody = Descriptor.defineComponent<RenderBodyValue>()("SpaceInvaders/RenderBody")
-const Player = Descriptor.defineComponent<{}>()("SpaceInvaders/Player")
-const Enemy = Descriptor.defineComponent<{ health: number }>()("SpaceInvaders/Enemy")
-const Bullet = Descriptor.defineComponent<{ damage: number }>()("SpaceInvaders/Bullet")
-const DescentPattern = Descriptor.defineComponent<DescentPatternValue>()("SpaceInvaders/DescentPattern")
+const Position = Descriptor.Component<{ x: number; y: number }>()("SpaceInvaders/Position")
+const Velocity = Descriptor.Component<{ vx: number; vy: number; speed: number }>()("SpaceInvaders/Velocity")
+const RenderBody = Descriptor.Component<RenderBodyValue>()("SpaceInvaders/RenderBody")
+const Player = Descriptor.Component<{}>()("SpaceInvaders/Player")
+const Enemy = Descriptor.Component<{ health: number }>()("SpaceInvaders/Enemy")
+const Bullet = Descriptor.Component<{ damage: number }>()("SpaceInvaders/Bullet")
+const DescentPattern = Descriptor.Component<DescentPatternValue>()("SpaceInvaders/DescentPattern")
 
-const FrameDelta = Descriptor.defineResource<number>()("SpaceInvaders/FrameDelta")
-const DeltaMilliseconds = Descriptor.defineResource<number>()("SpaceInvaders/DeltaMilliseconds")
-const ElapsedFrames = Descriptor.defineResource<number>()("SpaceInvaders/ElapsedFrames")
-const EnemySpawnProgress = Descriptor.defineResource<number>()("SpaceInvaders/EnemySpawnProgress")
-const ShootCooldown = Descriptor.defineResource<number>()("SpaceInvaders/ShootCooldown")
+const FrameDelta = Descriptor.Resource<number>()("SpaceInvaders/FrameDelta")
+const DeltaMilliseconds = Descriptor.Resource<number>()("SpaceInvaders/DeltaMilliseconds")
+const ElapsedFrames = Descriptor.Resource<number>()("SpaceInvaders/ElapsedFrames")
+const EnemySpawnProgress = Descriptor.Resource<number>()("SpaceInvaders/EnemySpawnProgress")
+const ShootCooldown = Descriptor.Resource<number>()("SpaceInvaders/ShootCooldown")
 
-const DestroyEnemy = Descriptor.defineEvent<{
+const DestroyEnemy = Descriptor.Event<{
   bullet: Entity.Handle<typeof Root, typeof Bullet>
   enemy: Entity.Handle<typeof Root, typeof Enemy>
 }>()("SpaceInvaders/DestroyEnemy")
 
-const InputManager = Descriptor.defineService<{
+const InputManager = Descriptor.Service<{
   readonly isKeyPressed: (keyCode: "ArrowLeft" | "ArrowRight" | "Space") => boolean
 }>()("SpaceInvaders/InputManager")
 
-const PixiHost = Descriptor.defineService<PixiHostValue>()("SpaceInvaders/PixiHost")
-const MatterHost = Descriptor.defineService<MatterHostValue>()("SpaceInvaders/MatterHost")
+const PixiHost = Descriptor.Service<PixiHostValue>()("SpaceInvaders/PixiHost")
+const MatterHost = Descriptor.Service<MatterHostValue>()("SpaceInvaders/MatterHost")
 
 const schema = Schema.build(
   Schema.fragment({
@@ -101,28 +101,28 @@ const schema = Schema.build(
 
 const Game = Schema.bind(schema, Root)
 
-const PlayerVelocityQuery = Game.Query.define({
+const PlayerVelocityQuery = Game.Query({
   selection: {
     player: Game.Query.read(Player),
     velocity: Game.Query.write(Velocity)
   }
 })
 
-const PlayerPositionQuery = Game.Query.define({
+const PlayerPositionQuery = Game.Query({
   selection: {
     player: Game.Query.read(Player),
     position: Game.Query.read(Position)
   }
 })
 
-const MovingQuery = Game.Query.define({
+const MovingQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
     velocity: Game.Query.read(Velocity)
   }
 })
 
-const EnemyDescentQuery = Game.Query.define({
+const EnemyDescentQuery = Game.Query({
   selection: {
     enemy: Game.Query.read(Enemy),
     position: Game.Query.write(Position),
@@ -130,7 +130,7 @@ const EnemyDescentQuery = Game.Query.define({
   }
 })
 
-const PlayerClampQuery = Game.Query.define({
+const PlayerClampQuery = Game.Query({
   selection: {
     player: Game.Query.read(Player),
     position: Game.Query.write(Position),
@@ -138,40 +138,40 @@ const PlayerClampQuery = Game.Query.define({
   }
 })
 
-const ColliderQuery = Game.Query.define({
+const ColliderQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderBody: Game.Query.read(RenderBody)
   }
 })
 
-const BulletCollisionQuery = Game.Query.define({
+const BulletCollisionQuery = Game.Query({
   selection: {
     bullet: Game.Query.read(Bullet)
   }
 })
 
-const EnemyCollisionQuery = Game.Query.define({
+const EnemyCollisionQuery = Game.Query({
   selection: {
     enemy: Game.Query.read(Enemy)
   }
 })
 
-const BulletCullingQuery = Game.Query.define({
+const BulletCullingQuery = Game.Query({
   selection: {
     bullet: Game.Query.read(Bullet),
     position: Game.Query.read(Position)
   }
 })
 
-const EnemyCullingQuery = Game.Query.define({
+const EnemyCullingQuery = Game.Query({
   selection: {
     enemy: Game.Query.read(Enemy),
     position: Game.Query.read(Position)
   }
 })
 
-const AddedRenderableQuery = Game.Query.define({
+const AddedRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderBody: Game.Query.read(RenderBody)
@@ -179,7 +179,7 @@ const AddedRenderableQuery = Game.Query.define({
   filters: [Game.Query.added(RenderBody)]
 })
 
-const ChangedRenderableTransformQuery = Game.Query.define({
+const ChangedRenderableTransformQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderBody: Game.Query.read(RenderBody)
@@ -428,7 +428,7 @@ const createNode = (renderBody: RenderBodyValue): Graphics => {
   return node
 }
 
-const SpawnPlayerSystem = Game.System.define(
+const SpawnPlayerSystem = Game.System(
   "SpaceInvaders/SpawnPlayer",
   {},
   ({ commands }) =>
@@ -437,7 +437,7 @@ const SpawnPlayerSystem = Game.System.define(
     })
 )
 
-const CaptureFrameInputSystem = Game.System.define(
+const CaptureFrameInputSystem = Game.System(
   "SpaceInvaders/CaptureFrameInput",
   {
     resources: {
@@ -457,7 +457,7 @@ const CaptureFrameInputSystem = Game.System.define(
     })
 )
 
-const PlayerInputSystem = Game.System.define(
+const PlayerInputSystem = Game.System(
   "SpaceInvaders/PlayerInput",
   {
     queries: {
@@ -485,7 +485,7 @@ const PlayerInputSystem = Game.System.define(
     })
 )
 
-const ShootingSystem = Game.System.define(
+const ShootingSystem = Game.System(
   "SpaceInvaders/Shooting",
   {
     queries: {
@@ -525,7 +525,7 @@ const ShootingSystem = Game.System.define(
     })
 )
 
-const EnemySpawnSystem = Game.System.define(
+const EnemySpawnSystem = Game.System(
   "SpaceInvaders/EnemySpawn",
   {
     resources: {
@@ -553,7 +553,7 @@ const EnemySpawnSystem = Game.System.define(
     })
 )
 
-const MovementSystem = Game.System.define(
+const MovementSystem = Game.System(
   "SpaceInvaders/Movement",
   {
     queries: {
@@ -576,7 +576,7 @@ const MovementSystem = Game.System.define(
     })
 )
 
-const ClampPlayerBoundsSystem = Game.System.define(
+const ClampPlayerBoundsSystem = Game.System(
   "SpaceInvaders/ClampPlayerBounds",
   {
     queries: {
@@ -601,7 +601,7 @@ const ClampPlayerBoundsSystem = Game.System.define(
     })
 )
 
-const EnemyDescentSystem = Game.System.define(
+const EnemyDescentSystem = Game.System(
   "SpaceInvaders/EnemyDescent",
   {
     queries: {
@@ -627,7 +627,7 @@ const EnemyDescentSystem = Game.System.define(
     })
 )
 
-const CreateMatterBodiesSystem = Game.System.define(
+const CreateMatterBodiesSystem = Game.System(
   "SpaceInvaders/CreateMatterBodies",
   {
     queries: {
@@ -650,7 +650,7 @@ const CreateMatterBodiesSystem = Game.System.define(
     })
 )
 
-const SyncMatterBodyTransformsSystem = Game.System.define(
+const SyncMatterBodyTransformsSystem = Game.System(
   "SpaceInvaders/SyncMatterBodyTransforms",
   {
     queries: {
@@ -686,7 +686,7 @@ const SyncMatterBodyTransformsSystem = Game.System.define(
     })
 )
 
-const DestroyMatterBodiesSystem = Game.System.define(
+const DestroyMatterBodiesSystem = Game.System(
   "SpaceInvaders/DestroyMatterBodies",
   {
     removed: {
@@ -711,7 +711,7 @@ const DestroyMatterBodiesSystem = Game.System.define(
     })
 )
 
-const EnemyBulletCollisionSystem = Game.System.define(
+const EnemyBulletCollisionSystem = Game.System(
   "SpaceInvaders/EnemyBulletCollision",
   {
     queries: {
@@ -768,7 +768,7 @@ const EnemyBulletCollisionSystem = Game.System.define(
     })
 )
 
-const EnemyDestroySystem = Game.System.define(
+const EnemyDestroySystem = Game.System(
   "SpaceInvaders/EnemyDestroy",
   {
     events: {
@@ -797,7 +797,7 @@ const EnemyDestroySystem = Game.System.define(
     })
 )
 
-const CullingSystem = Game.System.define(
+const CullingSystem = Game.System(
   "SpaceInvaders/Culling",
   {
     queries: {
@@ -825,7 +825,7 @@ const CullingSystem = Game.System.define(
     })
 )
 
-const CreatePixiNodesSystem = Game.System.define(
+const CreatePixiNodesSystem = Game.System(
   "SpaceInvaders/CreatePixiNodes",
   {
     queries: {
@@ -852,7 +852,7 @@ const CreatePixiNodesSystem = Game.System.define(
     })
 )
 
-const SyncPixiTransformsSystem = Game.System.define(
+const SyncPixiTransformsSystem = Game.System(
   "SpaceInvaders/SyncPixiTransforms",
   {
     queries: {
@@ -879,7 +879,7 @@ const SyncPixiTransformsSystem = Game.System.define(
     })
 )
 
-const DestroyPixiNodesSystem = Game.System.define(
+const DestroyPixiNodesSystem = Game.System(
   "SpaceInvaders/DestroyPixiNodes",
   {
     removed: {
@@ -904,15 +904,15 @@ const DestroyPixiNodesSystem = Game.System.define(
     })
 )
 
-const gameplaySetupSchedule = Game.Schedule.define(SpawnPlayerSystem)
+const gameplaySetupSchedule = Game.Schedule(SpawnPlayerSystem)
 
-const setupSchedule = Game.Schedule.define(
+const setupSchedule = Game.Schedule(
   gameplaySetupSchedule,
   CreateMatterBodiesSystem,
   CreatePixiNodesSystem
 )
 
-const updateSchedule = Game.Schedule.define(
+const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   PlayerInputSystem,
   ShootingSystem,

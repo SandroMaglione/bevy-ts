@@ -4,7 +4,7 @@ import { AddedRenderableQuery, ChangedRenderableTransformQuery } from "../querie
 import { Game, PlatformerHost, Renderable } from "../schema.ts"
 import { destroyRenderNode, ensureNode } from "../render/nodes.ts"
 
-export const DestroyRenderNodesSystem = Game.System.define(
+export const DestroyRenderNodesSystem = Game.System(
   "Platformer/DestroyRenderNodes",
   {
     removed: {
@@ -45,7 +45,7 @@ export const DestroyRenderNodesSystem = Game.System.define(
     })
 )
 
-export const CreateRenderNodesSystem = Game.System.define(
+export const CreateRenderNodesSystem = Game.System(
   "Platformer/CreateRenderNodes",
   {
     queries: {
@@ -69,7 +69,7 @@ export const CreateRenderNodesSystem = Game.System.define(
     })
 )
 
-export const SyncRenderableTransformsSystem = Game.System.define(
+export const SyncRenderableTransformsSystem = Game.System(
   "Platformer/SyncRenderableTransforms",
   {
     queries: {

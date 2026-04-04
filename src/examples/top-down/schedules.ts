@@ -21,18 +21,18 @@ import {
 } from "./systems/index.ts"
 import { Game } from "./schema.ts"
 
-const animationSchedule = Game.Schedule.define(
+const animationSchedule = Game.Schedule(
   ResetAnimationClockSystem,
   AdvanceAnimationClockSystem,
   ResolveCurrentPlayerFrameSystem
 )
 
-const cameraSyncSchedule = Game.Schedule.define(
+const cameraSyncSchedule = Game.Schedule(
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem
 )
 
-const renderSyncSchedule = Game.Schedule.define(
+const renderSyncSchedule = Game.Schedule(
   Game.Schedule.updateLifecycle(),
   DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
@@ -42,7 +42,7 @@ const renderSyncSchedule = Game.Schedule.define(
   SyncHudSystem
 )
 
-const gameplaySchedule = Game.Schedule.define(
+const gameplaySchedule = Game.Schedule(
   CaptureFrameContextSystem,
   PlanPlayerVelocitySystem,
   MovePlayerSystem,
@@ -54,7 +54,7 @@ const gameplaySchedule = Game.Schedule.define(
   Game.Schedule.applyStateTransitions()
 )
 
-export const setupSchedule = Game.Schedule.define(
+export const setupSchedule = Game.Schedule(
   SetupWorldSystem,
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
@@ -68,7 +68,7 @@ export const setupSchedule = Game.Schedule.define(
   SyncHudSystem
 )
 
-export const updateSchedule = Game.Schedule.define(
+export const updateSchedule = Game.Schedule(
   gameplaySchedule,
   animationSchedule,
   cameraSyncSchedule,

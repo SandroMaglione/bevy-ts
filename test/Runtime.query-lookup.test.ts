@@ -7,16 +7,16 @@ import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-const Hidden = Descriptor.defineComponent<{ hidden: true }>()("Hidden")
-const Count = Descriptor.defineResource<number>()("Count")
-const LastX = Descriptor.defineResource<number>()("LastX")
-const LastError = Descriptor.defineResource<string>()("LastError")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
+const Hidden = Descriptor.Component<{ hidden: true }>()("Hidden")
+const Count = Descriptor.Resource<number>()("Count")
+const LastX = Descriptor.Resource<number>()("LastX")
+const LastError = Descriptor.Resource<string>()("LastError")
 const HandleRoot = Schema.defineRoot("RuntimeQueryHandle")
-const StoredHandle = Descriptor.defineResource<Entity.Handle<typeof HandleRoot, typeof Position> | null>()("StoredHandle")
-const FollowTarget = Descriptor.defineEvent<{ target: Entity.Handle<typeof HandleRoot, typeof Position> }>()("FollowTarget")
-const Followed = Descriptor.defineComponent<{
+const StoredHandle = Descriptor.Resource<Entity.Handle<typeof HandleRoot, typeof Position> | null>()("StoredHandle")
+const FollowTarget = Descriptor.Event<{ target: Entity.Handle<typeof HandleRoot, typeof Position> }>()("FollowTarget")
+const Followed = Descriptor.Component<{
   target: Entity.Handle<typeof HandleRoot, typeof Position> | null
 }>()("Followed")
 
@@ -52,12 +52,12 @@ const makeRuntime = () =>
 
 describe("Runtime query and lookup", () => {
   it("each returns zero matches when nothing satisfies the query", () => {
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/ObserveEmpty",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.read(Position)
             }
@@ -74,18 +74,18 @@ describe("Runtime query and lookup", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(observe))
+    runtime.runSchedule(Schedule.Schedule(observe))
 
     expect(readResourceValue(runtime, schema, Count)).toBe(0)
   })
 
   it("single returns NoEntities when no entity matches", () => {
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/SingleNoEntities",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.read(Position)
             }
@@ -103,13 +103,13 @@ describe("Runtime query and lookup", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(observe))
+    runtime.runSchedule(Schedule.Schedule(observe))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("NoEntities")
   })
 
   it("single returns MultipleEntities when multiple entities match", () => {
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnMultiple",
       {
         schema
@@ -121,12 +121,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/ObserveMultiple",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.read(Position)
             }
@@ -145,20 +145,20 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
   })
 
   it("singleOptional returns undefined when no entity matches", () => {
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/SingleOptionalNoEntities",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.read(Position)
             }
@@ -178,14 +178,14 @@ describe("Runtime query and lookup", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.define(observe))
+    runtime.runSchedule(Schedule.Schedule(observe))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
     expect(readResourceValue(runtime, schema, LastX)).toBe(-1)
   })
 
   it("singleOptional returns the match when exactly one entity matches", () => {
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnOneForSingleOptional",
       {
         schema
@@ -196,12 +196,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/SingleOptionalOneEntity",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.write(Position)
             }
@@ -231,8 +231,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
@@ -240,7 +240,7 @@ describe("Runtime query and lookup", () => {
   })
 
   it("singleOptional returns MultipleEntities when multiple entities match", () => {
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnMultipleForSingleOptional",
       {
         schema
@@ -252,12 +252,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/SingleOptionalMultipleEntities",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.read(Position)
             }
@@ -276,8 +276,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
@@ -286,7 +286,7 @@ describe("Runtime query and lookup", () => {
   it("lookup returns MissingEntity and QueryMismatch for the expected cases", () => {
     let existingId: import("../src/entity.ts").EntityId<typeof schema> | undefined
 
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnOneForLookup",
       {
         schema
@@ -299,7 +299,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/ObserveLookupFailures",
       {
         schema,
@@ -313,12 +313,12 @@ describe("Runtime query and lookup", () => {
             resources.lastError.set("MissingSetup")
             return
           }
-          const missing = lookup.get(Entity.makeEntityId<typeof schema>(9999), Query.define({
+          const missing = lookup.get(Entity.makeEntityId<typeof schema>(9999), Query.Query({
             selection: {
               position: Query.read(Position)
             }
           }))
-          const mismatch = lookup.get(existingId, Query.define({
+          const mismatch = lookup.get(existingId, Query.Query({
             selection: {
               velocity: Query.read(Velocity)
             }
@@ -329,15 +329,15 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity/QueryMismatch")
   })
 
   it("with and without filters refine matching entities", () => {
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnFiltered",
       {
         schema
@@ -354,12 +354,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/ObserveFilters",
       {
         schema,
         queries: {
-          visible: Query.define({
+          visible: Query.Query({
             selection: {
               position: Query.read(Position)
             },
@@ -379,15 +379,15 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })
 
   it("optional component slots do not affect matching and stay explicit in results", () => {
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnOptional",
       {
         schema
@@ -404,12 +404,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/ObserveOptional",
       {
         schema,
         queries: {
-          moving: Query.define({
+          moving: Query.Query({
             selection: {
               position: Query.read(Position),
               velocity: Query.optional(Velocity)
@@ -437,8 +437,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(2)
@@ -448,7 +448,7 @@ describe("Runtime query and lookup", () => {
   it("lookup does not fail when only optional components are missing", () => {
     let existingId: import("../src/entity.ts").EntityId<typeof schema> | undefined
 
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnLookupOptional",
       {
         schema
@@ -461,7 +461,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = System.define(
+    const observe = System.System(
       "RuntimeQuery/ObserveLookupOptional",
       {
         schema,
@@ -477,7 +477,7 @@ describe("Runtime query and lookup", () => {
             return
           }
 
-          const result = lookup.get(existingId, Query.define({
+          const result = lookup.get(existingId, Query.Query({
             selection: {
               position: Query.read(Position),
               velocity: Query.optional(Velocity)
@@ -496,8 +496,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(observe)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("Missing")
@@ -505,7 +505,7 @@ describe("Runtime query and lookup", () => {
   })
 
   it("writable query cells update component values", () => {
-    const spawn = System.define(
+    const spawn = System.System(
       "RuntimeQuery/SpawnWritable",
       {
         schema
@@ -518,12 +518,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const write = System.define(
+    const write = System.System(
       "RuntimeQuery/WriteThroughCell",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.write(Position)
             }
@@ -542,12 +542,12 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const read = System.define(
+    const read = System.System(
       "RuntimeQuery/ReadWrittenCell",
       {
         schema,
         queries: {
-          positions: Query.define({
+          positions: Query.Query({
             selection: {
               position: Query.read(Position)
             }
@@ -566,8 +566,8 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.define(spawn),
-      Schedule.define(write, read)
+      Schedule.Schedule(spawn),
+      Schedule.Schedule(write, read)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(9)
@@ -577,7 +577,7 @@ describe("Runtime query and lookup", () => {
     const Game = Schema.bind(schema, HandleRoot)
     let currentHandle: Entity.Handle<typeof HandleRoot, typeof Position> | null = null
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeQuery/SpawnHandle",
       {},
       ({ commands }) =>
@@ -587,7 +587,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeQuery/ObserveHandle",
       {
         resources: {
@@ -602,7 +602,7 @@ describe("Runtime query and lookup", () => {
             return
           }
 
-          const result = lookup.getHandle(currentHandle, Game.Query.define({
+          const result = lookup.getHandle(currentHandle, Game.Query({
             selection: {
               position: Game.Query.read(Position)
             }
@@ -618,7 +618,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const destroy = Game.System.define(
+    const destroy = Game.System(
       "RuntimeQuery/DestroyHandleTarget",
       {},
       ({ lookup, commands }) =>
@@ -626,7 +626,7 @@ describe("Runtime query and lookup", () => {
           if (!currentHandle) {
             return
           }
-          const result = lookup.getHandle(currentHandle, Game.Query.define({
+          const result = lookup.getHandle(currentHandle, Game.Query({
             selection: {
               position: Game.Query.read(Position)
             }
@@ -648,16 +648,16 @@ describe("Runtime query and lookup", () => {
     })
 
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(5)
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
 
     runtime.tick(
-      Game.Schedule.define(destroy),
-      Game.Schedule.define(observe)
+      Game.Schedule(destroy),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity")
@@ -667,7 +667,7 @@ describe("Runtime query and lookup", () => {
     const Game = Schema.bind(schema, HandleRoot)
     let spawnedTarget: Entity.EntityId<typeof schema, typeof HandleRoot> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeQuery/SpawnStoredHandle",
       {
         resources: {
@@ -686,7 +686,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeQuery/ObserveStoredHandle",
       {
         resources: {
@@ -708,12 +708,12 @@ describe("Runtime query and lookup", () => {
             return
           }
 
-          const resourceResult = lookup.getHandle(resourceHandle, Game.Query.define({
+          const resourceResult = lookup.getHandle(resourceHandle, Game.Query({
             selection: {
               position: Game.Query.read(Position)
             }
           }))
-          const eventResult = lookup.getHandle(eventHandle, Game.Query.define({
+          const eventResult = lookup.getHandle(eventHandle, Game.Query({
             selection: {
               position: Game.Query.read(Position)
             }
@@ -729,7 +729,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const destroy = Game.System.define(
+    const destroy = Game.System(
       "RuntimeQuery/DestroyStoredHandleTarget",
       {},
       ({ commands }) =>
@@ -740,7 +740,7 @@ describe("Runtime query and lookup", () => {
         })
     )
 
-    const emitStored = Game.System.define(
+    const emitStored = Game.System(
       "RuntimeQuery/EmitStoredHandleAgain",
       {
         resources: {
@@ -770,15 +770,15 @@ describe("Runtime query and lookup", () => {
     })
 
     runtime.tick(
-      Game.Schedule.define(spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe)
+      Game.Schedule(spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(24)
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
 
     runtime.tick(
-      Game.Schedule.define(destroy),
-      Game.Schedule.define(emitStored, Game.Schedule.updateEvents(), observe)
+      Game.Schedule(destroy),
+      Game.Schedule(emitStored, Game.Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity/MissingEntity")

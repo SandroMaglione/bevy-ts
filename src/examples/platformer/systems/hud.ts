@@ -4,7 +4,7 @@ import { levelBounds } from "../content.ts"
 import { PlayerReadQuery } from "../queries.ts"
 import { Game, LoseMessage, PlatformerHost, PlayerContacts, SessionState } from "../schema.ts"
 
-export const SyncHudSystem = Game.System.define(
+export const SyncHudSystem = Game.System(
   "Platformer/SyncHud",
   {
     queries: {

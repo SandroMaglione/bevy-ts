@@ -7,23 +7,23 @@ export interface BrowserExampleHandle {
 }
 
 // ECS-owned simulation data.
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()(
+const Position = Descriptor.Component<{ x: number; y: number }>()(
   "Position",
 );
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()(
+const Velocity = Descriptor.Component<{ x: number; y: number }>()(
   "Velocity",
 );
-const Renderable = Descriptor.defineComponent<{ size: number }>()("Renderable");
-const Tint = Descriptor.defineComponent<{ value: number }>()("Tint");
+const Renderable = Descriptor.Component<{ size: number }>()("Renderable");
+const Tint = Descriptor.Component<{ value: number }>()("Tint");
 
 // Per-frame world data captured from the host renderer.
-const DeltaTime = Descriptor.defineResource<number>()("DeltaTime");
-const Viewport = Descriptor.defineResource<{ width: number; height: number }>()(
+const DeltaTime = Descriptor.Resource<number>()("DeltaTime");
+const Viewport = Descriptor.Resource<{ width: number; height: number }>()(
   "Viewport",
 );
 
 // Host-side renderer bridge. ECS owns simulation state; Pixi owns renderer objects.
-const PixiHost = Descriptor.defineService<{
+const PixiHost = Descriptor.Service<{
   readonly application: Application;
   readonly scene: Container;
   readonly sprites: Map<number, Sprite>;
@@ -48,7 +48,7 @@ const pixiSchema = Schema.fragment({
 const schema = Schema.build(pixiSchema);
 const Game = Schema.bind(schema);
 
-const AddedRenderableQuery = Game.Query.define({
+const AddedRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable),
@@ -57,14 +57,14 @@ const AddedRenderableQuery = Game.Query.define({
   filters: [Game.Query.added(Renderable)],
 });
 
-const ChangedPositionQuery = Game.Query.define({
+const ChangedPositionQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
   },
   filters: [Game.Query.changed(Position)],
 });
 
-const SetupSceneSystem = Game.System.define(
+const SetupSceneSystem = Game.System(
   "SetupSceneSystem",
   {
     services: {
@@ -118,7 +118,7 @@ const SetupSceneSystem = Game.System.define(
     }),
 );
 
-const CaptureFrameInputSystem = Game.System.define(
+const CaptureFrameInputSystem = Game.System(
   "CaptureFrameInputSystem",
   {
     resources: {
@@ -139,11 +139,11 @@ const CaptureFrameInputSystem = Game.System.define(
     }),
 );
 
-const IntegrateMotionSystem = Game.System.define(
+const IntegrateMotionSystem = Game.System(
   "IntegrateMotionSystem",
   {
     queries: {
-      moving: Game.Query.define({
+      moving: Game.Query({
         selection: {
           position: Game.Query.write(Position),
           velocity: Game.Query.read(Velocity),
@@ -169,11 +169,11 @@ const IntegrateMotionSystem = Game.System.define(
     }),
 );
 
-const BounceWithinViewportSystem = Game.System.define(
+const BounceWithinViewportSystem = Game.System(
   "BounceWithinViewportSystem",
   {
     queries: {
-      moving: Game.Query.define({
+      moving: Game.Query({
         selection: {
           position: Game.Query.write(Position),
           velocity: Game.Query.write(Velocity),
@@ -241,7 +241,7 @@ const BounceWithinViewportSystem = Game.System.define(
     }),
 );
 
-const CreatePixiSpritesSystem = Game.System.define(
+const CreatePixiSpritesSystem = Game.System(
   "CreatePixiSpritesSystem",
   {
     queries: {
@@ -275,7 +275,7 @@ const CreatePixiSpritesSystem = Game.System.define(
     }),
 );
 
-const SyncPixiTransformsSystem = Game.System.define(
+const SyncPixiTransformsSystem = Game.System(
   "SyncPixiTransformsSystem",
   {
     queries: {
@@ -299,14 +299,14 @@ const SyncPixiTransformsSystem = Game.System.define(
     }),
 );
 
-const setupSchedule = Game.Schedule.define(
+const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateLifecycle(),
   CreatePixiSpritesSystem,
 );
 
-const updateSchedule = Game.Schedule.define(
+const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,

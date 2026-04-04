@@ -21,10 +21,10 @@
 - Internal type optimization is allowed only when the user-facing API stays unchanged and requires no casts or scaffolding.
 
 ```ts
-const A = Game.System.define("A", { schema }, ...)
-const B = Game.System.define("B", { schema, after: [A] }, ...)
+const A = Game.System("A", { schema }, ...)
+const B = Game.System("B", { schema, after: [A] }, ...)
 
-const schedule = Game.Schedule.define({
+const schedule = Game.Schedule({
   systems: [A, B],
   steps: [A, Game.Schedule.applyDeferred(), B]
 })

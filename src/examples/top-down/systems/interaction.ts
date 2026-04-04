@@ -10,7 +10,7 @@ import {
 } from "../schema.ts"
 import { makeEmptyFocusedCollectable } from "../runtime.ts"
 
-export const UpdateFocusedCollectableSystem = Game.System.define(
+export const UpdateFocusedCollectableSystem = Game.System(
   "TopDown/UpdateFocusedCollectable",
   {
     queries: {
@@ -57,7 +57,7 @@ export const UpdateFocusedCollectableSystem = Game.System.define(
     })
 )
 
-export const CollectFocusedCollectableSystem = Game.System.define(
+export const CollectFocusedCollectableSystem = Game.System(
   "TopDown/CollectFocusedCollectable",
   {
     resources: {

@@ -5,7 +5,7 @@ import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
 import { Game, LoseMessage, PlayerContacts } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
-export const SetupWorldSystem = Game.System.define(
+export const SetupWorldSystem = Game.System(
   "Platformer/SetupWorld",
   {
     resources: {

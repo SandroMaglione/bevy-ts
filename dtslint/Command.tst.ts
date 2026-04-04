@@ -3,10 +3,10 @@ import * as Command from "../src/command.ts"
 import * as Vector2 from "../src/Vector2.ts"
 import { describe, expect, it } from "tstyche"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-const Time = Descriptor.defineResource<number>()("Time")
-const SafePosition = Descriptor.defineConstructedComponent(Vector2)("SafePosition")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
+const Time = Descriptor.Resource<number>()("Time")
+const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
 
 const schema = Schema.build(Schema.fragment({
   components: {

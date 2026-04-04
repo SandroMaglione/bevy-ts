@@ -5,10 +5,10 @@ import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Counter = Descriptor.defineResource<number>()("Counter")
-const Log = Descriptor.defineResource<ReadonlyArray<string>>()("Log")
-const Health = Descriptor.defineComponent<{ current: number }>()("Health")
-const BootCount = Descriptor.defineResource<number>()("BootCount")
+const Counter = Descriptor.Resource<number>()("Counter")
+const Log = Descriptor.Resource<ReadonlyArray<string>>()("Log")
+const Health = Descriptor.Component<{ current: number }>()("Health")
+const BootCount = Descriptor.Resource<number>()("BootCount")
 
 const schema = Schema.build(Schema.fragment({
   resources: {
@@ -21,7 +21,7 @@ describe("App", () => {
   it("runs one schedule once through update", () => {
     let captured = -1
 
-    const increment = System.define(
+    const increment = System.System(
       "AppTest/Increment",
       {
         schema,
@@ -35,7 +35,7 @@ describe("App", () => {
         })
     )
 
-    const read = System.define(
+    const read = System.System(
       "AppTest/ReadCounter",
       {
         schema,
@@ -49,9 +49,9 @@ describe("App", () => {
         })
     )
 
-    const updateSchedule = Schedule.define(increment)
+    const updateSchedule = Schedule.Schedule(increment)
 
-    const readSchedule = Schedule.define(read)
+    const readSchedule = Schedule.Schedule(read)
 
     const runtime = Runtime.makeRuntime({
       schema,
@@ -72,7 +72,7 @@ describe("App", () => {
   it("runs multiple schedules in order within one update call", () => {
     let captured: ReadonlyArray<string> = []
 
-    const first = System.define(
+    const first = System.System(
       "AppTest/First",
       {
         schema,
@@ -86,7 +86,7 @@ describe("App", () => {
         })
     )
 
-    const second = System.define(
+    const second = System.System(
       "AppTest/Second",
       {
         schema,
@@ -100,7 +100,7 @@ describe("App", () => {
         })
     )
 
-    const read = System.define(
+    const read = System.System(
       "AppTest/CaptureLog",
       {
         schema,
@@ -114,11 +114,11 @@ describe("App", () => {
         })
     )
 
-    const firstSchedule = Schedule.define(first)
+    const firstSchedule = Schedule.Schedule(first)
 
-    const secondSchedule = Schedule.define(second)
+    const secondSchedule = Schedule.Schedule(second)
 
-    const readSchedule = Schedule.define(read)
+    const readSchedule = Schedule.Schedule(read)
 
     const runtime = Runtime.makeRuntime({
       schema,
@@ -138,7 +138,7 @@ describe("App", () => {
   it("runs bootstrap schedules through the runtime initialization path", () => {
     let captured = -1
 
-    const setup = System.define(
+    const setup = System.System(
       "AppTest/BootstrapSetup",
       {
         schema,
@@ -152,7 +152,7 @@ describe("App", () => {
         })
     )
 
-    const read = System.define(
+    const read = System.System(
       "AppTest/BootstrapRead",
       {
         schema,
@@ -166,9 +166,9 @@ describe("App", () => {
         })
     )
 
-    const setupSchedule = Schedule.define(setup)
+    const setupSchedule = Schedule.Schedule(setup)
 
-    const readSchedule = Schedule.define(read)
+    const readSchedule = Schedule.Schedule(read)
 
     const runtime = Runtime.makeRuntime({
       schema,
@@ -187,7 +187,7 @@ describe("App", () => {
   })
 
   it("repeated update calls accumulate world changes", () => {
-    const increment = System.define(
+    const increment = System.System(
       "AppTest/RepeatedIncrement",
       {
         schema,
@@ -211,7 +211,7 @@ describe("App", () => {
     })
 
     const app = App.makeApp(runtime)
-    const schedule = Schedule.define(increment)
+    const schedule = Schedule.Schedule(increment)
 
     app.update(schedule)
     app.update(schedule)
@@ -233,7 +233,7 @@ describe("App", () => {
         }
       }),
       build: (Game) => {
-        const bootstrap = Game.System.define(
+        const bootstrap = Game.System(
           "Feature/CoreBootstrap",
           {
             resources: {
@@ -249,7 +249,7 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define(bootstrap)]
+          bootstrap: [Game.Schedule(bootstrap)]
         }
       }
     })
@@ -262,7 +262,7 @@ describe("App", () => {
       }),
       requires: [Core] as const,
       build: (Game) => {
-        const increment = Game.System.define(
+        const increment = Game.System(
           "Feature/CombatIncrement",
           {
             resources: {
@@ -277,7 +277,7 @@ describe("App", () => {
             })
         )
 
-        const capture = Game.System.define(
+        const capture = Game.System(
           "Feature/CombatCapture",
           {
             resources: {
@@ -296,8 +296,8 @@ describe("App", () => {
 
         return {
           update: [
-            Game.Schedule.define(increment),
-            Game.Schedule.define(capture)
+            Game.Schedule(increment),
+            Game.Schedule(capture)
           ]
         }
       }
@@ -331,7 +331,7 @@ describe("App", () => {
 
   it("uses selected feature order for aggregated phases and matches manual schedule execution", () => {
     const Root = Schema.defineRoot("FeatureOrderApp")
-    const Trace = Descriptor.defineResource<ReadonlyArray<string>>()("FeatureOrder/Trace")
+    const Trace = Descriptor.Resource<ReadonlyArray<string>>()("FeatureOrder/Trace")
 
     const Core = Schema.Feature.define("Core", {
       schema: Schema.fragment({
@@ -340,7 +340,7 @@ describe("App", () => {
         }
       }),
       build: (Game) => {
-        const bootstrap = Game.System.define(
+        const bootstrap = Game.System(
           "FeatureOrder/CoreBootstrap",
           {
             resources: {
@@ -353,7 +353,7 @@ describe("App", () => {
             })
         )
 
-        const update = Game.System.define(
+        const update = Game.System(
           "FeatureOrder/CoreUpdate",
           {
             resources: {
@@ -367,8 +367,8 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define(bootstrap)],
-          update: [Game.Schedule.define(update)]
+          bootstrap: [Game.Schedule(bootstrap)],
+          update: [Game.Schedule(update)]
         }
       }
     })
@@ -377,7 +377,7 @@ describe("App", () => {
       schema: Schema.fragment({}),
       requires: [Core] as const,
       build: (Game) => {
-        const bootstrap = Game.System.define(
+        const bootstrap = Game.System(
           "FeatureOrder/CombatBootstrap",
           {
             resources: {
@@ -390,7 +390,7 @@ describe("App", () => {
             })
         )
 
-        const update = Game.System.define(
+        const update = Game.System(
           "FeatureOrder/CombatUpdate",
           {
             resources: {
@@ -404,8 +404,8 @@ describe("App", () => {
         )
 
         return {
-          bootstrap: [Game.Schedule.define(bootstrap)],
-          update: [Game.Schedule.define(update)]
+          bootstrap: [Game.Schedule(bootstrap)],
+          update: [Game.Schedule(update)]
         }
       }
     })
@@ -497,7 +497,7 @@ const readCounter = (
   >
 ): number => {
   let captured = -1
-  runtime.runSchedule(Schedule.define(System.define(
+  runtime.runSchedule(Schedule.Schedule(System.System(
       "AppTest/ReadCounterHelperSystem",
       {
         schema,

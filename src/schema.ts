@@ -3,7 +3,7 @@
  *
  * The normal authoring flow is:
  *
- * 1. declare descriptors with `Descriptor.define...`
+ * 1. declare descriptors with `Descriptor.*`
  * 2. group them into reusable `Schema.fragment(...)` values
  * 3. close the schema with `Schema.build(...)`
  * 4. bind one `Game` with `Schema.bind(...)`
@@ -32,8 +32,8 @@
  *
  * @example
  * ```ts
- * const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
- * const Score = Descriptor.defineResource<number>()("Score")
+ * const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+ * const Score = Descriptor.Resource<number>()("Score")
  *
  * const Core = Schema.fragment({
  *   components: { Position },
@@ -303,7 +303,7 @@ export interface FeatureBuildGame<
     ) => Entity.Handle<Root, D>
   }
   readonly Query: {
-    define: <
+    <
       const Selection extends Record<string, FeatureQuerySelectionAccess<Accessible, Root>>,
       const With extends ReadonlyArray<FeatureComponentDescriptor<Accessible>> = [],
       const Without extends ReadonlyArray<FeatureComponentDescriptor<Accessible>> = [],
@@ -321,7 +321,7 @@ export interface FeatureBuildGame<
       readonly withoutRelations?: WithoutRelations
       readonly withRelated?: WithRelated
       readonly withoutRelated?: WithoutRelated
-    }) => QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
+    }): QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
     read: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.ReadAccess<D>
     write: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.WriteAccess<D>
     optional: <D extends FeatureComponentDescriptor<Accessible>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
@@ -378,8 +378,8 @@ export interface FeatureBuildGame<
   }
   readonly StateMachine: Schema.Game<Accessible, Root>["StateMachine"]
   readonly Condition: Schema.Game<Accessible, Root>["Condition"]
-    readonly System: {
-      define: <
+  readonly System: {
+      <
         const Name extends string,
         const Queries extends Record<string, Query.Any<Root>> = {},
         const Resources extends Record<string, System.ResourceRead<FeatureResourceDescriptor<Accessible>> | System.ResourceWrite<FeatureResourceDescriptor<Accessible>>> = {},
@@ -418,7 +418,7 @@ export interface FeatureBuildGame<
         E,
         System.SystemDependencies<System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
       >
-    ) => Schema.BoundSystem<
+    ): Schema.BoundSystem<
       Accessible,
       Root,
       System.SystemSpec<Accessible, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
@@ -442,9 +442,9 @@ export interface FeatureBuildGame<
     transition: Schema.Game<Accessible, Root>["System"]["transition"]
   }
   readonly Schedule: {
-    define: <
+    <
       const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
-    >(...entries: Entries) => BoundScheduleDefineResult<Accessible, Root, Entries>
+    >(...entries: Entries): BoundScheduleDefineResult<Accessible, Root, Entries>
     fragment: <
       const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
     >(options: {
@@ -692,7 +692,7 @@ export namespace Schema {
       ) => Entity.Handle<Root, D>
     }
     readonly Query: {
-      define: <
+      <
         const Selection extends Record<string, QuerySelectionAccess<S, Root>>,
         const With extends ReadonlyArray<ComponentDescriptor<S>> = [],
         const Without extends ReadonlyArray<ComponentDescriptor<S>> = [],
@@ -710,7 +710,7 @@ export namespace Schema {
         readonly withoutRelations?: WithoutRelations
         readonly withRelated?: WithRelated
         readonly withoutRelated?: WithoutRelated
-      }) => QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
+      }): QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
       read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
       write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
       optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
@@ -766,10 +766,10 @@ export namespace Schema {
       ) => Entity.EntityDraft<S, P, Root>
     }
     readonly StateMachine: {
-      define: <
+      <
         const Name extends string,
         const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
-      >(name: Name, values: Values) => Schema.BoundStateMachine<Root, Name, Values>
+      >(name: Name, values: Values): Schema.BoundStateMachine<Root, Name, Values>
     }
     readonly Condition: {
       inState: typeof Machine.inState
@@ -779,7 +779,7 @@ export namespace Schema {
       or: typeof Machine.or
     }
     readonly System: {
-      define: <
+      <
         const Name extends string,
         const Queries extends Record<string, Query.Any<Root>> = {},
         const Resources extends Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>> = {},
@@ -818,7 +818,7 @@ export namespace Schema {
           E,
           System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
         >
-      ) => Schema.BoundSystem<S, Root, any, A, E, Name>
+      ): Schema.BoundSystem<S, Root, any, A, E, Name>
       readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
       writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
       readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>
@@ -835,9 +835,9 @@ export namespace Schema {
       transition: typeof System.transition
     }
     readonly Schedule: {
-      define: <
-    const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
-      >(...entries: Entries) => BoundScheduleDefineResult<S, Root, Entries>
+      <
+        const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
+      >(...entries: Entries): BoundScheduleDefineResult<S, Root, Entries>
       fragment: <
         const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
       >(options: {
@@ -1026,7 +1026,7 @@ const mergeRelations = <
  * ```ts
  * const Root = Schema.defineRoot("Game")
  *
- * const Target = Descriptor.defineComponent<{
+ * const Target = Descriptor.Component<{
  *   handle: Entity.Handle<typeof Root>
  * }>()("Target")
  * ```
@@ -1180,9 +1180,9 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
  * const Root = Schema.defineRoot("Game")
  * const Game = Schema.bind(schema, Root)
  *
- * const Move = Game.System.define("Move", {
+ * const Move = Game.System("Move", {
  *   queries: {
- *     moving: Game.Query.define({
+ *     moving: Game.Query({
  *       selection: {
  *         position: Game.Query.write(Position),
  *         velocity: Game.Query.read(Velocity)
@@ -1273,7 +1273,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
     >
   ) => {
-    const system = System.define<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, RelationFailures, When, Transitions, Root, A, E>(name, {
+    const system = System.System<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, RelationFailures, When, Transitions, Root, A, E>(name, {
       schema,
       ...spec
     }, run)
@@ -1400,7 +1400,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     readonly withoutRelations?: WithoutRelations
     readonly withRelated?: WithRelated
     readonly withoutRelated?: WithoutRelated
-  }) => QueryModule.define<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>(spec)
+  }) => QueryModule.Query<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>(spec)
 
   const queryRead = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.read(descriptor)
   const queryWrite = <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.write(descriptor)
@@ -1430,7 +1430,7 @@ export const bind = <S extends Schema.Any, Root = S>(
   const defineSchedule = <
     const Entries extends ReadonlyArray<BoundScheduleEntry>
   >(...entries: Entries) =>
-    Schedule.define(...entries) as BoundScheduleDefineResult<S, Root, Entries>
+    Schedule.Schedule(...entries) as BoundScheduleDefineResult<S, Root, Entries>
 
   const makeScheduleFragment = <
     const Entries extends ReadonlyArray<BoundScheduleEntry>
@@ -1479,7 +1479,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     if (definedMachineNames.has(name)) {
       throw new Error(`Duplicate state machine name: ${name}`)
     }
-    const machine = Machine.define<Name, Values, Root>(name, values)
+    const machine = Machine.StateMachine<Name, Values, Root>(name, values)
     definedMachines.push(machine)
     definedMachineNames.add(name)
     return machine
@@ -1489,7 +1489,7 @@ export const bind = <S extends Schema.Any, Root = S>(
     const Entries extends ReadonlyArray<BoundTransitionEntry>,
     M extends BoundMachine = BoundMachine
   >(transition: Machine.TransitionScheduleDefinition<S, M, any, Root>["transition"], plan: readonly [...Entries]) => {
-    const schedule = Schedule.define(...plan)
+    const schedule = Schedule.Schedule(...plan)
     const transitionSchedule = {
       ...schedule,
       transition
@@ -1580,6 +1580,53 @@ export const bind = <S extends Schema.Any, Root = S>(
     initial: Machine.StateMachine.Value<M>
   ) => Runtime.machine(machine, initial)
 
+  const queryApi = Object.assign(queryDefine, {
+    read: queryRead,
+    write: queryWrite,
+    optional: queryOptional,
+    added: queryAdded,
+    changed: queryChanged,
+    readRelation: queryReadRelation,
+    optionalRelation: queryOptionalRelation,
+    readRelated: queryReadRelated,
+    optionalRelated: queryOptionalRelated
+  })
+
+  const stateMachineApi = Object.assign(defineMachine, {})
+
+  const systemApi = Object.assign(defineSystem, {
+    readResource,
+    writeResource,
+    readEvent,
+    writeEvent,
+    readState,
+    writeState,
+    service: System.service,
+    machine: systemMachine,
+    nextState: systemNextState,
+    readTransitionEvent: systemReadTransitionEvent,
+    readRemoved: systemReadRemoved,
+    readDespawned: systemReadDespawned,
+    readRelationFailures: systemReadRelationFailures,
+    transition: systemTransition
+  })
+
+  const scheduleApi = Object.assign(defineSchedule, {
+    fragment: makeScheduleFragment,
+    phase: makeSchedulePhase,
+    compose: composeSchedule,
+    transitions: makeTransitionBundle,
+    onEnter,
+    onExit,
+    onTransition,
+    applyDeferred: Schedule.applyDeferred,
+    updateEvents: Schedule.updateEvents,
+    updateLifecycle: Schedule.updateLifecycle,
+    updateRelationFailures: Schedule.updateRelationFailures,
+    applyStateTransitions: <Bundle extends BoundTransitionBundle | undefined = undefined>(bundle?: Bundle) =>
+      Schedule.applyStateTransitions(bundle) as Schedule.ApplyStateTransitionsStep<Bundle, Root>
+  })
+
   return {
     schema,
     Entity: {
@@ -1588,18 +1635,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       handleAs: entityHandleAs,
       handleAsFrom: entityHandleAsFrom
     },
-    Query: {
-      define: queryDefine,
-      read: queryRead,
-      write: queryWrite,
-      optional: queryOptional,
-      added: queryAdded,
-      changed: queryChanged,
-      readRelation: queryReadRelation,
-      optionalRelation: queryOptionalRelation,
-      readRelated: queryReadRelated,
-      optionalRelated: queryOptionalRelated
-    },
+    Query: queryApi,
     Command: {
       spawn: commandSpawn,
       entry: commandEntry,
@@ -1614,9 +1650,7 @@ export const bind = <S extends Schema.Any, Root = S>(
       spawnWithMixed: commandSpawnWithMixed,
       relate: commandRelate
     },
-    StateMachine: {
-      define: defineMachine
-    },
+    StateMachine: stateMachineApi,
     Condition: {
       inState: Machine.inState,
       stateChanged: Machine.stateChanged,
@@ -1624,39 +1658,8 @@ export const bind = <S extends Schema.Any, Root = S>(
       and: Machine.and,
       or: Machine.or
     },
-    System: {
-      define: defineSystem,
-      readResource,
-      writeResource,
-      readEvent,
-      writeEvent,
-      readState,
-      writeState,
-      service: System.service,
-      machine: systemMachine,
-      nextState: systemNextState,
-      readTransitionEvent: systemReadTransitionEvent,
-      readRemoved: systemReadRemoved,
-      readDespawned: systemReadDespawned,
-      readRelationFailures: systemReadRelationFailures,
-      transition: systemTransition
-    },
-    Schedule: {
-      define: defineSchedule,
-      fragment: makeScheduleFragment,
-      phase: makeSchedulePhase,
-      compose: composeSchedule,
-      transitions: makeTransitionBundle,
-      onEnter,
-      onExit,
-      onTransition,
-      applyDeferred: Schedule.applyDeferred,
-      updateEvents: Schedule.updateEvents,
-      updateLifecycle: Schedule.updateLifecycle,
-      updateRelationFailures: Schedule.updateRelationFailures,
-      applyStateTransitions: <Bundle extends BoundTransitionBundle | undefined = undefined>(bundle?: Bundle) =>
-        Schedule.applyStateTransitions(bundle) as Schedule.ApplyStateTransitionsStep<Bundle, Root>
-    },
+    System: systemApi,
+    Schedule: scheduleApi,
     Runtime: {
       make: makeRuntime,
       makeResult: makeRuntimeResult,

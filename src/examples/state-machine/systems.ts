@@ -66,7 +66,7 @@ const makePickupDraft = (position: { readonly x: number; readonly y: number }) =
   )
 }
 
-export const SpawnPlayerSystem = Game.System.define(
+export const SpawnPlayerSystem = Game.System(
   "StateMachineExample/SpawnPlayer",
   {},
   ({ commands }) =>
@@ -83,7 +83,7 @@ export const SpawnPlayerSystem = Game.System.define(
     })
 )
 
-export const CaptureFrameInputSystem = Game.System.define(
+export const CaptureFrameInputSystem = Game.System(
   "StateMachineExample/CaptureFrameInput",
   {
     resources: {
@@ -99,7 +99,7 @@ export const CaptureFrameInputSystem = Game.System.define(
     })
 )
 
-export const QueueStartFromTitleSystem = Game.System.define(
+export const QueueStartFromTitleSystem = Game.System(
   "StateMachineExample/QueueStartFromTitle",
   {
     when: [Game.Condition.inState(SessionState, "Title")],
@@ -120,7 +120,7 @@ export const QueueStartFromTitleSystem = Game.System.define(
     })
 )
 
-export const QueueRestartSystem = Game.System.define(
+export const QueueRestartSystem = Game.System(
   "StateMachineExample/QueueRestart",
   {
     when: [Game.Condition.and(
@@ -145,7 +145,7 @@ export const QueueRestartSystem = Game.System.define(
     })
 )
 
-export const QueuePauseSystem = Game.System.define(
+export const QueuePauseSystem = Game.System(
   "StateMachineExample/QueuePause",
   {
     when: [Game.Condition.and(
@@ -167,7 +167,7 @@ export const QueuePauseSystem = Game.System.define(
     })
 )
 
-export const QueueResumeSystem = Game.System.define(
+export const QueueResumeSystem = Game.System(
   "StateMachineExample/QueueResume",
   {
     when: [Game.Condition.and(
@@ -189,7 +189,7 @@ export const QueueResumeSystem = Game.System.define(
     })
 )
 
-export const TickCountdownSystem = Game.System.define(
+export const TickCountdownSystem = Game.System(
   "StateMachineExample/TickCountdown",
   {
     when: [Game.Condition.inState(SessionState, "Countdown")],
@@ -213,7 +213,7 @@ export const TickCountdownSystem = Game.System.define(
     })
 )
 
-export const MovePlayerSystem = Game.System.define(
+export const MovePlayerSystem = Game.System(
   "StateMachineExample/MovePlayer",
   {
     when: GameplayWhen,
@@ -247,7 +247,7 @@ export const MovePlayerSystem = Game.System.define(
     })
 )
 
-export const CollectPickupsSystem = Game.System.define(
+export const CollectPickupsSystem = Game.System(
   "StateMachineExample/CollectPickups",
   {
     when: GameplayWhen,
@@ -276,7 +276,7 @@ export const CollectPickupsSystem = Game.System.define(
     })
 )
 
-export const TickRoundClockSystem = Game.System.define(
+export const TickRoundClockSystem = Game.System(
   "StateMachineExample/TickRoundClock",
   {
     when: GameplayWhen,
@@ -291,7 +291,7 @@ export const TickRoundClockSystem = Game.System.define(
     })
 )
 
-export const QueueOutcomeSystem = Game.System.define(
+export const QueueOutcomeSystem = Game.System(
   "StateMachineExample/QueueOutcome",
   {
     when: GameplayWhen,
@@ -317,7 +317,7 @@ export const QueueOutcomeSystem = Game.System.define(
     })
 )
 
-export const ResetRoundOnCountdownEnterSystem = Game.System.define(
+export const ResetRoundOnCountdownEnterSystem = Game.System(
   "StateMachineExample/ResetRoundOnCountdownEnter",
   {
     queries: {
@@ -360,7 +360,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System.define(
     })
 )
 
-export const WriteTransitionNoticeSystem = Game.System.define(
+export const WriteTransitionNoticeSystem = Game.System(
   "StateMachineExample/WriteTransitionNotice",
   {
     transitionEvents: {
@@ -389,7 +389,7 @@ export const WriteTransitionNoticeSystem = Game.System.define(
     })
 )
 
-export const FadeTransitionNoticeSystem = Game.System.define(
+export const FadeTransitionNoticeSystem = Game.System(
   "StateMachineExample/FadeTransitionNotice",
   {
     resources: {
@@ -412,7 +412,7 @@ export const FadeTransitionNoticeSystem = Game.System.define(
     })
 )
 
-export const DestroyRenderNodesSystem = Game.System.define(
+export const DestroyRenderNodesSystem = Game.System(
   "StateMachineExample/DestroyRenderNodes",
   {
     despawned: {
@@ -437,7 +437,7 @@ export const DestroyRenderNodesSystem = Game.System.define(
     })
 )
 
-export const CreateRenderNodesSystem = Game.System.define(
+export const CreateRenderNodesSystem = Game.System(
   "StateMachineExample/CreateRenderNodes",
   {
     queries: {
@@ -464,7 +464,7 @@ export const CreateRenderNodesSystem = Game.System.define(
     })
 )
 
-export const SyncRenderableTransformsSystem = Game.System.define(
+export const SyncRenderableTransformsSystem = Game.System(
   "StateMachineExample/SyncRenderableTransforms",
   {
     queries: {
@@ -488,7 +488,7 @@ export const SyncRenderableTransformsSystem = Game.System.define(
     })
 )
 
-export const SyncHudSystem = Game.System.define(
+export const SyncHudSystem = Game.System(
   "StateMachineExample/SyncHud",
   {
     resources: {

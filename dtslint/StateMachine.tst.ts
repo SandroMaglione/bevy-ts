@@ -3,8 +3,8 @@ import * as Runtime from "../src/runtime.ts"
 import * as System from "../src/system.ts"
 import { describe, expect, it } from "tstyche"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("StateMachine/Position")
-const Counter = Descriptor.defineResource<number>()("StateMachine/Counter")
+const Position = Descriptor.Component<{ x: number; y: number }>()("StateMachine/Position")
+const Counter = Descriptor.Resource<number>()("StateMachine/Counter")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -24,11 +24,11 @@ const otherSchema = Schema.build(Schema.fragment({
 const Game = Schema.bind(schema)
 const OtherGame = Schema.bind(otherSchema)
 
-const AppState = Game.StateMachine.define("AppState", ["Menu", "Playing", "Paused"] as const)
-const RoundState = Game.StateMachine.define("RoundState", ["Warmup", "Live", "SuddenDeath"] as const)
-const OtherState = OtherGame.StateMachine.define("OtherState", ["Idle", "Running"] as const)
+const AppState = Game.StateMachine("AppState", ["Menu", "Playing", "Paused"] as const)
+const RoundState = Game.StateMachine("RoundState", ["Warmup", "Live", "SuddenDeath"] as const)
+const OtherState = OtherGame.StateMachine("OtherState", ["Idle", "Running"] as const)
 
-const ReaderSystem = Game.System.define(
+const ReaderSystem = Game.System(
   "StateMachine/Reader",
   {
     machines: {
@@ -41,7 +41,7 @@ const ReaderSystem = Game.System.define(
     })
 )
 
-const WriterSystem = Game.System.define(
+const WriterSystem = Game.System(
   "StateMachine/Writer",
   {
     nextMachines: {
@@ -56,7 +56,7 @@ const WriterSystem = Game.System.define(
     })
 )
 
-const TransitionSystem = Game.System.define(
+const TransitionSystem = Game.System(
   "StateMachine/TransitionReader",
   {
     transitions: {
@@ -70,7 +70,7 @@ const TransitionSystem = Game.System.define(
     })
 )
 
-const TransitionEventSystem = Game.System.define(
+const TransitionEventSystem = Game.System(
   "StateMachine/TransitionEventReader",
   {
     transitionEvents: {
@@ -84,7 +84,7 @@ const TransitionEventSystem = Game.System.define(
     })
 )
 
-const PlayingOnlySystem = Game.System.define(
+const PlayingOnlySystem = Game.System(
   "StateMachine/PlayingOnly",
   {
     when: [Game.Condition.inState(AppState, "Playing")]
@@ -93,7 +93,7 @@ const PlayingOnlySystem = Game.System.define(
 )
 
 
-const MachineSchedule = Game.Schedule.define(ReaderSystem, WriterSystem)
+const MachineSchedule = Game.Schedule(ReaderSystem, WriterSystem)
 
 const EnterPlaying = Game.Schedule.onEnter(AppState, "Playing", [TransitionSystem])
 
@@ -110,7 +110,7 @@ describe("StateMachine", () => {
   })
 
   it("supports multiple machines with exact unions in one system", () => {
-    Game.System.define(
+    Game.System(
       "StateMachine/MultiMachineReader",
       {
         machines: {
@@ -139,7 +139,7 @@ describe("StateMachine", () => {
       "GameOver"
     )
 
-    Game.System.define(
+    Game.System(
       "StateMachine/InvalidWriter",
       {
         nextMachines: {
@@ -155,7 +155,7 @@ describe("StateMachine", () => {
   })
 
   it("rejects cross-schema machine references", () => {
-    Game.System.define(
+    Game.System(
       "StateMachine/CrossSchemaSystem",
       {
         machines: {
@@ -166,7 +166,7 @@ describe("StateMachine", () => {
       () => Fx.sync<undefined, {}>(() => undefined)
     )
 
-    Game.System.define(
+    Game.System(
       "StateMachine/CrossSchemaTransitionEvents",
       {
         transitionEvents: {
@@ -184,7 +184,7 @@ describe("StateMachine", () => {
       OtherGame.Schedule.onEnter(OtherState, "Idle", [])
     )
 
-    Game.Schedule.define(
+    Game.Schedule(
       ReaderSystem,
       // @ts-expect-error!
       Game.Schedule.applyStateTransitions(OtherBundle)
@@ -218,7 +218,7 @@ describe("StateMachine", () => {
   })
 
   it("accepts direct inline schedule execution for disjunctive machine conditions", () => {
-    const IncrementWithOrCondition = Game.System.define(
+    const IncrementWithOrCondition = Game.System(
       "StateMachine/InlineRunSchedule",
       {
         when: [
@@ -245,7 +245,7 @@ describe("StateMachine", () => {
       )
     })
 
-    runtime.runSchedule(Game.Schedule.define(IncrementWithOrCondition))
+    runtime.runSchedule(Game.Schedule(IncrementWithOrCondition))
   })
 
   it("rejects invalid multi-machine runtime initialization values", () => {
@@ -266,7 +266,7 @@ describe("StateMachine", () => {
   })
 
   it("does not expose transition context on normal schedules", () => {
-    Game.System.define(
+    Game.System(
       "StateMachine/NoTransitionContext",
       {},
       ({ transitions }) =>
@@ -293,10 +293,10 @@ describe("StateMachine", () => {
   })
 
   it("includes transition bundle requirements in the parent schedule", () => {
-    const Logger = Descriptor.defineService<{ readonly log: (message: string) => void }>()("StateMachine/Logger")
+    const Logger = Descriptor.Service<{ readonly log: (message: string) => void }>()("StateMachine/Logger")
 
     const TransitionWithService = Game.Schedule.onEnter(AppState, "Playing", [
-      Game.System.define(
+      Game.System(
         "StateMachine/TransitionServiceRequirement",
         {
           transitions: {
@@ -313,7 +313,7 @@ describe("StateMachine", () => {
       )
     ])
 
-    const schedule = Game.Schedule.define(WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService)))
+    const schedule = Game.Schedule(WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService)))
 
     const runtime = Game.Runtime.make({
       services: Runtime.services(),
@@ -339,7 +339,7 @@ describe("StateMachine", () => {
       Game.Schedule.onExit(AppState, "Paused", [TransitionSystem])
     )
 
-    const schedule = Game.Schedule.define(
+    const schedule = Game.Schedule(
       WriterSystem,
       Game.Schedule.applyStateTransitions(flattened)
     )

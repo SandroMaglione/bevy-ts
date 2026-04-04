@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * const Tick = Game.System.define("Tick", {
+ * const Tick = Game.System("Tick", {
  *   resources: {
  *     dt: Game.System.readResource(DeltaTime)
  *   }
@@ -58,9 +58,9 @@ import type { CommandsApi } from "./command.ts"
  *
  * @example
  * ```ts
- * const Move = Game.System.define("Move", {
+ * const Move = Game.System("Move", {
  *   queries: {
- *     moving: Game.Query.define({
+ *     moving: Game.Query({
  *       selection: {
  *         position: Game.Query.write(Position),
  *         velocity: Game.Query.read(Velocity)
@@ -137,7 +137,7 @@ export const readResource = <D extends Descriptor<"resource", string, any>>(
  *
  * @example
  * ```ts
- * const CountUp = Game.System.define("CountUp", {
+ * const CountUp = Game.System("CountUp", {
  *   resources: {
  *     score: Game.System.writeResource(Score)
  *   }
@@ -199,7 +199,7 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
  *
  * @example
  * ```ts
- * const EmitHit = Game.System.define("EmitHit", {
+ * const EmitHit = Game.System("EmitHit", {
  *   events: {
  *     hit: Game.System.writeEvent(Hit)
  *   }
@@ -238,7 +238,7 @@ export type StateWrite<D extends Descriptor<"state", string, any>> = {
  * transition semantics, transition events, or enter/exit boundaries.
  *
  * If the behavior depends on when a mode change commits, prefer
- * `machine(...)` / `nextState(...)` on a `Game.StateMachine.define(...)`
+ * `machine(...)` / `nextState(...)` on a `Game.StateMachine(...)`
  * machine instead.
  */
 export const readState = <D extends Descriptor<"state", string, any>>(
@@ -428,7 +428,7 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  *
  * @example
  * ```ts
- * const DestroyRenderNodesSystem = Game.System.define("DestroyRenderNodes", {
+ * const DestroyRenderNodesSystem = Game.System("DestroyRenderNodes", {
  *   removed: {
  *     renderables: Game.System.readRemoved(Renderable)
  *   }
@@ -464,7 +464,7 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
  *
  * @example
  * ```ts
- * const DestroyNodesSystem = Game.System.define("DestroyNodes", {
+ * const DestroyNodesSystem = Game.System("DestroyNodes", {
  *   despawned: {
  *     entities: Game.System.readDespawned()
  *   }
@@ -653,7 +653,7 @@ export interface SystemOrderingSpec {
  * Reusable pre-definition system access fragment.
  *
  * Use this to type-check shared `queries`, `resources`, `services`, and other
- * access slices before spreading them into `Game.System.define(...)`.
+ * access slices before spreading them into `Game.System(...)`.
  */
 export interface SystemAccessSpec<
   out Queries extends Record<string, Query.Any<any>> = Record<string, Query.Any<any>>,
@@ -1019,9 +1019,9 @@ export interface SystemDefinition<
  *
  * @example
  * ```ts
- * const CountEnemies = Game.System.define("CountEnemies", {
+ * const CountEnemies = Game.System("CountEnemies", {
  *   queries: {
- *     enemies: Game.Query.define({
+ *     enemies: Game.Query({
  *       selection: {
  *         enemy: Game.Query.read(Enemy)
  *       }
@@ -1035,7 +1035,7 @@ export interface SystemDefinition<
  * }))
  * ```
  */
-export function define<
+export function System<
   S extends Schema.Any,
   const Queries extends Record<string, Query.Any<any>> = {},
   const Resources extends Record<string, ResourceAccess> = {},
@@ -1079,7 +1079,7 @@ export function define<
   >
 ): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
 
-export function define<
+export function System<
   S extends Schema.Any,
   const Queries extends Record<string, Query.Any<any>> = {},
   const Resources extends Record<string, ResourceAccess> = {},

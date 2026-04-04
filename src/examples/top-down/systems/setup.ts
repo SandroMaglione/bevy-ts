@@ -4,7 +4,7 @@ import { pickupLayout, wallLayout } from "../content.ts"
 import { makePickupDraft, makePlayerDraft, makeWallDraft } from "../drafts.ts"
 import { Game } from "../schema.ts"
 
-export const SetupWorldSystem = Game.System.define(
+export const SetupWorldSystem = Game.System(
   "TopDown/SetupWorld",
   {},
   ({ commands }) =>

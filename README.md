@@ -10,16 +10,16 @@ Documentation: https://sandromaglione.github.io/bevy-ts/
 import { App, Descriptor, Fx, Schema } from "bevy-ts"
 
 // Define the ECS world shape once.
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-const DeltaTime = Descriptor.defineResource<number>()("DeltaTime")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
+const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
 
 // Build a closed schema, then bind the runtime-facing API surface.
 const Game = Schema.bind(Schema.build(Schema.fragment({ components: { Position, Velocity }, resources: { DeltaTime } })))
 
 // Systems only receive the access they declare here.
-const Move = Game.System.define("Move", {
-  queries: { moving: Game.Query.define({ selection: { position: Game.Query.write(Position), velocity: Game.Query.read(Velocity) } }) },
+const Move = Game.System("Move", {
+  queries: { moving: Game.Query({ selection: { position: Game.Query.write(Position), velocity: Game.Query.read(Velocity) } }) },
   resources: { deltaTime: Game.System.readResource(DeltaTime) }
 }, ({ queries, resources }) => Fx.sync(() => {
   for (const match of queries.moving.each()) {
@@ -30,7 +30,7 @@ const Move = Game.System.define("Move", {
 }))
 
 const app = App.makeApp(Game.Runtime.make({ resources: { DeltaTime: 1 / 60 } }))
-app.update(Game.Schedule.define(Move))
+app.update(Game.Schedule(Move))
 ```
 
 Start with the docs homepage for the full step-by-step Pixi example:

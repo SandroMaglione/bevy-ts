@@ -3,11 +3,11 @@ import { Descriptor, Fx, Result, Schema } from "../src/index.ts"
 import * as Vector2 from "../src/Vector2.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Velocity = Descriptor.defineComponent<{ x: number; y: number }>()("Velocity")
-const Count = Descriptor.defineResource<number>()("Count")
-const LastX = Descriptor.defineResource<number>()("LastX")
-const SafePosition = Descriptor.defineConstructedComponent(Vector2)("SafePosition")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
+const Count = Descriptor.Resource<number>()("Count")
+const LastX = Descriptor.Resource<number>()("LastX")
+const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -39,7 +39,7 @@ const makeRuntime = () =>
 
 describe("Runtime commands", () => {
   it("insertMany applies entries in order with last-write-wins semantics", () => {
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeCommands/SpawnInsertMany",
       {},
       ({ commands }) =>
@@ -56,11 +56,11 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeCommands/ObserveLastWriteWins",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.read(Velocity)
@@ -82,8 +82,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -91,7 +91,7 @@ describe("Runtime commands", () => {
   })
 
   it("remove causes later queries to stop matching", () => {
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeCommands/SpawnForRemove",
       {},
       ({ commands }) =>
@@ -104,11 +104,11 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeCommands/ObserveRemove",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.read(Velocity)
@@ -127,8 +127,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(0)
@@ -137,7 +137,7 @@ describe("Runtime commands", () => {
   it("despawn removes the entity and exact lookup reports MissingEntity", () => {
     let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeCommands/SpawnAndStoreId",
       {},
       ({ commands }) =>
@@ -150,7 +150,7 @@ describe("Runtime commands", () => {
         })
     )
 
-    const lookup = Game.System.define(
+    const lookup = Game.System(
       "RuntimeCommands/LookupDespawned",
       {
         resources: {
@@ -164,7 +164,7 @@ describe("Runtime commands", () => {
             resources.count.set(-1)
             return
           }
-          const result = lookup.get(id, Game.Query.define({
+          const result = lookup.get(id, Game.Query({
             selection: {
               position: Game.Query.read(Position)
             }
@@ -175,8 +175,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(lookup)
+      Game.Schedule(spawn),
+      Game.Schedule(lookup)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -207,7 +207,7 @@ describe("Runtime commands", () => {
   it("insert on an existing entity becomes visible after explicit applyDeferred in the same schedule", () => {
     let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema> | undefined
 
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeCommands/SpawnStoreForInsert",
       {},
       ({ commands }) =>
@@ -219,7 +219,7 @@ describe("Runtime commands", () => {
         })
     )
 
-    const insertVelocity = Game.System.define(
+    const insertVelocity = Game.System(
       "RuntimeCommands/InsertVelocity",
       {},
       ({ commands }) =>
@@ -231,11 +231,11 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeCommands/ObserveInsertedVelocity",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.read(Velocity)
@@ -253,8 +253,8 @@ describe("Runtime commands", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule.define(spawn)
-    const observeSchedule = Game.Schedule.define(insertVelocity, Game.Schedule.applyDeferred(), observe)
+    const spawnSchedule = Game.Schedule(spawn)
+    const observeSchedule = Game.Schedule(insertVelocity, Game.Schedule.applyDeferred(), observe)
 
     runtime.tick(spawnSchedule, observeSchedule)
 
@@ -262,7 +262,7 @@ describe("Runtime commands", () => {
   })
 
   it("spawnWithResult returns tuple-shaped failures and applies successful drafts", () => {
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeCommands/SpawnWithResult",
       {
         resources: {
@@ -295,11 +295,11 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeCommands/ObserveSpawnWithResult",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.read(Velocity)
@@ -321,8 +321,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
@@ -330,7 +330,7 @@ describe("Runtime commands", () => {
   })
 
   it("spawnWithMixed accepts plain and validated entries together", () => {
-    const spawn = Game.System.define(
+    const spawn = Game.System(
       "RuntimeCommands/SpawnWithMixed",
       {
         resources: {
@@ -363,11 +363,11 @@ describe("Runtime commands", () => {
         })
     )
 
-    const observe = Game.System.define(
+    const observe = Game.System(
       "RuntimeCommands/ObserveSpawnWithMixed",
       {
         queries: {
-          moving: Game.Query.define({
+          moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
               velocity: Game.Query.read(Velocity)
@@ -389,8 +389,8 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule.define(spawn),
-      Game.Schedule.define(observe)
+      Game.Schedule(spawn),
+      Game.Schedule(observe)
     )
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)

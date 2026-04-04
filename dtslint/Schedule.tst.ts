@@ -4,8 +4,8 @@ import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
 import { describe, it } from "tstyche"
 
-const Position = Descriptor.defineComponent<{ x: number; y: number }>()("Position")
-const Time = Descriptor.defineResource<number>()("Time")
+const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+const Time = Descriptor.Resource<number>()("Time")
 
 const schema = Schema.build(Schema.fragment({
   components: {
@@ -16,12 +16,12 @@ const schema = Schema.build(Schema.fragment({
   }
 }))
 
-const MovementSystem = System.define(
+const MovementSystem = System.System(
   "MovementSystem",
   {
     schema,
     queries: {
-      position: Query.define({
+      position: Query.Query({
         selection: {
           position: Query.write(Position)
         }
@@ -31,7 +31,7 @@ const MovementSystem = System.define(
   () => Fx.sync<undefined, {}>(() => undefined)
 )
 
-const ExplicitNameSystem = System.define(
+const ExplicitNameSystem = System.System(
   "ExplicitNameSystem",
   {
     schema,
@@ -42,7 +42,7 @@ const ExplicitNameSystem = System.define(
   ({ resources }) => Fx.sync(() => resources.time.get())
 )
 
-const PlainSystem = System.define(
+const PlainSystem = System.System(
   "PlainSystem",
   {
     schema
@@ -50,7 +50,7 @@ const PlainSystem = System.define(
   () => Fx.sync<undefined, {}>(() => undefined)
 )
 
-const SuffixSystem = System.define(
+const SuffixSystem = System.System(
   "SuffixSystem",
   {
     schema
@@ -60,7 +60,7 @@ const SuffixSystem = System.define(
 
 describe("Schedule", () => {
   it("builds executable schedules from explicit authored plans", () => {
-    const schedule = Schedule.define(
+    const schedule = Schedule.Schedule(
       MovementSystem,
       Schedule.applyDeferred(),
       ExplicitNameSystem
@@ -74,7 +74,7 @@ describe("Schedule", () => {
     schedule.label
 
     // @ts-expect-error ScheduleEntry
-    Schedule.define([
+    Schedule.Schedule([
       MovementSystem,
       Schedule.applyDeferred(),
       ExplicitNameSystem
@@ -90,7 +90,7 @@ describe("Schedule", () => {
       ]
     })
 
-    const schedule = Schedule.define(
+    const schedule = Schedule.Schedule(
       PlainSystem,
       Schedule.applyDeferred(),
       hostMirror
@@ -109,7 +109,7 @@ describe("Schedule", () => {
       ]
     })
 
-    const schedule = Schedule.define(
+    const schedule = Schedule.Schedule(
       PlainSystem,
       hostMirrorPhase
     )

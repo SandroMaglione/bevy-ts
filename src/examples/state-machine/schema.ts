@@ -8,22 +8,22 @@ import type {
   StateMachineInputManager,
 } from "./types.ts"
 
-export const Position = Descriptor.defineConstructedComponent(Vector2)("StateMachineExample/Position")
-export const Actor = Descriptor.defineComponent<{ kind: ActorKind }>()("StateMachineExample/Actor")
-export const Player = Descriptor.defineComponent<{}>()("StateMachineExample/Player")
-export const Pickup = Descriptor.defineComponent<{}>()("StateMachineExample/Pickup")
+export const Position = Descriptor.ConstructedComponent(Vector2)("StateMachineExample/Position")
+export const Actor = Descriptor.Component<{ kind: ActorKind }>()("StateMachineExample/Actor")
+export const Player = Descriptor.Component<{}>()("StateMachineExample/Player")
+export const Pickup = Descriptor.Component<{}>()("StateMachineExample/Pickup")
 
-export const Arena = Descriptor.defineConstructedResource(Size2)("StateMachineExample/Arena")
-export const DeltaTime = Descriptor.defineResource<number>()("StateMachineExample/DeltaTime")
-export const Score = Descriptor.defineResource<number>()("StateMachineExample/Score")
-export const PickupGoal = Descriptor.defineResource<number>()("StateMachineExample/PickupGoal")
-export const RoundTimeRemaining = Descriptor.defineResource<number>()("StateMachineExample/RoundTimeRemaining")
-export const CountdownRemaining = Descriptor.defineResource<number>()("StateMachineExample/CountdownRemaining")
-export const SpawnCursor = Descriptor.defineResource<number>()("StateMachineExample/SpawnCursor")
-export const TransitionNotice = Descriptor.defineResource<NoticeValue>()("StateMachineExample/TransitionNotice")
+export const Arena = Descriptor.ConstructedResource(Size2)("StateMachineExample/Arena")
+export const DeltaTime = Descriptor.Resource<number>()("StateMachineExample/DeltaTime")
+export const Score = Descriptor.Resource<number>()("StateMachineExample/Score")
+export const PickupGoal = Descriptor.Resource<number>()("StateMachineExample/PickupGoal")
+export const RoundTimeRemaining = Descriptor.Resource<number>()("StateMachineExample/RoundTimeRemaining")
+export const CountdownRemaining = Descriptor.Resource<number>()("StateMachineExample/CountdownRemaining")
+export const SpawnCursor = Descriptor.Resource<number>()("StateMachineExample/SpawnCursor")
+export const TransitionNotice = Descriptor.Resource<NoticeValue>()("StateMachineExample/TransitionNotice")
 
-export const InputManager = Descriptor.defineService<StateMachineInputManager>()("StateMachineExample/InputManager")
-export const BrowserHost = Descriptor.defineService<BrowserHostValue>()("StateMachineExample/BrowserHost")
+export const InputManager = Descriptor.Service<StateMachineInputManager>()("StateMachineExample/InputManager")
+export const BrowserHost = Descriptor.Service<BrowserHostValue>()("StateMachineExample/BrowserHost")
 
 export const schema = Schema.build(
   Schema.fragment({
@@ -48,14 +48,14 @@ export const schema = Schema.build(
 
 export const Game = Schema.bind(schema)
 
-export const SessionState = Game.StateMachine.define(
+export const SessionState = Game.StateMachine(
   "StateMachineExample/SessionState",
   ["Title", "Countdown", "Round"] as const
 )
 
 // Two smaller machines are clearer than one larger combined phase union here:
 // session flow and round-local flow have different transition boundaries.
-export const RoundState = Game.StateMachine.define(
+export const RoundState = Game.StateMachine(
   "StateMachineExample/RoundState",
   ["Playing", "Paused", "Victory", "Defeat"] as const
 )
