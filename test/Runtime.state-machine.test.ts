@@ -872,6 +872,94 @@ describe("Runtime state machine", () => {
     expect(readResourceValue(runtime, schema, Log)).toEqual(["enter:Playing"])
   })
 
+  it("supports fragments inside transition schedules", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueuePlayingForTransitionFragment",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const logEnterPlaying = Game.System.define(
+      "StateMachineRuntime/TransitionFragmentEnterPlaying",
+      {
+        transitions: {
+          app: System.transition(AppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitions, resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, `fragment:${transitions.app.get().to}`])
+        })
+    )
+
+    const enterWork = Game.Schedule.fragment({
+      entries: [logEnterPlaying]
+    })
+
+    const transitions = Game.Schedule.transitions(
+      Game.Schedule.onEnter(AppState, "Playing", [enterWork])
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define(queuePlaying, Game.Schedule.applyStateTransitions(transitions)))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["fragment:Playing"])
+  })
+
+  it("supports phases inside transition schedules", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueuePlayingForTransitionPhase",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const logEnterPlaying = Game.System.define(
+      "StateMachineRuntime/TransitionPhaseEnterPlaying",
+      {
+        transitions: {
+          app: System.transition(AppState)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ transitions, resources }) =>
+        Fx.sync(() => {
+          resources.log.update((entries) => [...entries, `phase:${transitions.app.get().to}`])
+        })
+    )
+
+    const enterWork = Game.Schedule.phase({
+      steps: [logEnterPlaying]
+    })
+
+    const transitions = Game.Schedule.transitions(
+      Game.Schedule.onEnter(AppState, "Playing", [enterWork])
+    )
+
+    const runtime = makeRuntime()
+    runtime.runSchedule(Game.Schedule.define(queuePlaying, Game.Schedule.applyStateTransitions(transitions)))
+
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["phase:Playing"])
+  })
+
   it("throws when transition schedules contain nested applyStateTransitions markers at runtime", () => {
     const queuePlaying = Game.System.define(
       "StateMachineRuntime/QueueNestedInvalid",
@@ -897,6 +985,41 @@ describe("Runtime state machine", () => {
       ...validEnter,
       steps: [...validEnter.steps, Game.Schedule.applyStateTransitions()]
     } as typeof validEnter
+
+    const runtime = makeRuntime()
+    expect(() =>
+      runtime.runSchedule(Game.Schedule.define(queuePlaying, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(invalidEnter))))
+    ).toThrow("Transition schedules cannot contain applyStateTransitions() steps")
+  })
+
+  it("throws when transition fragments contain nested applyStateTransitions markers at runtime", () => {
+    const queuePlaying = Game.System.define(
+      "StateMachineRuntime/QueuePlayingForInvalidFragment",
+      {
+        nextMachines: {
+          app: System.nextState(AppState)
+        }
+      },
+      ({ nextMachines }) =>
+        Fx.sync(() => {
+          nextMachines.app.set("Playing")
+        })
+    )
+
+    const noop = Game.System.define(
+      "StateMachineRuntime/InvalidFragmentNoop",
+      {},
+      () => Fx.sync<undefined, {}>(() => undefined)
+    )
+
+    const invalidFragment = Game.Schedule.fragment({
+      entries: [
+        noop,
+        Game.Schedule.applyStateTransitions()
+      ]
+    })
+
+    const invalidEnter = Game.Schedule.onEnter(AppState, "Playing", [invalidFragment])
 
     const runtime = makeRuntime()
     expect(() =>

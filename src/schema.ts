@@ -225,6 +225,8 @@ type BoundScheduleEntryValue<S extends Schema.Any, Root> =
   | Schedule.LifecycleUpdateStep
   | Schedule.RelationFailureUpdateStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
+  | Schema.BoundScheduleFragment<S, Root, any>
+  | Schema.BoundSchedulePhase<S, Root, any>
   | Schema.BoundSchedule<S, Root, any>
 
 type BoundTransitionEntryValue<S extends Schema.Any, Root> =
@@ -233,7 +235,24 @@ type BoundTransitionEntryValue<S extends Schema.Any, Root> =
   | Schedule.EventUpdateStep
   | Schedule.LifecycleUpdateStep
   | Schedule.RelationFailureUpdateStep
+  | Schema.BoundScheduleFragment<S, Root, any>
+  | Schema.BoundSchedulePhase<S, Root, any>
   | Schema.BoundSchedule<S, Root, any>
+
+type BoundScheduleStepValue<S extends Schema.Any, Root> =
+  | Schema.BoundSystem<any, Root, any, any, any>
+  | Schedule.ApplyDeferredStep
+  | Schedule.EventUpdateStep
+  | Schedule.LifecycleUpdateStep
+  | Schedule.RelationFailureUpdateStep
+  | Schedule.ApplyStateTransitionsStep<any, Root>
+
+type BoundTransitionStepValue<S extends Schema.Any, Root> =
+  | Schema.BoundSystem<any, Root, any, any, any>
+  | Schedule.ApplyDeferredStep
+  | Schedule.EventUpdateStep
+  | Schedule.LifecycleUpdateStep
+  | Schedule.RelationFailureUpdateStep
 
 type BoundScheduleDefineResult<
   S extends Schema.Any,
@@ -427,6 +446,22 @@ export interface FeatureBuildGame<
     define: <
       const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
     >(...entries: Entries) => BoundScheduleDefineResult<Accessible, Root, Entries>
+    fragment: <
+      const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
+    >(options: {
+      readonly entries?: Entries
+      readonly steps?: ReadonlyArray<Extract<Entries[number], BoundScheduleStepValue<Accessible, Root>>>
+    }) => Schedule.ScheduleFragmentFor<Accessible, Entries, Root>
+    phase: <
+      const Steps extends ReadonlyArray<BoundScheduleStepValue<Accessible, Root>>
+    >(options: {
+      readonly steps: Steps
+    }) => Schema.BoundSchedulePhase<Accessible, Root>
+    compose: <
+      const Entries extends ReadonlyArray<BoundScheduleEntryValue<Accessible, Root>>
+    >(options: {
+      readonly entries: Entries
+    }) => Schedule.ScheduleCompositionFor<Entries>
     transitions: <
       const Entries extends ReadonlyArray<BoundTransitionBundleInputValue<Accessible, Root>>
     >(...entries: Entries) => BoundTransitionBundleResult<Accessible, Root, Entries>
@@ -587,6 +622,12 @@ export namespace Schema {
     Root,
     Requirements extends System.RuntimeRequirements = System.RuntimeRequirements
   > = Schedule.ScheduleDefinition<S, Requirements, Root>
+
+  export type BoundScheduleFragment<
+    S extends Any,
+    Root,
+    Requirements extends System.RuntimeRequirements = System.RuntimeRequirements
+  > = Schedule.ScheduleFragmentDefinition<S, Root, Requirements>
 
   export type BoundSchedulePhase<
     S extends Any,
@@ -798,6 +839,22 @@ export namespace Schema {
       define: <
     const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
       >(...entries: Entries) => BoundScheduleDefineResult<S, Root, Entries>
+      fragment: <
+        const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
+      >(options: {
+        readonly entries?: Entries
+        readonly steps?: ReadonlyArray<Extract<Entries[number], BoundScheduleStepValue<S, Root>>>
+      }) => RebindScheduleFragment<Schedule.ScheduleFragmentFor<S, Entries>, Root>
+      phase: <
+        const Steps extends ReadonlyArray<BoundScheduleStepValue<S, Root>>
+      >(options: {
+        readonly steps: Steps
+      }) => Schema.BoundSchedulePhase<S, Root>
+      compose: <
+        const Entries extends ReadonlyArray<BoundScheduleEntryValue<S, Root>>
+      >(options: {
+        readonly entries: Entries
+      }) => Schedule.ScheduleCompositionFor<Entries>
       transitions: <
         const Entries extends ReadonlyArray<BoundTransitionBundleInputValue<S, Root>>
       >(...entries: Entries) => BoundTransitionBundleResult<S, Root, Entries>
@@ -879,6 +936,11 @@ type QuerySelectionAccess<S extends Schema.Any, Root> =
 type RebindAnonymousSchedule<ScheduleValue, Root> =
   ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any>
     ? Schedule.Schedule.Definition<S, Requirements, Root>
+    : never
+
+type RebindScheduleFragment<FragmentValue, Root> =
+  FragmentValue extends Schedule.Schedule.Fragment<infer S, any, infer ExactRequirements, infer RuntimeRequirementsValue>
+    ? Schedule.Schedule.Fragment<S, Root, ExactRequirements, RuntimeRequirementsValue>
     : never
 
 type RebindSchedulePhase<PhaseValue, Root> =
@@ -1150,9 +1212,9 @@ export const bind = <S extends Schema.Any, Root = S>(
   type BoundTransitionBundleFor<Entries extends ReadonlyArray<BoundTransitionBundleInput>> =
     BoundTransitionBundleResult<S, Root, Entries>
   type BoundTransitionBundle = Schema.BoundTransitionBundle<S, Root>
-  type BoundScheduleStep = Exclude<BoundScheduleEntryValue<S, Root>, Schema.BoundSchedule<S, Root, any>>
+  type BoundScheduleStep = BoundScheduleStepValue<S, Root>
   type BoundScheduleEntry = BoundScheduleEntryValue<S, Root>
-  type BoundTransitionStep = Exclude<BoundTransitionEntryValue<S, Root>, Schema.BoundSchedule<S, Root, any>>
+  type BoundTransitionStep = BoundTransitionStepValue<S, Root>
   type BoundTransitionEntry = BoundTransitionEntryValue<S, Root>
   type BoundAnonymousScheduleFor<ScheduleValue> = RebindAnonymousSchedule<ScheduleValue, Root>
   type BoundTransitionScheduleFor<ScheduleValue, M extends BoundMachine> = RebindTransitionSchedule<ScheduleValue, M, Root>
@@ -1371,6 +1433,46 @@ export const bind = <S extends Schema.Any, Root = S>(
   >(...entries: Entries) =>
     Schedule.define(...entries) as BoundScheduleDefineResult<S, Root, Entries>
 
+  const makeScheduleFragment = <
+    const Entries extends ReadonlyArray<BoundScheduleEntry>
+  >(options: {
+    readonly entries?: Entries
+    readonly steps?: ReadonlyArray<Extract<Entries[number], BoundScheduleStep>>
+  }) => {
+    if (options.entries) {
+      return Schedule.fragment({
+        schema,
+        entries: options.entries
+      }) as RebindScheduleFragment<Schedule.ScheduleFragmentFor<S, Entries>, Root>
+    }
+    if (!options.steps) {
+      return Schedule.fragment({
+        schema
+      } as any) as RebindScheduleFragment<Schedule.ScheduleFragmentFor<S, Entries>, Root>
+    }
+    return Schedule.fragment({
+      schema,
+      steps: options.steps as ReadonlyArray<Schedule.ScheduleStep>
+    } as any) as RebindScheduleFragment<Schedule.ScheduleFragmentFor<S, Entries>, Root>
+  }
+
+  const makeSchedulePhase = <
+    const Steps extends ReadonlyArray<BoundScheduleStep>
+  >(options: {
+    readonly steps: Steps
+  }) =>
+    Schedule.phase({
+      schema,
+      steps: options.steps
+    }) as Schema.BoundSchedulePhase<S, Root>
+
+  const composeSchedule = <
+    const Entries extends ReadonlyArray<BoundScheduleEntry>
+  >(options: {
+    readonly entries: Entries
+  }) =>
+    Schedule.compose(options) as Schedule.ScheduleCompositionFor<Entries>
+
   const defineMachine = <
     const Name extends string,
     const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
@@ -1542,6 +1644,9 @@ export const bind = <S extends Schema.Any, Root = S>(
     },
     Schedule: {
       define: defineSchedule,
+      fragment: makeScheduleFragment,
+      phase: makeSchedulePhase,
+      compose: composeSchedule,
       transitions: makeTransitionBundle,
       onEnter,
       onExit,

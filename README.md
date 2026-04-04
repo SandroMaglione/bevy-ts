@@ -1122,25 +1122,4 @@ Full Bevy plugin parity, full observer parity, asset pipeline abstractions, and 
 
 ## Roadmap
 
-### Reusable composition for transition-local work
-
-Transition handling is explicit and good, but restart/reset flows still become
-repetitive once they need to despawn content, reset resources, and respawn
-authored state. In
-[src/examples/platformer/systems/state.ts:49](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L49),
-the restart flow has to manually reset resources, despawn tagged entities, and
-rebuild the level on `onEnter(Playing)`.
-
-The improvement should stay generic: better reusable transition bundles or
-transition-scoped composition values, not built-in gameplay reset helpers.
-
-Ideal shape:
-
-```ts
-const restartBundle = Game.Schedule.transitions(
-  Game.Schedule.onEnter(SessionState, "Playing", [
-    resetWorldSystem,
-    respawnWorldSystem
-  ])
-)
-```
+No active roadmap items right now.

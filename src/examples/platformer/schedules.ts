@@ -4,13 +4,15 @@ import {
   ApplyWorldCameraTransformSystem,
   CaptureFrameContextSystem,
   CreateRenderNodesSystem,
+  DespawnLevelEntitiesOnPlayingEnterSystem,
   DestroyRenderNodesSystem,
   MovePlayerSystem,
   QueueLossSystem,
   QueueRestartSystem,
-  ResetWorldOnPlayingEnterSystem,
+  ResetWorldResourcesOnPlayingEnterSystem,
   ResolveMoveIntentSystem,
   SetupWorldSystem,
+  SpawnWorldOnPlayingEnterSystem,
   SyncCameraSystem,
   SyncHudSystem,
   SyncRenderableTransformsSystem
@@ -27,9 +29,18 @@ export const setupSchedule = Game.Schedule.define(
   SyncHudSystem
 )
 
+const restartOnPlayingEnter = Game.Schedule.fragment({
+  entries: [
+    ResetWorldResourcesOnPlayingEnterSystem,
+    DespawnLevelEntitiesOnPlayingEnterSystem,
+    Game.Schedule.applyDeferred(),
+    SpawnWorldOnPlayingEnterSystem
+  ]
+})
+
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Playing", [
-    ResetWorldOnPlayingEnterSystem
+    restartOnPlayingEnter
   ])
 )
 

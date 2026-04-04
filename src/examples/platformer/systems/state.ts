@@ -56,30 +56,46 @@ export const QueueRestartSystem = Game.System.define(
     })
 )
 
-export const ResetWorldOnPlayingEnterSystem = Game.System.define(
-  "Platformer/ResetWorldOnPlayingEnter",
+export const ResetWorldResourcesOnPlayingEnterSystem = Game.System.define(
+  "Platformer/ResetWorldResourcesOnPlayingEnter",
   {
-    queries: {
-      levelEntities: LevelEntityQuery
-    },
     resources: {
       contacts: Game.System.writeResource(PlayerContacts),
       loseMessage: Game.System.writeResource(LoseMessage)
     }
   },
-  ({ queries, resources, commands }) =>
+  ({ resources }) =>
     Fx.sync(() => {
       resources.contacts.set(makeInitialPlayerContacts())
       resources.loseMessage.set("You fell into a hole.")
+    })
+)
 
+export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System.define(
+  "Platformer/DespawnLevelEntitiesOnPlayingEnter",
+  {
+    queries: {
+      levelEntities: LevelEntityQuery
+    }
+  },
+  ({ queries, commands }) =>
+    Fx.sync(() => {
       for (const match of queries.levelEntities.each()) {
         commands.despawn(match.entity.id)
       }
+    })
+)
 
+export const SpawnWorldOnPlayingEnterSystem = Game.System.define(
+  "Platformer/SpawnWorldOnPlayingEnter",
+  {},
+  ({ commands }) =>
+    Fx.sync(() => {
       const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawn(playerDraft.value)
       }
+
       for (const solid of levelSolids) {
         const solidDraft = makeSolidDraft(solid)
         if (solidDraft.ok) {

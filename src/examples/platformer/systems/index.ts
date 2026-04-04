@@ -9,4 +9,10 @@ export {
 } from "./movement.ts"
 export { CreateRenderNodesSystem, DestroyRenderNodesSystem, SyncRenderableTransformsSystem } from "./render-sync.ts"
 export { SetupWorldSystem } from "./setup.ts"
-export { QueueLossSystem, QueueRestartSystem, ResetWorldOnPlayingEnterSystem } from "./state.ts"
+export {
+  DespawnLevelEntitiesOnPlayingEnterSystem,
+  QueueLossSystem,
+  QueueRestartSystem,
+  ResetWorldResourcesOnPlayingEnterSystem,
+  SpawnWorldOnPlayingEnterSystem
+} from "./state.ts"
