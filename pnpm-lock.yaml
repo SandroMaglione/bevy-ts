@@ -32,6 +32,9 @@ importers:
       effect:
         specifier: 4.0.0-beta.43
         version: 4.0.0-beta.43
+      lightningcss:
+        specifier: 1.32.0
+        version: 1.32.0
       markdown-it:
         specifier: ^14.1.1
         version: 14.1.1

@@ -14,6 +14,7 @@
     "@vitest/coverage-v8": "4.0.18",
     "@vitest/expect": "4.0.18",
     "effect": "4.0.0-beta.43",
+    "lightningcss": "1.32.0",
     "markdown-it": "^14.1.1",
     "matter-js": "^0.20.0",
     "pixi.js": "^8.17.1",

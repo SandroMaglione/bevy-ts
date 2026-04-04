@@ -5,6 +5,7 @@ import * as FileSystem from "effect/FileSystem"
 import * as Effect from "effect/Effect"
 import * as Path from "effect/Path"
 import * as Schema from "effect/Schema"
+import { transform } from "lightningcss"
 import { createHighlighter } from "shiki"
 import * as ts from "typescript"
 
@@ -52,7 +53,6 @@ interface ModuleItem {
   readonly deprecated: boolean
   readonly anchor: string
   readonly order: number
-  readonly signature: string
   readonly sourceLink: string
   readonly line: number
   readonly statementKind: ts.SyntaxKind
@@ -105,6 +105,8 @@ const SHIKI_THEME = "catppuccin-latte"
 const SHIKI_INLINE_LANG = "ts"
 const SHIKI_PLAIN_LANG = "text"
 const MODULE_RENDER_CONCURRENCY = 6
+const HOMEPAGE_MARKDOWN_PATH = NodePath.join("scripts", "homepage.md")
+const DOCGEN_CSS_PATH = NodePath.join("scripts", "docgen.css")
 
 const HTML_ESCAPE: Record<string, string> = {
   "&": "&amp;",
@@ -299,53 +301,6 @@ const toTitleCase = (value: string): string =>
 const getGroupLabel = (config: DocsConfig, groupId: string): string =>
   config.moduleGroups.find((group) => group.id === groupId)?.label ?? toTitleCase(groupId)
 
-const formatTypeString = (checker: ts.TypeChecker, symbol: ts.Symbol, declaration: ts.Node): string => {
-  const type = checker.getTypeOfSymbolAtLocation(symbol, declaration)
-  return checker.typeToString(
-    type,
-    declaration,
-    ts.TypeFormatFlags.NoTruncation |
-      ts.TypeFormatFlags.MultilineObjectLiterals |
-      ts.TypeFormatFlags.UseSingleQuotesForStringLiteralType
-  )
-}
-
-const getValueSignature = (
-  checker: ts.TypeChecker,
-  declaration: ts.VariableDeclaration,
-  sourceFile: ts.SourceFile
-): string => {
-  if (!ts.isIdentifier(declaration.name)) {
-    return declaration.getText(sourceFile)
-  }
-  const symbol = checker.getSymbolAtLocation(declaration.name)
-  if (!symbol) {
-    return declaration.getText(sourceFile).replace(/\s*=\s*[\s\S]*$/, "").trim()
-  }
-  const typeString = formatTypeString(checker, symbol, declaration)
-  return `export const ${declaration.name.text}: ${typeString}`
-}
-
-const getFunctionSignature = (
-  checker: ts.TypeChecker,
-  declaration: ts.FunctionDeclaration
-): string => {
-  if (!declaration.name) {
-    return declaration.getText()
-  }
-  const symbol = checker.getSymbolAtLocation(declaration.name)
-  if (!symbol) {
-    return declaration.getText()
-  }
-  const typeString = formatTypeString(checker, symbol, declaration)
-  return `export const ${declaration.name.text}: ${typeString}`
-}
-
-const getTypeSignature = (
-  declaration: ts.InterfaceDeclaration | ts.TypeAliasDeclaration,
-  sourceFile: ts.SourceFile
-): string => declaration.getText(sourceFile)
-
 interface CreateItemInput {
   readonly modulePath: string
   readonly sourceFile: ts.SourceFile
@@ -354,7 +309,6 @@ interface CreateItemInput {
   readonly doc: ParsedJSDoc
   readonly kind: ModuleItemKind
   readonly name: string
-  readonly signature: string
   readonly order: number
   readonly config: DocsConfig
 }
@@ -367,7 +321,6 @@ const createItem = ({
   doc,
   kind,
   name,
-  signature,
   order,
   config
 }: CreateItemInput): ModuleItem => {
@@ -381,7 +334,6 @@ const createItem = ({
     deprecated: hasTag(doc, "deprecated"),
     anchor: slugify(name),
     order,
-    signature,
     sourceLink: createSourceLink(config, modulePath, line),
     line,
     statementKind: node.kind
@@ -392,12 +344,10 @@ const shouldSkipDoc = (doc: ParsedJSDoc): boolean => hasTag(doc, "internal") || 
 
 const parseExportedItems = ({
   config,
-  checker,
   sourceFile,
   modulePath
 }: {
   readonly config: DocsConfig
-  readonly checker: ts.TypeChecker
   readonly sourceFile: ts.SourceFile
   readonly modulePath: string
 }): Array<ModuleItem> => {
@@ -424,7 +374,6 @@ const parseExportedItems = ({
           doc,
           kind: "function",
           name: statement.name.text,
-          signature: getFunctionSignature(checker, statement),
           order: order++
         })
       )
@@ -466,7 +415,6 @@ const parseExportedItems = ({
             doc: declarationDoc,
             kind,
             name: declaration.name.text,
-            signature: getValueSignature(checker, declaration, sourceFile),
             order: order++
           })
         )
@@ -489,7 +437,6 @@ const parseExportedItems = ({
           doc,
           kind: "interface",
           name: statement.name.text,
-          signature: getTypeSignature(statement, sourceFile),
           order: order++
         })
       )
@@ -511,7 +458,6 @@ const parseExportedItems = ({
           doc,
           kind: "type",
           name: statement.name.text,
-          signature: getTypeSignature(statement, sourceFile),
           order: order++
         })
       )
@@ -533,7 +479,6 @@ const parseExportedItems = ({
           doc,
           kind: "namespace",
           name: statement.name.getText(sourceFile),
-          signature: statement.getText(sourceFile),
           order: order++
         })
       )
@@ -562,14 +507,12 @@ const parseModule = ({
   absolutePath,
   relativePath,
   config,
-  program,
-  checker
+  program
 }: {
   readonly absolutePath: string
   readonly relativePath: string
   readonly config: DocsConfig
   readonly program: ts.Program
-  readonly checker: ts.TypeChecker
 }): ModuleDoc => {
   const sourceFile = program.getSourceFile(absolutePath)
   if (!sourceFile) {
@@ -589,7 +532,6 @@ const parseModule = ({
   const groupDescriptions = collectNamedDescriptions(moduleDoc.tags.get("groupDescription"))
   const items = parseExportedItems({
     config,
-    checker,
     sourceFile,
     modulePath: relativePath
   })
@@ -629,10 +571,14 @@ const getRelativeDocHref = (fromOutputPath: string, toOutputPath: string): strin
   return relative === "" ? "./" : relative
 }
 
-const rewriteReadmeLinks = (content: string, sourceBaseUrl: string): string =>
+const rewriteMarkdownLinks = (content: string, sourceBaseUrl: string): string =>
   content.replace(/\]\((?!https?:\/\/|#|mailto:|data:)([^)]+)\)/g, (_match: string, rawTarget: string) => {
     const [target = "", hash = ""] = rawTarget.split("#")
-    const normalized = target.replace(/^\.\//, "").replace(/^\/+/, "")
+    const normalized = NodePath.posix
+      .normalize(target.replaceAll(NodePath.sep, "/"))
+      .replace(/^(\.\.\/)+/u, "")
+      .replace(/^\.\//u, "")
+      .replace(/^\/+/u, "")
     if (normalized.length === 0) {
       return `](#${hash})`
     }
@@ -640,8 +586,8 @@ const rewriteReadmeLinks = (content: string, sourceBaseUrl: string): string =>
     return `](${sourceBaseUrl}/${normalized}${suffix})`
   })
 
-const stripReadmeTitle = (content: string): string =>
-  content.replace(/^#\s+`?bevy-ts`?\s*\n+/i, "").trim()
+const stripMarkdownTitle = (content: string): string =>
+  content.replace(/^#\s+.+\n+/i, "").trim()
 
 const normalizeLanguage = (language: string): string => {
   const normalized = language.trim().toLowerCase()
@@ -748,134 +694,30 @@ const renderExamples = (
         .map((example: string) => renderMarkdown(renderer, example, anchors))
         .join("")}</section>`
 
-const INDENT_UNIT = "  "
-
-const makeIndent = (depth: number): string => INDENT_UNIT.repeat(Math.max(0, depth))
-
-const formatSignature = (signature: string): string => {
-  const source = signature.trim()
-  if (!source) {
-    return source
+export const getItemShortDescription = (description: string): string => {
+  const trimmed = description.trim()
+  if (!trimmed) {
+    return ""
   }
 
-  const lines: Array<string> = []
-  let currentLine = ""
-  let depth = 0
-  let stringQuote: string | null = null
-  let escaping = false
-
-  const pushNewline = (nextDepth = depth): void => {
-    const trimmedLine = currentLine.replace(/[ \t]+$/u, "")
-    if (trimmedLine.length > 0 || lines.length > 0) {
-      lines.push(trimmedLine)
-    }
-    currentLine = makeIndent(nextDepth)
+  const [paragraph] = trimmed.split(/\n\s*\n/u)
+  if (!paragraph) {
+    return ""
   }
 
-  for (let index = 0; index < source.length; index++) {
-    const char = source[index]
-    const next = source[index + 1] ?? ""
-    const prev = source[index - 1] ?? ""
-
-    if (stringQuote !== null) {
-      currentLine += char
-      if (escaping) {
-        escaping = false
-        continue
-      }
-      if (char === "\\") {
-        escaping = true
-        continue
-      }
-      if (char === stringQuote) {
-        stringQuote = null
-      }
-      continue
-    }
-
-    if (char === "\"" || char === "'" || char === "`") {
-      stringQuote = char
-      currentLine += char
-      continue
-    }
-
-    if (char === "{") {
-      depth += 1
-      currentLine += char
-      if (next && next !== "}" && next !== "\n") {
-        pushNewline(depth)
-      }
-      continue
-    }
-
-    if (char === "}") {
-      depth = Math.max(0, depth - 1)
-      if (prev !== "{" && prev !== "\n") {
-        pushNewline(depth)
-      }
-      currentLine += char
-      continue
-    }
-
-    if (char === "(" || char === "[" || char === "<") {
-      currentLine += char
-      depth += 1
-      if (next && ![")", "]", ">", "\n"].includes(next)) {
-        pushNewline(depth)
-      }
-      continue
-    }
-
-    if (char === ")" || char === "]" || char === ">") {
-      depth = Math.max(0, depth - 1)
-      if (currentLine.trim().length > 0 && prev !== "(" && prev !== "[" && prev !== "<") {
-        pushNewline(depth)
-      }
-      currentLine += char
-      continue
-    }
-
-    if (char === ",") {
-      currentLine += char
-      if (next && next !== "\n") {
-        pushNewline(depth)
-      }
-      continue
-    }
-
-    if (char === ";" && depth > 0) {
-      currentLine += char
-      if (next && next !== "\n" && next !== "}") {
-        pushNewline(depth)
-      }
-      continue
-    }
-
-    if (char === ":" && next === " ") {
-      currentLine += char
-      if (depth === 0 && source.slice(index + 1).includes("{")) {
-        pushNewline(depth + 1)
-      }
-      continue
-    }
-
-    currentLine += char
-  }
-
-  const trimmedLine = currentLine.replace(/[ \t]+$/u, "")
-  if (trimmedLine.length > 0) {
-    lines.push(trimmedLine)
-  }
-
-  return lines
-    .join("\n")
+  return paragraph
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join(" ")
     .trim()
 }
 
-const renderSignature = (renderer: DocsRenderer, signature: string): string =>
-  `<div class="signature">${renderer.highlightBlock(formatSignature(signature), "ts")}</div>`
-
-const renderModuleToc = (renderer: DocsRenderer, sections: ReadonlyArray<ModuleSection>): string => {
+const renderModuleToc = (
+  renderer: DocsRenderer,
+  sections: ReadonlyArray<ModuleSection>,
+  anchors: ReadonlySet<string>
+): string => {
   if (sections.length === 0) {
     return ""
   }
@@ -890,7 +732,14 @@ const renderModuleToc = (renderer: DocsRenderer, sections: ReadonlyArray<ModuleS
         `<h3>${escapeHtml(section.key)}</h3>`,
         `<ul>`,
         ...section.items.map((item: ModuleItem) =>
-          `<li><a href="#${item.anchor}">${renderer.highlightInline(item.name)}</a></li>`),
+          [
+            `<li>`,
+            `<a href="#${item.anchor}">${renderer.highlightInline(item.name)}</a>`,
+            getItemShortDescription(item.description)
+              ? `<div class="module-toc-description">${renderMarkdown(renderer, getItemShortDescription(item.description), anchors)}</div>`
+              : "",
+            `</li>`
+          ].join("")),
         `</ul>`,
         `</section>`
       ].join("")),
@@ -909,7 +758,6 @@ const renderItem = (renderer: DocsRenderer, item: ModuleItem, anchors: ReadonlyS
     item.description
       ? renderMarkdown(renderer, item.description, anchors)
       : `<p class="muted">No description provided yet.</p>`,
-    renderSignature(renderer, item.signature),
     item.examples.length > 0
       ? `<div class="doc-item-examples">${item.examples
           .map((example: string) => renderMarkdown(renderer, example, anchors))
@@ -973,7 +821,7 @@ const renderModuleContent = (renderer: DocsRenderer, config: ResolvedDocsConfig,
     renderMarkdown(renderer, moduleDoc.description, anchors),
     `</header>`,
     renderExamples(renderer, moduleDoc.examples, anchors),
-    renderModuleToc(renderer, sections),
+    renderModuleToc(renderer, sections, anchors),
     sections.length === 0
       ? `<section><p>No callable public exports are documented for this module yet.</p></section>`
       : sections
@@ -1075,12 +923,12 @@ const renderHomePage = ({
   renderer,
   config,
   modules,
-  readme
+  homepage
 }: {
   readonly renderer: DocsRenderer
   readonly config: ResolvedDocsConfig
   readonly modules: ReadonlyArray<ModuleDoc>
-  readonly readme: string
+  readonly homepage: string
 }): string => {
   const grouped = config.moduleGroups.map((group) => ({
     ...group,
@@ -1089,13 +937,13 @@ const renderHomePage = ({
 
   return [
     `<header class="home-hero">`,
-    `<p class="eyebrow">Project Docs</p>`,
+    `<p class="eyebrow">Step By Step Guide</p>`,
     `<h1>${escapeHtml(config.siteTitle)}</h1>`,
     `<p class="home-summary">${escapeHtml(config.siteDescription)}</p>`,
     `</header>`,
-    `<section class="home-readme">${renderMarkdown(renderer, readme)}</section>`,
+    `<section class="home-readme">${renderMarkdown(renderer, homepage)}</section>`,
     `<section class="home-groups">`,
-    `<h2>Modules</h2>`,
+    `<h2>API Modules</h2>`,
     `<div class="group-grid">`,
     grouped
       .map((group: ModuleGroup & { readonly modules: ReadonlyArray<ModuleDoc> }) =>
@@ -1114,404 +962,14 @@ const renderHomePage = ({
   ].join("")
 }
 
-const SITE_CSS = `
-:root {
-  color-scheme: light;
-  --bg: #f4f1ea;
-  --surface: rgba(255, 255, 255, 0.85);
-  --surface-strong: #fffdf8;
-  --border: #d8cdbd;
-  --text: #221b16;
-  --muted: #6a5c50;
-  --accent: #0d6c5b;
-  --shadow: 0 12px 40px rgba(34, 27, 22, 0.08);
-  --sidebar-width: 18rem;
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+export const buildSiteCss = (source: string): string => {
+  const result = transform({
+    filename: "docgen.css",
+    code: Buffer.from(source),
+    minify: true
+  })
+  return Buffer.from(result.code).toString("utf8")
 }
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-  color: var(--text);
-  background:
-    radial-gradient(circle at top left, rgba(13, 108, 91, 0.16), transparent 28rem),
-    linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
-}
-
-a {
-  color: var(--accent);
-}
-
-pre,
-code {
-  font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(14rem, var(--sidebar-width)) minmax(0, 1fr);
-  gap: 2rem;
-  max-width: 96rem;
-  margin: 0 auto;
-  padding: 1.5rem;
-}
-
-.sidebar {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  max-height: 100vh;
-  overflow: auto;
-  padding: 1.5rem 1rem 2rem;
-  border-right: 1px solid var(--border);
-}
-
-.site-title {
-  display: inline-block;
-  margin-bottom: 0.5rem;
-  color: var(--text);
-  text-decoration: none;
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.site-description {
-  margin: 0 0 1.5rem;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.sidebar-section {
-  margin-bottom: 1.5rem;
-}
-
-.sidebar-section h2 {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.sidebar-section ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.sidebar-link {
-  display: block;
-  padding: 0.4rem 0.65rem;
-  border-radius: 0.7rem;
-  text-decoration: none;
-  line-height: 1.35;
-}
-
-.sidebar-link.is-active {
-  color: var(--text);
-  background: rgba(13, 108, 91, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(13, 108, 91, 0.18);
-}
-
-.content {
-  min-width: 0;
-  padding: 2rem 0 4rem;
-}
-
-.module-hero,
-.home-hero,
-.module-section,
-.module-examples,
-.module-toc,
-.related-types,
-.home-readme,
-.group-card {
-  background: var(--surface);
-  border: 1px solid rgba(216, 205, 189, 0.8);
-  box-shadow: var(--shadow);
-  border-radius: 1.25rem;
-}
-
-.module-hero,
-.home-hero,
-.home-readme,
-.module-examples,
-.module-toc,
-.related-types {
-  padding: 1.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.module-section {
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.eyebrow {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.module-hero h1,
-.home-hero h1 {
-  margin: 0.4rem 0 1rem;
-  font-size: clamp(2.4rem, 4vw, 4rem);
-  line-height: 1.05;
-}
-
-.home-summary {
-  margin: 0;
-  max-width: 42rem;
-  color: var(--muted);
-  font-size: 1.1rem;
-  line-height: 1.55;
-}
-
-.module-actions {
-  margin: 0 0 1rem;
-}
-
-.source-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  text-decoration: none;
-  font-size: 0.95rem;
-}
-
-.content h2,
-.content h3,
-.content h4,
-.content p,
-.content ul,
-.content ol,
-.content pre {
-  margin-top: 0;
-}
-
-.content p,
-.content li {
-  line-height: 1.65;
-}
-
-.content p + p,
-.content p + ul,
-.content p + ol,
-.content ul + p,
-.content ol + p {
-  margin-top: 0.9rem;
-}
-
-.content ul,
-.content ol {
-  padding-left: 1.3rem;
-}
-
-.module-section-header h2,
-.module-examples h2,
-.module-toc h2,
-.related-types h2,
-.home-groups h2 {
-  margin-bottom: 0.75rem;
-}
-
-.module-section-header > :last-child,
-.module-examples > :last-child,
-.module-toc > :last-child,
-.related-types > :last-child {
-  margin-bottom: 0;
-}
-
-.module-toc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 1rem;
-}
-
-.module-toc-section {
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 0.9rem;
-  background: var(--surface-strong);
-}
-
-.module-toc-section h3 {
-  margin-bottom: 0.7rem;
-  font-size: 1rem;
-}
-
-.module-toc-section ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.module-toc-section li + li {
-  margin-top: 0.55rem;
-}
-
-.module-toc-section a {
-  text-decoration: none;
-  line-height: 1.4;
-}
-
-.doc-item-list {
-  display: grid;
-  gap: 1.25rem;
-}
-
-.doc-item {
-  padding: 1.35rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  background: var(--surface-strong);
-}
-
-.doc-item-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.9rem;
-}
-
-.doc-item-header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  line-height: 1.2;
-}
-
-.doc-item > :last-child {
-  margin-bottom: 0;
-}
-
-.doc-item .signature + .doc-item-examples,
-.doc-item p + .signature {
-  margin-top: 1rem;
-}
-
-.doc-item-examples > :last-child {
-  margin-bottom: 0;
-}
-
-.signature {
-  margin: 1.1rem 0 0;
-}
-
-.signature .shiki {
-  overflow-x: auto;
-}
-
-.signature .shiki code {
-  white-space: pre;
-  overflow-wrap: normal;
-}
-
-.signature .shiki .line {
-  min-height: 1.55em;
-}
-
-.shiki {
-  margin: 0;
-  padding: 1rem 1.1rem;
-  overflow: auto;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(216, 205, 189, 0.8);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-.shiki code {
-  display: grid;
-  gap: 0.18rem;
-  font-size: 0.92rem;
-  line-height: 1.6;
-}
-
-.shiki .line {
-  display: block;
-  min-height: 1.5em;
-}
-
-.inline-code {
-  display: inline;
-  padding: 0.04rem 0.28rem;
-  border-radius: 0.4rem;
-  border: 1px solid rgba(216, 205, 189, 0.85);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-  font-size: 0.84em;
-  line-height: 1.35;
-  white-space: break-spaces;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-}
-
-.inline-code code,
-.inline-code .line {
-  display: inline;
-}
-
-.related-types li + li {
-  margin-top: 0.5rem;
-}
-
-.group-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: 1rem;
-}
-
-.group-card {
-  padding: 1.25rem;
-}
-
-.group-card ul {
-  padding-left: 1.2rem;
-  margin: 0;
-}
-
-.group-card li {
-  margin-bottom: 1rem;
-}
-
-.group-card p {
-  margin: 0.3rem 0 0;
-  color: var(--muted);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-@media (max-width: 900px) {
-  .layout {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-  }
-
-  .sidebar {
-    position: static;
-    max-height: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 0 0 1rem;
-  }
-
-  .content {
-    padding-top: 0;
-  }
-}
-`
 
 export const loadDocsModel = (cwd = process.cwd()): Effect.Effect<DocsModel, Error, FileSystem.FileSystem> =>
   Effect.gen(function*() {
@@ -1524,15 +982,13 @@ export const loadDocsModel = (cwd = process.cwd()): Effect.Effect<DocsModel, Err
     const compilerOptions = readTsConfig(cwd)
     const absoluteEntryPoints = config.entryPoints.map((entryPoint) => NodePath.join(cwd, entryPoint))
     const program = ts.createProgram(absoluteEntryPoints, compilerOptions)
-    const checker = program.getTypeChecker()
     const modules = absoluteEntryPoints
       .map((absolutePath, index) =>
         parseModule({
           absolutePath,
           relativePath: config.entryPoints[index] ?? absolutePath,
           config,
-          program,
-          checker
+          program
         }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -1595,15 +1051,17 @@ export const buildDocsSite = (
       Effect.promise(() => createDocsRenderer()),
       (renderer) =>
         Effect.gen(function*() {
-          yield* Effect.logInfo(`Reading README and preparing output directory ${config.outDir}`)
-          const readme = yield* readFileString(NodePath.join(cwd, "README.md"))
-          const normalizedReadme = stripReadmeTitle(rewriteReadmeLinks(readme, config.sourceBaseUrl))
+          yield* Effect.logInfo(`Reading homepage markdown and stylesheet sources for ${config.outDir}`)
+          const homepage = yield* readFileString(NodePath.join(cwd, HOMEPAGE_MARKDOWN_PATH))
+          const normalizedHomepage = stripMarkdownTitle(rewriteMarkdownLinks(homepage, config.sourceBaseUrl))
+          const siteCssSource = yield* readFileString(NodePath.join(cwd, DOCGEN_CSS_PATH))
+          const siteCss = buildSiteCss(siteCssSource)
 
           yield* removeDir(config.outDir)
           yield* Effect.logInfo("Writing static assets")
           yield* Effect.all([
             writeFileString(NodePath.join(config.outDir, ".nojekyll"), ""),
-            writeFileString(NodePath.join(config.outDir, "assets", "site.css"), SITE_CSS)
+            writeFileString(NodePath.join(config.outDir, "assets", "site.css"), siteCss)
           ], { concurrency: "unbounded" })
 
           const homeOutputPath = NodePath.join(config.outDir, "index.html")
@@ -1614,7 +1072,7 @@ export const buildDocsSite = (
             currentOutputPath: homeOutputPath,
             title: `${config.siteTitle} Docs`,
             description: config.siteDescription,
-            content: renderHomePage({ renderer, config, modules, readme: normalizedReadme })
+            content: renderHomePage({ renderer, config, modules, homepage: normalizedHomepage })
           })
           yield* writeFileString(homeOutputPath, homeHtml)
           yield* Effect.logInfo(`Building ${modules.length} module pages with concurrency ${MODULE_RENDER_CONCURRENCY}`)

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { collectNamedDescriptions, createDocsRenderer, parseJSDoc } from "../scripts/docgen.ts"
+import {
+  buildSiteCss,
+  collectNamedDescriptions,
+  createDocsRenderer,
+  getItemShortDescription,
+  parseJSDoc
+} from "../scripts/docgen.ts"
 
 describe("parseJSDoc", () => {
   it("parses description and repeated tags", () => {
@@ -28,6 +34,44 @@ describe("collectNamedDescriptions", () => {
     ])
 
     expect(descriptions.get("Constructors")).toBe("Builders for the public surface.")
+  })
+})
+
+describe("getItemShortDescription", () => {
+  it("returns the first paragraph as a single line", () => {
+    const summary = getItemShortDescription([
+      "Creates the system definition.",
+      "",
+      "Further details stay in the full body."
+    ].join("\n"))
+
+    expect(summary).toBe("Creates the system definition.")
+  })
+
+  it("collapses multiline first paragraphs", () => {
+    const summary = getItemShortDescription([
+      "Defines the query access surface",
+      "without keeping formatting noise.",
+      "",
+      "Second paragraph."
+    ].join("\n"))
+
+    expect(summary).toBe("Defines the query access surface without keeping formatting noise.")
+  })
+})
+
+describe("buildSiteCss", () => {
+  it("minifies the authored stylesheet", () => {
+    const css = buildSiteCss(`
+      .example {
+        color: #ffffff;
+        margin: 0 0 0 0;
+      }
+    `)
+
+    expect(css).toContain(".example{")
+    expect(css).toContain("#fff")
+    expect(css).not.toContain("\n")
   })
 })
 

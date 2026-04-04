@@ -1,0 +1,385 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-strong: #fffdf8;
+  --border: #d8cdbd;
+  --text: #221b16;
+  --muted: #6a5c50;
+  --accent: #0d6c5b;
+  --shadow: 0 12px 40px rgba(34, 27, 22, 0.08);
+  --sidebar-width: 18rem;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(13, 108, 91, 0.16), transparent 28rem),
+    linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
+}
+
+a {
+  color: var(--accent);
+}
+
+pre,
+code {
+  font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, var(--sidebar-width)) minmax(0, 1fr);
+  gap: 2rem;
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow: auto;
+  padding: 1.5rem 1rem 2rem;
+  border-right: 1px solid var(--border);
+}
+
+.site-title {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.site-description {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.sidebar-section {
+  margin-bottom: 1.5rem;
+}
+
+.sidebar-section h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.sidebar-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.7rem;
+  text-decoration: none;
+  line-height: 1.35;
+}
+
+.sidebar-link.is-active {
+  color: var(--text);
+  background: rgba(13, 108, 91, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(13, 108, 91, 0.18);
+}
+
+.content {
+  min-width: 0;
+  padding: 2rem 0 4rem;
+}
+
+.module-hero,
+.home-hero,
+.module-section,
+.module-examples,
+.module-toc,
+.related-types,
+.home-readme,
+.group-card {
+  background: var(--surface);
+  border: 1px solid rgba(216, 205, 189, 0.8);
+  box-shadow: var(--shadow);
+  border-radius: 1.25rem;
+}
+
+.module-hero,
+.home-hero,
+.home-readme,
+.module-examples,
+.module-toc,
+.related-types {
+  padding: 1.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.module-section {
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.module-hero h1,
+.home-hero h1 {
+  margin: 0.4rem 0 1rem;
+  font-size: clamp(2.4rem, 4vw, 4rem);
+  line-height: 1.05;
+}
+
+.home-summary {
+  margin: 0;
+  max-width: 42rem;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1.55;
+}
+
+.module-actions {
+  margin: 0 0 1rem;
+}
+
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.content h2,
+.content h3,
+.content h4,
+.content p,
+.content ul,
+.content ol,
+.content pre {
+  margin-top: 0;
+}
+
+.content p,
+.content li {
+  line-height: 1.65;
+}
+
+.content p + p,
+.content p + ul,
+.content p + ol,
+.content ul + p,
+.content ol + p,
+.content pre + p,
+.content pre + ul,
+.content pre + ol {
+  margin-top: 0.9rem;
+}
+
+.content ul,
+.content ol {
+  padding-left: 1.3rem;
+}
+
+.module-section-header h2,
+.module-examples h2,
+.module-toc h2,
+.related-types h2,
+.home-groups h2 {
+  margin-bottom: 0.75rem;
+}
+
+.module-section-header > :last-child,
+.module-examples > :last-child,
+.module-toc > :last-child,
+.related-types > :last-child,
+.home-readme > :last-child {
+  margin-bottom: 0;
+}
+
+.module-toc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.module-toc-section {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface-strong);
+}
+
+.module-toc-section h3 {
+  margin-bottom: 0.7rem;
+  font-size: 1rem;
+}
+
+.module-toc-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.module-toc-section li + li {
+  margin-top: 0.8rem;
+}
+
+.module-toc-section a {
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.module-toc-description {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.module-toc-description p {
+  margin: 0;
+}
+
+.doc-item-list {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.doc-item {
+  padding: 1.35rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface-strong);
+}
+
+.doc-item-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.doc-item-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.doc-item > :last-child,
+.doc-item-examples > :last-child {
+  margin-bottom: 0;
+}
+
+.shiki {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  overflow: auto;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(216, 205, 189, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.shiki code {
+  display: grid;
+  gap: 0.18rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.shiki .line {
+  display: block;
+  min-height: 1.5em;
+}
+
+.inline-code {
+  display: inline;
+  padding: 0.04rem 0.28rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(216, 205, 189, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  font-size: 0.84em;
+  line-height: 1.35;
+  white-space: break-spaces;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.inline-code code,
+.inline-code .line {
+  display: inline;
+}
+
+.related-types li + li {
+  margin-top: 0.5rem;
+}
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
+.group-card {
+  padding: 1.25rem;
+}
+
+.group-card ul {
+  padding-left: 1.2rem;
+  margin: 0;
+}
+
+.group-card li {
+  margin-bottom: 1rem;
+}
+
+.group-card p {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .sidebar {
+    position: static;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 1rem;
+  }
+
+  .content {
+    padding-top: 0;
+  }
+}
