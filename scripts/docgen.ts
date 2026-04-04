@@ -79,9 +79,45 @@ interface ModuleSection {
   readonly items: Array<ModuleItem>
 }
 
+interface StandalonePage {
+  readonly id: string
+  readonly label: string
+  readonly outputPath: string
+  readonly title: string
+  readonly description: string
+  readonly content: string
+}
+
 interface DocsModel {
   readonly config: ResolvedDocsConfig
   readonly modules: ReadonlyArray<ModuleDoc>
+}
+
+interface TocEntry {
+  readonly name: string
+  readonly anchor: string
+  readonly description: string
+}
+
+interface TocSection {
+  readonly key: string
+  readonly items: ReadonlyArray<TocEntry>
+}
+
+interface KeyApiDocTarget {
+  readonly key: string
+  readonly moduleSlug: string
+  readonly moduleName: string
+  readonly modulePath: string
+  readonly moduleOrder: number
+  readonly itemName: string
+  readonly itemAnchor: string
+  readonly itemDescription: string
+  readonly itemOrder: number
+}
+
+interface KeyApiEntry extends KeyApiDocTarget {
+  readonly usageCount: number
 }
 
 const ModuleGroupSchema = Schema.Struct({
@@ -107,6 +143,27 @@ const SHIKI_PLAIN_LANG = "text"
 const MODULE_RENDER_CONCURRENCY = 6
 const HOMEPAGE_MARKDOWN_PATH = NodePath.join("scripts", "homepage.md")
 const DOCGEN_CSS_PATH = NodePath.join("scripts", "docgen.css")
+const EXAMPLES_DIRECTORY_PATH = NodePath.join("src", "examples")
+
+const DIRECT_NAMESPACE_TO_MODULE_SLUG: Record<string, string> = {
+  App: "app",
+  Definition: "definition",
+  Descriptor: "descriptor",
+  Entity: "entity",
+  Result: "result",
+  Schema: "schema"
+}
+
+const BOUND_NAMESPACE_TO_MODULE_SLUG: Record<string, string> = {
+  Command: "command",
+  Condition: "machine",
+  Entity: "entity",
+  Query: "query",
+  Runtime: "runtime",
+  Schedule: "schedule",
+  StateMachine: "machine",
+  System: "system"
+}
 
 const HTML_ESCAPE: Record<string, string> = {
   "&": "&amp;",
@@ -485,7 +542,38 @@ const parseExportedItems = ({
     }
   }
 
-  return items
+  return dedupeModuleItems(items)
+}
+
+const dedupeModuleItems = (items: ReadonlyArray<ModuleItem>): Array<ModuleItem> => {
+  const deduped: Array<ModuleItem> = []
+  const byKey = new Map<string, number>()
+
+  for (const item of items) {
+    const key = `${item.kind}:${item.name}`
+    const existingIndex = byKey.get(key)
+
+    if (existingIndex === undefined) {
+      byKey.set(key, deduped.length)
+      deduped.push(item)
+      continue
+    }
+
+    const existing = deduped[existingIndex]
+    if (!existing) {
+      continue
+    }
+
+    deduped[existingIndex] = {
+      ...existing,
+      description: existing.description || item.description,
+      examples: existing.examples.length > 0 ? existing.examples : item.examples,
+      category: existing.category ?? item.category,
+      deprecated: existing.deprecated || item.deprecated
+    }
+  }
+
+  return deduped
 }
 
 const validateModule = (moduleDoc: ModuleDoc, config: DocsConfig): void => {
@@ -713,9 +801,9 @@ export const getItemShortDescription = (description: string): string => {
     .trim()
 }
 
-const renderModuleToc = (
+const renderToc = (
   renderer: DocsRenderer,
-  sections: ReadonlyArray<ModuleSection>,
+  sections: ReadonlyArray<TocSection>,
   anchors: ReadonlySet<string>
 ): string => {
   if (sections.length === 0) {
@@ -726,12 +814,12 @@ const renderModuleToc = (
     `<section class="module-toc">`,
     `<h2>On This Page</h2>`,
     `<div class="module-toc-grid">`,
-    ...sections.map((section: ModuleSection) =>
+    ...sections.map((section: TocSection) =>
       [
         `<section class="module-toc-section">`,
         `<h3>${escapeHtml(section.key)}</h3>`,
         `<ul>`,
-        ...section.items.map((item: ModuleItem) =>
+        ...section.items.map((item: TocEntry) =>
           [
             `<li>`,
             `<a href="#${item.anchor}">${renderer.highlightInline(item.name)}</a>`,
@@ -747,6 +835,24 @@ const renderModuleToc = (
     `</section>`
   ].join("")
 }
+
+const renderModuleToc = (
+  renderer: DocsRenderer,
+  sections: ReadonlyArray<ModuleSection>,
+  anchors: ReadonlySet<string>
+): string =>
+  renderToc(
+    renderer,
+    sections.map((section) => ({
+      key: section.key,
+      items: section.items.map((item) => ({
+        name: item.name,
+        anchor: item.anchor,
+        description: item.description
+      }))
+    })),
+    anchors
+  )
 
 const renderItem = (renderer: DocsRenderer, item: ModuleItem, anchors: ReadonlySet<string>): string => {
   return [
@@ -842,17 +948,202 @@ const renderModuleContent = (renderer: DocsRenderer, config: ResolvedDocsConfig,
   ].join("")
 }
 
+export const extractExampleApiUsages = (content: string): ReadonlyArray<string> => {
+  const usages: Array<string> = []
+
+  for (const match of content.matchAll(/\bGame\.([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
+    const namespace = match[1]
+    const member = match[2]
+    if (!namespace || !member) {
+      continue
+    }
+    const moduleSlug = BOUND_NAMESPACE_TO_MODULE_SLUG[namespace]
+    if (!moduleSlug) {
+      continue
+    }
+    usages.push(`${moduleSlug}.${member}`)
+  }
+
+  for (const match of content.matchAll(/\b(App|Definition|Descriptor|Entity|Result|Schema)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
+    const namespace = match[1]
+    const member = match[2]
+    if (!namespace || !member) {
+      continue
+    }
+    const moduleSlug = DIRECT_NAMESPACE_TO_MODULE_SLUG[namespace]
+    if (!moduleSlug) {
+      continue
+    }
+    usages.push(`${moduleSlug}.${member}`)
+  }
+
+  return usages
+}
+
+export const collectExampleApiUsageCounts = (sources: ReadonlyArray<string>): Map<string, number> => {
+  const counts = new Map<string, number>()
+
+  for (const source of sources) {
+    for (const usage of extractExampleApiUsages(source)) {
+      counts.set(usage, (counts.get(usage) ?? 0) + 1)
+    }
+  }
+
+  return counts
+}
+
+export const resolveKeyApiEntries = (
+  usageCounts: ReadonlyMap<string, number>,
+  targets: ReadonlyArray<KeyApiDocTarget>
+): Array<KeyApiEntry> => {
+  const byKey = new Map(targets.map((target) => [target.key, target] as const))
+
+  return [...usageCounts.entries()]
+    .flatMap(([key, usageCount]) => {
+      const target = byKey.get(key)
+      return target ? [{ ...target, usageCount }] : []
+    })
+    .sort((left, right) =>
+      right.usageCount - left.usageCount ||
+      left.moduleName.localeCompare(right.moduleName) ||
+      left.itemOrder - right.itemOrder
+    )
+}
+
+const getKeyApiDocTargets = (modules: ReadonlyArray<ModuleDoc>): Array<KeyApiDocTarget> =>
+  modules.flatMap((moduleDoc) =>
+    moduleDoc.valueItems.map((item) => ({
+      key: `${moduleDoc.slug}.${item.name}`,
+      moduleSlug: moduleDoc.slug,
+      moduleName: moduleDoc.name,
+      modulePath: moduleDoc.path,
+      moduleOrder: modules.findIndex((candidate) => candidate.slug === moduleDoc.slug),
+      itemName: item.name,
+      itemAnchor: item.anchor,
+      itemDescription: item.description,
+      itemOrder: item.order
+    }))
+  )
+
+const readExampleSources = (cwd: string): Array<string> =>
+  ts.sys
+    .readDirectory(NodePath.join(cwd, EXAMPLES_DIRECTORY_PATH), [".ts"], undefined, undefined)
+    .flatMap((path) => {
+      const content = ts.sys.readFile(path)
+      return content === undefined ? [] : [content]
+    })
+
+const renderKeyApiContent = ({
+  renderer,
+  config,
+  entries,
+  currentOutputPath
+}: {
+  readonly renderer: DocsRenderer
+  readonly config: ResolvedDocsConfig
+  readonly entries: ReadonlyArray<KeyApiEntry>
+  readonly currentOutputPath: string
+}): string => {
+  const anchors = new Set(entries.map((entry) => entry.itemName))
+  const toc = renderToc(
+    renderer,
+    [{
+      key: "Most Used APIs",
+      items: entries.map((entry) => ({
+        name: entry.itemName,
+        anchor: `${entry.moduleSlug}-${entry.itemAnchor}`,
+        description: entry.itemDescription
+      }))
+    }],
+    anchors
+  )
+
+  return [
+    `<header class="module-hero">`,
+    `<p class="eyebrow">Generated From Examples</p>`,
+    `<h1>Key APIs</h1>`,
+    `<p>This page ranks the most-used documented helper APIs across <span class="inline-code">${escapeHtml(EXAMPLES_DIRECTORY_PATH)}</span> and links each one back to its canonical docs section.</p>`,
+    `</header>`,
+    toc,
+    entries.length === 0
+      ? `<section><p>No documented API helper usage was found in the examples.</p></section>`
+      : `<section class="module-section"><header class="module-section-header"><h2>Most Used APIs</h2></header><div class="doc-item-list">${entries
+          .map((entry) => {
+            const modulePath = NodePath.join(config.outDir, "modules", entry.moduleSlug, "index.html")
+            const moduleHref = getRelativeDocHref(currentOutputPath, modulePath)
+            return [
+              `<article class="doc-item" id="${entry.moduleSlug}-${entry.itemAnchor}">`,
+              `<header class="doc-item-header">`,
+              `<h3>${renderer.highlightInline(entry.itemName)}</h3>`,
+              `<a class="source-link" href="${moduleHref}#${entry.itemAnchor}">${escapeHtml(entry.moduleName)}</a>`,
+              `</header>`,
+              entry.itemDescription
+                ? renderMarkdown(renderer, entry.itemDescription, anchors)
+                : `<p class="muted">No description provided yet.</p>`,
+              `<p><a href="${moduleHref}#${entry.itemAnchor}">Open ${escapeHtml(entry.moduleName)}.${escapeHtml(entry.itemName)} in the docs</a></p>`,
+              `</article>`
+            ].join("")
+          })
+          .join("")}</div></section>`
+  ].join("")
+}
+
+const buildStandalonePages = ({
+  renderer,
+  cwd,
+  config,
+  modules,
+  homepage
+}: {
+  readonly renderer: DocsRenderer
+  readonly cwd: string
+  readonly config: ResolvedDocsConfig
+  readonly modules: ReadonlyArray<ModuleDoc>
+  readonly homepage: string
+}): ReadonlyArray<StandalonePage> => {
+  const homeOutputPath = NodePath.join(config.outDir, "index.html")
+  const keyApisOutputPath = NodePath.join(config.outDir, "key-apis", "index.html")
+  const keyApiEntries = resolveKeyApiEntries(
+    collectExampleApiUsageCounts(readExampleSources(cwd)),
+    getKeyApiDocTargets(modules)
+  )
+
+  return [
+    {
+      id: "overview",
+      label: "Overview",
+      outputPath: homeOutputPath,
+      title: `${config.siteTitle} Docs`,
+      description: config.siteDescription,
+      content: renderHomePage({ renderer, config, modules, homepage })
+    },
+    {
+      id: "key-apis",
+      label: "Key APIs",
+      outputPath: keyApisOutputPath,
+      title: `Key APIs | ${config.siteTitle}`,
+      description: "The most-used documented helper APIs across the project examples.",
+      content: renderKeyApiContent({
+        renderer,
+        config,
+        entries: keyApiEntries,
+        currentOutputPath: keyApisOutputPath
+      })
+    }
+  ]
+}
+
 const renderSidebar = ({
   config,
   modules,
+  standalonePages,
   currentOutputPath
 }: {
   readonly config: ResolvedDocsConfig
   readonly modules: ReadonlyArray<ModuleDoc>
+  readonly standalonePages: ReadonlyArray<StandalonePage>
   readonly currentOutputPath: string
 }): string => {
-  const homePath = NodePath.join(config.outDir, "index.html")
-  const isHomePage = NodePath.resolve(currentOutputPath) === NodePath.resolve(homePath)
   const groups = config.moduleGroups.map((group) => ({
     ...group,
     modules: modules.filter((moduleDoc) => moduleDoc.group === group.id)
@@ -860,10 +1151,13 @@ const renderSidebar = ({
 
   return [
     `<nav class="sidebar">`,
-    `<a class="site-title" href="${getRelativeDocHref(currentOutputPath, homePath)}">${escapeHtml(config.siteTitle)}</a>`,
+    `<a class="site-title" href="${getRelativeDocHref(currentOutputPath, standalonePages[0]?.outputPath ?? NodePath.join(config.outDir, "index.html"))}">${escapeHtml(config.siteTitle)}</a>`,
     `<p class="site-description">${escapeHtml(config.siteDescription)}</p>`,
     `<div class="sidebar-section">`,
-    `<a class="sidebar-link${isHomePage ? " is-active" : ""}" href="${getRelativeDocHref(currentOutputPath, homePath)}"${isHomePage ? ' aria-current="page"' : ""}>Overview</a>`,
+    ...standalonePages.map((page) => {
+      const isCurrentPage = NodePath.resolve(currentOutputPath) === NodePath.resolve(page.outputPath)
+      return `<a class="sidebar-link${isCurrentPage ? " is-active" : ""}" href="${getRelativeDocHref(currentOutputPath, page.outputPath)}"${isCurrentPage ? ' aria-current="page"' : ""}>${escapeHtml(page.label)}</a>`
+    }),
     `</div>`,
     ...groups.map((group: ModuleGroup & { readonly modules: ReadonlyArray<ModuleDoc> }) =>
       [
@@ -886,6 +1180,7 @@ const renderSidebar = ({
 const renderPage = ({
   config,
   modules,
+  standalonePages,
   currentOutputPath,
   title,
   description,
@@ -893,6 +1188,7 @@ const renderPage = ({
 }: {
   readonly config: ResolvedDocsConfig
   readonly modules: ReadonlyArray<ModuleDoc>
+  readonly standalonePages: ReadonlyArray<StandalonePage>
   readonly currentOutputPath: string
   readonly title: string
   readonly description: string
@@ -911,7 +1207,7 @@ const renderPage = ({
     `</head>`,
     `<body>`,
     `<div class="layout">`,
-    renderSidebar({ config, modules, currentOutputPath }),
+    renderSidebar({ config, modules, standalonePages, currentOutputPath }),
     `<main class="content">${content}</main>`,
     `</div>`,
     `</body>`,
@@ -1009,12 +1305,14 @@ const buildModulePage = ({
   renderer,
   config,
   modules,
+  standalonePages,
   moduleDoc,
   index
 }: {
   readonly renderer: DocsRenderer
   readonly config: ResolvedDocsConfig
   readonly modules: ReadonlyArray<ModuleDoc>
+  readonly standalonePages: ReadonlyArray<StandalonePage>
   readonly moduleDoc: ModuleDoc
   readonly index: number
 }) =>
@@ -1025,6 +1323,7 @@ const buildModulePage = ({
     const html = renderPage({
       config,
       modules,
+      standalonePages,
       currentOutputPath: outputPath,
       title: `${moduleDoc.name} | ${config.siteTitle}`,
       description: moduleDoc.description.split("\n")[0] ?? moduleDoc.description,
@@ -1056,6 +1355,13 @@ export const buildDocsSite = (
           const normalizedHomepage = stripMarkdownTitle(rewriteMarkdownLinks(homepage, config.sourceBaseUrl))
           const siteCssSource = yield* readFileString(NodePath.join(cwd, DOCGEN_CSS_PATH))
           const siteCss = buildSiteCss(siteCssSource)
+          const standalonePages = buildStandalonePages({
+            renderer,
+            cwd,
+            config,
+            modules,
+            homepage: normalizedHomepage
+          })
 
           yield* removeDir(config.outDir)
           yield* Effect.logInfo("Writing static assets")
@@ -1064,17 +1370,24 @@ export const buildDocsSite = (
             writeFileString(NodePath.join(config.outDir, "assets", "site.css"), siteCss)
           ], { concurrency: "unbounded" })
 
-          const homeOutputPath = NodePath.join(config.outDir, "index.html")
-          yield* Effect.logInfo("Rendering home page")
-          const homeHtml = renderPage({
-            config,
-            modules,
-            currentOutputPath: homeOutputPath,
-            title: `${config.siteTitle} Docs`,
-            description: config.siteDescription,
-            content: renderHomePage({ renderer, config, modules, homepage: normalizedHomepage })
-          })
-          yield* writeFileString(homeOutputPath, homeHtml)
+          yield* Effect.logInfo(`Rendering ${standalonePages.length} standalone pages`)
+          yield* Effect.forEach(
+            standalonePages,
+            (page) =>
+              writeFileString(
+                page.outputPath,
+                renderPage({
+                  config,
+                  modules,
+                  standalonePages,
+                  currentOutputPath: page.outputPath,
+                  title: page.title,
+                  description: page.description,
+                  content: page.content
+                })
+              ),
+            { concurrency: "unbounded", discard: true }
+          )
           yield* Effect.logInfo(`Building ${modules.length} module pages with concurrency ${MODULE_RENDER_CONCURRENCY}`)
 
           yield* Effect.forEach(
@@ -1084,6 +1397,7 @@ export const buildDocsSite = (
                 renderer,
                 config,
                 modules,
+                standalonePages,
                 moduleDoc,
                 index
               }),

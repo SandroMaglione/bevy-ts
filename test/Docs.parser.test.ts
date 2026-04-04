@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   buildSiteCss,
   collectNamedDescriptions,
+  collectExampleApiUsageCounts,
   createDocsRenderer,
+  extractExampleApiUsages,
   getItemShortDescription,
-  parseJSDoc
+  parseJSDoc,
+  resolveKeyApiEntries
 } from "../scripts/docgen.ts"
 
 describe("parseJSDoc", () => {
@@ -72,6 +75,97 @@ describe("buildSiteCss", () => {
     expect(css).toContain(".example{")
     expect(css).toContain("#fff")
     expect(css).not.toContain("\n")
+  })
+})
+
+describe("extractExampleApiUsages", () => {
+  it("collects bound and direct namespace helper usages", () => {
+    const usages = extractExampleApiUsages([
+      "const setup = Game.System.define(\"Setup\", {",
+      "  queries: { moving: Game.Query.define({ selection: { position: Game.Query.read(Position) } }) }",
+      "})",
+      "const schema = Schema.build(Schema.fragment({}))",
+      "const app = App.makeApp(runtime)",
+      "const state = Game.Condition.inState(Phase, \"Running\")"
+    ].join("\n"))
+
+    expect(usages).toEqual([
+      "system.define",
+      "query.define",
+      "query.read",
+      "machine.inState",
+      "schema.build",
+      "schema.fragment",
+      "app.makeApp"
+    ])
+  })
+})
+
+describe("collectExampleApiUsageCounts", () => {
+  it("counts helper usage across multiple example sources", () => {
+    const counts = collectExampleApiUsageCounts([
+      "Game.System.define(\"A\", {})\nGame.System.define(\"B\", {})",
+      "Schema.build(Schema.fragment({}))\nGame.System.define(\"C\", {})"
+    ])
+
+    expect(counts.get("system.define")).toBe(3)
+    expect(counts.get("schema.build")).toBe(1)
+    expect(counts.get("schema.fragment")).toBe(1)
+  })
+})
+
+describe("resolveKeyApiEntries", () => {
+  it("keeps only documented helpers and sorts by usage then module and item order", () => {
+    const entries = resolveKeyApiEntries(
+      new Map([
+        ["system.define", 3],
+        ["schema.build", 3],
+        ["app.makeApp", 1],
+        ["runtime.missing", 10]
+      ]),
+      [
+        {
+          key: "system.define",
+          moduleSlug: "system",
+          moduleName: "system",
+          modulePath: "src/system.ts",
+          moduleOrder: 2,
+          itemName: "define",
+          itemAnchor: "define",
+          itemDescription: "Defines a system.",
+          itemOrder: 5
+        },
+        {
+          key: "schema.build",
+          moduleSlug: "schema",
+          moduleName: "schema",
+          modulePath: "src/schema.ts",
+          moduleOrder: 1,
+          itemName: "build",
+          itemAnchor: "build",
+          itemDescription: "Builds a schema.",
+          itemOrder: 3
+        },
+        {
+          key: "app.makeApp",
+          moduleSlug: "app",
+          moduleName: "app",
+          modulePath: "src/app.ts",
+          moduleOrder: 0,
+          itemName: "makeApp",
+          itemAnchor: "makeapp",
+          itemDescription: "Wraps a runtime.",
+          itemOrder: 1
+        }
+      ]
+    )
+
+    expect(entries.map((entry) => entry.key)).toEqual([
+      "schema.build",
+      "system.define",
+      "app.makeApp"
+    ])
+    expect(entries.map((entry) => entry.usageCount)).toEqual([3, 3, 1])
   })
 })
 
