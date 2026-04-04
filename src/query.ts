@@ -14,6 +14,7 @@
  * ```
  *
  * @module query
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped proof helpers that derive precise component evidence from one query selection.

@@ -12,6 +12,7 @@
  * ```
  *
  * @module fx
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped helper types that extract success, error, and environment information from effects.

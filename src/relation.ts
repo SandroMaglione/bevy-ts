@@ -11,6 +11,7 @@
  * ```
  *
  * @module relation
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped relation helper types for edges, pairs, and traversal proofs.

@@ -11,6 +11,7 @@
  * ```
  *
  * @module machine
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped machine helper types for conditions, transitions, and machine-aware requirements.

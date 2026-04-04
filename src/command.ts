@@ -13,6 +13,7 @@
  * ```
  *
  * @module command
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Type-level draft helpers that derive exact component proofs while command values are still staged.

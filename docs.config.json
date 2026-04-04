@@ -1,0 +1,34 @@
+{
+  "siteTitle": "bevy-ts",
+  "siteDescription": "A type-safe, game-loop-agnostic ECS runtime for TypeScript.",
+  "basePath": "/bevy-ts/",
+  "outDir": "docs",
+  "sourceBaseUrl": "https://github.com/SandroMaglione/bevy-ts/blob/main",
+  "moduleGroups": [
+    { "id": "core", "label": "Core" },
+    { "id": "helpers", "label": "Helpers" }
+  ],
+  "entryPoints": [
+    "src/Aabb.ts",
+    "src/app.ts",
+    "src/Brand.ts",
+    "src/command.ts",
+    "src/Definition.ts",
+    "src/descriptor.ts",
+    "src/entity.ts",
+    "src/fx.ts",
+    "src/InputAxis.ts",
+    "src/label.ts",
+    "src/machine.ts",
+    "src/query.ts",
+    "src/relation.ts",
+    "src/Result.ts",
+    "src/runtime.ts",
+    "src/Scalar.ts",
+    "src/schedule.ts",
+    "src/schema.ts",
+    "src/Size2.ts",
+    "src/system.ts",
+    "src/Vector2.ts"
+  ]
+}

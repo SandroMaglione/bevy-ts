@@ -17,6 +17,7 @@
  * ```
  *
  * @module InputAxis
+ * @docGroup helpers
  *
  * @categoryDescription Input Types
  * Small shared types that describe normalized axis values.

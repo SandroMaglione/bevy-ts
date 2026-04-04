@@ -15,6 +15,7 @@
  * ```
  *
  * @module Brand
+ * @docGroup helpers
  *
  * @categoryDescription Brand Types
  * The nominal markers and constructor contracts used by branded public values.

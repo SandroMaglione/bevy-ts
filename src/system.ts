@@ -14,6 +14,7 @@
  * ```
  *
  * @module system
+ * @docGroup core
  *
  * @groupDescription Interfaces
  * Public system contracts and runtime context view shapes derived from one system specification.

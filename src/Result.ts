@@ -21,6 +21,7 @@
  * ```
  *
  * @module Result
+ * @docGroup helpers
  *
  * @categoryDescription Result Types
  * The structural success and failure shapes used by non-throwing public APIs.

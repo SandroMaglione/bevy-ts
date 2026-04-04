@@ -12,6 +12,7 @@
  * ```
  *
  * @module Vector2
+ * @docGroup helpers
  *
  * @categoryDescription Vector Types
  * Raw, branded, and error shapes used to describe validated two-dimensional vectors.

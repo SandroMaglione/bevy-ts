@@ -10,6 +10,7 @@
  * ```
  *
  * @module label
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped label helpers for the different runtime-owned label domains.

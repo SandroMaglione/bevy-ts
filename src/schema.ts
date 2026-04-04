@@ -13,6 +13,7 @@
  * fragments and build schedules only after the final merged schema is known.
  *
  * @module schema
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped schema helper types for fragments, bound game APIs, and feature composition.

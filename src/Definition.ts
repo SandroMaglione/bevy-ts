@@ -14,6 +14,7 @@
  * ```
  *
  * @module Definition
+ * @docGroup core
  *
  * @categoryDescription Definition Types
  * Named reusable shapes used to validate and retain authored values.

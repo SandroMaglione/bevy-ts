@@ -13,6 +13,7 @@
  * 4. bind one `Game` with `Schema.bind(...)`
  *
  * @module descriptor
+ * @docGroup core
  *
  * @groupDescription Namespaces
  * Grouped descriptor helper types for narrowing and reflecting descriptor metadata.
