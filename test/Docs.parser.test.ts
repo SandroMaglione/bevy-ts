@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 // @ts-expect-error The docs generator runs as ESM JS; the test imports its runtime entrypoint directly.
-import { collectNamedDescriptions, parseJSDoc } from "../scripts/docgen.mjs"
+import { collectNamedDescriptions, createDocsRenderer, parseJSDoc } from "../scripts/docgen.mjs"
 
 describe("parseJSDoc", () => {
   it("parses description and repeated tags", () => {
@@ -29,5 +29,36 @@ describe("collectNamedDescriptions", () => {
     ])
 
     expect(descriptions.get("Constructors")).toBe("Builders for the public surface.")
+  })
+})
+
+describe("createDocsRenderer", () => {
+  it("highlights fenced blocks, inline code, and signatures with shiki markup", async () => {
+    const renderer = await createDocsRenderer()
+
+    const markdownHtml = renderer.markdown.render([
+      "Inline `Game.System.define()`",
+      "",
+      "```ts",
+      "const value = 1",
+      "```"
+    ].join("\n"))
+
+    expect(markdownHtml).toContain('class="shiki')
+    expect(markdownHtml).toContain('class="line"')
+    expect(markdownHtml).toContain('inline-code')
+
+    const signatureHtml = renderer.highlightBlock("export const value: number", "ts")
+
+    expect(signatureHtml).toContain('class="shiki')
+    expect(signatureHtml).toContain("export")
+  })
+
+  it("drops trailing blank lines from highlighted blocks", async () => {
+    const renderer = await createDocsRenderer()
+
+    const html = renderer.highlightBlock("const value = 1\n", "ts")
+
+    expect(html.match(/class="line"/g)).toHaveLength(1)
   })
 })

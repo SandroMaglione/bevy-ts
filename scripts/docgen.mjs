@@ -4,6 +4,7 @@ import process from "node:process"
 import MarkdownIt from "markdown-it"
 import * as Effect from "effect/Effect"
 import * as Schema from "effect/Schema"
+import { createHighlighter } from "shiki"
 import * as ts from "typescript"
 
 const ModuleGroupSchema = Schema.Struct({
@@ -23,11 +24,9 @@ const DocsConfigSchema = Schema.Struct({
 
 const decodeDocsConfig = Schema.decodeUnknownSync(DocsConfigSchema)
 
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: false
-})
+const SHIKI_THEME = "catppuccin-latte"
+const SHIKI_INLINE_LANG = "ts"
+const SHIKI_PLAIN_LANG = "text"
 
 const HTML_ESCAPE = {
   "&": "&amp;",
@@ -503,7 +502,85 @@ const rewriteReadmeLinks = (content, sourceBaseUrl) =>
 const stripReadmeTitle = (content) =>
   content.replace(/^#\s+`?bevy-ts`?\s*\n+/i, "").trim()
 
-const renderMarkdown = (content, anchors = new Set()) => {
+const normalizeLanguage = (language) => {
+  const normalized = language.trim().toLowerCase()
+  if (!normalized) {
+    return SHIKI_PLAIN_LANG
+  }
+  if (normalized === "ts" || normalized === "typescript") {
+    return "ts"
+  }
+  if (normalized === "js" || normalized === "javascript") {
+    return "js"
+  }
+  if (normalized === "shell" || normalized === "bash" || normalized === "sh" || normalized === "zsh") {
+    return "bash"
+  }
+  if (normalized === "plaintext") {
+    return SHIKI_PLAIN_LANG
+  }
+  return normalized
+}
+
+const buildHighlightedInlineCode = (attributes, line) => {
+  if (attributes.includes(`class="`)) {
+    return `<span${attributes.replace(/class="([^"]*)"/, ' class="$1 inline-code"')}>${line}</span>`
+  }
+  const normalized = attributes.length > 0 ? `${attributes} ` : ""
+  return `<span ${normalized}class="inline-code">${line}</span>`
+}
+
+const convertBlockToInline = (html) => {
+  const match = html.match(/^<pre([^>]*)><code><span class="line">([\s\S]*)<\/span><\/code><\/pre>$/)
+  if (!match) {
+    throw new Error("Unable to convert highlighted block HTML to inline code.")
+  }
+  const attributes = match[1].trim()
+  return buildHighlightedInlineCode(attributes, match[2])
+}
+
+export const createDocsRenderer = async () => {
+  const highlighter = await createHighlighter({
+    themes: [SHIKI_THEME],
+    langs: ["ts", "js", "json", "bash", "html", "css", "text"]
+  })
+  const normalizeHighlightedCode = (code) => code.replace(/\n+$/u, "")
+  const highlightBlock = (code, language = SHIKI_PLAIN_LANG) => {
+    const normalizedCode = normalizeHighlightedCode(code)
+    const normalizedLanguage = normalizeLanguage(language)
+    try {
+      return highlighter.codeToHtml(normalizedCode, {
+        lang: normalizedLanguage,
+        theme: SHIKI_THEME
+      })
+    } catch {
+      return highlighter.codeToHtml(normalizedCode, {
+        lang: SHIKI_PLAIN_LANG,
+        theme: SHIKI_THEME
+      })
+    }
+  }
+  const highlightInline = (code) =>
+    convertBlockToInline(
+      highlightBlock(code, SHIKI_INLINE_LANG)
+    )
+  const markdown = new MarkdownIt({
+    html: false,
+    linkify: true,
+    typographer: false,
+    highlight: (code, language) => highlightBlock(code, language)
+  })
+  markdown.renderer.rules.code_inline = (tokens, index) =>
+    highlightInline(tokens[index]?.content ?? "")
+
+  return {
+    markdown,
+    highlightBlock,
+    highlightInline
+  }
+}
+
+const rewriteDocLinks = (content, anchors = new Set()) => {
   const withLinks = content.replace(/\{@link\s+([^}\s|]+)(?:\s+[^}]*)?\}/g, (_match, target) => {
     const normalized = target.split(".").at(-1) ?? target
     if (anchors.has(normalized)) {
@@ -511,20 +588,23 @@ const renderMarkdown = (content, anchors = new Set()) => {
     }
     return `\`${normalized}\``
   })
-  return md.render(withLinks)
+  return withLinks
 }
 
-const renderExamples = (examples, anchors) =>
+const renderMarkdown = (renderer, content, anchors = new Set()) =>
+  renderer.markdown.render(rewriteDocLinks(content, anchors))
+
+const renderExamples = (renderer, examples, anchors) =>
   examples.length === 0
     ? ""
     : `<section class="module-examples"><h2>Examples</h2>${examples
-        .map((example) => renderMarkdown(example, anchors))
+        .map((example) => renderMarkdown(renderer, example, anchors))
         .join("")}</section>`
 
-const renderSignature = (signature) =>
-  `<div class="signature"><pre><code>${escapeHtml(signature)}</code></pre></div>`
+const renderSignature = (renderer, signature) =>
+  `<div class="signature">${renderer.highlightBlock(signature, "ts")}</div>`
 
-const renderItem = (item, anchors) => {
+const renderItem = (renderer, item, anchors) => {
   const kindLabel = item.kind === "constant" ? "Value" : "Function"
   return [
     `<article class="doc-item" id="${item.anchor}">`,
@@ -534,19 +614,19 @@ const renderItem = (item, anchors) => {
     `<a class="source-link" href="${item.sourceLink}">Source</a>`,
     `</header>`,
     item.description
-      ? renderMarkdown(item.description, anchors)
+      ? renderMarkdown(renderer, item.description, anchors)
       : `<p class="muted">No description provided yet.</p>`,
-    renderSignature(item.signature),
+    renderSignature(renderer, item.signature),
     item.examples.length > 0
       ? `<div class="doc-item-examples">${item.examples
-          .map((example) => renderMarkdown(example, anchors))
+          .map((example) => renderMarkdown(renderer, example, anchors))
           .join("")}</div>`
       : "",
     `</article>`
   ].join("")
 }
 
-const renderSecondaryTypes = (moduleDoc) => {
+const renderSecondaryTypes = (renderer, moduleDoc) => {
   if (moduleDoc.typeItems.length === 0) {
     return ""
   }
@@ -555,7 +635,7 @@ const renderSecondaryTypes = (moduleDoc) => {
     `<h2>Related Types</h2>`,
     `<p>These support the callable API surface and are intentionally kept secondary in this v1 docs view.</p>`,
     `<ul>`,
-    ...moduleDoc.typeItems.map((item) => `<li><code>${escapeHtml(item.name)}</code></li>`),
+    ...moduleDoc.typeItems.map((item) => `<li>${renderer.highlightInline(item.name)}</li>`),
     `</ul>`,
     `</section>`
   ].join("")
@@ -585,7 +665,7 @@ const getModuleSections = (moduleDoc) => {
   return sections
 }
 
-const renderModuleContent = (moduleDoc) => {
+const renderModuleContent = (renderer, moduleDoc) => {
   const anchors = new Set(moduleDoc.items.map((item) => item.name))
   const sections = getModuleSections(moduleDoc)
 
@@ -594,9 +674,9 @@ const renderModuleContent = (moduleDoc) => {
     `<p class="eyebrow">${escapeHtml(moduleDoc.group)}</p>`,
     `<h1>${escapeHtml(moduleDoc.name)}</h1>`,
     `<div class="module-actions"><a class="source-link" href="${moduleDoc.sourceLink}">View Source</a></div>`,
-    renderMarkdown(moduleDoc.description, anchors),
+    renderMarkdown(renderer, moduleDoc.description, anchors),
     `</header>`,
-    renderExamples(moduleDoc.examples, anchors),
+    renderExamples(renderer, moduleDoc.examples, anchors),
     sections.length === 0
       ? `<section><p>No callable public exports are documented for this module yet.</p></section>`
       : sections
@@ -605,15 +685,15 @@ const renderModuleContent = (moduleDoc) => {
               `<section class="module-section">`,
               `<header class="module-section-header">`,
               `<h2>${escapeHtml(section.key)}</h2>`,
-              section.description ? renderMarkdown(section.description, anchors) : "",
+              section.description ? renderMarkdown(renderer, section.description, anchors) : "",
               `</header>`,
               `<div class="doc-item-list">`,
-              section.items.map((item) => renderItem(item, anchors)).join(""),
+              section.items.map((item) => renderItem(renderer, item, anchors)).join(""),
               `</div>`,
               `</section>`
             ].join(""))
           .join(""),
-    renderSecondaryTypes(moduleDoc)
+    renderSecondaryTypes(renderer, moduleDoc)
   ].join("")
 }
 
@@ -670,7 +750,7 @@ const renderPage = ({ config, modules, currentOutputPath, title, description, co
   ].join("")
 }
 
-const renderHomePage = ({ config, modules, readme }) => {
+const renderHomePage = ({ renderer, config, modules, readme }) => {
   const grouped = config.moduleGroups.map((group) => ({
     ...group,
     modules: modules.filter((moduleDoc) => moduleDoc.group === group.id)
@@ -682,7 +762,7 @@ const renderHomePage = ({ config, modules, readme }) => {
     `<h1>${escapeHtml(config.siteTitle)}</h1>`,
     `<p class="home-summary">${escapeHtml(config.siteDescription)}</p>`,
     `</header>`,
-    `<section class="home-readme">${renderMarkdown(readme)}</section>`,
+    `<section class="home-readme">${renderMarkdown(renderer, readme)}</section>`,
     `<section class="home-groups">`,
     `<h2>Modules</h2>`,
     `<div class="group-grid">`,
@@ -896,13 +976,59 @@ code {
   margin-top: 1rem;
 }
 
-.signature pre {
+.signature .shiki {
+  overflow-x: hidden;
+}
+
+.signature .shiki code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.signature .shiki .line {
+  min-height: 0;
+}
+
+.shiki {
   margin: 0;
   padding: 1rem;
   overflow: auto;
   border-radius: 0.9rem;
-  background: #1f1f1f;
-  color: #f3efe7;
+  border: 1px solid rgba(216, 205, 189, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.shiki code {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 0.92rem;
+}
+
+.shiki .line {
+  display: block;
+  min-height: 1.4em;
+}
+
+.inline-code {
+  display: inline;
+  padding: 0.04rem 0.28rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(216, 205, 189, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  font-size: 0.84em;
+  line-height: 1.35;
+  white-space: break-spaces;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.inline-code code,
+.inline-code .line {
+  display: inline;
+}
+
+.related-types li + li {
+  margin-top: 0.5rem;
 }
 
 .group-grid {
@@ -986,6 +1112,7 @@ export const buildDocsSite = (cwd = process.cwd()) =>
   loadDocsModel(cwd).pipe(
     Effect.flatMap(({ config, modules }) =>
       Effect.gen(function*() {
+        const renderer = yield* Effect.promise(() => createDocsRenderer())
         const readme = yield* readFileString(Path.join(cwd, "README.md"))
         const normalizedReadme = stripReadmeTitle(rewriteReadmeLinks(readme, config.sourceBaseUrl))
         yield* removeDir(config.outDir)
@@ -999,7 +1126,7 @@ export const buildDocsSite = (cwd = process.cwd()) =>
           currentOutputPath: homeOutputPath,
           title: `${config.siteTitle} Docs`,
           description: config.siteDescription,
-          content: renderHomePage({ config, modules, readme: normalizedReadme })
+          content: renderHomePage({ renderer, config, modules, readme: normalizedReadme })
         })
         yield* writeFileString(homeOutputPath, homeHtml)
 
@@ -1011,7 +1138,7 @@ export const buildDocsSite = (cwd = process.cwd()) =>
             currentOutputPath: outputPath,
             title: `${moduleDoc.name} | ${config.siteTitle}`,
             description: moduleDoc.description.split("\n")[0] ?? moduleDoc.description,
-            content: renderModuleContent(moduleDoc)
+            content: renderModuleContent(renderer, moduleDoc)
           })
           yield* writeFileString(outputPath, html)
         }
