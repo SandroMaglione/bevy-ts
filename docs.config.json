@@ -20,7 +20,6 @@
     "src/entity.ts",
     "src/fx.ts",
     "src/InputAxis.ts",
-    "src/label.ts",
     "src/machine.ts",
     "src/query.ts",
     "src/relation.ts",

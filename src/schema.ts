@@ -55,7 +55,6 @@ import * as Runtime from "./runtime.ts"
 import * as Schedule from "./schedule.ts"
 import * as System from "./system.ts"
 import type { Fx } from "./fx.ts"
-import type { Label } from "./label.ts"
 import type { Query } from "./query.ts"
 import type * as Result from "./Result.ts"
 

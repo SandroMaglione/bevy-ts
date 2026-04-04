@@ -34,8 +34,6 @@ import type { Query, QueryMatch } from "./query.ts"
 import type { ConstructedWriteCell, ReadCell, WriteCell } from "./query.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
-import * as LabelModule from "./label.ts"
-import type { Label } from "./label.ts"
 
 /**
  * System declarations, typed execution context, and runtime requirements.
@@ -647,7 +645,8 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
  * surface instead of repeatedly expanding the full system spec.
  */
 export interface SystemOrderingSpec {
-  readonly label: Label.System
+  readonly key: symbol
+  readonly name: string
 }
 
 /**
@@ -709,7 +708,6 @@ export interface SystemSpec<
   Root = unknown,
   out RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {}
 > {
-  readonly label: Label.System
   readonly queries: Queries
   readonly resources: Resources
   readonly events: Events
@@ -1015,9 +1013,9 @@ export interface SystemDefinition<
  * receives the capabilities declared in the spec, and the returned effect keeps
  * service dependencies tracked in the type system.
  *
- * Use the string-name overload in normal code. The name is turned into a typed
- * internal label automatically, so the system can participate in schedule
- * ordering without extra label plumbing.
+ * Use the string-name overload in normal code. The name is turned into an
+ * internal ordering token automatically, so the system can participate in
+ * schedule validation without extra user-authored identity plumbing.
  *
  * @example
  * ```ts
@@ -1081,12 +1079,6 @@ export function define<
   >
 ): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
 
-/**
- * Legacy low-level overload that accepts an explicit system label.
- *
- * Prefer the string-name overload, which creates the internal typed label
- * automatically and avoids manual label threading in user code.
- */
 export function define<
   S extends Schema.Any,
   const Queries extends Record<string, Query.Any<any>> = {},
@@ -1107,8 +1099,8 @@ export function define<
   E = never,
   const Name extends string = string
 >(
+  name: Name,
   spec: {
-    readonly label: Label.System
     readonly schema: S
     readonly queries?: Queries
     readonly resources?: Resources
@@ -1129,107 +1121,16 @@ export function define<
     E,
     ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
-
-export function define<
-  S extends Schema.Any,
-  const Queries extends Record<string, Query.Any<any>> = {},
-  const Resources extends Record<string, ResourceAccess> = {},
-  const Events extends Record<string, EventAccess> = {},
-  const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
-  const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
-  const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
-  const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
-  const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
-  const Despawned extends Record<string, DespawnedRead> = {},
-  const RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {},
-  const When extends ReadonlyArray<Machine.Condition> = [],
-  const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
-  Root = unknown,
-  A = void,
-  E = never,
-  const Name extends string = string
->(
-  nameOrSpec: string | {
-    readonly label: Label.System
-    readonly schema: S
-    readonly queries?: Queries
-    readonly resources?: Resources
-    readonly events?: Events
-    readonly services?: Services
-    readonly states?: States
-    readonly machines?: Machines
-    readonly nextMachines?: NextMachines
-    readonly transitionEvents?: TransitionEvents
-    readonly removed?: Removed
-    readonly despawned?: Despawned
-    readonly relationFailures?: RelationFailures
-    readonly when?: When
-    readonly transitions?: Transitions
-  },
-  specOrRun:
-    | {
-        readonly schema: S
-        readonly queries?: Queries
-        readonly resources?: Resources
-        readonly events?: Events
-        readonly services?: Services
-        readonly states?: States
-        readonly machines?: Machines
-        readonly nextMachines?: NextMachines
-        readonly transitionEvents?: TransitionEvents
-        readonly removed?: Removed
-        readonly despawned?: Despawned
-        readonly when?: When
-        readonly transitions?: Transitions
-      }
-      | ((context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, unknown, RelationFailures>>) => Fx<
-        A,
-        E,
-        ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, unknown, RelationFailures>>
-      >),
-  maybeRun?: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
-    A,
-    E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
-  >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root> {
-  const named = typeof nameOrSpec === "string"
-  const name = named ? nameOrSpec : nameOrSpec.label.name
-  const spec = (named ? specOrRun : nameOrSpec) as {
-    readonly label?: Label.System
-    readonly schema: S
-    readonly queries?: Queries
-    readonly resources?: Resources
-    readonly events?: Events
-    readonly services?: Services
-    readonly states?: States
-    readonly machines?: Machines
-    readonly nextMachines?: NextMachines
-    readonly transitionEvents?: TransitionEvents
-    readonly removed?: Removed
-    readonly despawned?: Despawned
-    readonly relationFailures?: RelationFailures
-    readonly when?: When
-    readonly transitions?: Transitions
-  }
-  const run = (named ? maybeRun : specOrRun) as (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
-    A,
-    E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
-  >
-  const label = spec.label ?? LabelModule.defineSystemLabel(name)
-
+): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name> {
   return {
     name,
     requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>,
     __schemaRoot: undefined as unknown as Root,
     ordering: {
-      label
+      key: Symbol.for(`bevy-ts/system/${name}`),
+      name
     },
     spec: {
-      label,
       schema: spec.schema,
       queries: (spec.queries ?? {}) as Queries,
       resources: (spec.resources ?? {}) as Resources,

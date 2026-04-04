@@ -1038,8 +1038,8 @@ const collectUniqueSystems = (
     if (!isSystemStep(step)) {
       continue
     }
-    if (!unique.has(step.ordering.label.key)) {
-      unique.set(step.ordering.label.key, step)
+    if (!unique.has(step.ordering.key)) {
+      unique.set(step.ordering.key, step)
     }
   }
   return [...unique.values()]
@@ -1054,9 +1054,9 @@ const validateUniqueSystemSteps = (
     if (!isSystemStep(step)) {
       continue
     }
-    const key = step.ordering.label.key
+    const key = step.ordering.key
     if (names.has(key)) {
-      throw new Error(`Duplicate system step in ${context}: ${step.ordering.label.name}`)
+      throw new Error(`Duplicate system step in ${context}: ${step.ordering.name}`)
     }
     names.add(key)
   }

@@ -37,10 +37,6 @@ export * as Fx from "./fx.ts"
  */
 export * as InputAxis from "./InputAxis.ts"
 /**
- * Nominal labels for schedules and systems.
- */
-export * as Label from "./label.ts"
-/**
  * Explicit success/failure helpers.
  */
 export * as Result from "./Result.ts"

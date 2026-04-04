@@ -1,4 +1,4 @@
-import { Descriptor, Fx, Label, Schema } from "../src/index.ts"
+import { Descriptor, Fx, Schema } from "../src/index.ts"
 import * as Query from "../src/query.ts"
 import * as Schedule from "../src/schedule.ts"
 import * as System from "../src/system.ts"
@@ -31,9 +31,9 @@ const MovementSystem = System.define(
   () => Fx.sync<undefined, {}>(() => undefined)
 )
 
-const ExplicitLabelSystem = System.define(
+const ExplicitNameSystem = System.define(
+  "ExplicitNameSystem",
   {
-    label: Label.defineSystemLabel("ExplicitLabelSystem"),
     schema,
     resources: {
       time: System.readResource(Time)
@@ -63,7 +63,7 @@ describe("Schedule", () => {
     const schedule = Schedule.define(
       MovementSystem,
       Schedule.applyDeferred(),
-      ExplicitLabelSystem
+      ExplicitNameSystem
     )
 
     schedule.steps
@@ -77,7 +77,7 @@ describe("Schedule", () => {
     Schedule.define([
       MovementSystem,
       Schedule.applyDeferred(),
-      ExplicitLabelSystem
+      ExplicitNameSystem
     ])
   })
 
