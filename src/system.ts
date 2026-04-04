@@ -651,6 +651,42 @@ export interface SystemOrderingSpec {
 }
 
 /**
+ * Reusable pre-definition system access fragment.
+ *
+ * Use this to type-check shared `queries`, `resources`, `services`, and other
+ * access slices before spreading them into `Game.System.define(...)`.
+ */
+export interface SystemAccessSpec<
+  out Queries extends Record<string, Query.Any<any>> = Record<string, Query.Any<any>>,
+  out Resources extends Record<string, ResourceAccess> = Record<string, ResourceAccess>,
+  out Events extends Record<string, EventAccess> = Record<string, EventAccess>,
+  out Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = Record<string, ServiceRead<Descriptor<"service", string, any>>>,
+  out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>>,
+  out Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = Record<string, Machine.MachineRead<Machine.StateMachine.Any>>,
+  out NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>>,
+  out TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>>,
+  out Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = Record<string, RemovedRead<Descriptor<"component", string, any>>>,
+  out Despawned extends Record<string, DespawnedRead> = Record<string, DespawnedRead>,
+  out When extends ReadonlyArray<Machine.Condition> = readonly [],
+  out Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>,
+  out RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = Record<string, RelationFailureRead<Relation.Relation.Any>>
+> {
+  readonly queries?: Queries
+  readonly resources?: Resources
+  readonly events?: Events
+  readonly services?: Services
+  readonly states?: States
+  readonly machines?: Machines
+  readonly nextMachines?: NextMachines
+  readonly transitionEvents?: TransitionEvents
+  readonly removed?: Removed
+  readonly despawned?: Despawned
+  readonly relationFailures?: RelationFailures
+  readonly when?: When
+  readonly transitions?: Transitions
+}
+
+/**
  * An explicit system specification.
  *
  * This is the central user-facing abstraction: all ECS access, service

@@ -143,6 +143,34 @@ The important runtime rule is that deferred writes are still queued inside the
 system callback. They only become visible after explicit schedule markers like
 `Game.Schedule.applyDeferred()` and `Game.Schedule.updateEvents()` run.
 
+Shared system access fragments can be plain objects. Reuse them by spreading
+them into multiple `Game.System.define(...)` calls:
+
+```ts
+const movementAccess = {
+  queries: {
+    moving: MoveQuery
+  },
+  resources: {
+    time: Game.System.readResource(Time)
+  },
+  services: {
+    logger: Game.System.service(Logger)
+  }
+}
+
+const MoveSystem = Game.System.define(
+  "MoveSystem",
+  {
+    ...movementAccess
+  },
+  ({ queries, resources, services }) =>
+    Fx.sync(() => {
+      // ...
+    })
+)
+```
+
 ## Core flow
 
 The normal flow is: define descriptors, group them into schema fragments, build one final schema, define systems, group them into schedules, then run those schedules from your own loop. Rendering, input, physics, and timing stay outside the runtime unless you model them explicitly as resources or services.
@@ -1114,73 +1142,5 @@ const restartBundle = Game.Schedule.transitions(
     resetWorldSystem,
     respawnWorldSystem
   ])
-)
-```
-
-### Reusable access/spec fragments for systems
-
-A lot of repetition still comes from re-declaring similar `queries`,
-`resources`, `services`, and `nextMachines` shapes across systems. This shows
-up in
-[src/examples/platformer/systems/movement.ts:9](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/movement.ts#L9),
-[src/examples/platformer/systems/state.ts:8](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/state.ts#L8),
-and
-[src/examples/platformer/systems/render-sync.ts:7](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts#L7).
-
-The improvement should not be broader overloads or implicit access. It should
-be composition of explicit access fragments before `System.define(...)`, so
-repeated specs can be authored once and reused.
-
-Ideal shape:
-
-```ts
-const playerMotionAccess = Game.System.spec({
-  queries: {
-    player: PlayerMovementQuery
-  },
-  resources: {
-    deltaTime: Game.System.readResource(DeltaTime),
-    input: Game.System.readResource(InputState)
-  }
-})
-
-const ResolveMoveIntentSystem = Game.System.define(
-  "ResolveMoveIntent",
-  playerMotionAccess,
-  ({ queries, resources }) => Fx.sync(() => {
-    // ...
-  })
-)
-```
-
-### Easier packaging for explicit host-sync orchestration
-
-The current render-sync pattern is correct, but still verbose. The lifecycle
-ordering in
-[src/examples/platformer/schedules.ts:58](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/schedules.ts#L58)
-and the destroy/create/sync split in
-[src/examples/platformer/systems/render-sync.ts:7](/Users/sandromaglione/Development/projects/gamedev/bevy-ts/src/examples/platformer/systems/render-sync.ts#L7)
-are the right structure, but every project still has to package that pattern by
-hand.
-
-The useful improvement is now above the current primitive surface, not a return
-to phase/compose/extend helpers. The goal is a better way to package the generic
-ECS pattern of “simulate, commit lifecycle, mirror external state” into reusable
-final schedules without pushing renderer-specific logic into the core.
-
-Ideal shape:
-
-```ts
-const renderMirror = Game.Schedule.define(
-  Game.Schedule.updateLifecycle(),
-  destroyRenderNodesSystem,
-  createRenderNodesSystem,
-  syncRenderableTransformsSystem
-)
-
-const update = Game.Schedule.define(
-  gameplaySystem,
-  Game.Schedule.applyDeferred(),
-  renderMirror
 )
 ```

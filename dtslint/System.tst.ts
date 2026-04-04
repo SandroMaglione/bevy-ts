@@ -104,4 +104,69 @@ describe("System", () => {
 
     expect(system).type.toBeAssignableTo<import("../src/system.ts").SystemDefinition<any, void, never>>()
   })
+
+  it("accepts reusable plain object access fragments without a wrapper", () => {
+    const query = Query.define({
+      selection: {
+        position: Query.write(SafePosition),
+        velocity: Query.read(Velocity)
+      }
+    })
+
+    const movementAccess = {
+      queries: {
+        moving: query
+      },
+      resources: {
+        time: System.readResource(Time),
+        viewport: System.writeResource(Viewport)
+      },
+      services: {
+        logger: System.service(Logger)
+      }
+    } satisfies System.SystemAccessSpec
+
+    System.define(
+      "MoveA",
+      {
+        schema,
+        ...movementAccess
+      },
+      ({ queries, resources, services }) =>
+        Fx.sync(() => {
+          expect(queries.moving.each()).type.toBe<ReadonlyArray<{
+            readonly entity: import("../src/entity.ts").EntityMut<typeof schema, {
+              readonly position: Vector2.Vector2
+              readonly velocity: { x: number; y: number }
+            }, {
+              readonly position: Vector2.Vector2
+            }>
+            readonly data: QueryTypes.Cells<typeof query>
+          }>>()
+
+          expect(resources.time.get()).type.toBe<number>()
+          expect(resources.viewport.setRaw({ width: 320, height: 180 })).type.toBe<Result.Result<void, Size2.Error>>()
+          expect(services.logger).type.toBe<{ log: (message: string) => void }>()
+
+          // @ts-expect-error!
+          resources.missing
+        })
+    )
+
+    System.define(
+      "MoveB",
+      {
+        schema,
+        ...movementAccess
+      },
+      ({ resources, services }) =>
+        Fx.sync(() => {
+          expect(resources.time.get()).type.toBe<number>()
+          expect(services.logger.log).type.toBe<(message: string) => void>()
+
+          // @ts-expect-error!
+          services.missing
+        })
+    )
+  })
 })
