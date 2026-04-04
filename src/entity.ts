@@ -11,7 +11,7 @@
  * ```
  *
  * @module entity
- * @docGroup core
+ * @docGroup runtime
  *
  * @groupDescription Namespaces
  * Entity-specific proof helpers that refine ids and handles through descriptor evidence.

@@ -12,7 +12,7 @@
  * ```
  *
  * @module Size2
- * @docGroup helpers
+ * @docGroup data-structures
  *
  * @categoryDescription Size Types
  * Raw, branded, and error shapes for validated two-dimensional sizes.

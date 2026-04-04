@@ -6,6 +6,8 @@
   "sourceBaseUrl": "https://github.com/SandroMaglione/bevy-ts/blob/main",
   "moduleGroups": [
     { "id": "core", "label": "Core" },
+    { "id": "runtime", "label": "Runtime" },
+    { "id": "data-structures", "label": "Data Structures" },
     { "id": "helpers", "label": "Helpers" }
   ],
   "entryPoints": [

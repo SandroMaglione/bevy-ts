@@ -6,7 +6,7 @@
  * value, so host code can stay simple without hiding the underlying ECS model.
  *
  * @module app
- * @docGroup core
+ * @docGroup runtime
  *
  * @groupDescription Interfaces
  * Public facade contracts that expose a minimal application-shaped wrapper over one runtime.

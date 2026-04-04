@@ -199,6 +199,15 @@ const getModuleKindLabel = (kind) => {
   }
 }
 
+const toTitleCase = (value) =>
+  value
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+
+const getGroupLabel = (config, groupId) =>
+  config.moduleGroups.find((group) => group.id === groupId)?.label ?? toTitleCase(groupId)
+
 const formatTypeString = (checker, symbol, declaration) => {
   const type = checker.getTypeOfSymbolAtLocation(symbol, declaration)
   return checker.typeToString(
@@ -576,7 +585,8 @@ export const createDocsRenderer = async () => {
   return {
     markdown,
     highlightBlock,
-    highlightInline
+    highlightInline,
+    dispose: () => highlighter.dispose()
   }
 }
 
@@ -601,16 +611,162 @@ const renderExamples = (renderer, examples, anchors) =>
         .map((example) => renderMarkdown(renderer, example, anchors))
         .join("")}</section>`
 
+const INDENT_UNIT = "  "
+
+const makeIndent = (depth) => INDENT_UNIT.repeat(Math.max(0, depth))
+
+const formatSignature = (signature) => {
+  const source = signature.trim()
+  if (!source) {
+    return source
+  }
+
+  const lines = []
+  let currentLine = ""
+  let depth = 0
+  let stringQuote = null
+  let escaping = false
+
+  const pushNewline = (nextDepth = depth) => {
+    const trimmedLine = currentLine.replace(/[ \t]+$/u, "")
+    if (trimmedLine.length > 0 || lines.length > 0) {
+      lines.push(trimmedLine)
+    }
+    currentLine = makeIndent(nextDepth)
+  }
+
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index]
+    const next = source[index + 1] ?? ""
+    const prev = source[index - 1] ?? ""
+
+    if (stringQuote !== null) {
+      currentLine += char
+      if (escaping) {
+        escaping = false
+        continue
+      }
+      if (char === "\\") {
+        escaping = true
+        continue
+      }
+      if (char === stringQuote) {
+        stringQuote = null
+      }
+      continue
+    }
+
+    if (char === "\"" || char === "'" || char === "`") {
+      stringQuote = char
+      currentLine += char
+      continue
+    }
+
+    if (char === "{") {
+      depth += 1
+      currentLine += char
+      if (next && next !== "}" && next !== "\n") {
+        pushNewline(depth)
+      }
+      continue
+    }
+
+    if (char === "}") {
+      depth = Math.max(0, depth - 1)
+      if (prev !== "{" && prev !== "\n") {
+        pushNewline(depth)
+      }
+      currentLine += char
+      continue
+    }
+
+    if (char === "(" || char === "[" || char === "<") {
+      currentLine += char
+      depth += 1
+      if (next && ![")", "]", ">", "\n"].includes(next)) {
+        pushNewline(depth)
+      }
+      continue
+    }
+
+    if (char === ")" || char === "]" || char === ">") {
+      depth = Math.max(0, depth - 1)
+      if (currentLine.trim().length > 0 && prev !== "(" && prev !== "[" && prev !== "<") {
+        pushNewline(depth)
+      }
+      currentLine += char
+      continue
+    }
+
+    if (char === ",") {
+      currentLine += char
+      if (next && next !== "\n") {
+        pushNewline(depth)
+      }
+      continue
+    }
+
+    if (char === ";" && depth > 0) {
+      currentLine += char
+      if (next && next !== "\n" && next !== "}") {
+        pushNewline(depth)
+      }
+      continue
+    }
+
+    if (char === ":" && next === " ") {
+      currentLine += char
+      if (depth === 0 && source.slice(index + 1).includes("{")) {
+        pushNewline(depth + 1)
+      }
+      continue
+    }
+
+    currentLine += char
+  }
+
+  const trimmedLine = currentLine.replace(/[ \t]+$/u, "")
+  if (trimmedLine.length > 0) {
+    lines.push(trimmedLine)
+  }
+
+  return lines
+    .join("\n")
+    .trim()
+}
+
 const renderSignature = (renderer, signature) =>
-  `<div class="signature">${renderer.highlightBlock(signature, "ts")}</div>`
+  `<div class="signature">${renderer.highlightBlock(formatSignature(signature), "ts")}</div>`
+
+const renderModuleToc = (renderer, sections) => {
+  if (sections.length === 0) {
+    return ""
+  }
+
+  return [
+    `<section class="module-toc">`,
+    `<h2>On This Page</h2>`,
+    `<div class="module-toc-grid">`,
+    ...sections.map((section) =>
+      [
+        `<section class="module-toc-section">`,
+        `<h3>${escapeHtml(section.key)}</h3>`,
+        `<ul>`,
+        ...section.items.map((item) =>
+          `<li><a href="#${item.anchor}">${renderer.highlightInline(item.name)}</a></li>`),
+        `</ul>`,
+        `</section>`
+      ].join("")),
+    `</div>`,
+    `</section>`
+  ].join("")
+}
 
 const renderItem = (renderer, item, anchors) => {
-  const kindLabel = item.kind === "constant" ? "Value" : "Function"
   return [
     `<article class="doc-item" id="${item.anchor}">`,
     `<header class="doc-item-header">`,
-    `<div class="doc-item-label">${kindLabel}</div>`,
-    `<h3>${escapeHtml(item.name)}</h3>`,
+    `<h3>${renderer.highlightInline(item.name)}</h3>`,
     `<a class="source-link" href="${item.sourceLink}">Source</a>`,
     `</header>`,
     item.description
@@ -665,18 +821,19 @@ const getModuleSections = (moduleDoc) => {
   return sections
 }
 
-const renderModuleContent = (renderer, moduleDoc) => {
+const renderModuleContent = (renderer, config, moduleDoc) => {
   const anchors = new Set(moduleDoc.items.map((item) => item.name))
   const sections = getModuleSections(moduleDoc)
 
   return [
     `<header class="module-hero">`,
-    `<p class="eyebrow">${escapeHtml(moduleDoc.group)}</p>`,
+    `<p class="eyebrow">${escapeHtml(getGroupLabel(config, moduleDoc.group))}</p>`,
     `<h1>${escapeHtml(moduleDoc.name)}</h1>`,
     `<div class="module-actions"><a class="source-link" href="${moduleDoc.sourceLink}">View Source</a></div>`,
     renderMarkdown(renderer, moduleDoc.description, anchors),
     `</header>`,
     renderExamples(renderer, moduleDoc.examples, anchors),
+    renderModuleToc(renderer, sections),
     sections.length === 0
       ? `<section><p>No callable public exports are documented for this module yet.</p></section>`
       : sections
@@ -699,6 +856,7 @@ const renderModuleContent = (renderer, moduleDoc) => {
 
 const renderSidebar = ({ config, modules, currentOutputPath }) => {
   const homePath = Path.join(config.outDir, "index.html")
+  const isHomePage = Path.resolve(currentOutputPath) === Path.resolve(homePath)
   const groups = config.moduleGroups.map((group) => ({
     ...group,
     modules: modules.filter((moduleDoc) => moduleDoc.group === group.id)
@@ -709,7 +867,7 @@ const renderSidebar = ({ config, modules, currentOutputPath }) => {
     `<a class="site-title" href="${getRelativeDocHref(currentOutputPath, homePath)}">${escapeHtml(config.siteTitle)}</a>`,
     `<p class="site-description">${escapeHtml(config.siteDescription)}</p>`,
     `<div class="sidebar-section">`,
-    `<a class="sidebar-link" href="${getRelativeDocHref(currentOutputPath, homePath)}">Overview</a>`,
+    `<a class="sidebar-link${isHomePage ? " is-active" : ""}" href="${getRelativeDocHref(currentOutputPath, homePath)}"${isHomePage ? ' aria-current="page"' : ""}>Overview</a>`,
     `</div>`,
     ...groups.map((group) =>
       [
@@ -719,7 +877,8 @@ const renderSidebar = ({ config, modules, currentOutputPath }) => {
         ...group.modules.map((moduleDoc) => {
           const modulePath = Path.join(config.outDir, "modules", moduleDoc.slug, "index.html")
           const href = getRelativeDocHref(currentOutputPath, modulePath)
-          return `<li><a class="sidebar-link" href="${href}">${escapeHtml(moduleDoc.name)}</a></li>`
+          const isCurrentPage = Path.resolve(currentOutputPath) === Path.resolve(modulePath)
+          return `<li><a class="sidebar-link${isCurrentPage ? " is-active" : ""}" href="${href}"${isCurrentPage ? ' aria-current="page"' : ""}>${escapeHtml(moduleDoc.name)}</a></li>`
         }),
         `</ul>`,
         `</section>`
@@ -854,7 +1013,7 @@ code {
 .site-description {
   margin: 0 0 1.5rem;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .sidebar-section {
@@ -877,8 +1036,16 @@ code {
 
 .sidebar-link {
   display: block;
-  padding: 0.3rem 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.7rem;
   text-decoration: none;
+  line-height: 1.35;
+}
+
+.sidebar-link.is-active {
+  color: var(--text);
+  background: rgba(13, 108, 91, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(13, 108, 91, 0.18);
 }
 
 .content {
@@ -890,6 +1057,7 @@ code {
 .home-hero,
 .module-section,
 .module-examples,
+.module-toc,
 .related-types,
 .home-readme,
 .group-card {
@@ -903,6 +1071,7 @@ code {
 .home-hero,
 .home-readme,
 .module-examples,
+.module-toc,
 .related-types {
   padding: 1.75rem;
   margin-bottom: 1.5rem;
@@ -913,8 +1082,7 @@ code {
   margin-bottom: 1.5rem;
 }
 
-.eyebrow,
-.doc-item-label {
+.eyebrow {
   margin: 0;
   color: var(--muted);
   font-size: 0.8rem;
@@ -934,10 +1102,11 @@ code {
   max-width: 42rem;
   color: var(--muted);
   font-size: 1.1rem;
+  line-height: 1.55;
 }
 
 .module-actions {
-  margin-bottom: 1rem;
+  margin: 0 0 1rem;
 }
 
 .source-link {
@@ -948,13 +1117,89 @@ code {
   font-size: 0.95rem;
 }
 
-.doc-item-list {
+.content h2,
+.content h3,
+.content h4,
+.content p,
+.content ul,
+.content ol,
+.content pre {
+  margin-top: 0;
+}
+
+.content p,
+.content li {
+  line-height: 1.65;
+}
+
+.content p + p,
+.content p + ul,
+.content p + ol,
+.content ul + p,
+.content ol + p {
+  margin-top: 0.9rem;
+}
+
+.content ul,
+.content ol {
+  padding-left: 1.3rem;
+}
+
+.module-section-header h2,
+.module-examples h2,
+.module-toc h2,
+.related-types h2,
+.home-groups h2 {
+  margin-bottom: 0.75rem;
+}
+
+.module-section-header > :last-child,
+.module-examples > :last-child,
+.module-toc > :last-child,
+.related-types > :last-child {
+  margin-bottom: 0;
+}
+
+.module-toc-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 1rem;
 }
 
+.module-toc-section {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface-strong);
+}
+
+.module-toc-section h3 {
+  margin-bottom: 0.7rem;
+  font-size: 1rem;
+}
+
+.module-toc-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.module-toc-section li + li {
+  margin-top: 0.55rem;
+}
+
+.module-toc-section a {
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.doc-item-list {
+  display: grid;
+  gap: 1.25rem;
+}
+
 .doc-item {
-  padding: 1.25rem;
+  padding: 1.35rem;
   border: 1px solid var(--border);
   border-radius: 1rem;
   background: var(--surface-strong);
@@ -963,35 +1208,51 @@ code {
 .doc-item-header {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  margin-bottom: 0.9rem;
 }
 
 .doc-item-header h3 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.25rem;
+  line-height: 1.2;
 }
 
-.signature {
+.doc-item > :last-child {
+  margin-bottom: 0;
+}
+
+.doc-item .signature + .doc-item-examples,
+.doc-item p + .signature {
   margin-top: 1rem;
 }
 
+.doc-item-examples > :last-child {
+  margin-bottom: 0;
+}
+
+.signature {
+  margin: 1.1rem 0 0;
+}
+
 .signature .shiki {
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .signature .shiki code {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 .signature .shiki .line {
-  min-height: 0;
+  min-height: 1.55em;
 }
 
 .shiki {
   margin: 0;
-  padding: 1rem;
+  padding: 1rem 1.1rem;
   overflow: auto;
   border-radius: 0.9rem;
   border: 1px solid rgba(216, 205, 189, 0.8);
@@ -1000,13 +1261,14 @@ code {
 
 .shiki code {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.18rem;
   font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .shiki .line {
   display: block;
-  min-height: 1.4em;
+  min-height: 1.5em;
 }
 
 .inline-code {
@@ -1113,34 +1375,38 @@ export const buildDocsSite = (cwd = process.cwd()) =>
     Effect.flatMap(({ config, modules }) =>
       Effect.gen(function*() {
         const renderer = yield* Effect.promise(() => createDocsRenderer())
-        const readme = yield* readFileString(Path.join(cwd, "README.md"))
-        const normalizedReadme = stripReadmeTitle(rewriteReadmeLinks(readme, config.sourceBaseUrl))
-        yield* removeDir(config.outDir)
-        yield* writeFileString(Path.join(config.outDir, ".nojekyll"), "")
-        yield* writeFileString(Path.join(config.outDir, "assets", "site.css"), SITE_CSS)
+        try {
+          const readme = yield* readFileString(Path.join(cwd, "README.md"))
+          const normalizedReadme = stripReadmeTitle(rewriteReadmeLinks(readme, config.sourceBaseUrl))
+          yield* removeDir(config.outDir)
+          yield* writeFileString(Path.join(config.outDir, ".nojekyll"), "")
+          yield* writeFileString(Path.join(config.outDir, "assets", "site.css"), SITE_CSS)
 
-        const homeOutputPath = Path.join(config.outDir, "index.html")
-        const homeHtml = renderPage({
-          config,
-          modules,
-          currentOutputPath: homeOutputPath,
-          title: `${config.siteTitle} Docs`,
-          description: config.siteDescription,
-          content: renderHomePage({ renderer, config, modules, readme: normalizedReadme })
-        })
-        yield* writeFileString(homeOutputPath, homeHtml)
-
-        for (const moduleDoc of modules) {
-          const outputPath = Path.join(config.outDir, "modules", moduleDoc.slug, "index.html")
-          const html = renderPage({
+          const homeOutputPath = Path.join(config.outDir, "index.html")
+          const homeHtml = renderPage({
             config,
             modules,
-            currentOutputPath: outputPath,
-            title: `${moduleDoc.name} | ${config.siteTitle}`,
-            description: moduleDoc.description.split("\n")[0] ?? moduleDoc.description,
-            content: renderModuleContent(renderer, moduleDoc)
+            currentOutputPath: homeOutputPath,
+            title: `${config.siteTitle} Docs`,
+            description: config.siteDescription,
+            content: renderHomePage({ renderer, config, modules, readme: normalizedReadme })
           })
-          yield* writeFileString(outputPath, html)
+          yield* writeFileString(homeOutputPath, homeHtml)
+
+          for (const moduleDoc of modules) {
+            const outputPath = Path.join(config.outDir, "modules", moduleDoc.slug, "index.html")
+            const html = renderPage({
+              config,
+              modules,
+              currentOutputPath: outputPath,
+              title: `${moduleDoc.name} | ${config.siteTitle}`,
+              description: moduleDoc.description.split("\n")[0] ?? moduleDoc.description,
+              content: renderModuleContent(renderer, config, moduleDoc)
+            })
+            yield* writeFileString(outputPath, html)
+          }
+        } finally {
+          renderer.dispose()
         }
       })
     )

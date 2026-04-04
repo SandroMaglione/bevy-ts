@@ -14,7 +14,7 @@
  * ```
  *
  * @module Aabb
- * @docGroup helpers
+ * @docGroup data-structures
  *
  * @categoryDescription AABB Types
  * Raw, branded, and error shapes for centered axis-aligned bounding boxes.

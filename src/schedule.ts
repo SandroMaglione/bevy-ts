@@ -14,7 +14,7 @@
  * ```
  *
  * @module schedule
- * @docGroup core
+ * @docGroup runtime
  *
  * @groupDescription Namespaces
  * Grouped schedule helper types for ordering, transitions, and schedule-aware requirements.

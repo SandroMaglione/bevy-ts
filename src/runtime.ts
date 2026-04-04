@@ -15,7 +15,7 @@
  * ```
  *
  * @module runtime
- * @docGroup core
+ * @docGroup runtime
  *
  * @groupDescription Interfaces
  * Public runtime and runtime-view contracts that expose explicit execution boundaries.

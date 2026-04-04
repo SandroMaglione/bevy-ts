@@ -15,7 +15,7 @@
  * ```
  *
  * @module Scalar
- * @docGroup helpers
+ * @docGroup data-structures
  *
  * @categoryDescription Scalar Types
  * Branded numeric shapes and shared scalar validation errors.
