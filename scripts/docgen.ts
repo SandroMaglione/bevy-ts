@@ -1,11 +1,88 @@
-import * as Fs from "node:fs"
-import * as Path from "node:path"
+import * as NodePath from "node:path"
 import process from "node:process"
 import MarkdownIt from "markdown-it"
+import * as FileSystem from "effect/FileSystem"
 import * as Effect from "effect/Effect"
+import * as Path from "effect/Path"
 import * as Schema from "effect/Schema"
 import { createHighlighter } from "shiki"
 import * as ts from "typescript"
+
+type TagMap = Map<string, Array<string>>
+
+interface ModuleGroup {
+  readonly id: string
+  readonly label: string
+}
+
+interface DocsConfig {
+  readonly siteTitle: string
+  readonly siteDescription: string
+  readonly basePath: string
+  readonly outDir: string
+  readonly sourceBaseUrl: string
+  readonly moduleGroups: ReadonlyArray<ModuleGroup>
+  readonly entryPoints: ReadonlyArray<string>
+}
+
+interface ResolvedDocsConfig extends DocsConfig {
+  readonly outDir: string
+}
+
+export interface ParsedJSDoc {
+  readonly description: string
+  readonly tags: TagMap
+}
+
+export interface DocsRenderer {
+  readonly markdown: MarkdownIt
+  readonly highlightBlock: (code: string, language?: string) => string
+  readonly highlightInline: (code: string) => string
+  readonly dispose: () => void
+}
+
+type ModuleItemKind = "function" | "constant" | "interface" | "type" | "namespace"
+
+interface ModuleItem {
+  readonly name: string
+  readonly kind: ModuleItemKind
+  readonly description: string
+  readonly examples: ReadonlyArray<string>
+  readonly category: string | null
+  readonly deprecated: boolean
+  readonly anchor: string
+  readonly order: number
+  readonly signature: string
+  readonly sourceLink: string
+  readonly line: number
+  readonly statementKind: ts.SyntaxKind
+}
+
+interface ModuleDoc {
+  readonly path: string
+  readonly slug: string
+  readonly name: string
+  readonly description: string
+  readonly examples: ReadonlyArray<string>
+  readonly group: string
+  readonly categoryDescriptions: ReadonlyMap<string, string>
+  readonly groupDescriptions: ReadonlyMap<string, string>
+  readonly sourceLink: string
+  readonly items: ReadonlyArray<ModuleItem>
+  readonly valueItems: ReadonlyArray<ModuleItem>
+  readonly typeItems: ReadonlyArray<ModuleItem>
+}
+
+interface ModuleSection {
+  readonly key: string
+  readonly description: string
+  readonly items: Array<ModuleItem>
+}
+
+interface DocsModel {
+  readonly config: ResolvedDocsConfig
+  readonly modules: ReadonlyArray<ModuleDoc>
+}
 
 const ModuleGroupSchema = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -27,8 +104,9 @@ const decodeDocsConfig = Schema.decodeUnknownSync(DocsConfigSchema)
 const SHIKI_THEME = "catppuccin-latte"
 const SHIKI_INLINE_LANG = "ts"
 const SHIKI_PLAIN_LANG = "text"
+const MODULE_RENDER_CONCURRENCY = 6
 
-const HTML_ESCAPE = {
+const HTML_ESCAPE: Record<string, string> = {
   "&": "&amp;",
   "<": "&lt;",
   ">": "&gt;",
@@ -36,44 +114,56 @@ const HTML_ESCAPE = {
   "'": "&#39;"
 }
 
-const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => HTML_ESCAPE[char])
+const toError = (error: unknown, message: string): Error =>
+  error instanceof Error ? new Error(`${message}: ${error.message}`, { cause: error }) : new Error(`${message}: ${String(error)}`)
 
-const slugify = (value) =>
+const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (char) => HTML_ESCAPE[char] ?? char)
+
+const slugify = (value: string): string =>
   value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "item"
 
-const readFileString = (path) =>
-  Effect.try({
-    try: () => Fs.readFileSync(path, "utf8"),
-    catch: (error) => new Error(`Unable to read ${path}: ${String(error)}`)
+const readFileString = (path: string) =>
+  Effect.gen(function*() {
+    const fs = yield* FileSystem.FileSystem
+    return yield* fs.readFileString(path).pipe(
+      Effect.mapError((error) => toError(error, `Unable to read ${path}`))
+    )
   })
 
-const writeFileString = (path, content) =>
-  Effect.try({
-    try: () => {
-      Fs.mkdirSync(Path.dirname(path), { recursive: true })
-      Fs.writeFileSync(path, content)
-    },
-    catch: (error) => new Error(`Unable to write ${path}: ${String(error)}`)
+const writeFileString = (path: string, content: string) =>
+  Effect.gen(function*() {
+    const fs = yield* FileSystem.FileSystem
+    const pathService = yield* Path.Path
+    yield* fs.makeDirectory(pathService.dirname(path), { recursive: true }).pipe(
+      Effect.mapError((error) => toError(error, `Unable to create parent directory for ${path}`))
+    )
+    yield* fs.writeFileString(path, content).pipe(
+      Effect.mapError((error) => toError(error, `Unable to write ${path}`))
+    )
   })
 
-const removeDir = (path) =>
-  Effect.try({
-    try: () => {
-      Fs.rmSync(path, { recursive: true, force: true })
-    },
-    catch: (error) => new Error(`Unable to remove ${path}: ${String(error)}`)
+const removeDir = (path: string) =>
+  Effect.gen(function*() {
+    const fs = yield* FileSystem.FileSystem
+    yield* fs.remove(path, { recursive: true, force: true }).pipe(
+      Effect.mapError((error) => toError(error, `Unable to remove ${path}`))
+    )
   })
 
-const readJsonFile = (path) =>
-  readFileString(path).pipe(
-    Effect.map((content) => JSON.parse(content))
-  )
+const readJsonFile = (path: string) =>
+  Effect.gen(function*() {
+    const content = yield* readFileString(path)
+    return yield* Effect.try({
+      try: () => JSON.parse(content) as unknown,
+      catch: (error) => toError(error, `Unable to parse JSON in ${path}`)
+    })
+  })
 
-const normalizeCommentBody = (text) =>
+const normalizeCommentBody = (text: string): string =>
   text
     .replace(/^\/\*\*/, "")
     .replace(/\*\/$/, "")
@@ -82,18 +172,18 @@ const normalizeCommentBody = (text) =>
     .join("\n")
     .trim()
 
-export const parseJSDoc = (text) => {
+export const parseJSDoc = (text: string): ParsedJSDoc => {
   if (!text || !text.trim()) {
     return { description: "", tags: new Map() }
   }
 
   const body = normalizeCommentBody(text)
   const lines = body.split("\n")
-  const descriptionLines = []
-  const tags = new Map()
+  const descriptionLines: Array<string> = []
+  const tags: TagMap = new Map()
 
-  let currentTag = null
-  let currentLines = []
+  let currentTag: string | null = null
+  let currentLines: Array<string> = []
 
   const flushTag = () => {
     if (currentTag === null) {
@@ -107,9 +197,10 @@ export const parseJSDoc = (text) => {
   for (const line of lines) {
     const tagMatch = line.match(/^@([A-Za-z][\w-]*)\s*(.*)$/)
     if (tagMatch) {
+      const [, matchedTag = "", initialValue = ""] = tagMatch
       flushTag()
-      currentTag = tagMatch[1]
-      currentLines = [tagMatch[2] ?? ""]
+      currentTag = matchedTag
+      currentLines = [initialValue]
       continue
     }
     if (currentTag === null) {
@@ -127,7 +218,7 @@ export const parseJSDoc = (text) => {
   }
 }
 
-const getFirstTag = (doc, tagName) => {
+const getFirstTag = (doc: ParsedJSDoc, tagName: string): string | null => {
   const values = doc.tags.get(tagName)
   if (!values || values.length === 0) {
     return null
@@ -136,11 +227,11 @@ const getFirstTag = (doc, tagName) => {
   return first && first.length > 0 ? first : null
 }
 
-const hasTag = (doc, tagName) => (doc.tags.get(tagName) ?? []).length > 0
+const hasTag = (doc: ParsedJSDoc, tagName: string): boolean => (doc.tags.get(tagName) ?? []).length > 0
 
-export const collectNamedDescriptions = (values) => {
+export const collectNamedDescriptions = (values: ReadonlyArray<string> | undefined): Map<string, string> => {
   const entries = values ?? []
-  const result = new Map()
+  const result = new Map<string, string>()
 
   for (const entry of entries) {
     const trimmed = entry.trim()
@@ -158,13 +249,13 @@ export const collectNamedDescriptions = (values) => {
   return result
 }
 
-const extractLeadingModuleComment = (content) => {
+const extractLeadingModuleComment = (content: string): string => {
   const match = content.match(/^\s*\/\*\*[\s\S]*?\*\//)
   return match?.[0] ?? ""
 }
 
-const getJsDocText = (node, sourceFile) => {
-  const jsDocs = node.jsDoc
+const getJsDocText = (node: ts.HasJSDoc, sourceFile: ts.SourceFile): string => {
+  const jsDocs = (node as ts.Node & { readonly jsDoc?: ReadonlyArray<ts.JSDoc> }).jsDoc
   if (!Array.isArray(jsDocs) || jsDocs.length === 0) {
     return ""
   }
@@ -172,17 +263,17 @@ const getJsDocText = (node, sourceFile) => {
   return last.getFullText(sourceFile)
 }
 
-const isExported = (node) =>
+const isExported = (node: ts.Node & { readonly modifiers?: ts.NodeArray<ts.ModifierLike> }) =>
   Array.isArray(node.modifiers) &&
   node.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
 
-const createSourceLink = (config, relativePath, line) =>
-  `${config.sourceBaseUrl}/${relativePath.replaceAll(Path.sep, "/")}#L${line}`
+const createSourceLink = (config: DocsConfig, relativePath: string, line: number): string =>
+  `${config.sourceBaseUrl}/${relativePath.replaceAll(NodePath.sep, "/")}#L${line}`
 
-const getLineNumber = (sourceFile, node) =>
+const getLineNumber = (sourceFile: ts.SourceFile, node: ts.Node): number =>
   sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1
 
-const getModuleKindLabel = (kind) => {
+const getModuleKindLabel = (kind: ModuleItemKind): string => {
   switch (kind) {
     case "function":
       return "Functions"
@@ -199,16 +290,16 @@ const getModuleKindLabel = (kind) => {
   }
 }
 
-const toTitleCase = (value) =>
+const toTitleCase = (value: string): string =>
   value
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ")
 
-const getGroupLabel = (config, groupId) =>
+const getGroupLabel = (config: DocsConfig, groupId: string): string =>
   config.moduleGroups.find((group) => group.id === groupId)?.label ?? toTitleCase(groupId)
 
-const formatTypeString = (checker, symbol, declaration) => {
+const formatTypeString = (checker: ts.TypeChecker, symbol: ts.Symbol, declaration: ts.Node): string => {
   const type = checker.getTypeOfSymbolAtLocation(symbol, declaration)
   return checker.typeToString(
     type,
@@ -219,7 +310,11 @@ const formatTypeString = (checker, symbol, declaration) => {
   )
 }
 
-const getValueSignature = (checker, declaration, sourceFile) => {
+const getValueSignature = (
+  checker: ts.TypeChecker,
+  declaration: ts.VariableDeclaration,
+  sourceFile: ts.SourceFile
+): string => {
   if (!ts.isIdentifier(declaration.name)) {
     return declaration.getText(sourceFile)
   }
@@ -231,7 +326,10 @@ const getValueSignature = (checker, declaration, sourceFile) => {
   return `export const ${declaration.name.text}: ${typeString}`
 }
 
-const getFunctionSignature = (checker, declaration) => {
+const getFunctionSignature = (
+  checker: ts.TypeChecker,
+  declaration: ts.FunctionDeclaration
+): string => {
   if (!declaration.name) {
     return declaration.getText()
   }
@@ -243,7 +341,23 @@ const getFunctionSignature = (checker, declaration) => {
   return `export const ${declaration.name.text}: ${typeString}`
 }
 
-const getTypeSignature = (declaration, sourceFile) => declaration.getText(sourceFile)
+const getTypeSignature = (
+  declaration: ts.InterfaceDeclaration | ts.TypeAliasDeclaration,
+  sourceFile: ts.SourceFile
+): string => declaration.getText(sourceFile)
+
+interface CreateItemInput {
+  readonly modulePath: string
+  readonly sourceFile: ts.SourceFile
+  readonly node: ts.Node
+  readonly declaration: ts.Node
+  readonly doc: ParsedJSDoc
+  readonly kind: ModuleItemKind
+  readonly name: string
+  readonly signature: string
+  readonly order: number
+  readonly config: DocsConfig
+}
 
 const createItem = ({
   modulePath,
@@ -256,7 +370,7 @@ const createItem = ({
   signature,
   order,
   config
-}) => {
+}: CreateItemInput): ModuleItem => {
   const line = getLineNumber(sourceFile, declaration)
   return {
     name,
@@ -274,15 +388,20 @@ const createItem = ({
   }
 }
 
-const shouldSkipDoc = (doc) => hasTag(doc, "internal") || hasTag(doc, "ignore")
+const shouldSkipDoc = (doc: ParsedJSDoc): boolean => hasTag(doc, "internal") || hasTag(doc, "ignore")
 
 const parseExportedItems = ({
   config,
   checker,
   sourceFile,
   modulePath
-}) => {
-  const items = []
+}: {
+  readonly config: DocsConfig
+  readonly checker: ts.TypeChecker
+  readonly sourceFile: ts.SourceFile
+  readonly modulePath: string
+}): Array<ModuleItem> => {
+  const items: Array<ModuleItem> = []
   let order = 0
 
   for (const statement of sourceFile.statements) {
@@ -322,6 +441,7 @@ const parseExportedItems = ({
         if (!ts.isIdentifier(declaration.name)) {
           continue
         }
+        const initializer = declaration.initializer
         const declarationDocText = getJsDocText(declaration, sourceFile)
         const declarationDoc = declarationDocText
           ? parseJSDoc(declarationDocText)
@@ -331,8 +451,8 @@ const parseExportedItems = ({
         }
 
         const kind = declaration.type?.getText(sourceFile).includes("=>") ||
-          ts.isArrowFunction(declaration.initializer) ||
-          ts.isFunctionExpression(declaration.initializer)
+          (initializer !== undefined && ts.isArrowFunction(initializer)) ||
+          (initializer !== undefined && ts.isFunctionExpression(initializer))
           ? "function"
           : "constant"
 
@@ -423,7 +543,7 @@ const parseExportedItems = ({
   return items
 }
 
-const validateModule = (moduleDoc, config) => {
+const validateModule = (moduleDoc: ModuleDoc, config: DocsConfig): void => {
   if (!moduleDoc.description) {
     throw new Error(`Missing module description in ${moduleDoc.path}`)
   }
@@ -444,15 +564,27 @@ const parseModule = ({
   config,
   program,
   checker
-}) => {
+}: {
+  readonly absolutePath: string
+  readonly relativePath: string
+  readonly config: DocsConfig
+  readonly program: ts.Program
+  readonly checker: ts.TypeChecker
+}): ModuleDoc => {
   const sourceFile = program.getSourceFile(absolutePath)
   if (!sourceFile) {
     throw new Error(`Unable to load source file ${relativePath}`)
   }
   const content = sourceFile.getFullText()
   const moduleDoc = parseJSDoc(extractLeadingModuleComment(content))
-  const moduleName = getFirstTag(moduleDoc, "module") ?? Path.basename(relativePath, ".ts")
+  const moduleName = getFirstTag(moduleDoc, "module") ?? NodePath.basename(relativePath, ".ts")
   const group = getFirstTag(moduleDoc, "docGroup")
+  if (!moduleDoc.description) {
+    throw new Error(`Missing module description in ${relativePath}`)
+  }
+  if (!group) {
+    throw new Error(`Missing @docGroup in ${relativePath}`)
+  }
   const categoryDescriptions = collectNamedDescriptions(moduleDoc.tags.get("categoryDescription"))
   const groupDescriptions = collectNamedDescriptions(moduleDoc.tags.get("groupDescription"))
   const items = parseExportedItems({
@@ -479,8 +611,8 @@ const parseModule = ({
   return result
 }
 
-const readTsConfig = (cwd) => {
-  const tsConfigPath = Path.join(cwd, "tsconfig.json")
+const readTsConfig = (cwd: string): ts.CompilerOptions => {
+  const tsConfigPath = NodePath.join(cwd, "tsconfig.json")
   const readResult = ts.readConfigFile(tsConfigPath, ts.sys.readFile)
   if (readResult.error) {
     throw new Error(ts.flattenDiagnosticMessageText(readResult.error.messageText, "\n"))
@@ -492,14 +624,14 @@ const readTsConfig = (cwd) => {
   }
 }
 
-const getRelativeDocHref = (fromOutputPath, toOutputPath) => {
-  const relative = Path.relative(Path.dirname(fromOutputPath), toOutputPath).replaceAll(Path.sep, "/")
+const getRelativeDocHref = (fromOutputPath: string, toOutputPath: string): string => {
+  const relative = NodePath.relative(NodePath.dirname(fromOutputPath), toOutputPath).replaceAll(NodePath.sep, "/")
   return relative === "" ? "./" : relative
 }
 
-const rewriteReadmeLinks = (content, sourceBaseUrl) =>
-  content.replace(/\]\((?!https?:\/\/|#|mailto:|data:)([^)]+)\)/g, (_match, rawTarget) => {
-    const [target, hash = ""] = rawTarget.split("#")
+const rewriteReadmeLinks = (content: string, sourceBaseUrl: string): string =>
+  content.replace(/\]\((?!https?:\/\/|#|mailto:|data:)([^)]+)\)/g, (_match: string, rawTarget: string) => {
+    const [target = "", hash = ""] = rawTarget.split("#")
     const normalized = target.replace(/^\.\//, "").replace(/^\/+/, "")
     if (normalized.length === 0) {
       return `](#${hash})`
@@ -508,10 +640,10 @@ const rewriteReadmeLinks = (content, sourceBaseUrl) =>
     return `](${sourceBaseUrl}/${normalized}${suffix})`
   })
 
-const stripReadmeTitle = (content) =>
+const stripReadmeTitle = (content: string): string =>
   content.replace(/^#\s+`?bevy-ts`?\s*\n+/i, "").trim()
 
-const normalizeLanguage = (language) => {
+const normalizeLanguage = (language: string): string => {
   const normalized = language.trim().toLowerCase()
   if (!normalized) {
     return SHIKI_PLAIN_LANG
@@ -531,7 +663,7 @@ const normalizeLanguage = (language) => {
   return normalized
 }
 
-const buildHighlightedInlineCode = (attributes, line) => {
+const buildHighlightedInlineCode = (attributes: string, line: string): string => {
   if (attributes.includes(`class="`)) {
     return `<span${attributes.replace(/class="([^"]*)"/, ' class="$1 inline-code"')}>${line}</span>`
   }
@@ -539,22 +671,23 @@ const buildHighlightedInlineCode = (attributes, line) => {
   return `<span ${normalized}class="inline-code">${line}</span>`
 }
 
-const convertBlockToInline = (html) => {
+const convertBlockToInline = (html: string): string => {
   const match = html.match(/^<pre([^>]*)><code><span class="line">([\s\S]*)<\/span><\/code><\/pre>$/)
   if (!match) {
     throw new Error("Unable to convert highlighted block HTML to inline code.")
   }
-  const attributes = match[1].trim()
-  return buildHighlightedInlineCode(attributes, match[2])
+  const [, rawAttributes = "", line = ""] = match
+  const attributes = rawAttributes.trim()
+  return buildHighlightedInlineCode(attributes, line)
 }
 
-export const createDocsRenderer = async () => {
+export const createDocsRenderer = async (): Promise<DocsRenderer> => {
   const highlighter = await createHighlighter({
     themes: [SHIKI_THEME],
     langs: ["ts", "js", "json", "bash", "html", "css", "text"]
   })
-  const normalizeHighlightedCode = (code) => code.replace(/\n+$/u, "")
-  const highlightBlock = (code, language = SHIKI_PLAIN_LANG) => {
+  const normalizeHighlightedCode = (code: string): string => code.replace(/\n+$/u, "")
+  const highlightBlock = (code: string, language = SHIKI_PLAIN_LANG): string => {
     const normalizedCode = normalizeHighlightedCode(code)
     const normalizedLanguage = normalizeLanguage(language)
     try {
@@ -569,7 +702,7 @@ export const createDocsRenderer = async () => {
       })
     }
   }
-  const highlightInline = (code) =>
+  const highlightInline = (code: string): string =>
     convertBlockToInline(
       highlightBlock(code, SHIKI_INLINE_LANG)
     )
@@ -577,7 +710,7 @@ export const createDocsRenderer = async () => {
     html: false,
     linkify: true,
     typographer: false,
-    highlight: (code, language) => highlightBlock(code, language)
+    highlight: (code: string, language: string) => highlightBlock(code, language)
   })
   markdown.renderer.rules.code_inline = (tokens, index) =>
     highlightInline(tokens[index]?.content ?? "")
@@ -590,8 +723,8 @@ export const createDocsRenderer = async () => {
   }
 }
 
-const rewriteDocLinks = (content, anchors = new Set()) => {
-  const withLinks = content.replace(/\{@link\s+([^}\s|]+)(?:\s+[^}]*)?\}/g, (_match, target) => {
+const rewriteDocLinks = (content: string, anchors: ReadonlySet<string> = new Set()): string => {
+  const withLinks = content.replace(/\{@link\s+([^}\s|]+)(?:\s+[^}]*)?\}/g, (_match: string, target: string) => {
     const normalized = target.split(".").at(-1) ?? target
     if (anchors.has(normalized)) {
       return `[${normalized}](#${slugify(normalized)})`
@@ -601,33 +734,37 @@ const rewriteDocLinks = (content, anchors = new Set()) => {
   return withLinks
 }
 
-const renderMarkdown = (renderer, content, anchors = new Set()) =>
+const renderMarkdown = (renderer: DocsRenderer, content: string, anchors: ReadonlySet<string> = new Set()): string =>
   renderer.markdown.render(rewriteDocLinks(content, anchors))
 
-const renderExamples = (renderer, examples, anchors) =>
+const renderExamples = (
+  renderer: DocsRenderer,
+  examples: ReadonlyArray<string>,
+  anchors: ReadonlySet<string>
+): string =>
   examples.length === 0
     ? ""
     : `<section class="module-examples"><h2>Examples</h2>${examples
-        .map((example) => renderMarkdown(renderer, example, anchors))
+        .map((example: string) => renderMarkdown(renderer, example, anchors))
         .join("")}</section>`
 
 const INDENT_UNIT = "  "
 
-const makeIndent = (depth) => INDENT_UNIT.repeat(Math.max(0, depth))
+const makeIndent = (depth: number): string => INDENT_UNIT.repeat(Math.max(0, depth))
 
-const formatSignature = (signature) => {
+const formatSignature = (signature: string): string => {
   const source = signature.trim()
   if (!source) {
     return source
   }
 
-  const lines = []
+  const lines: Array<string> = []
   let currentLine = ""
   let depth = 0
-  let stringQuote = null
+  let stringQuote: string | null = null
   let escaping = false
 
-  const pushNewline = (nextDepth = depth) => {
+  const pushNewline = (nextDepth = depth): void => {
     const trimmedLine = currentLine.replace(/[ \t]+$/u, "")
     if (trimmedLine.length > 0 || lines.length > 0) {
       lines.push(trimmedLine)
@@ -735,10 +872,10 @@ const formatSignature = (signature) => {
     .trim()
 }
 
-const renderSignature = (renderer, signature) =>
+const renderSignature = (renderer: DocsRenderer, signature: string): string =>
   `<div class="signature">${renderer.highlightBlock(formatSignature(signature), "ts")}</div>`
 
-const renderModuleToc = (renderer, sections) => {
+const renderModuleToc = (renderer: DocsRenderer, sections: ReadonlyArray<ModuleSection>): string => {
   if (sections.length === 0) {
     return ""
   }
@@ -747,12 +884,12 @@ const renderModuleToc = (renderer, sections) => {
     `<section class="module-toc">`,
     `<h2>On This Page</h2>`,
     `<div class="module-toc-grid">`,
-    ...sections.map((section) =>
+    ...sections.map((section: ModuleSection) =>
       [
         `<section class="module-toc-section">`,
         `<h3>${escapeHtml(section.key)}</h3>`,
         `<ul>`,
-        ...section.items.map((item) =>
+        ...section.items.map((item: ModuleItem) =>
           `<li><a href="#${item.anchor}">${renderer.highlightInline(item.name)}</a></li>`),
         `</ul>`,
         `</section>`
@@ -762,7 +899,7 @@ const renderModuleToc = (renderer, sections) => {
   ].join("")
 }
 
-const renderItem = (renderer, item, anchors) => {
+const renderItem = (renderer: DocsRenderer, item: ModuleItem, anchors: ReadonlySet<string>): string => {
   return [
     `<article class="doc-item" id="${item.anchor}">`,
     `<header class="doc-item-header">`,
@@ -775,14 +912,14 @@ const renderItem = (renderer, item, anchors) => {
     renderSignature(renderer, item.signature),
     item.examples.length > 0
       ? `<div class="doc-item-examples">${item.examples
-          .map((example) => renderMarkdown(renderer, example, anchors))
+          .map((example: string) => renderMarkdown(renderer, example, anchors))
           .join("")}</div>`
       : "",
     `</article>`
   ].join("")
 }
 
-const renderSecondaryTypes = (renderer, moduleDoc) => {
+const renderSecondaryTypes = (renderer: DocsRenderer, moduleDoc: ModuleDoc): string => {
   if (moduleDoc.typeItems.length === 0) {
     return ""
   }
@@ -791,15 +928,15 @@ const renderSecondaryTypes = (renderer, moduleDoc) => {
     `<h2>Related Types</h2>`,
     `<p>These support the callable API surface and are intentionally kept secondary in this v1 docs view.</p>`,
     `<ul>`,
-    ...moduleDoc.typeItems.map((item) => `<li>${renderer.highlightInline(item.name)}</li>`),
+    ...moduleDoc.typeItems.map((item: ModuleItem) => `<li>${renderer.highlightInline(item.name)}</li>`),
     `</ul>`,
     `</section>`
   ].join("")
 }
 
-const getModuleSections = (moduleDoc) => {
-  const sections = []
-  const byKey = new Map()
+const getModuleSections = (moduleDoc: ModuleDoc): Array<ModuleSection> => {
+  const sections: Array<ModuleSection> = []
+  const byKey = new Map<string, ModuleSection>()
 
   for (const item of moduleDoc.valueItems) {
     const key = item.category ?? getModuleKindLabel(item.kind)
@@ -807,7 +944,7 @@ const getModuleSections = (moduleDoc) => {
       const description = moduleDoc.categoryDescriptions.get(key) ??
         moduleDoc.groupDescriptions.get(key) ??
         ""
-      const section = {
+      const section: ModuleSection = {
         key,
         description,
         items: []
@@ -815,14 +952,17 @@ const getModuleSections = (moduleDoc) => {
       byKey.set(key, section)
       sections.push(section)
     }
-    byKey.get(key).items.push(item)
+    const section = byKey.get(key)
+    if (section) {
+      section.items.push(item)
+    }
   }
 
   return sections
 }
 
-const renderModuleContent = (renderer, config, moduleDoc) => {
-  const anchors = new Set(moduleDoc.items.map((item) => item.name))
+const renderModuleContent = (renderer: DocsRenderer, config: ResolvedDocsConfig, moduleDoc: ModuleDoc): string => {
+  const anchors = new Set(moduleDoc.items.map((item: ModuleItem) => item.name))
   const sections = getModuleSections(moduleDoc)
 
   return [
@@ -845,7 +985,7 @@ const renderModuleContent = (renderer, config, moduleDoc) => {
               section.description ? renderMarkdown(renderer, section.description, anchors) : "",
               `</header>`,
               `<div class="doc-item-list">`,
-              section.items.map((item) => renderItem(renderer, item, anchors)).join(""),
+              section.items.map((item: ModuleItem) => renderItem(renderer, item, anchors)).join(""),
               `</div>`,
               `</section>`
             ].join(""))
@@ -854,9 +994,17 @@ const renderModuleContent = (renderer, config, moduleDoc) => {
   ].join("")
 }
 
-const renderSidebar = ({ config, modules, currentOutputPath }) => {
-  const homePath = Path.join(config.outDir, "index.html")
-  const isHomePage = Path.resolve(currentOutputPath) === Path.resolve(homePath)
+const renderSidebar = ({
+  config,
+  modules,
+  currentOutputPath
+}: {
+  readonly config: ResolvedDocsConfig
+  readonly modules: ReadonlyArray<ModuleDoc>
+  readonly currentOutputPath: string
+}): string => {
+  const homePath = NodePath.join(config.outDir, "index.html")
+  const isHomePage = NodePath.resolve(currentOutputPath) === NodePath.resolve(homePath)
   const groups = config.moduleGroups.map((group) => ({
     ...group,
     modules: modules.filter((moduleDoc) => moduleDoc.group === group.id)
@@ -869,15 +1017,15 @@ const renderSidebar = ({ config, modules, currentOutputPath }) => {
     `<div class="sidebar-section">`,
     `<a class="sidebar-link${isHomePage ? " is-active" : ""}" href="${getRelativeDocHref(currentOutputPath, homePath)}"${isHomePage ? ' aria-current="page"' : ""}>Overview</a>`,
     `</div>`,
-    ...groups.map((group) =>
+    ...groups.map((group: ModuleGroup & { readonly modules: ReadonlyArray<ModuleDoc> }) =>
       [
         `<section class="sidebar-section">`,
         `<h2>${escapeHtml(group.label)}</h2>`,
         `<ul>`,
-        ...group.modules.map((moduleDoc) => {
-          const modulePath = Path.join(config.outDir, "modules", moduleDoc.slug, "index.html")
+        ...group.modules.map((moduleDoc: ModuleDoc) => {
+          const modulePath = NodePath.join(config.outDir, "modules", moduleDoc.slug, "index.html")
           const href = getRelativeDocHref(currentOutputPath, modulePath)
-          const isCurrentPage = Path.resolve(currentOutputPath) === Path.resolve(modulePath)
+          const isCurrentPage = NodePath.resolve(currentOutputPath) === NodePath.resolve(modulePath)
           return `<li><a class="sidebar-link${isCurrentPage ? " is-active" : ""}" href="${href}"${isCurrentPage ? ' aria-current="page"' : ""}>${escapeHtml(moduleDoc.name)}</a></li>`
         }),
         `</ul>`,
@@ -887,8 +1035,22 @@ const renderSidebar = ({ config, modules, currentOutputPath }) => {
   ].join("")
 }
 
-const renderPage = ({ config, modules, currentOutputPath, title, description, content }) => {
-  const cssPath = Path.join(config.outDir, "assets", "site.css")
+const renderPage = ({
+  config,
+  modules,
+  currentOutputPath,
+  title,
+  description,
+  content
+}: {
+  readonly config: ResolvedDocsConfig
+  readonly modules: ReadonlyArray<ModuleDoc>
+  readonly currentOutputPath: string
+  readonly title: string
+  readonly description: string
+  readonly content: string
+}): string => {
+  const cssPath = NodePath.join(config.outDir, "assets", "site.css")
   return [
     `<!doctype html>`,
     `<html lang="en">`,
@@ -909,7 +1071,17 @@ const renderPage = ({ config, modules, currentOutputPath, title, description, co
   ].join("")
 }
 
-const renderHomePage = ({ renderer, config, modules, readme }) => {
+const renderHomePage = ({
+  renderer,
+  config,
+  modules,
+  readme
+}: {
+  readonly renderer: DocsRenderer
+  readonly config: ResolvedDocsConfig
+  readonly modules: ReadonlyArray<ModuleDoc>
+  readonly readme: string
+}): string => {
   const grouped = config.moduleGroups.map((group) => ({
     ...group,
     modules: modules.filter((moduleDoc) => moduleDoc.group === group.id)
@@ -926,12 +1098,12 @@ const renderHomePage = ({ renderer, config, modules, readme }) => {
     `<h2>Modules</h2>`,
     `<div class="group-grid">`,
     grouped
-      .map((group) =>
+      .map((group: ModuleGroup & { readonly modules: ReadonlyArray<ModuleDoc> }) =>
         [
           `<section class="group-card">`,
           `<h3>${escapeHtml(group.label)}</h3>`,
           `<ul>`,
-          ...group.modules.map((moduleDoc) =>
+          ...group.modules.map((moduleDoc: ModuleDoc) =>
             `<li><a href="./modules/${moduleDoc.slug}/">${escapeHtml(moduleDoc.name)}</a><p>${escapeHtml(moduleDoc.description.split("\n")[0] ?? "")}</p></li>`),
           `</ul>`,
           `</section>`
@@ -1341,48 +1513,101 @@ code {
 }
 `
 
-export const loadDocsModel = (cwd = process.cwd()) =>
+export const loadDocsModel = (cwd = process.cwd()): Effect.Effect<DocsModel, Error, FileSystem.FileSystem> =>
   Effect.gen(function*() {
-    const configPath = Path.join(cwd, "docs.config.json")
+    const configPath = NodePath.join(cwd, "docs.config.json")
+    yield* Effect.logInfo(`Loading docs config from ${configPath}`)
     const rawConfig = yield* readJsonFile(configPath)
-    const config = decodeDocsConfig(rawConfig)
+    const config = decodeDocsConfig(rawConfig) as DocsConfig
+
+    yield* Effect.logInfo(`Creating TypeScript program for ${config.entryPoints.length} entry points`)
     const compilerOptions = readTsConfig(cwd)
-    const absoluteEntryPoints = config.entryPoints.map((entryPoint) => Path.join(cwd, entryPoint))
+    const absoluteEntryPoints = config.entryPoints.map((entryPoint) => NodePath.join(cwd, entryPoint))
     const program = ts.createProgram(absoluteEntryPoints, compilerOptions)
     const checker = program.getTypeChecker()
     const modules = absoluteEntryPoints
       .map((absolutePath, index) =>
         parseModule({
           absolutePath,
-          relativePath: config.entryPoints[index],
+          relativePath: config.entryPoints[index] ?? absolutePath,
           config,
           program,
           checker
         }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
+    yield* Effect.logInfo(`Loaded ${modules.length} documentation modules`)
+
     return {
       config: {
         ...config,
-        outDir: Path.join(cwd, config.outDir)
+        outDir: NodePath.join(cwd, config.outDir)
       },
       modules
     }
-  })
+  }).pipe(
+    Effect.withLogSpan("load-docs-model")
+  )
 
-export const buildDocsSite = (cwd = process.cwd()) =>
-  loadDocsModel(cwd).pipe(
-    Effect.flatMap(({ config, modules }) =>
-      Effect.gen(function*() {
-        const renderer = yield* Effect.promise(() => createDocsRenderer())
-        try {
-          const readme = yield* readFileString(Path.join(cwd, "README.md"))
+const buildModulePage = ({
+  renderer,
+  config,
+  modules,
+  moduleDoc,
+  index
+}: {
+  readonly renderer: DocsRenderer
+  readonly config: ResolvedDocsConfig
+  readonly modules: ReadonlyArray<ModuleDoc>
+  readonly moduleDoc: ModuleDoc
+  readonly index: number
+}) =>
+  Effect.gen(function*() {
+    const outputPath = NodePath.join(config.outDir, "modules", moduleDoc.slug, "index.html")
+    yield* Effect.logInfo(`Building module ${index + 1}/${modules.length}: ${moduleDoc.name}`)
+
+    const html = renderPage({
+      config,
+      modules,
+      currentOutputPath: outputPath,
+      title: `${moduleDoc.name} | ${config.siteTitle}`,
+      description: moduleDoc.description.split("\n")[0] ?? moduleDoc.description,
+      content: renderModuleContent(renderer, config, moduleDoc)
+    })
+
+    yield* writeFileString(outputPath, html)
+    yield* Effect.logInfo(`Wrote module page ${moduleDoc.slug}`)
+  }).pipe(
+    Effect.annotateLogs({
+      module: moduleDoc.slug
+    })
+  )
+
+export const buildDocsSite = (
+  cwd = process.cwd()
+): Effect.Effect<void, Error, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*() {
+    const startedAt = Date.now()
+    const { config, modules } = yield* loadDocsModel(cwd)
+
+    yield* Effect.logInfo("Initializing markdown and syntax highlighter")
+    yield* Effect.acquireUseRelease(
+      Effect.promise(() => createDocsRenderer()),
+      (renderer) =>
+        Effect.gen(function*() {
+          yield* Effect.logInfo(`Reading README and preparing output directory ${config.outDir}`)
+          const readme = yield* readFileString(NodePath.join(cwd, "README.md"))
           const normalizedReadme = stripReadmeTitle(rewriteReadmeLinks(readme, config.sourceBaseUrl))
-          yield* removeDir(config.outDir)
-          yield* writeFileString(Path.join(config.outDir, ".nojekyll"), "")
-          yield* writeFileString(Path.join(config.outDir, "assets", "site.css"), SITE_CSS)
 
-          const homeOutputPath = Path.join(config.outDir, "index.html")
+          yield* removeDir(config.outDir)
+          yield* Effect.logInfo("Writing static assets")
+          yield* Effect.all([
+            writeFileString(NodePath.join(config.outDir, ".nojekyll"), ""),
+            writeFileString(NodePath.join(config.outDir, "assets", "site.css"), SITE_CSS)
+          ], { concurrency: "unbounded" })
+
+          const homeOutputPath = NodePath.join(config.outDir, "index.html")
+          yield* Effect.logInfo("Rendering home page")
           const homeHtml = renderPage({
             config,
             modules,
@@ -1392,22 +1617,25 @@ export const buildDocsSite = (cwd = process.cwd()) =>
             content: renderHomePage({ renderer, config, modules, readme: normalizedReadme })
           })
           yield* writeFileString(homeOutputPath, homeHtml)
+          yield* Effect.logInfo(`Building ${modules.length} module pages with concurrency ${MODULE_RENDER_CONCURRENCY}`)
 
-          for (const moduleDoc of modules) {
-            const outputPath = Path.join(config.outDir, "modules", moduleDoc.slug, "index.html")
-            const html = renderPage({
-              config,
-              modules,
-              currentOutputPath: outputPath,
-              title: `${moduleDoc.name} | ${config.siteTitle}`,
-              description: moduleDoc.description.split("\n")[0] ?? moduleDoc.description,
-              content: renderModuleContent(renderer, config, moduleDoc)
-            })
-            yield* writeFileString(outputPath, html)
-          }
-        } finally {
-          renderer.dispose()
-        }
-      })
+          yield* Effect.forEach(
+            modules,
+            (moduleDoc, index) =>
+              buildModulePage({
+                renderer,
+                config,
+                modules,
+                moduleDoc,
+                index
+              }),
+            { concurrency: MODULE_RENDER_CONCURRENCY, discard: true }
+          )
+
+          yield* Effect.logInfo(`Documentation build completed in ${Date.now() - startedAt}ms`)
+        }),
+      (renderer) => Effect.sync(() => renderer.dispose())
     )
+  }).pipe(
+    Effect.withLogSpan("build-docs-site")
   )

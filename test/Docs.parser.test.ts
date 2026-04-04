@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
-// @ts-expect-error The docs generator runs as ESM JS; the test imports its runtime entrypoint directly.
-import { collectNamedDescriptions, createDocsRenderer, parseJSDoc } from "../scripts/docgen.mjs"
+import { collectNamedDescriptions, createDocsRenderer, parseJSDoc } from "../scripts/docgen.ts"
 
 describe("parseJSDoc", () => {
   it("parses description and repeated tags", () => {
