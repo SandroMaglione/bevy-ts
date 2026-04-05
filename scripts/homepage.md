@@ -1,6 +1,6 @@
 # Build The Pixi Example
 
-This walkthrough rebuilds [`src/examples/pixi.ts`](../src/examples/pixi.ts) from zero to a complete app.
+This walkthrough rebuilds [`examples/pixi/main.ts`](../examples/pixi/main.ts) from zero to a complete app.
 
 The goal is to show the normal `bevy-ts` flow in order:
 
@@ -17,7 +17,7 @@ The goal is to show the normal `bevy-ts` flow in order:
 Start by defining the ECS data you want to store. Components hold per-entity data. Resources hold singleton world values. Services expose host-owned capabilities, such as a renderer or clock.
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "../index.ts"
+import { App, Descriptor, Fx, Schema } from "../src/index.ts"
 import { Application, Container, Sprite, Texture } from "pixi.js"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -304,7 +304,7 @@ That is the core `bevy-ts` shape:
 
 ## Read the full source
 
-The complete version, including sprite creation and viewport bounce logic, is in [`src/examples/pixi.ts`](../src/examples/pixi.ts).
+The complete version, including sprite creation and viewport bounce logic, is in [`examples/pixi/main.ts`](../examples/pixi/main.ts).
 
 From here, the API reference pages are the next step if you want exact definitions for the surfaces used above:
 

@@ -145,7 +145,7 @@ const MODULE_RENDER_CONCURRENCY = 6
 const ICON_EXTERNAL_LINK = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`
 const HOMEPAGE_MARKDOWN_PATH = NodePath.join("scripts", "homepage.md")
 const DOCGEN_CSS_PATH = NodePath.join("scripts", "docgen.css")
-const EXAMPLES_DIRECTORY_PATH = NodePath.join("src", "examples")
+const EXAMPLES_DIRECTORY_PATH = "examples"
 
 const DIRECT_NAMESPACE_TO_MODULE_SLUG: Record<string, string> = {
   App: "app",

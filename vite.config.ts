@@ -4,13 +4,13 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        pixi: "pixi.html",
-        platformer: "platformer.html",
-        "top-down": "top-down.html"
+        pixi: "examples/pixi/index.html",
+        platformer: "examples/platformer/index.html",
+        "top-down": "examples/top-down/index.html"
       }
     }
   },
   server: {
-    open: "/pixi.html"
+    open: "/examples/pixi/"
   }
 })

@@ -37,8 +37,8 @@
     "docs:build": "pnpm docs:generate",
     "docs:preview": "vite docs --host",
     "docs:check": "pnpm docs:generate && git diff --exit-code -- docs",
-    "example:pixi": "vite --open /pixi.html",
-    "example:platformer": "vite --open /platformer.html",
-    "example:top-down": "vite --open /top-down.html"
+    "example:pixi": "vite --open /examples/pixi/",
+    "example:platformer": "vite --open /examples/platformer/",
+    "example:top-down": "vite --open /examples/top-down/"
   }
 }
