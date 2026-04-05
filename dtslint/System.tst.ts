@@ -1,6 +1,7 @@
 import { Descriptor, Fx, Result, Schema } from "../src/index.ts"
 import * as Size2 from "../src/Size2.ts"
 import * as Vector2 from "../src/Vector2.ts"
+import type { EntityMut } from "../src/entity.ts"
 import * as Query from "../src/query.ts"
 import * as System from "../src/system.ts"
 import type { Query as QueryTypes } from "../src/query.ts"
@@ -16,7 +17,7 @@ const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
 const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
 const Camera = Descriptor.ConstructedState(Vector2)("Camera")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   components: {
     Position,
     Velocity,
@@ -34,6 +35,7 @@ const schema = Schema.build(Schema.fragment({
     Camera
   }
 }))
+const schema = Game.schema
 
 describe("System", () => {
   it("derives context from the explicit spec", () => {
@@ -69,7 +71,7 @@ describe("System", () => {
       ({ queries, resources, events, services, states }) =>
         Fx.sync(() => {
           expect(queries.moving.each()).type.toBe<ReadonlyArray<{
-            readonly entity: import("../src/entity.ts").EntityMut<typeof schema, {
+            readonly entity: EntityMut<typeof schema, {
               readonly position: Vector2.Vector2
               readonly velocity: { x: number; y: number }
             }, {
@@ -102,7 +104,7 @@ describe("System", () => {
         })
     )
 
-    expect(system).type.toBeAssignableTo<import("../src/system.ts").SystemDefinition<any, void, never>>()
+    expect(system).type.toBeAssignableTo<System.SystemDefinition<any, void, never>>()
   })
 
   it("accepts reusable plain object access fragments without a wrapper", () => {
@@ -135,7 +137,7 @@ describe("System", () => {
       ({ queries, resources, services }) =>
         Fx.sync(() => {
           expect(queries.moving.each()).type.toBe<ReadonlyArray<{
-            readonly entity: import("../src/entity.ts").EntityMut<typeof schema, {
+            readonly entity: EntityMut<typeof schema, {
               readonly position: Vector2.Vector2
               readonly velocity: { x: number; y: number }
             }, {

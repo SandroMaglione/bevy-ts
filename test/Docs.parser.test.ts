@@ -84,7 +84,7 @@ describe("extractExampleApiUsages", () => {
       "const setup = Game.System(\"Setup\", {",
       "  queries: { moving: Game.Query({ selection: { position: Game.Query.read(Position) } }) }",
       "})",
-      "const schema = Schema.build(Schema.fragment({}))",
+      "const Game = Schema.bind(Schema.fragment({}))",
       "const app = App.makeApp(runtime)",
       "const state = Game.Condition.inState(Phase, \"Running\")"
     ].join("\n"))
@@ -94,7 +94,7 @@ describe("extractExampleApiUsages", () => {
       "machine.inState",
       "system.System",
       "query.Query",
-      "schema.build",
+      "schema.bind",
       "schema.fragment",
       "app.makeApp"
     ])
@@ -105,11 +105,11 @@ describe("collectExampleApiUsageCounts", () => {
   it("counts helper usage across multiple example sources", () => {
     const counts = collectExampleApiUsageCounts([
       "Game.System(\"A\", {})\nGame.System(\"B\", {})",
-      "Schema.build(Schema.fragment({}))\nGame.System(\"C\", {})"
+      "Schema.bind(Schema.fragment({}))\nGame.System(\"C\", {})"
     ])
 
     expect(counts.get("system.System")).toBe(3)
-    expect(counts.get("schema.build")).toBe(1)
+    expect(counts.get("schema.bind")).toBe(1)
     expect(counts.get("schema.fragment")).toBe(1)
   })
 })
@@ -119,7 +119,7 @@ describe("resolveKeyApiEntries", () => {
     const entries = resolveKeyApiEntries(
       new Map([
         ["system.System", 3],
-        ["schema.build", 3],
+        ["schema.bind", 3],
         ["app.makeApp", 1],
         ["runtime.missing", 10]
       ]),
@@ -136,14 +136,14 @@ describe("resolveKeyApiEntries", () => {
           itemOrder: 5
         },
         {
-          key: "schema.build",
+          key: "schema.bind",
           moduleSlug: "schema",
           moduleName: "schema",
           modulePath: "src/schema.ts",
           moduleOrder: 1,
-          itemName: "build",
-          itemAnchor: "build",
-          itemDescription: "Builds a schema.",
+          itemName: "bind",
+          itemAnchor: "bind",
+          itemDescription: "Binds a schema.",
           itemOrder: 3
         },
         {
@@ -161,7 +161,7 @@ describe("resolveKeyApiEntries", () => {
     )
 
     expect(entries.map((entry) => entry.key)).toEqual([
-      "schema.build",
+      "schema.bind",
       "system.System",
       "app.makeApp"
     ])

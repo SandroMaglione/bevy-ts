@@ -7,7 +7,7 @@ const Summary = Descriptor.Resource<string>()("Summary")
 const { relation: ChildOf } = Descriptor.Hierarchy("ChildOf", "Children")
 const { relation: Targeting } = Descriptor.Relation("Targeting", "TargetedBy")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   components: {
     Name
   },
@@ -19,8 +19,7 @@ const schema = Schema.build(Schema.fragment({
     Targeting
   }
 }))
-
-const Game = Schema.bind(schema)
+const schema = Game.schema
 
 const makeRuntime = () =>
   Game.Runtime.make({

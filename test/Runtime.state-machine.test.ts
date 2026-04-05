@@ -7,14 +7,13 @@ import { readResourceValue } from "./utils/fixtures.ts"
 const Counter = Descriptor.Resource<number>()("StateMachineRuntime/Counter")
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("StateMachineRuntime/Log")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   resources: {
     Counter,
     Log
   }
 }))
-
-const Game = Schema.bind(schema)
+const schema = Game.schema
 const AppState = Game.StateMachine("AppState", ["Menu", "Playing", "Paused"] as const)
 const RoundState = Game.StateMachine("RoundState", ["Warmup", "Live", "SuddenDeath"] as const)
 

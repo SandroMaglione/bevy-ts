@@ -9,8 +9,7 @@
  *
  * 1. declare descriptors with `Descriptor.*`
  * 2. register them in `Schema.fragment(...)`
- * 3. close the schema with `Schema.build(...)`
- * 4. bind one `Game` with `Schema.bind(...)`
+ * 3. bind one `Game` with `Schema.bind(...)`
  *
  * @module descriptor
  * @docGroup core

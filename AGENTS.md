@@ -6,6 +6,8 @@
 - Prefer explicit APIs over overloaded, implicit, heuristic, or convenience-first APIs.
 - Build APIs as small composable lego blocks that remain independently type-safe.
 
+All changes to be complete MUST BE VERIFIED by running `pnpm run check`.
+
 ## Public API Rules
 - Do not require user-facing casts.
 - Do not require explicit generic arguments for normal usage.

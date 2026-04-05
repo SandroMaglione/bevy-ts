@@ -8,7 +8,7 @@ import { readResourceValue } from "./utils/fixtures.ts"
 const Log = Descriptor.Resource<ReadonlyArray<number>>()("Log")
 const Ping = Descriptor.Event<{ value: number }>()("Ping")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   resources: {
     Log
   },
@@ -16,6 +16,7 @@ const schema = Schema.build(Schema.fragment({
     Ping
   }
 }))
+const schema = Game.schema
 
 const makeRuntime = () =>
   Runtime.makeRuntime({

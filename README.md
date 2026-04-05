@@ -14,8 +14,8 @@ const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
 const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
 
-// Build a closed schema, then bind the runtime-facing API surface.
-const Game = Schema.bind(Schema.build(Schema.fragment({ components: { Position, Velocity }, resources: { DeltaTime } })))
+// Compose one or more fragments and bind the runtime-facing API surface.
+const Game = Schema.bind(Schema.fragment({ components: { Position, Velocity }, resources: { DeltaTime } }))
 
 // Systems only receive the access they declare here.
 const Move = Game.System("Move", {

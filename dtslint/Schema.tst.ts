@@ -1,5 +1,9 @@
 import { App, Descriptor, Entity, Fx, Schema } from "../src/index.ts"
 import * as Public from "../src/index.ts"
+import type { EntityId } from "../src/entity.ts"
+import * as QueryTypes from "../src/query.ts"
+import * as Relation from "../src/relation.ts"
+import type * as SchemaTypes from "../src/schema.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -50,7 +54,7 @@ describe("Schema", () => {
     >>()
   })
 
-  it("build merges fragment registries into one final schema", () => {
+  it("bind merges fragment registries into one final schema", () => {
     const left = Schema.fragment({
       components: {
         Position
@@ -69,7 +73,8 @@ describe("Schema", () => {
       }
     })
 
-    const schema = Schema.build(left, right)
+    const Game = Schema.bind(left, right)
+    const schema = Game.schema
 
     expect(schema).type.toBe<Schema.SchemaDefinition<
       { readonly Position: typeof Position },
@@ -97,7 +102,7 @@ describe("Schema", () => {
   })
 
   it("bind closes the schema over systems, schedules, and runtimes", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position
       },
@@ -107,8 +112,7 @@ describe("Schema", () => {
       states: {
         CurrentPhase: Phase
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
 
     const MoveSystem = Game.System(
@@ -146,17 +150,17 @@ describe("Schema", () => {
       }
     })
 
-    App.makeApp(runtime).update(update)
+    expect(update).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
+    App.makeApp(runtime)
   })
 
   it("supports explicit optional component access without widening entity proofs", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position,
         Velocity
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
 
     const ObserveSystem = Game.System(
@@ -174,7 +178,7 @@ describe("Schema", () => {
       ({ queries }) =>
         Fx.sync(() => {
           for (const match of queries.moving.each()) {
-            expect(match.data.velocity).type.toBe<import("../src/query.ts").OptionalReadCell<{ dx: number; dy: number }>>()
+            expect(match.data.velocity).type.toBe<QueryTypes.OptionalReadCell<{ dx: number; dy: number }>>()
             expect(match.entity.proof).type.toBe<{
               readonly position: { x: number; y: number }
             }>()
@@ -193,17 +197,16 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule(ObserveSystem))
+    expect(Game.Schedule(ObserveSystem)).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })
 
   it("supports a zero-or-one singleton read without widening successful matches", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position,
         Velocity
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
     const MovingQuery = Game.Query({
       selection: {
@@ -222,9 +225,9 @@ describe("Schema", () => {
       ({ queries }) =>
         Fx.sync(() => {
           const result = queries.moving.singleOptional()
-          expect(result).type.toBe<import("../src/query.ts").Query.Result<
-            import("../src/query.ts").QueryMatch<typeof schema, typeof MovingQuery> | undefined,
-            import("../src/query.ts").Query.MultipleEntitiesError
+          expect(result).type.toBe<QueryTypes.Query.Result<
+            QueryTypes.QueryMatch<typeof schema, typeof MovingQuery> | undefined,
+            QueryTypes.Query.MultipleEntitiesError
           >>()
 
           if (!result.ok || !result.value) {
@@ -244,19 +247,18 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    App.makeApp(runtime).update(Game.Schedule(ObserveSystem))
+    expect(Game.Schedule(ObserveSystem)).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })
 
   it("rejects non-component descriptors in query selection and structural filters", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position
       },
       resources: {
         DeltaTime: Time
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
 
     // @ts-expect-error!
@@ -284,7 +286,7 @@ describe("Schema", () => {
   })
 
   it("supports explicit lifecycle query filters and lifecycle readers", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position,
         Velocity
@@ -292,8 +294,7 @@ describe("Schema", () => {
       resources: {
         DeltaTime: Time
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
 
     const ObserveLifecycleSystem = Game.System(
@@ -318,15 +319,11 @@ describe("Schema", () => {
       ({ queries, removed, despawned }) =>
         Fx.sync(() => {
           for (const match of queries.moved.each()) {
-            expect(match.data.velocity).type.toBe<import("../src/query.ts").OptionalReadCell<{ dx: number; dy: number }>>()
+            expect(match.data.velocity).type.toBe<QueryTypes.OptionalReadCell<{ dx: number; dy: number }>>()
           }
 
-          expect(removed.positions.all()).type.toBe<
-            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema>>
-          >()
-          expect(despawned.entities.all()).type.toBe<
-            ReadonlyArray<import("../src/entity.ts").EntityId<typeof schema, typeof schema>>
-          >()
+          expect(removed.positions.all()).type.toBe<ReadonlyArray<EntityId<typeof schema, typeof schema>>>()
+          expect(despawned.entities.all()).type.toBe<ReadonlyArray<EntityId<typeof schema, typeof schema>>>()
         })
     )
 
@@ -336,19 +333,18 @@ describe("Schema", () => {
 
     const schedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveLifecycleSystem)
 
-    runtime.runSchedule(schedule)
+    expect(schedule).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })
 
   it("rejects non-component descriptors in lifecycle query APIs", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position
       },
       resources: {
         DeltaTime: Time
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
 
     // @ts-expect-error!
@@ -360,7 +356,7 @@ describe("Schema", () => {
   })
 
   it("rejects cross-schema systems and schedules on the bound path", () => {
-    const schemaA = Schema.build(Schema.fragment({
+    const GameA = Schema.bind(Schema.fragment({
       components: {
         Position
       },
@@ -368,15 +364,14 @@ describe("Schema", () => {
         DeltaTime: Time
       }
     }))
+    const schemaA = GameA.schema
 
-    const schemaB = Schema.build(Schema.fragment({
+    const GameB = Schema.bind(Schema.fragment({
       components: {
         Velocity
       }
     }))
-
-    const GameA = Schema.bind(schemaA)
-    const GameB = Schema.bind(schemaB)
+    const schemaB = GameB.schema
 
     const SystemA = GameA.System(
       "A",
@@ -432,7 +427,7 @@ describe("Schema", () => {
   })
 
   it("supports explicit relation query access and hierarchy-only lookup helpers", () => {
-    const schema = Schema.build(Schema.fragment({
+    const schema = Schema.fragment({
       components: {
         Position
       },
@@ -440,8 +435,7 @@ describe("Schema", () => {
         ChildOf,
         Targeting
       }
-    }))
-
+    })
     const Game = Schema.bind(schema)
     const entityId = Entity.makeEntityId<typeof schema, typeof Game.schema>(1)
 
@@ -454,10 +448,10 @@ describe("Schema", () => {
       withRelations: [ChildOf]
     })
 
-    expect(query).type.toBeAssignableTo<import("../src/query.ts").QuerySpec<{
-      readonly parent: import("../src/relation.ts").RelationReadAccess<typeof ChildOf, typeof schema, typeof Game.schema>
-      readonly children: import("../src/relation.ts").OptionalRelatedReadAccess<typeof ChildOf, typeof schema, typeof Game.schema>
-      readonly target: import("../src/relation.ts").OptionalRelationReadAccess<typeof Targeting, typeof schema, typeof Game.schema>
+    expect(query).type.toBeAssignableTo<QueryTypes.QuerySpec<{
+      readonly parent: Relation.RelationReadAccess<typeof ChildOf, typeof schema, typeof Game.schema>
+      readonly children: Relation.OptionalRelatedReadAccess<typeof ChildOf, typeof schema, typeof Game.schema>
+      readonly target: Relation.OptionalRelationReadAccess<typeof Targeting, typeof schema, typeof Game.schema>
     }, readonly [], readonly [], readonly [], readonly [typeof ChildOf], readonly [], readonly [], readonly [], typeof Game.schema>>()
 
     const ObserveSystem = Game.System(
@@ -480,32 +474,24 @@ describe("Schema", () => {
           commands.unrelate(entityId, Targeting)
           commands.reorderChildren(entityId, ChildOf, [entityId])
 
-          expect(relationFailures.targeting.all()).type.toBeAssignableTo<
-            ReadonlyArray<import("../src/relation.ts").Relation.MutationFailure<
-              typeof Targeting,
-              typeof schema,
-              typeof Game.schema
-            >>
-          >()
-          expect(relationFailures.childOf.all()).type.toBeAssignableTo<
-            ReadonlyArray<import("../src/relation.ts").Relation.MutationFailure<
-              typeof ChildOf,
-              typeof schema,
-              typeof Game.schema
-            >>
-          >()
-          expect(lookup.childMatches(entityId, ChildOf, query)).type.toBeAssignableTo<
-            import("../src/relation.ts").Relation.Result<
-              ReadonlyArray<import("../src/query.ts").QueryMatch<typeof schema, typeof query>>,
-              import("../src/relation.ts").Relation.MissingEntityError
-            >
-          >()
-          expect(lookup.descendantMatches(entityId, ChildOf, query, { order: "breadth" })).type.toBeAssignableTo<
-            import("../src/relation.ts").Relation.Result<
-              ReadonlyArray<import("../src/query.ts").QueryMatch<typeof schema, typeof query>>,
-              import("../src/relation.ts").Relation.MissingEntityError
-            >
-          >()
+          expect(relationFailures.targeting.all()).type.toBeAssignableTo<ReadonlyArray<Relation.Relation.MutationFailure<
+            typeof Targeting,
+            typeof schema,
+            typeof Game.schema
+          >>>()
+          expect(relationFailures.childOf.all()).type.toBeAssignableTo<ReadonlyArray<Relation.Relation.MutationFailure<
+            typeof ChildOf,
+            typeof schema,
+            typeof Game.schema
+          >>>()
+          expect(lookup.childMatches(entityId, ChildOf, query)).type.toBeAssignableTo<Relation.Relation.Result<
+            ReadonlyArray<QueryTypes.QueryMatch<typeof schema, typeof query>>,
+            Relation.Relation.MissingEntityError
+          >>()
+          expect(lookup.descendantMatches(entityId, ChildOf, query, { order: "breadth" })).type.toBeAssignableTo<Relation.Relation.Result<
+            ReadonlyArray<QueryTypes.QueryMatch<typeof schema, typeof query>>,
+            Relation.Relation.MissingEntityError
+          >>()
 
           // @ts-expect-error!
           commands.reorderChildren(entityId, Targeting, [entityId])
@@ -531,7 +517,7 @@ describe("Schema", () => {
     const Root = Schema.defineRoot("ExactQueryRoot")
     const Tagged = Descriptor.Component<{ readonly kind: "tagged" }>()("Tagged")
 
-    const schema = Schema.build(Schema.fragment({
+    const Game = Schema.bind(Schema.fragment({
       components: {
         Position,
         Velocity,
@@ -540,9 +526,8 @@ describe("Schema", () => {
       relations: {
         ChildOf
       }
-    }))
-
-    const Game = Schema.bind(schema, Root)
+    }), Root)
+    const schema = Game.schema
     const entityId = Entity.makeEntityId<typeof schema, typeof Root>(1)
 
     const CameraTargetQuery = Game.Query({
@@ -616,7 +601,7 @@ describe("Schema", () => {
         })
     )
 
-    expect(ObserveSystem).type.toBeAssignableTo<import("../src/schema.ts").Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
+    expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
   })
 
   it("supports durable handles with explicit roots and checked lookup resolution", () => {
@@ -625,14 +610,13 @@ describe("Schema", () => {
       target: Entity.Handle<typeof Root, typeof Position> | null
     }>()("Target")
 
-    const schema = Schema.build(Schema.fragment({
+    const Game = Schema.bind(Schema.fragment({
       components: {
         Position,
         Target
       }
-    }))
-
-    const Game = Schema.bind(schema, Root)
+    }), Root)
+    const schema = Game.schema
 
     const PositionQuery = Game.Query({
       selection: {
@@ -730,7 +714,7 @@ describe("Schema", () => {
         })
     )
 
-    expect(ObserveSystem).type.toBeAssignableTo<import("../src/schema.ts").Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
+    expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
   })
 
   it("supports pre-bind typed feature composition with structural dependencies", () => {
@@ -813,9 +797,9 @@ describe("Schema", () => {
       features: [Core, Combat] as const
     })
 
-    expect(project.Game).type.toBe<import("../src/schema.ts").Schema.Game<typeof project.schema, typeof Root>>()
-    expect(project.features.Core.update).type.toBeAssignableTo<ReadonlyArray<import("../src/schema.ts").Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
-    expect(project.features.Combat.update).type.toBeAssignableTo<ReadonlyArray<import("../src/schema.ts").Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
+    expect(project.Game).type.toBe<SchemaTypes.Schema.Game<typeof project.schema, typeof Root>>()
+    expect(project.features.Core.update).type.toBeAssignableTo<ReadonlyArray<SchemaTypes.Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
+    expect(project.features.Combat.update).type.toBeAssignableTo<ReadonlyArray<SchemaTypes.Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
 
     project.App.make({
       services: project.Game.Runtime.services(),

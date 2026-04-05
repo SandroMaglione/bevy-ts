@@ -14,7 +14,7 @@ const RemovedAfter = Descriptor.Resource<number>()("RemovedAfter")
 const DespawnedBefore = Descriptor.Resource<number>()("DespawnedBefore")
 const DespawnedAfter = Descriptor.Resource<number>()("DespawnedAfter")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   components: {
     Position
   },
@@ -29,8 +29,7 @@ const schema = Schema.build(Schema.fragment({
     DespawnedAfter
   }
 }))
-
-const Game = Schema.bind(schema)
+const schema = Game.schema
 
 const makeRuntime = () => Game.Runtime.make({
   services: Game.Runtime.services(),

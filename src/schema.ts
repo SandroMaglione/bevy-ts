@@ -5,9 +5,8 @@
  *
  * 1. declare descriptors with `Descriptor.*`
  * 2. group them into reusable `Schema.fragment(...)` values
- * 3. close the schema with `Schema.build(...)`
- * 4. bind one `Game` with `Schema.bind(...)`
- * 5. build a runtime or composed project from that bound `Game`
+ * 3. bind one `Game` with `Schema.bind(...)`
+ * 4. build a runtime or composed project from that bound `Game`
  *
  * `Schema.Feature` lives on the same pre-bind layer. Features contribute schema
  * fragments and build schedules only after the final merged schema is known.
@@ -28,7 +27,7 @@
  * Stable schema-level runtime markers used to brand bound roots and feature outputs.
  *
  * @groupDescription Functions
- * Public helpers for defining roots, building schemas, binding `Game`, and composing features.
+ * Public helpers for defining roots, creating fragments, binding `Game`, and composing features.
  *
  * @example
  * ```ts
@@ -40,9 +39,8 @@
  *   resources: { Score }
  * })
  *
- * const schema = Schema.build(Core)
  * const Root = Schema.defineRoot("Game")
- * const Game = Schema.bind(schema, Root)
+ * const Game = Schema.bind(Core, Root)
  * ```
  */
 import * as Command from "./command.ts"
@@ -94,6 +92,12 @@ export type RootToken<Name extends string = string> = {
     readonly _Name: (_: never) => Name
   }
 }
+
+const isRootToken = (value: unknown): value is RootToken =>
+  typeof value === "object"
+  && value !== null
+  && "kind" in value
+  && value.kind === "SchemaRoot"
 
 type EmptySchemaDefinition = SchemaDefinition<{}, {}, {}, {}, {}>
 
@@ -218,7 +222,7 @@ type FeatureQuerySelectionAccess<Accessible extends Schema.Any, Root> =
   | Relation.SelectionAccess<Accessible, Root>
 
 type BoundScheduleEntryValue<S extends Schema.Any, Root> =
-  | Schema.BoundSystem<any, Root, any, any, any>
+  | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.EventUpdateStep
   | Schedule.LifecycleUpdateStep
@@ -229,7 +233,7 @@ type BoundScheduleEntryValue<S extends Schema.Any, Root> =
   | Schema.BoundSchedule<S, Root, any>
 
 type BoundTransitionEntryValue<S extends Schema.Any, Root> =
-  | Schema.BoundSystem<any, Root, any, any, any>
+  | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.EventUpdateStep
   | Schedule.LifecycleUpdateStep
@@ -239,7 +243,7 @@ type BoundTransitionEntryValue<S extends Schema.Any, Root> =
   | Schema.BoundSchedule<S, Root, any>
 
 type BoundScheduleStepValue<S extends Schema.Any, Root> =
-  | Schema.BoundSystem<any, Root, any, any, any>
+  | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.EventUpdateStep
   | Schedule.LifecycleUpdateStep
@@ -247,7 +251,7 @@ type BoundScheduleStepValue<S extends Schema.Any, Root> =
   | Schedule.ApplyStateTransitionsStep<any, Root>
 
 type BoundTransitionStepValue<S extends Schema.Any, Root> =
-  | Schema.BoundSystem<any, Root, any, any, any>
+  | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.EventUpdateStep
   | Schedule.LifecycleUpdateStep
@@ -818,7 +822,14 @@ export namespace Schema {
           E,
           System.SystemDependencies<System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
         >
-      ): Schema.BoundSystem<S, Root, any, A, E, Name>
+      ): Schema.BoundSystem<
+        S,
+        Root,
+        System.SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
+        A,
+        E,
+        Name
+      >
       readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
       writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
       readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>
@@ -1020,7 +1031,7 @@ const mergeRelations = <
  * stored in descriptor payload types without widening to `Schema.Any`.
  *
  * Use one root token for the whole application. Anything created from
- * `Schema.bind(schema, Root)` will carry the same hidden root brand.
+ * `Schema.bind(Core, Root)` will carry the same hidden root brand.
  *
  * @example
  * ```ts
@@ -1120,19 +1131,7 @@ export const merge = <
   relations: mergeRelations(left.relations, right.relations)
 })
 
-/**
- * Builds one final schema from a non-empty list of fragments.
- *
- * This is the typical application-level entrypoint for schema composition.
- *
- * Duplicate schema keys are rejected both at the type level and at runtime.
- *
- * @example
- * ```ts
- * const schema = Schema.build(Core, Combat, Dialogue)
- * ```
- */
-export const build = <
+const buildFragments = <
   Fragments extends readonly [Schema.Any, ...Array<Schema.Any>]
 >(
   ...fragments: Fragments
@@ -1145,7 +1144,7 @@ export const build = <
 }
 
 /**
- * Type-level fold for `Schema.build(...)`.
+ * Type-level fold for fragment composition.
  *
  * This reconstructs the final merged schema type from a tuple of fragments.
  */
@@ -1176,9 +1175,8 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
  *
  * @example
  * ```ts
- * const schema = Schema.build(Core)
  * const Root = Schema.defineRoot("Game")
- * const Game = Schema.bind(schema, Root)
+ * const Game = Schema.bind(Core, Root)
  *
  * const Move = Game.System("Move", {
  *   queries: {
@@ -1200,10 +1198,10 @@ type BuildFragments<Fragments extends readonly [Schema.Any, ...Array<Schema.Any>
  * }))
  * ```
  */
-export const bind = <S extends Schema.Any, Root = S>(
+const bindBuiltSchema = <S extends Schema.Any, Root = S>(
   schema: S,
   _root: Root = schema as unknown as Root
-) => {
+): Schema.Game<S, Root> => {
   type BoundAnySystem = Schema.BoundSystem<any, Root, any, any, any>
   type BoundMachine = Schema.BoundStateMachine<Root>
   type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root>
@@ -1669,7 +1667,48 @@ export const bind = <S extends Schema.Any, Root = S>(
       machine: runtimeMachine,
       machines: Runtime.machines
     }
+  } as Schema.Game<S, Root>
+}
+
+/**
+ * Composes one or more fragments and returns one bound `Game` surface.
+ *
+ * This is the canonical public schema entrypoint. Fragment composition and
+ * schema binding happen together so the common path does not need a separate
+ * intermediate built-schema value.
+ *
+ * Use `Game.schema` when lower-level code still needs the final closed schema.
+ *
+ * @example
+ * ```ts
+ * const Root = Schema.defineRoot("Game")
+ * const Game = Schema.bind(Core, Combat, Root)
+ * ```
+ */
+export function bind<
+  S extends Schema.Any
+>(schema: S): Schema.Game<S, S>
+export function bind<
+  S extends Schema.Any,
+  const Name extends string
+>(schema: S, root: RootToken<Name>): Schema.Game<S, RootToken<Name>>
+export function bind<
+  const Fragments extends readonly [Schema.Any, Schema.Any, ...Array<Schema.Any>]
+>(...fragments: Fragments): Schema.Game<BuildFragments<Fragments>, BuildFragments<Fragments>>
+export function bind<
+  const Fragments extends readonly [Schema.Any, Schema.Any, ...Array<Schema.Any>],
+  const Name extends string
+>(...args: [...Fragments, RootToken<Name>]): Schema.Game<BuildFragments<Fragments>, RootToken<Name>>
+export function bind(...args: ReadonlyArray<Schema.Any | RootToken>) {
+  const maybeRoot = args[args.length - 1]
+  const fragments = (isRootToken(maybeRoot) ? args.slice(0, -1) : args) as Array<Schema.Any>
+  if (fragments.length === 0) {
+    throw new Error("Schema.bind requires at least one schema fragment")
   }
+  const schema = buildFragments(...fragments as [Schema.Any, ...Array<Schema.Any>])
+  return isRootToken(maybeRoot)
+    ? bindBuiltSchema(schema, maybeRoot)
+    : bindBuiltSchema(schema)
 }
 
 /**
@@ -1738,8 +1777,8 @@ export const composeFeatures = <
     }
   }
 
-  const schema = build(...options.features.map((feature) => feature.schema) as unknown as FeaturesToSchemaTuple<Features>)
-  const Game = bind(schema, options.root)
+  const schema = buildFragments(...options.features.map((feature) => feature.schema) as unknown as FeaturesToSchemaTuple<Features>)
+  const Game = bindBuiltSchema(schema, options.root)
   const builtFeatures = Object.create(null) as Record<string, object>
   const bootstrapSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root>> = []
   const updateSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root>> = []

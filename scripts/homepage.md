@@ -52,8 +52,7 @@ const pixiSchema = Schema.fragment({
   resources: { DeltaTime, Viewport }
 })
 
-const schema = Schema.build(pixiSchema)
-const Game = Schema.bind(schema)
+const Game = Schema.bind(pixiSchema)
 ```
 
 `Schema.bind(...)` is what gives you the runtime-connected API family:

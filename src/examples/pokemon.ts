@@ -53,7 +53,7 @@ const PixiHost = Descriptor.Service<{
   }
 }>()("Pokemon/PixiHost")
 
-const schema = Schema.build(
+const Game = Schema.bind(
   Schema.fragment({
     components: {
       Position,
@@ -66,10 +66,10 @@ const schema = Schema.build(
       GridSize,
       DeltaTime
     }
-  })
+  }),
+  Root
 )
-
-const Game = Schema.bind(schema, Root)
+const schema = Game.schema
 
 const PlayerQuery = Game.Query({
   selection: {

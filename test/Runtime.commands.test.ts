@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Fx, Result, Schema } from "../src/index.ts"
+import type { EntityId } from "../src/entity.ts"
 import * as Vector2 from "../src/Vector2.ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
@@ -9,7 +10,7 @@ const Count = Descriptor.Resource<number>()("Count")
 const LastX = Descriptor.Resource<number>()("LastX")
 const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   components: {
     Position,
     Velocity
@@ -19,14 +20,14 @@ const schema = Schema.build(Schema.fragment({
     LastX
   }
 }))
-const Game = Schema.bind(schema)
+const schema = Game.schema
 
-const constructedSchema = Schema.build(Schema.fragment({
+const ConstructedGame = Schema.bind(Schema.fragment({
   components: {
     SafePosition
   }
 }))
-const ConstructedGame = Schema.bind(constructedSchema)
+const constructedSchema = ConstructedGame.schema
 
 const makeRuntime = () =>
   Game.Runtime.make({
@@ -135,7 +136,7 @@ describe("Runtime commands", () => {
   })
 
   it("despawn removes the entity and exact lookup reports MissingEntity", () => {
-    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema> | undefined
+    let storedId: EntityId<typeof schema, typeof schema> | undefined
 
     const spawn = Game.System(
       "RuntimeCommands/SpawnAndStoreId",
@@ -205,7 +206,7 @@ describe("Runtime commands", () => {
   })
 
   it("insert on an existing entity becomes visible after explicit applyDeferred in the same schedule", () => {
-    let storedId: import("../src/entity.ts").EntityId<typeof schema, typeof schema> | undefined
+    let storedId: EntityId<typeof schema, typeof schema> | undefined
 
     const spawn = Game.System(
       "RuntimeCommands/SpawnStoreForInsert",

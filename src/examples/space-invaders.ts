@@ -75,7 +75,7 @@ const InputManager = Descriptor.Service<{
 const PixiHost = Descriptor.Service<PixiHostValue>()("SpaceInvaders/PixiHost")
 const MatterHost = Descriptor.Service<MatterHostValue>()("SpaceInvaders/MatterHost")
 
-const schema = Schema.build(
+const Game = Schema.bind(
   Schema.fragment({
     components: {
       Position,
@@ -96,10 +96,10 @@ const schema = Schema.build(
     events: {
       DestroyEnemy
     }
-  })
+  }),
+  Root
 )
-
-const Game = Schema.bind(schema, Root)
+const schema = Game.schema
 
 const PlayerVelocityQuery = Game.Query({
   selection: {

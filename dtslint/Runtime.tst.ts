@@ -14,7 +14,7 @@ const Camera = Descriptor.ConstructedState(Vector2)("Camera")
 const Logger = Descriptor.Service<{ readonly log: (message: string) => void }>()("Logger")
 const PrefixedLogger = Descriptor.Service<{ readonly log: (message: string) => void }>()("RuntimeTypes/Logger")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   resources: {
     DeltaTime: Time,
     Counter,
@@ -25,6 +25,7 @@ const schema = Schema.build(Schema.fragment({
     Camera
   }
 }))
+const schema = Game.schema
 
 const ResourceSystem = System.System(
   "RuntimeTypes/Resource",

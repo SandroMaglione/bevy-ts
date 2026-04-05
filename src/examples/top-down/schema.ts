@@ -49,7 +49,7 @@ export const InputManager = Descriptor.Service<{
 }>()("TopDown/InputManager")
 export const TopDownHost = Descriptor.Service<TopDownHostValue>()("TopDown/Host")
 
-export const schema = Schema.build(
+export const Game = Schema.bind(
   Schema.fragment({
     components: {
       Position,
@@ -71,10 +71,11 @@ export const schema = Schema.build(
       AnimationClock,
       CurrentPlayerFrame
     }
-  })
+  }),
+  Root
 )
 
-export const Game = Schema.bind(schema, Root)
+export const schema = Game.schema
 
 export const Facing = Game.StateMachine(
   "TopDown/Facing",

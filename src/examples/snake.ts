@@ -56,7 +56,7 @@ const INITIAL_HEAD_POSITION: GridPosition = { x: 5, y: 5 }
 const INITIAL_VELOCITY: GridPosition = { x: 1, y: 0 }
 const INITIAL_TAIL_POSITION: GridPosition = { x: 4, y: 5 }
 
-const schema = Schema.build(
+const Game = Schema.bind(
   Schema.fragment({
     components: {
       Position,
@@ -78,10 +78,10 @@ const schema = Schema.build(
     relations: {
       ChildOf
     }
-  })
+  }),
+  Root
 )
-
-const Game = Schema.bind(schema, Root)
+const schema = Game.schema
 const GamePhase = Game.StateMachine("Phase", ["Playing", "GameOver"])
 
 const HeadQuery = Game.Query({

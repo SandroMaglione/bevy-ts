@@ -8,12 +8,13 @@ import { readResourceValue } from "./utils/fixtures.ts"
 const Counter = Descriptor.Resource<number>()("Counter")
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("Log")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   resources: {
     Counter,
     Log
   }
 }))
+const schema = Game.schema
 
 const makeRuntime = () =>
   Runtime.makeRuntime({

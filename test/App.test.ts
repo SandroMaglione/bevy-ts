@@ -10,12 +10,13 @@ const Log = Descriptor.Resource<ReadonlyArray<string>>()("Log")
 const Health = Descriptor.Component<{ current: number }>()("Health")
 const BootCount = Descriptor.Resource<number>()("BootCount")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   resources: {
     Counter,
     Log
   }
 }))
+const schema = Game.schema
 
 describe("App", () => {
   it("runs one schedule once through update", () => {

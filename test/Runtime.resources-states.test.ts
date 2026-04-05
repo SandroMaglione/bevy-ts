@@ -16,7 +16,7 @@ const PrefixedLogger = Descriptor.Service<{ readonly log: (message: string) => v
 const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
 const Camera = Descriptor.ConstructedState(Vector2)("Camera")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   resources: {
     DeltaTime: Time,
     Counter,
@@ -27,6 +27,7 @@ const schema = Schema.build(Schema.fragment({
     Camera
   }
 }))
+const schema = Game.schema
 
 const makeRuntime = () => {
   const runtime = Runtime.makeRuntimeConstructed({

@@ -443,6 +443,18 @@ export type ValidateScheduleArray<
       readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedules[number], Services, Resources, States, Machines>
     }
 
+type ValidateScheduleArgs<
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = [RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, States, Machines>] extends [never]
+  ? Schedules
+  : Schedules & {
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, States, Machines>
+    }
+
 type ValidateSchedule<
   Schedule extends ExecutableScheduleDefinition<any, any, any, any>,
   Services extends Record<string, unknown>,
@@ -614,7 +626,7 @@ export interface Runtime<
    */
   readonly initialize: {
     <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any>>>(
-      ...schedules: ValidateSchedules<Schedules, Services, Resources, States, Machines>
+      ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, States, Machines>
     ): void
   }
   /**
@@ -641,7 +653,7 @@ export interface Runtime<
    */
   readonly tick: {
     <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any>>>(
-      ...schedules: ValidateSchedules<Schedules, Services, Resources, States, Machines>
+      ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, States, Machines>
     ): void
   }
 }

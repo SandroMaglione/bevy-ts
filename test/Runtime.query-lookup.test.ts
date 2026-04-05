@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Entity, Fx, Schema } from "../src/index.ts"
 import * as Command from "../src/command.ts"
+import type { EntityId } from "../src/entity.ts"
 import * as Query from "../src/query.ts"
 import * as Runtime from "../src/runtime.ts"
 import * as Schedule from "../src/schedule.ts"
@@ -20,7 +21,7 @@ const Followed = Descriptor.Component<{
   target: Entity.Handle<typeof HandleRoot, typeof Position> | null
 }>()("Followed")
 
-const schema = Schema.build(Schema.fragment({
+const HandleGame = Schema.bind(Schema.fragment({
   components: {
     Position,
     Velocity,
@@ -36,7 +37,8 @@ const schema = Schema.build(Schema.fragment({
   events: {
     FollowTarget
   }
-}))
+}), HandleRoot)
+const schema = HandleGame.schema
 
 const makeRuntime = () =>
   Runtime.makeRuntime({
@@ -284,7 +286,7 @@ describe("Runtime query and lookup", () => {
   })
 
   it("lookup returns MissingEntity and QueryMismatch for the expected cases", () => {
-    let existingId: import("../src/entity.ts").EntityId<typeof schema> | undefined
+    let existingId: EntityId<typeof schema> | undefined
 
     const spawn = System.System(
       "RuntimeQuery/SpawnOneForLookup",
@@ -446,7 +448,7 @@ describe("Runtime query and lookup", () => {
   })
 
   it("lookup does not fail when only optional components are missing", () => {
-    let existingId: import("../src/entity.ts").EntityId<typeof schema> | undefined
+    let existingId: EntityId<typeof schema> | undefined
 
     const spawn = System.System(
       "RuntimeQuery/SpawnLookupOptional",
@@ -574,7 +576,7 @@ describe("Runtime query and lookup", () => {
   })
 
   it("getHandle resolves durable handles explicitly and reports stale handles safely", () => {
-    const Game = Schema.bind(schema, HandleRoot)
+    const Game = HandleGame
     let currentHandle: Entity.Handle<typeof HandleRoot, typeof Position> | null = null
 
     const spawn = Game.System(
@@ -664,7 +666,7 @@ describe("Runtime query and lookup", () => {
   })
 
   it("resolves handles stored in resources and events with the same explicit failure semantics", () => {
-    const Game = Schema.bind(schema, HandleRoot)
+    const Game = HandleGame
     let spawnedTarget: Entity.EntityId<typeof schema, typeof HandleRoot> | undefined
 
     const spawn = Game.System(

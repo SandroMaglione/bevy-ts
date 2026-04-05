@@ -8,7 +8,7 @@ const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
 const Time = Descriptor.Resource<number>()("Time")
 const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   components: {
     Position,
     Velocity,
@@ -18,11 +18,10 @@ const schema = Schema.build(Schema.fragment({
     Time
   }
 }))
+const schema = Game.schema
 
 describe("Command", () => {
   it("bound spawnWith infers the schema without an explicit generic", () => {
-    const Game = Schema.bind(schema)
-
     const draft = Game.Command.spawnWith(
       [Position, { x: 0, y: 0 }],
       [Velocity, { x: 1, y: 1 }]

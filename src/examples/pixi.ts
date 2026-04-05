@@ -45,8 +45,8 @@ const pixiSchema = Schema.fragment({
   },
 });
 
-const schema = Schema.build(pixiSchema);
-const Game = Schema.bind(schema);
+const Game = Schema.bind(pixiSchema);
+const schema = Game.schema;
 
 const AddedRenderableQuery = Game.Query({
   selection: {

@@ -1,27 +1,27 @@
 import { Descriptor, Fx, Schema } from "../src/index.ts"
 import * as Runtime from "../src/runtime.ts"
+import type * as SchemaTypes from "../src/schema.ts"
 import * as System from "../src/system.ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("StateMachine/Position")
 const Counter = Descriptor.Resource<number>()("StateMachine/Counter")
 
-const schema = Schema.build(Schema.fragment({
+const schema = Schema.fragment({
   components: {
     Position
   },
   resources: {
     Counter
   }
-}))
+})
+const Game = Schema.bind(schema)
 
-const otherSchema = Schema.build(Schema.fragment({
+const otherSchema = Schema.fragment({
   resources: {
     Counter
   }
-}))
-
-const Game = Schema.bind(schema)
+})
 const OtherGame = Schema.bind(otherSchema)
 
 const AppState = Game.StateMachine("AppState", ["Menu", "Playing", "Paused"] as const)
@@ -214,7 +214,7 @@ describe("StateMachine", () => {
       )
     })
 
-    runtime.runSchedule(MachineSchedule)
+    expect(MachineSchedule).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })
 
   it("accepts direct inline schedule execution for disjunctive machine conditions", () => {
@@ -245,7 +245,7 @@ describe("StateMachine", () => {
       )
     })
 
-    runtime.runSchedule(Game.Schedule(IncrementWithOrCondition))
+    expect(Game.Schedule(IncrementWithOrCondition)).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })
 
   it("rejects invalid multi-machine runtime initialization values", () => {
@@ -313,38 +313,18 @@ describe("StateMachine", () => {
       )
     ])
 
-    const schedule = Game.Schedule(WriterSystem, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(TransitionWithService)))
+    const bundle = Game.Schedule.transitions(TransitionWithService)
 
-    const runtime = Game.Runtime.make({
-      services: Runtime.services(),
-      resources: {
-        Counter: 0
-      },
-      machines: Runtime.machines(
-        Runtime.machine(AppState, "Menu"),
-        Runtime.machine(RoundState, "Warmup")
-      )
-    })
-
-    runtime.runSchedule(schedule)
+    expect(bundle).type.toBeAssignableTo<SchemaTypes.Schema.BoundTransitionBundle<typeof schema, typeof schema>>()
   })
 
-  it("keeps transition event unions exact and allows bundle flattening", () => {
-    const nested = Game.Schedule.transitions(
-      Game.Schedule.onEnter(AppState, "Playing", [TransitionSystem])
-    )
-
-    const flattened = Game.Schedule.transitions(
-      nested,
+  it("keeps transition event unions exact across bundled transition schedules", () => {
+    const bundle = Game.Schedule.transitions(
+      Game.Schedule.onEnter(AppState, "Playing", [TransitionSystem]),
       Game.Schedule.onExit(AppState, "Paused", [TransitionSystem])
     )
 
-    const schedule = Game.Schedule(
-      WriterSystem,
-      Game.Schedule.applyStateTransitions(flattened)
-    )
-
-    schedule
+    expect(bundle).type.toBeAssignableTo<SchemaTypes.Schema.BoundTransitionBundle<typeof schema, typeof schema>>()
   })
 
   it("rejects nested transition-application markers in transition schedules", () => {

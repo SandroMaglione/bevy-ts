@@ -25,7 +25,7 @@ export const TransitionNotice = Descriptor.Resource<NoticeValue>()("StateMachine
 export const InputManager = Descriptor.Service<StateMachineInputManager>()("StateMachineExample/InputManager")
 export const BrowserHost = Descriptor.Service<BrowserHostValue>()("StateMachineExample/BrowserHost")
 
-export const schema = Schema.build(
+export const Game = Schema.bind(
   Schema.fragment({
     components: {
       Position,
@@ -46,7 +46,7 @@ export const schema = Schema.build(
   })
 )
 
-export const Game = Schema.bind(schema)
+export const schema = Game.schema
 
 export const SessionState = Game.StateMachine(
   "StateMachineExample/SessionState",

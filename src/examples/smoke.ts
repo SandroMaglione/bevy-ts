@@ -22,7 +22,7 @@ const Logger = Descriptor.Service<{
   readonly log: (message: string) => void
 }>()("Smoke/Logger")
 
-const schema = Schema.build(Schema.fragment({
+const Game = Schema.bind(Schema.fragment({
   components: {
     Position,
     Velocity
@@ -35,8 +35,7 @@ const schema = Schema.build(Schema.fragment({
     TickEvent
   }
 }))
-
-const Game = Schema.bind(schema)
+const schema = Game.schema
 // `Phase` is a machine because the queued transition boundary matters for
 // gameplay flow. A plain state descriptor would not model that boundary.
 const Phase = Game.StateMachine("Phase", ["Running", "Paused"])
