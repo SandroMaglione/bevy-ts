@@ -39,6 +39,7 @@ export interface DocsRenderer {
   readonly markdown: MarkdownIt
   readonly highlightBlock: (code: string, language?: string) => string
   readonly highlightInline: (code: string) => string
+  readonly highlightName: (code: string) => string
   readonly dispose: () => void
 }
 
@@ -137,10 +138,11 @@ const DocsConfigSchema = Schema.Struct({
 
 const decodeDocsConfig = Schema.decodeUnknownSync(DocsConfigSchema)
 
-const SHIKI_THEME = "catppuccin-latte"
+const SHIKI_THEME = "one-light"
 const SHIKI_INLINE_LANG = "ts"
 const SHIKI_PLAIN_LANG = "text"
 const MODULE_RENDER_CONCURRENCY = 6
+const ICON_EXTERNAL_LINK = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`
 const HOMEPAGE_MARKDOWN_PATH = NodePath.join("scripts", "homepage.md")
 const DOCGEN_CSS_PATH = NodePath.join("scripts", "docgen.css")
 const EXAMPLES_DIRECTORY_PATH = NodePath.join("src", "examples")
@@ -697,22 +699,22 @@ const normalizeLanguage = (language: string): string => {
   return normalized
 }
 
-const buildHighlightedInlineCode = (attributes: string, line: string): string => {
+const buildHighlightedSpan = (attributes: string, line: string, className: string): string => {
   if (attributes.includes(`class="`)) {
-    return `<span${attributes.replace(/class="([^"]*)"/, ' class="$1 inline-code"')}>${line}</span>`
+    return `<span${attributes.replace(/class="([^"]*)"/, ` class="$1 ${className}"`)}>${line}</span>`
   }
   const normalized = attributes.length > 0 ? `${attributes} ` : ""
-  return `<span ${normalized}class="inline-code">${line}</span>`
+  return `<span ${normalized}class="${className}">${line}</span>`
 }
 
-const convertBlockToInline = (html: string): string => {
+const convertBlockToInline = (html: string, className: string): string => {
   const match = html.match(/^<pre([^>]*)><code><span class="line">([\s\S]*)<\/span><\/code><\/pre>$/)
   if (!match) {
     throw new Error("Unable to convert highlighted block HTML to inline code.")
   }
   const [, rawAttributes = "", line = ""] = match
-  const attributes = rawAttributes.trim()
-  return buildHighlightedInlineCode(attributes, line)
+  const attributes = rawAttributes.trim().replace(/\s*tabindex="[^"]*"/g, "")
+  return buildHighlightedSpan(attributes, line, className)
 }
 
 export const createDocsRenderer = async (): Promise<DocsRenderer> => {
@@ -738,7 +740,13 @@ export const createDocsRenderer = async (): Promise<DocsRenderer> => {
   }
   const highlightInline = (code: string): string =>
     convertBlockToInline(
-      highlightBlock(code, SHIKI_INLINE_LANG)
+      highlightBlock(code, SHIKI_INLINE_LANG),
+      "inline-code"
+    )
+  const highlightName = (code: string): string =>
+    convertBlockToInline(
+      highlightBlock(code, SHIKI_INLINE_LANG),
+      "api-name"
     )
   const markdown = new MarkdownIt({
     html: false,
@@ -753,6 +761,7 @@ export const createDocsRenderer = async (): Promise<DocsRenderer> => {
     markdown,
     highlightBlock,
     highlightInline,
+    highlightName,
     dispose: () => highlighter.dispose()
   }
 }
@@ -812,26 +821,23 @@ const renderToc = (
 
   return [
     `<section class="module-toc">`,
-    `<h2>On This Page</h2>`,
-    `<div class="module-toc-grid">`,
     ...sections.map((section: TocSection) =>
       [
-        `<section class="module-toc-section">`,
-        `<h3>${escapeHtml(section.key)}</h3>`,
-        `<ul>`,
+        `<div class="module-toc-section">`,
+        `<h3 class="module-toc-section-title">${escapeHtml(section.key)}</h3>`,
+        `<div class="module-toc-list">`,
         ...section.items.map((item: TocEntry) =>
           [
-            `<li>`,
-            `<a href="#${item.anchor}">${renderer.highlightInline(item.name)}</a>`,
+            `<a class="module-toc-item" href="#${item.anchor}">`,
+            `<span class="module-toc-item-name">${renderer.highlightName(item.name)}</span>`,
             getItemShortDescription(item.description)
-              ? `<div class="module-toc-description">${renderMarkdown(renderer, getItemShortDescription(item.description), anchors)}</div>`
+              ? `<span class="module-toc-description">${renderMarkdown(renderer, getItemShortDescription(item.description), anchors)}</span>`
               : "",
-            `</li>`
+            `</a>`
           ].join("")),
-        `</ul>`,
-        `</section>`
+        `</div>`,
+        `</div>`
       ].join("")),
-    `</div>`,
     `</section>`
   ].join("")
 }
@@ -858,8 +864,8 @@ const renderItem = (renderer: DocsRenderer, item: ModuleItem, anchors: ReadonlyS
   return [
     `<article class="doc-item" id="${item.anchor}">`,
     `<header class="doc-item-header">`,
-    `<h3>${renderer.highlightInline(item.name)}</h3>`,
-    `<a class="source-link" href="${item.sourceLink}">Source</a>`,
+    `<h3>${renderer.highlightName(item.name)}</h3>`,
+    `<a class="source-link" href="${item.sourceLink}">Source${ICON_EXTERNAL_LINK}</a>`,
     `</header>`,
     item.description
       ? renderMarkdown(renderer, item.description, anchors)
@@ -882,7 +888,7 @@ const renderSecondaryTypes = (renderer: DocsRenderer, moduleDoc: ModuleDoc): str
     `<h2>Related Types</h2>`,
     `<p>These support the callable API surface and are intentionally kept secondary in this v1 docs view.</p>`,
     `<ul>`,
-    ...moduleDoc.typeItems.map((item: ModuleItem) => `<li>${renderer.highlightInline(item.name)}</li>`),
+    ...moduleDoc.typeItems.map((item: ModuleItem) => `<li>${renderer.highlightName(item.name)}</li>`),
     `</ul>`,
     `</section>`
   ].join("")
@@ -923,7 +929,7 @@ const renderModuleContent = (renderer: DocsRenderer, config: ResolvedDocsConfig,
     `<header class="module-hero">`,
     `<p class="eyebrow">${escapeHtml(getGroupLabel(config, moduleDoc.group))}</p>`,
     `<h1>${escapeHtml(moduleDoc.name)}</h1>`,
-    `<div class="module-actions"><a class="source-link" href="${moduleDoc.sourceLink}">View Source</a></div>`,
+    `<div class="module-actions"><a class="source-link" href="${moduleDoc.sourceLink}">View Source${ICON_EXTERNAL_LINK}</a></div>`,
     renderMarkdown(renderer, moduleDoc.description, anchors),
     `</header>`,
     renderExamples(renderer, moduleDoc.examples, anchors),
@@ -1086,8 +1092,8 @@ const renderKeyApiContent = ({
             return [
               `<article class="doc-item" id="${entry.moduleSlug}-${entry.itemAnchor}">`,
               `<header class="doc-item-header">`,
-              `<h3>${renderer.highlightInline(entry.itemName)}</h3>`,
-              `<a class="source-link" href="${moduleHref}#${entry.itemAnchor}">${escapeHtml(entry.moduleName)}</a>`,
+              `<h3>${renderer.highlightName(entry.itemName)}</h3>`,
+              `<a class="source-link" href="${moduleHref}#${entry.itemAnchor}">${escapeHtml(entry.moduleName)}${ICON_EXTERNAL_LINK}</a>`,
               `</header>`,
               entry.itemDescription
                 ? renderMarkdown(renderer, entry.itemDescription, anchors)
