@@ -1,5 +1,4 @@
 import { startPlatformerExample } from "../platformer/main.ts"
-import { startGeneticsExample } from "./genetics.ts"
 import { startPixiExample } from "./main.ts"
 import { startPokemonExample } from "./pokemon.ts"
 import { startSnakeExample } from "./snake.ts"
@@ -11,7 +10,6 @@ interface BrowserExampleHandle {
 }
 
 type ExampleId =
-  | "genetics"
   | "pixi"
   | "platformer"
   | "pokemon"
@@ -30,16 +28,6 @@ type ExampleDefinition = {
 }
 
 const examples: ReadonlyArray<ExampleDefinition> = [
-  {
-    id: "genetics",
-    label: "Genetics Arena",
-    eyebrow: "Autonomous selection sandbox",
-    title: "Finite-generation ecosystem with courtship risk, hostility, and lineage survival.",
-    description:
-      "Every block is an ECS agent with explicit genes for speed, resilience, attack, longevity, sight, fertility, and aggression. They forage, court, flee, fight, reproduce on contact, and pass traits forward into the next generation or collapse into extinction.",
-    meta: ["Finite seasons + extinction state", "Mate if genetically close, attack if too distant", "Color and shape encode phenotype"],
-    start: startGeneticsExample
-  },
   {
     id: "pixi",
     label: "Pixi Motion",

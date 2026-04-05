@@ -41,6 +41,24 @@ describe("helpers", () => {
     expect(finite).type.toBe<Result.Result<Scalar.Finite, Scalar.Error>>()
   })
 
+  it("scalar interpolation helpers preserve branded results", () => {
+    const start = Scalar.Finite.result(0)
+    const end = Scalar.Finite.result(10)
+    const value = Scalar.Finite.result(5)
+
+    if (!start.ok || !end.ok || !value.ok) {
+      return
+    }
+
+    expect(Scalar.lerp(start.value, end.value, value.value)).type.toBe<Scalar.Finite>()
+    expect(Scalar.inverseLerp(start.value, end.value, value.value)).type.toBe<
+      Result.Result<Scalar.Finite, Scalar.InterpolationError>
+    >()
+    expect(Scalar.remap(value.value, start.value, end.value, start.value, end.value)).type.toBe<
+      Result.Result<Scalar.Finite, Scalar.InterpolationError>
+    >()
+  })
+
   it("definition helpers preserve keyed success and failure shapes", () => {
     const definitions = Definition.all({
       position: Definition.entry(Vector2, { x: 1, y: 2 }),

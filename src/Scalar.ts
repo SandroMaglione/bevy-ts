@@ -70,6 +70,17 @@ export type Error =
   | { readonly tag: "Scalar/NonPositive"; readonly value: number }
 
 /**
+ * Structured interpolation failure.
+ *
+ * @category Scalar Types
+ */
+export type InterpolationError = {
+  readonly tag: "Scalar/ZeroRange"
+  readonly start: number
+  readonly end: number
+}
+
+/**
  * Constructor for {@link Finite}.
  *
  * @category Constructors
@@ -98,6 +109,15 @@ export const Positive = internal.Positive
  */
 export const clamp: (value: Finite, min: Finite, max: Finite) => Finite = internal.clamp
 /**
+ * Interpolates between two finite values by one finite amount.
+ *
+ * The amount is not clamped. This stays a pure interpolation primitive rather
+ * than mixing interpolation with policy.
+ *
+ * @category Operations
+ */
+export const lerp: (start: Finite, end: Finite, amount: Finite) => Finite = internal.lerp
+/**
  * Moves one finite value toward a target by at most one non-negative delta.
  *
  * Use this for explicit interpolation-style updates where overshooting the
@@ -106,6 +126,32 @@ export const clamp: (value: Finite, min: Finite, max: Finite) => Finite = intern
  * @category Operations
  */
 export const approach: (current: Finite, target: Finite, maxDelta: NonNegative) => Finite = internal.approach
+/**
+ * Returns the interpolation amount of one value within a finite input range.
+ *
+ * Fails explicitly when the input range has zero size.
+ *
+ * @category Operations
+ */
+export const inverseLerp: (
+  start: Finite,
+  end: Finite,
+  value: Finite
+) => Result.Result<Finite, InterpolationError> = internal.inverseLerp
+/**
+ * Remaps one finite value from one input range to one output range.
+ *
+ * Fails explicitly when the input range has zero size.
+ *
+ * @category Operations
+ */
+export const remap: (
+  value: Finite,
+  inputStart: Finite,
+  inputEnd: Finite,
+  outputStart: Finite,
+  outputEnd: Finite
+) => Result.Result<Finite, InterpolationError> = internal.remap
 
 /**
  * Common result shape returned by the scalar constructors.

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bevy-ts Genetics Arena</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page-bg:
+          radial-gradient(circle at top left, rgba(247, 201, 72, 0.18), transparent 24%),
+          radial-gradient(circle at 84% 14%, rgba(78, 205, 196, 0.18), transparent 22%),
+          linear-gradient(180deg, #061018 0%, #0b131b 44%, #081018 100%);
+        --panel-bg: rgba(7, 11, 16, 0.58);
+        --panel-border: rgba(255, 255, 255, 0.08);
+        --text-main: #eef4f7;
+        --text-muted: #abc0cd;
+        --accent: #5bc0be;
+        --accent-warm: #f7c948;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      [data-genetics-root] {
+        width: 100%;
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: var(--page-bg);
+        color: var(--text-main);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      }
+
+      .genetics-shell {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      .genetics-shell__viewport {
+        position: absolute;
+        inset: 0;
+      }
+
+      .genetics-shell__viewport canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .genetics-hud {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        pointer-events: none;
+      }
+
+      .genetics-hud__top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 18px;
+      }
+
+      .genetics-hud__chip {
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(6, 10, 14, 0.72);
+        color: var(--text-main);
+        font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .genetics-hud__middle {
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .genetics-hud__scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(2, 7, 10, 0.04), rgba(2, 7, 10, 0.72));
+        opacity: 0;
+        transition: opacity 150ms ease;
+      }
+
+      .genetics-hud__overlay {
+        position: relative;
+        display: grid;
+        gap: 10px;
+        justify-items: center;
+        max-width: min(560px, calc(100vw - 32px));
+        padding: 22px 28px;
+        border-radius: 24px;
+        border: 1px solid var(--panel-border);
+        background: var(--panel-bg);
+        backdrop-filter: blur(12px);
+        text-align: center;
+        opacity: 0;
+        transition: opacity 150ms ease;
+      }
+
+      .genetics-hud__title {
+        margin: 0;
+        font-size: clamp(2.4rem, 5vw, 4rem);
+        line-height: 0.94;
+        letter-spacing: -0.05em;
+      }
+
+      .genetics-hud__subtitle,
+      .genetics-hud__champion,
+      .genetics-hud__dominant,
+      .genetics-hud__footer {
+        margin: 0;
+        line-height: 1.55;
+      }
+
+      .genetics-hud__subtitle {
+        color: var(--text-muted);
+      }
+
+      .genetics-hud__champion {
+        color: var(--accent-warm);
+        font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .genetics-hud__dominant {
+        font-size: 13px;
+      }
+
+      .genetics-hud__footer {
+        padding: 0 18px 18px;
+        color: var(--text-muted);
+        font-size: 13px;
+        letter-spacing: 0.02em;
+      }
+
+      @media (max-width: 720px) {
+        .genetics-hud__top {
+          padding: 14px;
+        }
+
+        .genetics-hud__middle {
+          padding: 16px;
+        }
+
+        .genetics-hud__overlay {
+          padding: 18px;
+          border-radius: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main data-genetics-root></main>
+    <script type="module" src="./browser.ts"></script>
+  </body>
+  </html>

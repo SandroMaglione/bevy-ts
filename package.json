@@ -37,6 +37,7 @@
     "docs:build": "pnpm docs:generate",
     "docs:preview": "vite docs --host",
     "docs:check": "pnpm docs:generate && git diff --exit-code -- docs",
+    "example:genetics": "vite --open /examples/genetics/",
     "example:pixi": "vite --open /examples/pixi/",
     "example:platformer": "vite --open /examples/platformer/",
     "example:top-down": "vite --open /examples/top-down/"

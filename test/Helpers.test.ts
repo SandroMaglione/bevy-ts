@@ -86,6 +86,54 @@ describe("helpers", () => {
     }).ok).toBe(false)
   })
 
+  it("interpolates finite scalar values", () => {
+    const start = Scalar.Finite.result(10)
+    const end = Scalar.Finite.result(20)
+    const amount = Scalar.Finite.result(0.25)
+    expect(start.ok && end.ok && amount.ok).toBe(true)
+    if (!start.ok || !end.ok || !amount.ok) {
+      return
+    }
+
+    expect(Scalar.lerp(start.value, end.value, amount.value)).toBe(12.5)
+  })
+
+  it("computes inverse interpolation and remap explicitly", () => {
+    const zero = Scalar.Finite.result(0)
+    const ten = Scalar.Finite.result(10)
+    const five = Scalar.Finite.result(5)
+    const hundred = Scalar.Finite.result(100)
+    const twoHundred = Scalar.Finite.result(200)
+    expect(zero.ok && ten.ok && five.ok && hundred.ok && twoHundred.ok).toBe(true)
+    if (!zero.ok || !ten.ok || !five.ok || !hundred.ok || !twoHundred.ok) {
+      return
+    }
+
+    expect(Scalar.inverseLerp(zero.value, ten.value, five.value)).toEqual(Result.success(0.5))
+    expect(
+      Scalar.remap(five.value, zero.value, ten.value, hundred.value, twoHundred.value)
+    ).toEqual(Result.success(150))
+  })
+
+  it("fails inverse interpolation and remap for zero-sized input ranges", () => {
+    const zero = Scalar.Finite.result(0)
+    const five = Scalar.Finite.result(5)
+    const ten = Scalar.Finite.result(10)
+    expect(zero.ok && five.ok && ten.ok).toBe(true)
+    if (!zero.ok || !five.ok || !ten.ok) {
+      return
+    }
+
+    const error = {
+      tag: "Scalar/ZeroRange" as const,
+      start: 5,
+      end: 5
+    }
+
+    expect(Scalar.inverseLerp(five.value, five.value, ten.value)).toEqual(Result.failure(error))
+    expect(Scalar.remap(ten.value, five.value, five.value, zero.value, ten.value)).toEqual(Result.failure(error))
+  })
+
   it("normalizes movement explicitly and without mutating the source", () => {
     const raw = { x: 3, y: 4 } as const
     const vector = Vector2.result(raw)

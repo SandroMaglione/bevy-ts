@@ -1,0 +1,10 @@
+export const INITIAL_FOOD_COUNT = 22
+export const FOOD_TARGET = 24
+export const FOOD_ENERGY = 22
+export const FOUNDER_COUNT = 28
+export const GENERATION_DURATION_SECONDS = 38
+export const SUMMARY_DURATION_SECONDS = 5
+export const EXTINCTION_DURATION_SECONDS = 4
+export const MATING_CONTACT_RADIUS = 12
+export const ATTACK_CONTACT_PADDING = 16
+export const MAX_DELTA_SECONDS = 0.05
