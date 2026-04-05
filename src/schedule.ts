@@ -1,15 +1,32 @@
 /**
  * Schedule definitions and explicit visibility-boundary markers.
  *
- * Schedules order systems and define when deferred writes, events, lifecycle
- * buffers, relation failures, and machine transitions become visible.
+ * Schedules are the execution plan of the game. They decide not only which
+ * systems run, but also when staged world changes become observable to later
+ * systems in the same frame.
+ *
+ * That makes this module the place where ECS timing becomes intentional:
+ *
+ * - deferred commands flush only at `applyDeferred()`
+ * - emitted events become readable only at `updateEvents()`
+ * - lifecycle buffers advance only at `updateLifecycle()`
+ * - machine transitions commit only at transition markers
+ *
+ * Reach for this module whenever you need to explain the order of gameplay,
+ * setup, reset, host sync, or state transitions in one frame.
  *
  * @example
  * ```ts
+ * // Run simulation first while mutations are still staged.
  * const update = Game.Schedule(
- *   move,
+ *   simulateMovement,
+ *   resolveCollisions,
+ *   // Make queued spawns, inserts, and despawns visible.
  *   Game.Schedule.applyDeferred(),
- *   sync
+ *   // Advance lifecycle buffers before host sync reacts to changes.
+ *   Game.Schedule.updateLifecycle(),
+ *   createSprites,
+ *   syncTransforms
  * )
  * ```
  *
@@ -646,6 +663,7 @@ type DuplicateExtensionSystemNames<
  * ```ts
  * const update = Game.Schedule(
  *   simulateSystem,
+ *   // Flush queued world mutation before the observer runs.
  *   Game.Schedule.applyDeferred(),
  *   observeSpawnedSystem
  * )
@@ -697,6 +715,7 @@ export const updateEvents = (): EventUpdateStep => ({
  * const browserUpdate = Game.Schedule(
  *   simulationSystem,
  *   Game.Schedule.applyDeferred(),
+ *   // Commit readable added/changed/removed views for the host sync slice.
  *   Game.Schedule.updateLifecycle(),
  *   destroyNodesSystem,
  *   createNodesSystem,

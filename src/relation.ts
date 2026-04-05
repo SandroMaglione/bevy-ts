@@ -4,9 +4,16 @@
  * Relations model directed entity links plus the explicit error surfaces used
  * when those links cannot be created or traversed.
  *
+ * Use this module when plain components are not enough to express structure:
+ * parent/child scene trees, targeting links, ownership chains, attachments, or
+ * any other graph edge that should stay first-class and queryable in the ECS.
+ *
  * @example
  * ```ts
+ * // Model a scene-graph style parent/children relationship.
  * const Parent = Relation.Hierarchy("Parent", "Children")
+ *
+ * // Model another directed gameplay relationship.
  * const Target = Relation.Relation("Target", "TargetedBy")
  * ```
  *

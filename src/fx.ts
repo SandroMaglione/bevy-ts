@@ -5,9 +5,17 @@
  * channels, but stays intentionally minimal instead of becoming a full effect
  * system.
  *
+ * In this library it mainly exists so systems can return executable work while
+ * still carrying typed service requirements and explicit failure channels where
+ * needed. Most game systems will use `Fx.sync(...)`, but the type keeps the
+ * orchestration model uniform.
+ *
  * @example
  * ```ts
+ * // Build one small delayed computation.
  * const program = Fx.map(Fx.succeed(1), (value) => value + 1)
+ *
+ * // Execute it explicitly at the runtime boundary.
  * const result = Fx.runSync(program)
  * ```
  *

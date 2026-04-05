@@ -1,16 +1,56 @@
 /**
  * Query declarations, matching semantics, and typed cell access surfaces.
  *
- * Queries are the explicit entity-data access layer used by systems.
+ * Queries are the read-side center of ECS gameplay code. They describe which
+ * entities a system is allowed to see and exactly which component cells that
+ * system may read or write once a match is found.
+ *
+ * In practice this module answers three different design questions at once:
+ *
+ * - which entities should this system iterate over
+ * - which components prove an entity belongs in that iteration
+ * - which slots are readable, writable, or only optionally available
+ *
+ * Reach for this module whenever game logic needs to iterate entity state,
+ * perform host sync from ECS data, or resolve durable handles back into
+ * current-world entity proofs.
  *
  * @example
  * ```ts
- * const movers = Game.Query({
+ * // Describe exactly which entities the movement system may see.
+ * const MovingActors = Game.Query({
  *   selection: {
+ *     // Writable slots declare mutation capability in the query result.
  *     position: Game.Query.write(Position),
- *     velocity: Game.Query.read(Velocity)
- *   }
+ *     // Read-only slots prove presence without granting mutation.
+ *     velocity: Game.Query.read(Velocity),
+ *     // Optional slots do not affect matching and must be narrowed explicitly.
+ *     sprite: Game.Query.optional(Sprite)
+ *   },
+ *   // Structural filters describe who participates in the system at all.
+ *   with: [Movable],
+ *   without: [Frozen]
  * })
+ *
+ * const MoveActors = Game.System("MoveActors", {
+ *   queries: { moving: MovingActors },
+ *   resources: { dt: Game.System.readResource(DeltaTime) }
+ * }, ({ queries, resources }) => Fx.sync(() => {
+ *   const dt = resources.dt.get()
+ *
+ *   for (const { data } of queries.moving.each()) {
+ *     const velocity = data.velocity.get()
+ *     data.position.update((position) => ({
+ *       x: position.x + velocity.x * dt,
+ *       y: position.y + velocity.y * dt
+ *     }))
+ *
+ *     // Optional reads stay explicit at the use site.
+ *     if (data.sprite.present) {
+ *       void data.sprite.get()
+ *     }
+ *   }
+ * }))
  * ```
  *
  * @module query
@@ -145,10 +185,10 @@ export type Filter<D extends ComponentDescriptor> =
 /**
  * Declares read-only access to a component in a query selection.
  *
- * A required read slot contributes to both:
- *
- * - query matching: the component must be present
- * - result typing: the slot becomes a `ReadCell`
+ * A required read slot is both a matching requirement and a typing decision:
+ * the entity must have that component, and the resulting slot becomes a
+ * `ReadCell`. Use this for data the system needs to inspect but must not
+ * mutate.
  */
 export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D> => ({
   mode: "read",
@@ -158,8 +198,10 @@ export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D
 /**
  * Declares writable access to a component in a query selection.
  *
- * A write slot requires the component to be present and produces a
- * `WriteCell`, making mutation capability explicit in the query result.
+ * Use this when the system is responsible for mutating component state in
+ * place. A write slot both requires component presence and exposes the slot as
+ * a `WriteCell`, so mutation capability stays visible in the query spec rather
+ * than appearing ad hoc in the loop body.
  */
 export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess<D> => ({
   mode: "write",
@@ -170,13 +212,17 @@ export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess
  * Declares maybe-present read-only access to a component in a query
  * specification.
  *
- * `optional(...)` does not affect entity matching. It only changes the cell
- * type for that slot, forcing callers to narrow on `present` before reading.
+ * `optional(...)` is for enrichment, not matching. It keeps the entity set
+ * broad while letting one system opportunistically read extra data when
+ * present. The returned cell forces an explicit `present` check before use, so
+ * the possibility of absence remains visible in the type surface.
  *
  * @example
  * ```ts
+ * // Keep the main query focused on movers, but read sprite data when available.
  * const query = Game.Query({
  *   selection: {
+ *     position: Game.Query.read(Position),
  *     sprite: Game.Query.optional(Sprite)
  *   }
  * })
@@ -199,6 +245,7 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
  *
  * @example
  * ```ts
+ * // React only to renderables that became visible after the lifecycle boundary.
  * const AddedRenderableQuery = Game.Query({
  *   selection: {
  *     position: Game.Query.read(Position),
@@ -227,6 +274,7 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
  *
  * @example
  * ```ts
+ * // React only to entities whose position changed since the last lifecycle update.
  * const MovedQuery = Game.Query({
  *   selection: {
  *     position: Game.Query.read(Position)
@@ -595,10 +643,12 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * query result type.
  *
  * A query spec is purely declarative. It does not access the world by itself;
- * systems receive `QueryHandle`s derived from the spec.
+ * systems receive `QueryHandle`s derived from the spec. In practice this is
+ * where you encode the exact shape of one gameplay iteration pass.
  *
  * @example
  * ```ts
+ * // Define one reusable iteration contract for a movement system.
  * const Moving = Game.Query({
  *   selection: {
  *     position: Game.Query.write(Position),

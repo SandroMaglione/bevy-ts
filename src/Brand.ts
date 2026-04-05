@@ -5,8 +5,14 @@
  * input without changing their runtime representation. Constructors built with
  * this module are always explicit and non-throwing.
  *
+ * This matters in game code whenever one plain structural shape is too weak to
+ * express a guarantee. Helpers like `Vector2`, `Size2`, `Scalar`, and `Aabb`
+ * all build on this module so validated values can move through the ECS
+ * without losing the fact that they were checked once already.
+ *
  * @example
  * ```ts
+ * // Create a domain-specific constructor that only accepts valid ports.
  * const Port = Brand.refine((raw: number) =>
  *   raw > 0
  *     ? Result.success(raw as Brand.Branded<number, "Port">)

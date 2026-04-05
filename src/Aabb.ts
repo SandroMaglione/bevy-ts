@@ -5,8 +5,13 @@
  * a non-negative size. Geometry helpers derive edges and overlap relationships
  * without mutating the original value.
  *
+ * In game code this is the natural helper for collision volumes, trigger
+ * regions, camera bounds, and spatial authored data that should stay validated
+ * and immutable after construction.
+ *
  * @example
  * ```ts
+ * // Build a collision volume from raw authored data.
  * const player = Aabb.result({
  *   position: { x: 0, y: 0 },
  *   size: { width: 16, height: 16 }

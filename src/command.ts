@@ -1,14 +1,48 @@
 /**
  * Deferred command builders and typed entity-draft helpers.
  *
- * Commands keep mutation explicit by staging world writes as values that are
- * flushed later by schedule boundaries.
+ * This module exists for the part of ECS work that wants to describe mutation
+ * now and make it visible later. Systems often decide that an entity should be
+ * spawned, despawned, or extended while iterating queries, but the actual
+ * world change is intentionally deferred until the schedule reaches
+ * `Game.Schedule.applyDeferred()`.
+ *
+ * `Command` is therefore the write-side companion to `Query`:
+ *
+ * - queries prove what exists right now
+ * - commands stage what should exist after the next deferred boundary
+ *
+ * Reach for this module when gameplay logic needs explicit world mutation,
+ * especially for setup, reset, projectiles, pickups, despawns, and relation
+ * edits that should stay schedule-visible instead of happening implicitly.
  *
  * @example
  * ```ts
- * const draft = Game.Command.spawnWithMixed(
- *   Game.Command.entryRaw(Position, { x: 8, y: 12 }),
- *   Game.Command.entry(Player, {})
+ * // Build drafts as values so spawn intent stays explicit inside the system.
+ * const EnemyWave = Game.System("EnemyWave", {}, ({ commands }) =>
+ *   Fx.sync(() => {
+ *     const enemy = Game.Command.spawnWithMixed(
+ *       // Validate raw authored input through the constructed descriptor.
+ *       Game.Command.entryRaw(Position, { x: 96, y: 32 }),
+ *       // Add already-validated marker or config components directly.
+ *       Game.Command.entry(Enemy, {}),
+ *       Game.Command.entry(Health, 3)
+ *     )
+ *
+ *     if (!enemy.ok) {
+ *       return
+ *     }
+ *
+ *     // Queue the world write now. The entity becomes visible later.
+ *     commands.spawn(enemy.value)
+ *   })
+ * )
+ *
+ * // Make the deferred mutation boundary part of the schedule itself.
+ * const update = Game.Schedule(
+ *   EnemyWave,
+ *   Game.Schedule.applyDeferred(),
+ *   observeSpawnedEnemies
  * )
  * ```
  *
@@ -247,14 +281,24 @@ export const spawn = <S extends Schema.Any, Root = unknown>(): Entity.EntityDraf
 /**
  * Creates a typed component entry.
  *
- * This helper is optional, but it gives a named constructor for the flat
- * variadic APIs when plain tuple literals feel too bare.
+ * Use this when building drafts through the flat variadic helpers and you want
+ * the component/value pairing to stay visually explicit. It is especially
+ * useful once entries come from small factories or conditional branches rather
+ * than inline tuple literals.
  */
 export const entry = <D extends Descriptor<"component", string, any>>(
   descriptor: D,
   value: Descriptor.Value<D>
 ): Entry<D> => [descriptor, value]
 
+/**
+ * Lifts a validated result into a typed component entry result.
+ *
+ * This is the bridge between constructor-first validation and command
+ * authoring: validate a value separately, then preserve that success/failure
+ * shape while turning it into an entry for `spawnWithResult(...)` or
+ * `spawnWithMixed(...)`.
+ */
 export const entryResult = <D extends Descriptor<"component", string, any>, Error>(
   descriptor: D,
   result: Result.Result<Descriptor.Value<D>, Error>
@@ -267,9 +311,20 @@ export const entryResult = <D extends Descriptor<"component", string, any>, Erro
  * Creates a typed component entry by validating raw input through a
  * constructed descriptor.
  *
+ * Use this when spawn or reset data starts as raw numbers, vectors, sizes, or
+ * other host/authored input and you want the command path itself to surface
+ * validation failure explicitly.
+ *
  * @example
  * ```ts
+ * // Keep raw input validation attached to the descriptor that owns it.
  * const position = Game.Command.entryRaw(Position, { x: 10, y: 20 })
+ *
+ * // Carry the result forward into a mixed draft builder.
+ * const draft = Game.Command.spawnWithMixed(
+ *   position,
+ *   Game.Command.entry(Player, {})
+ * )
  * ```
  */
 export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>(
@@ -471,12 +526,27 @@ export const spawnWithResult = <
  * Starts a staged entity definition from a mix of plain validated entries and
  * explicit result-wrapped entries.
  *
+ * This is the practical "normal game code" helper when some components are
+ * already valid and others must cross a constructor boundary first. It keeps
+ * the whole spawn path flat while still refusing to hide validation failure.
+ *
  * @example
  * ```ts
+ * // Validate only the components that need constructor-backed checks.
  * const draft = Game.Command.spawnWithMixed(
  *   Game.Command.entryRaw(Position, { x: 8, y: 12 }),
- *   Game.Command.entry(Player, {})
+ *   Game.Command.entryRaw(Collider, { width: 12, height: 12 }),
+ *   // Keep plain marker/data components inline when no extra validation is needed.
+ *   Game.Command.entry(Player, {}),
+ *   Game.Command.entry(Health, 5)
  * )
+ *
+ * if (!draft.ok) {
+ *   return
+ * }
+ *
+ * // Queue the staged entity after all component inputs are known to be valid.
+ * commands.spawn(draft.value)
  * ```
  */
 export const spawnWithMixed = <

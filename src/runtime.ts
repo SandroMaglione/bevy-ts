@@ -1,17 +1,47 @@
 /**
  * Runtime creation, world storage, and schedule execution.
  *
- * The runtime owns ECS state and explicit service provisioning, and applies
- * deferred mutation only at schedule-controlled boundaries.
+ * The runtime is the concrete owner of the ECS world. It holds entities,
+ * resources, states, relation graphs, machines, event buffers, lifecycle
+ * buffers, and the host-provided services declared by systems.
+ *
+ * This module is where the library's explicit execution model becomes real:
+ *
+ * - systems never run without a runtime
+ * - schedules are the only way world visibility advances
+ * - service injection stays separate from world storage
+ * - construction-time validation remains visible through result-returning APIs
+ *
+ * Reach for this module when wiring the final game object that a browser loop,
+ * server process, test, or custom engine adapter will actually execute.
  *
  * @example
  * ```ts
+ * // Provide the services systems declared in their specs.
+ * const services = Game.Runtime.services(
+ *   Game.Runtime.service(RenderClock, { now: () => performance.now() }),
+ *   Game.Runtime.service(Random, { next: Math.random })
+ * )
+ *
+ * // Bootstrap the runtime from raw host values through constructed descriptors.
  * const runtime = Game.Runtime.makeConstructed({
- *   services: Game.Runtime.services(),
+ *   schema: Game,
+ *   services,
  *   resources: {
  *     viewport: { width: 800, height: 600 }
- *   }
+ *   },
+ *   machines: Game.Runtime.machines(
+ *     Game.Runtime.machine(GameFlow, "Boot")
+ *   )
  * })
+ *
+ * if (!runtime.ok) {
+ *   throw new Error("Invalid runtime bootstrap data")
+ * }
+ *
+ * // The runtime owns the world and executes explicit schedules.
+ * runtime.value.initialize(setupSchedule)
+ * runtime.value.tick(updateSchedule)
  * ```
  *
  * @module runtime
@@ -661,15 +691,19 @@ export interface Runtime<
 /**
  * Creates a runtime for a fully built schema and a set of external services.
  *
- * This is the main integration point for embedding the ECS into another loop,
- * renderer, or host application.
+ * Use this when bootstrap data is already in carried form and you want the
+ * most direct path from bound schema to executable world. This is the final
+ * assembly step that turns the type-level ECS design into a concrete runtime
+ * value.
  *
  * The runtime does not own the outer frame loop. It only owns ECS state plus
  * the host-provided services that systems are allowed to depend on.
  *
  * @example
  * ```ts
+ * // Assemble the world once all schema and schedules are defined.
  * const runtime = Game.Runtime.make({
+ *   schema: Game,
  *   services: Game.Runtime.services(
  *     Game.Runtime.service(Logger, { log: console.log })
  *   ),
@@ -2278,12 +2312,16 @@ export const makeRuntimeConstructed = <
 /**
  * Builds the descriptor-backed runtime service environment.
  *
- * Use this instead of writing service objects keyed by strings manually. The
- * helper derives the runtime map directly from service descriptors, so the key
- * used at runtime can never drift from the declared service identity.
+ * This is the runtime-side counterpart to `Game.System.service(...)`. Use it
+ * to assemble the host implementations the game exposes to systems, such as
+ * clocks, random generators, render bridges, audio sinks, or network clients.
+ *
+ * The helper keeps the runtime map keyed by service descriptors instead of
+ * ad hoc strings, so the provision site cannot drift from the declaration site.
  *
  * @example
  * ```ts
+ * // Bundle host capabilities once when building the runtime.
  * const services = Game.Runtime.services(
  *   Game.Runtime.service(Logger, { log: console.log }),
  *   Game.Runtime.service(Random, { next: Math.random })
@@ -2303,9 +2341,10 @@ export const services = <
 /**
  * Creates one service provision for `Runtime.services(...)`.
  *
- * This is the canonical user-facing entry constructor because passing the
- * descriptor directly gives TypeScript a contextual type for the implementation
- * object.
+ * Use this at the runtime assembly boundary to pair a service descriptor with
+ * its concrete host implementation. Passing the descriptor first keeps the
+ * implementation object contextually typed and makes the dependency relation
+ * obvious in docs and code review.
  */
 export const service = <
   D extends Descriptor<"service", string, any>
@@ -2320,7 +2359,8 @@ export const service = <
 /**
  * Builds the machine initialization environment from machine definitions.
  *
- * Use this when the runtime must start with committed machine values.
+ * Use this when gameplay phases need a known committed starting state before
+ * any schedule runs, for example `"Boot"`, `"Menu"`, or `"Playing"`.
  */
 export const machines = <
   const Entries extends ReadonlyArray<MachineProvision>
@@ -2338,8 +2378,13 @@ export const machines = <
 /**
  * Creates one machine initialization provision.
  *
+ * This is the machine-side equivalent of `Runtime.service(...)`: it pairs one
+ * machine definition with the committed initial value the runtime should start
+ * from before any transition schedule runs.
+ *
  * @example
  * ```ts
+ * // Start the game in a known committed phase.
  * const machines = Game.Runtime.machines(
  *   Game.Runtime.machine(GameFlow, "Menu")
  * )

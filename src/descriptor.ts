@@ -5,11 +5,18 @@
  * schema entries, query slots, system specs, runtime provisioning, long-lived
  * handle intents, and relationships.
  *
+ * If `Schema` answers "what world can exist?", descriptors answer "what is
+ * each named thing in that world?" They are the vocabulary the rest of the
+ * ECS system reuses everywhere else.
+ *
  * The normal authoring flow is:
  *
  * 1. declare descriptors with `Descriptor.*`
  * 2. register them in `Schema.fragment(...)`
  * 3. bind one `Game` with `Schema.bind(...)`
+ *
+ * Reach for this module first whenever you introduce a new component,
+ * resource, event, state, or service to the game.
  *
  * @module descriptor
  * @docGroup core
@@ -31,9 +38,17 @@
  *
  * @example
  * ```ts
+ * // Components describe per-entity state that queries can match.
  * const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+ *
+ * // Resources describe singleton world data shared across systems.
  * const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
+ *
+ * // Events describe staged cross-system messages.
  * const DamageTaken = Descriptor.Event<{ amount: number }>()("DamageTaken")
+ *
+ * // Services describe host capabilities that live outside ECS storage.
+ * const Logger = Descriptor.Service<{ log: (message: string) => void }>()("Logger")
  * ```
  */
 export type DescriptorTypeId = "~bevy-ts/Descriptor"
@@ -186,8 +201,13 @@ export const Component = <Value>() => <const Name extends string>(
 /**
  * Defines a component descriptor that also knows how to validate raw values.
  *
+ * Use this when the component should never exist in the world in an unvalidated
+ * shape, for example vectors, sizes, collider bounds, or other branded domain
+ * values.
+ *
  * @example
  * ```ts
+ * // Route raw component input through a constructor once at the boundary.
  * const Position = Descriptor.ConstructedComponent(Vector2)("Position")
  * ```
  */
@@ -204,11 +224,13 @@ export const ConstructedComponent = <Value, Raw, Error>(
  * Resources represent unique world-level values accessed through explicit
  * system specs.
  *
- * Use resources for singleton world data such as counters, configuration, or
- * transient per-frame summaries.
+ * Use resources for singleton world data such as counters, configuration,
+ * global timers, camera summaries, or transient per-frame aggregates that
+ * should not be duplicated across entities.
  *
  * @example
  * ```ts
+ * // Store shared world state once and request it explicitly from systems.
  * const Score = Descriptor.Resource<number>()("Score")
  * ```
  */
@@ -279,12 +301,14 @@ export const ConstructedState = <Value, Raw, Error>(
  * Services are the dependency-injection side of the system model, similar to
  * Effect environment entries.
  *
- * Services are provided when the runtime is created with
- * `Game.Runtime.services(...)`. Systems declare them explicitly with
- * `Game.System.service(...)`.
+ * Use them for capabilities owned by the host instead of the ECS world:
+ * clocks, random sources, render/audio bridges, storage, or network clients.
+ * Systems request them explicitly with `Game.System.service(...)`, and the
+ * runtime provides them through `Game.Runtime.services(...)`.
  *
  * @example
  * ```ts
+ * // Describe one host capability the runtime must provide.
  * const Logger = Descriptor.Service<{ log: (message: string) => void }>()("Logger")
  * ```
  */

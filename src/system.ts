@@ -1,16 +1,46 @@
 /**
  * System declarations, typed requirements, and execution context.
  *
- * Systems declare exactly what they may read, write, emit, and depend on
- * before they are allowed to run inside one schedule.
+ * Systems are the main unit of gameplay behavior in the library. A system
+ * declares everything it is allowed to touch up front, and the runtime derives
+ * a context that exposes exactly that surface and nothing more.
+ *
+ * This module is where ECS logic becomes explicit and reviewable:
+ *
+ * - queries describe which entities may be visited
+ * - resources, events, services, and machines are requested by name
+ * - lifecycle and transition reads stay gated by schedule boundaries
+ * - hidden ambient world access is impossible through the public API
+ *
+ * Reach for this module whenever you are writing gameplay, simulation, reset,
+ * input, host sync, or transition logic that should run inside a schedule.
  *
  * @example
  * ```ts
- * const Tick = Game.System("Tick", {
+ * // Define one simulation step with explicit world access.
+ * const Move = Game.System("Move", {
+ *   queries: {
+ *     moving: Game.Query({
+ *       selection: {
+ *         position: Game.Query.write(Position),
+ *         velocity: Game.Query.read(Velocity)
+ *       }
+ *     })
+ *   },
  *   resources: {
  *     dt: Game.System.readResource(DeltaTime)
  *   }
- * }, ({ resources }) => Fx.sync(() => resources.dt.get()))
+ * }, ({ queries, resources }) => Fx.sync(() => {
+ *   const dt = resources.dt.get()
+ *
+ *   for (const { data } of queries.moving.each()) {
+ *     const velocity = data.velocity.get()
+ *     data.position.update((position) => ({
+ *       x: position.x + velocity.x * dt,
+ *       y: position.y + velocity.y * dt
+ *     }))
+ *   }
+ * }))
  * ```
  *
  * @module system
@@ -93,8 +123,10 @@ export interface ServiceRead<D extends Descriptor<"service", string, any>> {
 /**
  * Declares that a system needs a service from the external runtime environment.
  *
- * Services are not stored in the world. They are provided when the runtime is
- * created with `Game.Runtime.services(...)`.
+ * Use this for host capabilities that should not live in ECS world storage:
+ * clocks, random generators, render bridges, audio sinks, persistence APIs,
+ * or network clients. The matching implementation must be supplied when the
+ * runtime is created with `Game.Runtime.services(...)`.
  */
 export const service = <D extends Descriptor<"service", string, any>>(
   descriptor: D
@@ -121,7 +153,10 @@ export type ResourceWrite<D extends Descriptor<"resource", string, any>> = {
 /**
  * Creates a resource-read declaration for a system spec.
  *
- * This gives the system a read-only `ReadCell` in `context.resources`.
+ * Use this for world-level singleton data the system needs to observe but must
+ * not mutate, such as delta time, score snapshots, configuration, or
+ * aggregated frame input. The resulting context slot is a read-only
+ * `ReadCell`.
  */
 export const readResource = <D extends Descriptor<"resource", string, any>>(
   descriptor: D
@@ -133,7 +168,10 @@ export const readResource = <D extends Descriptor<"resource", string, any>>(
 /**
  * Creates a resource-write declaration for a system spec.
  *
- * This gives the system a `WriteCell` in `context.resources`.
+ * Use this when the system owns mutation of one world-level singleton, such as
+ * score, UI summaries, accumulated damage, or frame-local caches. Declaring it
+ * here makes that authority visible in the system contract before the body is
+ * read.
  *
  * @example
  * ```ts
@@ -142,6 +180,7 @@ export const readResource = <D extends Descriptor<"resource", string, any>>(
  *     score: Game.System.writeResource(Score)
  *   }
  * }, ({ resources }) => Fx.sync(() => {
+ *   // Mutate the singleton through the explicit write cell.
  *   resources.score.update((score) => score + 1)
  * }))
  * ```
@@ -265,11 +304,10 @@ export const writeState = <D extends Descriptor<"state", string, any>>(
 /**
  * Declares read access to the current committed value of a finite-state machine.
  *
- * Use this when a system needs to branch on the current committed machine
- * state. Queued writes are exposed separately through `nextState(...)`.
- *
- * Machines are the intended default for gameplay phases and other discrete
- * mode changes whose transition boundary matters.
+ * Use this when gameplay logic needs to branch on the current committed phase,
+ * but should not see queued next-state writes early. Machines are the intended
+ * default for menus, rounds, encounters, pause flows, and other discrete modes
+ * whose transition boundary matters.
  */
 export const machine = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -278,16 +316,13 @@ export const machine = <M extends Machine.StateMachine.Any>(
 /**
  * Declares queued write access to the next value of a finite-state machine.
  *
- * This does not immediately change the committed state. The queued value is
- * applied only at an explicit `Game.Schedule.applyStateTransitions(...)`
- * boundary.
+ * This is the system-side request channel for a future phase change. It does
+ * not immediately switch the committed state; the queued value is applied only
+ * at an explicit `Game.Schedule.applyStateTransitions(...)` boundary.
  *
- * Use this instead of `writeState(...)` when gameplay depends on the explicit
- * transition boundary.
- *
- * This is the usual restart or mode-change entrypoint: input systems queue the
- * next phase here, then transition schedules perform reset or setup work later
- * at the explicit apply boundary.
+ * Use this instead of `writeState(...)` when the transition timing itself is
+ * part of the gameplay model, such as restarting a round, leaving a menu, or
+ * entering a results screen after reset/setup schedules run.
  */
 export const nextState = <M extends Machine.StateMachine.Any>(
   stateMachine: M

@@ -4,10 +4,17 @@
  * Sizes model non-negative width/height pairs and are commonly used for
  * colliders, viewports, and AABB dimensions.
  *
+ * Reach for this module when authored or host-provided dimensions should be
+ * validated once and then carried through gameplay code, runtime bootstrap, or
+ * geometry helpers without repeating non-negative checks everywhere.
+ *
  * @example
  * ```ts
+ * // Validate raw viewport dimensions before storing or reusing them.
  * const viewport = Size2.result({ width: 800, height: 600 })
  * if (!viewport.ok) return
+ *
+ * // Read the branded size later without rechecking width/height validity.
  * const width = Size2.width(viewport.value)
  * ```
  *

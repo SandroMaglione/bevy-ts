@@ -6,8 +6,13 @@
  * gamepads, or host APIs. It only translates already-sampled booleans into the
  * compact movement values used by the examples.
  *
+ * Reach for it in the gap between host input sampling and ECS simulation:
+ * capture raw button state in the host, normalize it here, then write the
+ * resulting axes or vectors into resources/components for systems to consume.
+ *
  * @example
  * ```ts
+ * // Normalize one sampled host input snapshot into a movement vector.
  * const movement = InputAxis.vectorFromAxes({
  *   left: false,
  *   right: true,

@@ -1,6 +1,11 @@
 /**
  * Schema authoring, binding, and pre-bind feature composition.
  *
+ * This module is the bridge between raw descriptor declarations and the final
+ * bound `Game` API that systems, schedules, queries, commands, and runtimes
+ * actually use. It answers the question "what world is allowed to exist in
+ * this game?" before any runtime value is built.
+ *
  * The normal authoring flow is:
  *
  * 1. declare descriptors with `Descriptor.*`
@@ -10,6 +15,10 @@
  *
  * `Schema.Feature` lives on the same pre-bind layer. Features contribute schema
  * fragments and build schedules only after the final merged schema is known.
+ *
+ * Reach for this module when a project grows beyond one file and needs schema
+ * composition that stays explicit, local, and type-safe instead of relying on
+ * mutable global registries.
  *
  * @module schema
  * @docGroup core
@@ -31,15 +40,21 @@
  *
  * @example
  * ```ts
+ * // Declare the descriptor identities that define the allowed world contents.
  * const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+ * const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
  * const Score = Descriptor.Resource<number>()("Score")
  *
+ * // Package one gameplay slice as a reusable schema fragment.
  * const Core = Schema.fragment({
- *   components: { Position },
+ *   components: { Position, Velocity },
  *   resources: { Score }
  * })
  *
+ * // Create one root brand so handles and bound APIs all agree on one world.
  * const Root = Schema.defineRoot("Game")
+ *
+ * // Bind the final public ECS authoring surface for the project.
  * const Game = Schema.bind(Core, Root)
  * ```
  */
@@ -1067,16 +1082,25 @@ export const empty = (): SchemaDefinition => ({
 /**
  * Creates a schema fragment.
  *
- * Modules should export fragments instead of mutating global registries. Later
- * the application can merge these fragments into one final schema.
+ * Fragments are the main composition unit for game modules. Use them to keep
+ * each gameplay slice local, exportable, and mergeable without introducing
+ * hidden registry mutation.
  *
- * Use fragments as the reusable lego blocks of schema composition.
+ * A fragment says "this subsystem contributes these components/resources/
+ * events/states/relations", and nothing more. Binding and runtime assembly
+ * happen later once the final application shape is known.
  *
  * @example
  * ```ts
+ * // Keep combat schema local to the combat module.
  * const Combat = Schema.fragment({
  *   components: { Health, Damage },
  *   events: { Hit }
+ * })
+ *
+ * // Other modules can export their own fragments independently.
+ * const Movement = Schema.fragment({
+ *   components: { Position, Velocity }
  * })
  * ```
  */
@@ -1681,6 +1705,7 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
  *
  * @example
  * ```ts
+ * // Compose several independent gameplay fragments into one final API surface.
  * const Root = Schema.defineRoot("Game")
  * const Game = Schema.bind(Core, Combat, Root)
  * ```

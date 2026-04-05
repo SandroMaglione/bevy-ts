@@ -4,9 +4,17 @@
  * State machines model queued discrete phase changes whose commit boundaries
  * matter to schedule execution.
  *
+ * Use this module when gameplay depends not only on the current mode, but also
+ * on exactly when a mode change becomes committed and which schedules should
+ * run around that boundary. Menus, rounds, encounter phases, pause flows, and
+ * restart/reset pipelines are the canonical cases.
+ *
  * @example
  * ```ts
+ * // Model a gameplay phase whose transition timing matters.
  * const GameFlow = Machine.StateMachine("GameFlow", ["Menu", "Playing"] as const)
+ *
+ * // Gate one system so it only runs in the committed playing phase.
  * const isPlaying = Machine.inState(GameFlow, "Playing")
  * ```
  *
@@ -302,6 +310,7 @@ export const readTransitionEvent = <M extends StateMachine.Any>(machine: M): Tra
 /**
  * Creates a condition that only passes in one exact machine state.
  *
+ * Use this to gate systems or schedule entries by the committed gameplay phase.
  * If you need this kind of gating, the value should generally be modeled as a
  * finite-state machine rather than a plain state descriptor.
  */

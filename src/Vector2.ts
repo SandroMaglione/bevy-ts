@@ -4,10 +4,18 @@
  * Raw `{ x, y }` input is validated once at the constructor boundary. All
  * other helpers work on branded vectors only and remain pure and immutable.
  *
+ * This is the common math value that game code threads through position,
+ * velocity, input direction, camera motion, and collision helpers. Use it when
+ * vectors should stay explicitly validated and reusable across ECS and helper
+ * modules.
+ *
  * @example
  * ```ts
+ * // Validate one raw velocity before storing or reusing it elsewhere.
  * const velocity = Vector2.result({ x: 3, y: 4 })
  * if (!velocity.ok) return
+ *
+ * // Derive a movement direction from the branded vector.
  * const direction = Vector2.normalizeOrZero(velocity.value)
  * ```
  *

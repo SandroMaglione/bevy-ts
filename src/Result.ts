@@ -12,8 +12,13 @@
  * failure should remain visible and typed instead of being hidden behind
  * exceptions or implicit coercion.
  *
+ * In practical ECS code this is the shared language for construction-time
+ * validation and fallible lookups. It keeps ordinary failure in the type
+ * surface instead of pushing it into exceptions.
+ *
  * @example
  * ```ts
+ * // Validate several authored inputs and keep every failure explicit.
  * const built = Result.all({
  *   position: Vector2.result({ x: 4, y: 8 }),
  *   size: Size2.result({ width: 16, height: 16 })

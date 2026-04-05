@@ -4,9 +4,18 @@
  * This module defines the nominal entity reference types used across queries,
  * commands, relations, and lookup APIs.
  *
+ * In practical game code, it separates short-lived "current runtime entity"
+ * identity from durable references that may survive across frames inside
+ * components, resources, or events. That distinction is essential for keeping
+ * liveness uncertainty explicit instead of pretending a saved reference proves
+ * the entity still exists.
+ *
  * @example
  * ```ts
+ * // Turn a current frame entity id into a durable reference.
  * const handle = Game.Entity.handle(playerId)
+ *
+ * // Add an intent when later resolution should require one component proof.
  * const positioned = Game.Entity.handleAs(Position, playerId)
  * ```
  *
@@ -246,8 +255,13 @@ export const handle = <S extends Schema.Any, Root = unknown>(
  * It only forces resolution through a query that statically proves the
  * component is present.
  *
+ * This is the safer default when the handle will later be used in gameplay
+ * logic that assumes a specific role, such as "player", "camera target", or
+ * "damage source".
+ *
  * @example
  * ```ts
+ * // Preserve that later resolution must prove this is still a player entity.
  * const handle = Game.Entity.handleAs(Player, playerId)
  * ```
  */

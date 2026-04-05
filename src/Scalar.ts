@@ -6,11 +6,18 @@
  * {@link Finite} and {@link NonNegative}. Once validated, downstream helpers
  * operate only on branded values.
  *
+ * In game code this is useful whenever "just a number" is too weak: viewport
+ * sizes, speeds, distances, durations, and geometry values often need explicit
+ * non-negative or finite guarantees before they should be stored in the world.
+ *
  * @example
  * ```ts
+ * // Validate raw numbers before geometry or gameplay code relies on them.
  * const speed = Scalar.Finite.result(12)
  * const limit = Scalar.Finite.result(8)
  * if (!speed.ok || !limit.ok) return
+ *
+ * // Operate on the branded values after the boundary has been crossed.
  * const clamped = Scalar.clamp(speed.value, limit.value, speed.value)
  * ```
  *
