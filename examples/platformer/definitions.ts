@@ -1,6 +1,6 @@
-import * as Definition from "../../src/Definition.ts"
-import * as Size2 from "../../src/Size2.ts"
-import * as Vector2 from "../../src/Vector2.ts"
+import * as Definition from "@bevy-ts/core/Definition"
+import * as Size2 from "@bevy-ts/core/Size2"
+import * as Vector2 from "@bevy-ts/core/Vector2"
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from "./constants.ts"
 import { playerSpawn as rawPlayerSpawn } from "./content.ts"
 

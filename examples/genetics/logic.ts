@@ -1,7 +1,6 @@
-import { clamp, lerp } from "../../src/internal/scalar.ts"
-import { normalizeXYOrZero } from "../../src/internal/vector2.ts"
-import { Entity } from "../../src/index.ts"
+import { Entity } from "@bevy-ts/core"
 import { FOOD_ENERGY } from "./constants.ts"
+import { clamp, lerp, normalizeXYOrZero } from "./math.ts"
 import { Agent, Game, Genes, Position, Renderable, Root, Velocity, Vitals, Behavior, Intent, Food, schema } from "./schema.ts"
 import type { AgentSnapshot, ArenaValue, FounderSeed, GenesValue, PopulationStatsValue, RenderKind, ShapeKind, SummaryValue } from "./types.ts"
 

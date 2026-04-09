@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from "pixi.js"
-import * as InputAxis from "../../../src/InputAxis.ts"
+import * as InputAxis from "@bevy-ts/core/InputAxis"
 
 import {
   PICKUP_RADIUS,

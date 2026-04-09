@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 
 import { pickupLayout, wallLayout } from "../content.ts"
 import { makePickupDraft, makePlayerDraft, makeWallDraft } from "../drafts.ts"

@@ -1,4 +1,4 @@
-import * as Result from "../../src/Result.ts"
+import * as Result from "@bevy-ts/core/Result"
 import { levelBounds } from "./content.ts"
 import { Camera, DeltaTime, Game, InputManager, InputState, LoseMessage, PlatformerHost, PlayerContacts, SessionState, Viewport } from "./schema.ts"
 import type { InputStateValue, PlatformerHostValue, PlatformerInputManager, PlayerContactsValue } from "./types.ts"

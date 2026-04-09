@@ -1,0 +1,10 @@
+{
+  "name": "@bevy-ts/example-top-down",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@bevy-ts/core": "workspace:*",
+    "@bevy-ts/browser": "workspace:*",
+    "@bevy-ts/pixi": "workspace:*"
+  }
+}

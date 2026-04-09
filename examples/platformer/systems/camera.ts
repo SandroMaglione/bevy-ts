@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 import { levelBounds } from "../content.ts"
 import { PlayerCameraQuery } from "../queries.ts"
 import { Camera, Game, PlatformerHost, Viewport } from "../schema.ts"

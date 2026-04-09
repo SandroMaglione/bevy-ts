@@ -1,6 +1,6 @@
-import { Descriptor, Entity, Schema } from "../../src/index.ts"
-import * as Size2 from "../../src/Size2.ts"
-import * as Vector2 from "../../src/Vector2.ts"
+import { Descriptor, Entity, Schema } from "@bevy-ts/core"
+import * as Size2 from "@bevy-ts/core/Size2"
+import * as Vector2 from "@bevy-ts/core/Vector2"
 
 import type {
   AnimationClockValue,

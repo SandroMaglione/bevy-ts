@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../constants.ts"
 import { clamp } from "../math.ts"
 import { PlayerCameraQuery } from "../queries.ts"

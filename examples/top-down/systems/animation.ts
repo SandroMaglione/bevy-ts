@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 
 import { PLAYER_FRAME_SECONDS, facingRows } from "../constants.ts"
 import { advanceFrameIndex, lengthSquared } from "../math.ts"

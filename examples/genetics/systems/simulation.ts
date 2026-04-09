@@ -1,5 +1,4 @@
-import { clamp, lerp } from "../../../src/internal/scalar.ts"
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 import {
   Agent,
   AgentDecisionQuery,
@@ -49,6 +48,7 @@ import {
   MATING_CONTACT_RADIUS,
   SUMMARY_DURATION_SECONDS
 } from "../constants.ts"
+import { clamp, lerp } from "../math.ts"
 import type { GenesValue, IntentKind } from "../types.ts"
 
 export const SetupWorldSystem = Game.System(

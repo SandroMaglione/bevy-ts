@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/tstyche/schemas/config.json",
   "testFileMatch": [
-    "dtslint/**/*.tst.*"
+    "packages/*/dtslint/**/*.tst.*"
   ],
   "tsconfig": "baseline"
 }

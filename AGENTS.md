@@ -1,3 +1,9 @@
+## Repo Structure
+- [`packages/core`](./packages/core/): strict public ECS/runtime library surface.
+- [`packages/browser`](./packages/browser/): browser-specific package scaffold and tests.
+- [`packages/pixi`](./packages/pixi/): Pixi-specific package scaffold and tests.
+- [`examples`](./examples/): workspace example apps that consume packages by package name.
+
 ## Core Principles
 - Type safety is the first and absolute priority.
 - Public APIs must be as strict as possible.

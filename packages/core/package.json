@@ -1,0 +1,26 @@
+{
+  "name": "@bevy-ts/core",
+  "type": "module",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Type-safe core ECS runtime for bevy-ts",
+  "sideEffects": [],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./internal/*": null,
+    "./*/index": null
+  },
+  "files": [
+    "src/**/*.ts",
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.ts.map"
+  ],
+  "scripts": {
+    "check": "tsgo -b tsconfig.json",
+    "test": "vitest"
+  }
+}

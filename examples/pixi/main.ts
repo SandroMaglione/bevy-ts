@@ -1,6 +1,6 @@
 import { Application, Container, Sprite, Texture } from "pixi.js";
 
-import { App, Descriptor, Fx, Schema } from "../../src/index.ts";
+import { App, Descriptor, Fx, Schema } from "@bevy-ts/core";
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>

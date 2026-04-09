@@ -1,6 +1,6 @@
-import { clamp } from "../../../src/internal/scalar.ts"
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 
+import { clamp } from "../math.ts"
 import { AddedRenderableQuery, AgentSnapshotQuery, BrowserHost, Game, GenerationClock, GenerationIndex, LiveRenderableQuery, PopulationStats, SimulationPhase, Summary } from "../schema.ts"
 import { collectAgentSnapshots } from "../logic.ts"
 import { makeAgentNode, makeFoodNode } from "../render/nodes.ts"

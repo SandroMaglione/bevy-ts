@@ -1,4 +1,4 @@
-import * as Result from "../../src/Result.ts"
+import * as Result from "@bevy-ts/core/Result"
 import {
   AnimationClock,
   Camera,

@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 
 import { CollectableQuery, PlayerCameraQuery } from "../queries.ts"
 import {

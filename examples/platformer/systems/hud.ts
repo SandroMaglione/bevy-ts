@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 
 import { levelBounds } from "../content.ts"
 import { PlayerReadQuery } from "../queries.ts"

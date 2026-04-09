@@ -1,5 +1,5 @@
-import { Fx } from "../../../src/index.ts"
-import * as Vector2 from "../../../src/Vector2.ts"
+import { Fx } from "@bevy-ts/core"
+import * as Vector2 from "@bevy-ts/core/Vector2"
 
 import { PLAYER_SPEED } from "../constants.ts"
 import { normalizeMovement, resolveHorizontalMovement, resolveVerticalMovement } from "../math.ts"

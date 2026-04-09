@@ -66,6 +66,71 @@ importers:
         specifier: 4.0.18
         version: 4.0.18(@types/node@25.5.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3)
 
+  examples/genetics:
+    dependencies:
+      '@bevy-ts/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@bevy-ts/pixi':
+        specifier: workspace:*
+        version: link:../../packages/pixi
+
+  examples/pixi:
+    dependencies:
+      '@bevy-ts/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@bevy-ts/pixi':
+        specifier: workspace:*
+        version: link:../../packages/pixi
+
+  examples/platformer:
+    dependencies:
+      '@bevy-ts/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@bevy-ts/pixi':
+        specifier: workspace:*
+        version: link:../../packages/pixi
+
+  examples/top-down:
+    dependencies:
+      '@bevy-ts/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@bevy-ts/pixi':
+        specifier: workspace:*
+        version: link:../../packages/pixi
+
+  packages/browser:
+    dependencies:
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/core: {}
+
+  packages/pixi:
+    dependencies:
+      '@bevy-ts/browser':
+        specifier: workspace:*
+        version: link:../browser
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../core
+
 packages:
 
   '@babel/helper-string-parser@7.27.1':

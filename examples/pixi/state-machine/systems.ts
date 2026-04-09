@@ -1,6 +1,6 @@
-import { Fx } from "../../../src/index.ts"
-import * as Scalar from "../../../src/Scalar.ts"
-import * as Vector2 from "../../../src/Vector2.ts"
+import { Fx } from "@bevy-ts/core"
+import * as Scalar from "@bevy-ts/core/Scalar"
+import * as Vector2 from "@bevy-ts/core/Vector2"
 import { PICKUP_POINTS } from "./content.ts"
 import { playerSpawn } from "./definitions.ts"
 import {

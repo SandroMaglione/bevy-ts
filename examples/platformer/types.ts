@@ -1,7 +1,7 @@
 import type { Application, Container } from "pixi.js"
-import type * as Scalar from "../../src/Scalar.ts"
-import type * as Size2Value from "../../src/Size2.ts"
-import type * as Vector2Value from "../../src/Vector2.ts"
+import type * as Scalar from "@bevy-ts/core/Scalar"
+import type * as Size2Value from "@bevy-ts/core/Size2"
+import type * as Vector2Value from "@bevy-ts/core/Vector2"
 
 export type Vector2 = Vector2Value.Vector2
 export type Size2 = Size2Value.Size2

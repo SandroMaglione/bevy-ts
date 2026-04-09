@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 import { DeltaTime, Game, InputManager, InputState, PlatformerHost, Viewport } from "../schema.ts"
 
 export const CaptureFrameContextSystem = Game.System(

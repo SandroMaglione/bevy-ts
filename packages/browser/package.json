@@ -1,0 +1,21 @@
+{
+  "name": "@bevy-ts/browser",
+  "type": "module",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Browser platform integrations for bevy-ts",
+  "sideEffects": [],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./internal/*": null,
+    "./*/index": null
+  },
+  "scripts": {
+    "check": "tsgo -b tsconfig.json"
+  },
+  "dependencies": {
+    "@bevy-ts/core": "workspace:*"
+  }
+}

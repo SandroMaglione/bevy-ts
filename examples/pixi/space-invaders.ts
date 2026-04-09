@@ -1,7 +1,7 @@
 import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
-import { Descriptor, Entity, Fx, Schema } from "../../src/index.ts"
+import { Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>

@@ -5,7 +5,7 @@
  * schema binding, machine-gated systems, deferred commands, explicit event
  * visibility, runtime provisioning, and app bootstrap/update execution.
  */
-import { App, Descriptor, Fx, Schema } from "../src/index.ts"
+import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Smoke/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Smoke/Velocity")

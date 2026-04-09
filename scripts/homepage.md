@@ -17,7 +17,7 @@ The goal is to show the normal `bevy-ts` flow in order:
 Start by defining the ECS data you want to store. Components hold per-entity data. Resources hold singleton world values. Services expose host-owned capabilities, such as a renderer or clock.
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "../src/index.ts"
+import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
 import { Application, Container, Sprite, Texture } from "pixi.js"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

@@ -1,4 +1,4 @@
-import { Fx } from "../../../src/index.ts"
+import { Fx } from "@bevy-ts/core"
 
 import { AddedRenderableQuery, ChangedRenderableTransformQuery } from "../queries.ts"
 import { Game, PlatformerHost, Renderable } from "../schema.ts"

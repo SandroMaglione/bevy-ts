@@ -1,4 +1,4 @@
-import { Descriptor, Entity, Schema } from "../../src/index.ts"
+import { Descriptor, Entity, Schema } from "@bevy-ts/core"
 import type {
   ArenaValue,
   BrowserHostValue,

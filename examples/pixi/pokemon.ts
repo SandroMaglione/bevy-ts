@@ -10,7 +10,7 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Descriptor, Fx, Schema } from "../../src/index.ts"
+import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
