@@ -34,6 +34,7 @@
  * Public constructors for machines, conditions, and explicit transition bundles.
  */
 import type { Schedule } from "./schedule.ts"
+import * as Requirement from "./requirement.ts"
 import type { Schema } from "./schema.ts"
 
 /**
@@ -148,26 +149,45 @@ export interface InStateCondition<M extends StateMachineDefinition = StateMachin
   readonly kind: "inState"
   readonly machine: M
   readonly value: StateMachine.Value<M>
+  readonly requirements: ReadonlyArray<StateMachine.Any>
+  readonly __machineNeeds?: M | undefined
 }
 
 export interface StateChangedCondition<M extends StateMachineDefinition = StateMachineDefinition> {
   readonly kind: "stateChanged"
   readonly machine: M
+  readonly requirements: ReadonlyArray<StateMachine.Any>
+  readonly __machineNeeds?: M | undefined
 }
 
-export interface NotCondition<C extends Condition = Condition> {
+export interface NotCondition<
+  C extends Condition = Condition,
+  Needs extends StateMachine.Any = StateMachine.Any
+> {
   readonly kind: "not"
   readonly condition: C
+  readonly requirements: ReadonlyArray<StateMachine.Any>
+  readonly __machineNeeds?: Needs | undefined
 }
 
-export interface AndCondition<C extends ReadonlyArray<Condition> = ReadonlyArray<Condition>> {
+export interface AndCondition<
+  C extends ReadonlyArray<Condition> = ReadonlyArray<Condition>,
+  Needs extends StateMachine.Any = StateMachine.Any
+> {
   readonly kind: "and"
   readonly conditions: C
+  readonly requirements: ReadonlyArray<StateMachine.Any>
+  readonly __machineNeeds?: Needs | undefined
 }
 
-export interface OrCondition<C extends ReadonlyArray<Condition> = ReadonlyArray<Condition>> {
+export interface OrCondition<
+  C extends ReadonlyArray<Condition> = ReadonlyArray<Condition>,
+  Needs extends StateMachine.Any = StateMachine.Any
+> {
   readonly kind: "or"
   readonly conditions: C
+  readonly requirements: ReadonlyArray<StateMachine.Any>
+  readonly __machineNeeds?: Needs | undefined
 }
 
 /**
@@ -176,13 +196,13 @@ export interface OrCondition<C extends ReadonlyArray<Condition> = ReadonlyArray<
 export interface TransitionScheduleDefinition<
   S extends Schema.Any = Schema.Any,
   M extends StateMachineDefinition = StateMachineDefinition,
-  Requirements = unknown,
+  Needs extends Requirement.Requirement = Requirement.Requirement,
   Root = unknown
 > {
   readonly steps: ReadonlyArray<Schedule.Step>
   readonly systems: ReadonlyArray<unknown>
   readonly schema: S
-  readonly requirements: Requirements
+  readonly requirements: ReadonlyArray<Needs>
   readonly __schemaRoot?: Root | undefined
   readonly transition: {
     readonly machine: M
@@ -202,46 +222,26 @@ export namespace StateMachine {
   export type Root<M extends Any> = M extends StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], infer R> ? R : never
   export type AnyCondition<Root = unknown> = Condition<Root>
   export type AnyTransitionSchedule<S extends Schema.Any = Schema.Any, Root = unknown> =
-    TransitionScheduleDefinition<S, Any, unknown, Root>
+    TransitionScheduleDefinition<S, Any, Requirement.Requirement, Root>
 }
 
-/**
- * Extracts the runtime initialization requirements implied by one machine access object.
- */
-type RequirementForAccess<Access> =
-  Access extends { readonly machine: infer M extends StateMachine.Any }
-    ? { readonly [K in M["name"]]: StateMachine.Value<M> }
-    : {}
+/** Extracts the machine token from one declared machine access slot. */
+type MachineFromAccess<Access> =
+  Access extends { readonly machine: infer M extends StateMachine.Any } ? M : never
 
-type ConditionRequirements<C> =
-  C extends InStateCondition<infer M> ? { readonly [K in M["name"]]: StateMachine.Value<M> }
-  : C extends StateChangedCondition<infer M> ? { readonly [K in M["name"]]: StateMachine.Value<M> }
-  : C extends NotCondition<infer Inner> ? ConditionRequirements<Inner>
-  : C extends AndCondition<infer Many> ? UnionToIntersection<ConditionRequirements<Many[number]>>
-  : C extends OrCondition<infer Many> ? UnionToIntersection<ConditionRequirements<Many[number]>>
-  : never
+/** Extracts every machine token mentioned by one run condition. */
+export type MachineNeedsFromCondition<C> =
+  C extends { readonly __machineNeeds?: infer M extends StateMachine.Any | undefined }
+    ? NonNullable<M>
+    : never
 
-type UnionToIntersection<A> =
-  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
+/** Extracts the machine-token union carried by a named access record. */
+export type MachineNeedsFromRecord<R extends Record<string, unknown>> =
+  MachineFromAccess<R[keyof R]>
 
-type RecordAccessUnion<R extends Record<string, unknown>> =
-  R extends Record<string, unknown> ? R[keyof R] : never
-
-/**
- * Derives machine requirements from declared machine access slots.
- */
-export type MachineRequirementsFromRecord<R extends Record<string, unknown>> = {
-  readonly [K in keyof UnionToIntersection<RequirementForAccess<RecordAccessUnion<R>>>]:
-    UnionToIntersection<RequirementForAccess<RecordAccessUnion<R>>>[K]
-}
-
-/**
- * Derives machine requirements from declared conditions.
- */
-export type MachineRequirementsFromConditions<C extends ReadonlyArray<Condition>> = {
-  readonly [K in keyof UnionToIntersection<ConditionRequirements<C[number]>>]:
-    UnionToIntersection<ConditionRequirements<C[number]>>[K]
-}
+/** Extracts the machine-token union carried by a condition list. */
+export type MachineNeedsFromConditions<C extends ReadonlyArray<Condition>> =
+  MachineNeedsFromCondition<C[number]>
 
 /**
  * Creates a schema-bound finite-state machine definition.
@@ -266,7 +266,7 @@ export const StateMachine = <
 ): StateMachineDefinition<Name, Values, Root> => ({
   kind: "stateMachine",
   name,
-  key: Symbol(name),
+  key: Symbol.for(`bevy-ts/stateMachine/${name}`),
   values
 }) as StateMachineDefinition<Name, Values, Root>
 
@@ -320,7 +320,8 @@ export const inState = <M extends StateMachine.Any>(
 ): InStateCondition<M> => ({
   kind: "inState",
   machine,
-  value
+  value,
+  requirements: [machine]
 })
 
 /**
@@ -330,29 +331,33 @@ export const stateChanged = <M extends StateMachine.Any>(
   machine: M
 ): StateChangedCondition<M> => ({
   kind: "stateChanged",
-  machine
+  machine,
+  requirements: [machine]
 })
 
 /**
  * Negates another condition.
  */
-export const not = <C extends Condition>(condition: C): NotCondition<C> => ({
+export const not = <C extends Condition>(condition: C): NotCondition<C, MachineNeedsFromCondition<C>> => ({
   kind: "not",
-  condition
+  condition,
+  requirements: condition.requirements
 })
 
 /**
  * Requires every child condition to pass.
  */
-export const and = <const C extends ReadonlyArray<Condition>>(...conditions: C): AndCondition<C> => ({
+export const and = <const C extends ReadonlyArray<Condition>>(...conditions: C): AndCondition<C, MachineNeedsFromCondition<C[number]>> => ({
   kind: "and",
-  conditions
+  conditions,
+  requirements: Requirement.collect(conditions.flatMap((condition) => condition.requirements)) as ReadonlyArray<StateMachine.Any>
 })
 
 /**
  * Requires at least one child condition to pass.
  */
-export const or = <const C extends ReadonlyArray<Condition>>(...conditions: C): OrCondition<C> => ({
+export const or = <const C extends ReadonlyArray<Condition>>(...conditions: C): OrCondition<C, MachineNeedsFromCondition<C[number]>> => ({
   kind: "or",
-  conditions
+  conditions,
+  requirements: Requirement.collect(conditions.flatMap((condition) => condition.requirements)) as ReadonlyArray<StateMachine.Any>
 })

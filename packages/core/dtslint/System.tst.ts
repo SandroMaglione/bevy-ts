@@ -171,4 +171,13 @@ describe("System", () => {
         })
     )
   })
+
+  it("rejects unknown access categories at the constructor boundary", () => {
+    Game.System("InvalidAccess", {
+      // @ts-expect-error!
+      resoruces: {
+        time: Game.System.readResource(Time)
+      }
+    }, () => Fx.sync<undefined, {}>(() => undefined))
+  })
 })

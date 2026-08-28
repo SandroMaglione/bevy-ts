@@ -62,6 +62,7 @@ import * as Machine from "./machine.ts"
 import type * as Relation from "./relation.ts"
 import type { Query, QueryMatch } from "./query.ts"
 import type { ConstructedWriteCell, ReadCell, WriteCell } from "./query.ts"
+import * as Requirement from "./requirement.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
 
@@ -726,36 +727,58 @@ export interface SystemAccessSpec<
  * This is the central user-facing abstraction: all ECS access, service
  * dependencies, and stateful capabilities are declared here up front.
  */
-export interface SystemSpec<
+export interface SystemAccessInput {
+  readonly queries?: Record<string, Query.Any<any>>
+  readonly resources?: Record<string, ResourceAccess>
+  readonly events?: Record<string, EventAccess>
+  readonly services?: Record<string, ServiceRead<Descriptor<"service", string, any>>>
+  readonly states?: Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>>
+  readonly machines?: Record<string, Machine.MachineRead<Machine.StateMachine.Any>>
+  readonly nextMachines?: Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>>
+  readonly transitionEvents?: Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>>
+  readonly removed?: Record<string, RemovedRead<Descriptor<"component", string, any>>>
+  readonly despawned?: Record<string, DespawnedRead>
+  readonly relationFailures?: Record<string, RelationFailureRead<Relation.Relation.Any>>
+  readonly when?: ReadonlyArray<Machine.Condition>
+  readonly transitions?: Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>
+}
+
+/** Rejects unknown system access categories at a bound constructor. */
+export type ExactAccess<Access extends SystemAccessInput> = Access & {
+  readonly [Key in Exclude<keyof Access, keyof SystemAccessInput>]: never
+}
+
+type AccessField<
+  Access,
+  Key extends PropertyKey,
+  Fallback
+> = Key extends keyof Access ? NonNullable<Access[Key]> : Fallback
+
+/**
+ * The exact access declaration normalized once at the system boundary.
+ *
+ * `Access` is the only inferred structure. Schedules and runtimes never
+ * reconstruct it; they consume the small requirement union cached on the
+ * resulting system value.
+ */
+export type SystemSpec<
   S extends Schema.Any,
-  out Queries extends Record<string, Query.Any<any>> = {},
-  out Resources extends Record<string, ResourceAccess> = {},
-  out Events extends Record<string, EventAccess> = {},
-  out Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
-  out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  out Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
-  out NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
-  out TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
-  out Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
-  out Despawned extends Record<string, DespawnedRead> = {},
-  out When extends ReadonlyArray<Machine.Condition> = readonly [],
-  out Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
-  Root = unknown,
-  out RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {}
-> {
-  readonly queries: Queries
-  readonly resources: Resources
-  readonly events: Events
-  readonly services: Services
-  readonly states: States
-  readonly machines: Machines
-  readonly nextMachines: NextMachines
-  readonly transitionEvents: TransitionEvents
-  readonly removed: Removed
-  readonly despawned: Despawned
-  readonly relationFailures: RelationFailures
-  readonly when: When
-  readonly transitions: Transitions
+  Access extends SystemAccessInput = SystemAccessInput,
+  Root = unknown
+> = {
+  readonly queries: AccessField<Access, "queries", {}>
+  readonly resources: AccessField<Access, "resources", {}>
+  readonly events: AccessField<Access, "events", {}>
+  readonly services: AccessField<Access, "services", {}>
+  readonly states: AccessField<Access, "states", {}>
+  readonly machines: AccessField<Access, "machines", {}>
+  readonly nextMachines: AccessField<Access, "nextMachines", {}>
+  readonly transitionEvents: AccessField<Access, "transitionEvents", {}>
+  readonly removed: AccessField<Access, "removed", {}>
+  readonly despawned: AccessField<Access, "despawned", {}>
+  readonly relationFailures: AccessField<Access, "relationFailures", {}>
+  readonly when: AccessField<Access, "when", readonly []>
+  readonly transitions: AccessField<Access, "transitions", {}>
   readonly schema: S
   readonly __schemaRoot: Root
 }
@@ -763,47 +786,7 @@ export interface SystemSpec<
 /**
  * Internal helper representing any fully-defined system spec shape.
  */
-export type AnySystemSpec = SystemSpec<
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  ReadonlyArray<Machine.Condition>,
-  any,
-  any
->
-
-/**
- * Flattens an inferred object type for clearer public signatures.
- */
-type Simplify<A> = {
-  readonly [K in keyof A]: A[K]
-}
-
-type UnionToIntersection<A> =
-  (A extends unknown ? (value: A) => void : never) extends ((value: infer I) => void) ? I : never
-
-type IntersectOrEmpty<A> = [A] extends [never] ? {} : UnionToIntersection<A>
-
-/**
- * Finds the schema registry key associated with one descriptor.
- */
-type RegistryKeyForDescriptor<
-  R extends Record<string, Descriptor.Any>,
-  D extends Descriptor.Any
-> = {
-  readonly [K in keyof R]:
-    [R[K]] extends [D] ? K
-    : [D] extends [R[K]] ? K
-    : never
-}[keyof R]
+export type AnySystemSpec = SystemSpec<any, any, any>
 
 type ResourceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["resources"]]:
@@ -924,82 +907,52 @@ export interface SystemContext<Spec extends AnySystemSpec> {
  */
 export type SystemDependencies<Spec extends AnySystemSpec> = ServiceContext<Spec>
 
-/**
- * The runtime requirement contract derived from one system or schedule.
- *
- * Services are keyed by service descriptor names because runtimes provide them
- * through the public `services` map. Resources and states are keyed by schema
- * property names because runtime initialization is schema-keyed.
- */
-export interface RuntimeRequirements<
-  out Services extends Record<string, unknown> = {},
-  out Resources extends Record<string, unknown> = {},
-  out States extends Record<string, unknown> = {},
-  out Machines extends Record<string, unknown> = {}
-> {
-  readonly services: Services
-  readonly resources: Resources
-  readonly states: States
-  readonly machines: Machines
-}
+type DescriptorFromAccess<Access> =
+  Access extends { readonly descriptor: infer D extends Requirement.Requirement } ? D : never
 
-/**
- * Derives the runtime service requirements from a system spec.
- */
-export type SystemServiceRequirements<Spec extends AnySystemSpec> = Simplify<{
-  readonly [K in keyof Spec["services"] as
-    Spec["services"][K] extends ServiceRead<infer D> ? Descriptor.Name<D> : never]:
-      Spec["services"][K] extends ServiceRead<infer D> ? Descriptor.Value<D> : never
-}>
+type DescriptorNeedsFromRecord<RecordValue> =
+  RecordValue extends Record<string, unknown>
+    ? DescriptorFromAccess<RecordValue[keyof RecordValue]>
+    : never
 
-/**
- * Derives the runtime resource initialization requirements from a system spec.
- */
-export type SystemResourceRequirements<Spec extends AnySystemSpec> = Simplify<{
-  readonly [K in keyof Spec["resources"] as
-    Spec["resources"][K] extends { readonly descriptor: infer D extends Descriptor<"resource", string, any> }
-      ? RegistryKeyForDescriptor<Schema.Resources<Spec["schema"]>, D>
-      : never]:
-        Spec["resources"][K] extends { readonly descriptor: infer D extends Descriptor<"resource", string, any> }
-          ? Descriptor.Value<D>
-          : never
-}>
+/** The flat nominal requirement union derived from one exact system spec. */
+export type SystemNeeds<Spec extends AnySystemSpec> =
+  | DescriptorNeedsFromRecord<Spec["services"]>
+  | DescriptorNeedsFromRecord<Spec["resources"]>
+  | DescriptorNeedsFromRecord<Spec["states"]>
+  | Machine.MachineNeedsFromRecord<Spec["machines"]>
+  | Machine.MachineNeedsFromRecord<Spec["nextMachines"]>
+  | Machine.MachineNeedsFromRecord<Spec["transitionEvents"]>
+  | Machine.MachineNeedsFromRecord<Spec["transitions"]>
+  | Machine.MachineNeedsFromConditions<Spec["when"]>
 
-/**
- * Derives the runtime state initialization requirements from a system spec.
- */
-export type SystemStateRequirements<Spec extends AnySystemSpec> = Simplify<{
-  readonly [K in keyof Spec["states"] as
-    Spec["states"][K] extends { readonly descriptor: infer D extends Descriptor<"state", string, any> }
-      ? RegistryKeyForDescriptor<Schema.States<Spec["schema"]>, D>
-      : never]:
-        Spec["states"][K] extends { readonly descriptor: infer D extends Descriptor<"state", string, any> }
-          ? Descriptor.Value<D>
-          : never
-}>
+type AccessRecordValue<Access, Key extends PropertyKey> =
+  Key extends keyof Access
+    ? NonNullable<Access[Key]> extends infer RecordValue extends Record<string, unknown>
+      ? RecordValue[keyof RecordValue]
+      : never
+    : never
 
-/**
- * Derives the runtime machine initialization requirements from one system spec.
- */
-export type SystemMachineRequirements<Spec extends AnySystemSpec> = Simplify<
-  IntersectOrEmpty<
-    | Machine.MachineRequirementsFromRecord<Spec["machines"]>
-    | Machine.MachineRequirementsFromRecord<Spec["nextMachines"]>
-    | Machine.MachineRequirementsFromRecord<Spec["transitionEvents"]>
-    | Machine.MachineRequirementsFromRecord<Spec["transitions"]>
-    | Machine.MachineRequirementsFromConditions<Spec["when"]>
-  >
->
+type RequirementFromAccessValue<Value> =
+  Value extends { readonly descriptor: infer D extends Requirement.Requirement } ? D
+  : Value extends { readonly machine: infer M extends Machine.StateMachine.Any } ? M
+  : never
 
-/**
- * Aggregates every runtime requirement implied by a system spec.
- */
-export type SystemRequirements<Spec extends AnySystemSpec> = RuntimeRequirements<
-  SystemServiceRequirements<Spec>,
-  SystemResourceRequirements<Spec>,
-  SystemStateRequirements<Spec>,
-  SystemMachineRequirements<Spec>
->
+/** Derives requirements directly from the constructor's inferred access object. */
+export type SystemAccessNeeds<Access extends SystemAccessInput> =
+  | RequirementFromAccessValue<AccessRecordValue<Access,
+      | "services"
+      | "resources"
+      | "states"
+      | "machines"
+      | "nextMachines"
+      | "transitionEvents"
+      | "transitions">>
+  | ("when" extends keyof Access
+      ? NonNullable<Access["when"]> extends ReadonlyArray<Machine.Condition>
+        ? Machine.MachineNeedsFromConditions<NonNullable<Access["when"]>>
+        : never
+      : never)
 
 /**
  * A fully defined system value ready to be placed into a schedule.
@@ -1009,7 +962,8 @@ export interface SystemDefinition<
   out A = void,
   out E = never,
   out Root = unknown,
-  out Name extends string = string
+  out Name extends string = string,
+  out Needs extends Requirement.Requirement = Requirement.Requirement
 > {
   /**
    * Human-readable declaration name used to derive the internal typed label.
@@ -1026,7 +980,7 @@ export interface SystemDefinition<
    * type folds re-infer the full spec repeatedly, which keeps the bound API
    * both stricter and cheaper for the compiler.
    */
-  readonly requirements: SystemRequirements<Spec>
+  readonly requirements: ReadonlyArray<Needs>
   /**
    * Hidden schema-root brand used by schema-bound APIs.
    */
@@ -1070,49 +1024,38 @@ export interface SystemDefinition<
  * }))
  * ```
  */
-export function System<
-  S extends Schema.Any,
-  const Queries extends Record<string, Query.Any<any>> = {},
-  const Resources extends Record<string, ResourceAccess> = {},
-  const Events extends Record<string, EventAccess> = {},
-  const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
-  const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
-  const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
-  const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
-  const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
-  const Despawned extends Record<string, DespawnedRead> = {},
-  const RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {},
-  const When extends ReadonlyArray<Machine.Condition> = [],
-  const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
-  Root = unknown,
-  A = void,
-  E = never,
-  const Name extends string = string
->(
-  name: Name,
-  spec: {
-    readonly schema: S
-    readonly queries?: Queries
-    readonly resources?: Resources
-    readonly events?: Events
-    readonly services?: Services
-    readonly states?: States
-    readonly machines?: Machines
-    readonly nextMachines?: NextMachines
-    readonly transitionEvents?: TransitionEvents
-    readonly removed?: Removed
-    readonly despawned?: Despawned
-    readonly relationFailures?: RelationFailures
-    readonly when?: When
-    readonly transitions?: Transitions
-  },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
-    A,
-    E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
-  >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name>
+const requirementValuesFromRecord = (
+  record: Record<string, unknown> | undefined
+): ReadonlyArray<Requirement.RequirementValue> => {
+  if (!record) return []
+  const requirements: Array<Requirement.RequirementValue> = []
+  for (const access of Object.values(record)) {
+    if (typeof access !== "object" || access === null) continue
+    if ("descriptor" in access) {
+      requirements.push(access.descriptor as Requirement.RequirementValue)
+    } else if ("machine" in access) {
+      requirements.push(access.machine as Requirement.RequirementValue)
+    }
+  }
+  return requirements
+}
+
+const requirementValuesFromCondition = (
+  condition: Machine.Condition
+): ReadonlyArray<Requirement.RequirementValue> => condition.requirements
+
+const collectSystemRequirements = (
+  spec: SystemAccessInput
+): ReadonlyArray<Requirement.RequirementValue> => Requirement.collect([
+  ...requirementValuesFromRecord(spec.services),
+  ...requirementValuesFromRecord(spec.resources),
+  ...requirementValuesFromRecord(spec.states),
+  ...requirementValuesFromRecord(spec.machines),
+  ...requirementValuesFromRecord(spec.nextMachines),
+  ...requirementValuesFromRecord(spec.transitionEvents),
+  ...requirementValuesFromRecord(spec.transitions),
+  ...(spec.when ?? []).flatMap(requirementValuesFromCondition)
+])
 
 export function System<
   S extends Schema.Any,
@@ -1126,68 +1069,92 @@ export function System<
   const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
   const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
   const Despawned extends Record<string, DespawnedRead> = {},
-  const RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {},
-  const When extends ReadonlyArray<Machine.Condition> = [],
+  const When extends ReadonlyArray<Machine.Condition> = readonly [],
   const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
+  const RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {},
   Root = unknown,
   A = void,
   E = never,
   const Name extends string = string
 >(
   name: Name,
-  spec: {
-    readonly schema: S
-    readonly queries?: Queries
-    readonly resources?: Resources
-    readonly events?: Events
-    readonly services?: Services
-    readonly states?: States
-    readonly machines?: Machines
-    readonly nextMachines?: NextMachines
-    readonly transitionEvents?: TransitionEvents
-    readonly removed?: Removed
-    readonly despawned?: Despawned
-    readonly relationFailures?: RelationFailures
-    readonly when?: When
-    readonly transitions?: Transitions
-  },
-  run: (context: SystemContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>) => Fx<
+  spec: { readonly schema: S } & SystemAccessSpec<
+    Queries,
+    Resources,
+    Events,
+    Services,
+    States,
+    Machines,
+    NextMachines,
+    TransitionEvents,
+    Removed,
+    Despawned,
+    When,
+    Transitions,
+    RelationFailures
+  >,
+  run: (context: SystemContext<SystemSpec<S, SystemAccessSpec<
+    Queries,
+    Resources,
+    Events,
+    Services,
+    States,
+    Machines,
+    NextMachines,
+    TransitionEvents,
+    Removed,
+    Despawned,
+    When,
+    Transitions,
+    RelationFailures
+  >, Root>>) => Fx<
     A,
     E,
-    ServiceContext<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>
+    ServiceContext<SystemSpec<S, SystemAccessSpec<Queries, Resources, Events, Services, States>, Root>>
   >
-): SystemDefinition<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>, A, E, Root, Name> {
+): SystemDefinition<
+  SystemSpec<S, SystemAccessSpec<Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, RelationFailures>, Root>,
+  A,
+  E,
+  Root,
+  Name,
+  SystemAccessNeeds<SystemAccessSpec<Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, RelationFailures>>
+>
+
+export function System(
+  name: string,
+  spec: { readonly schema: Schema.Any } & SystemAccessInput,
+  run: (context: any) => Fx<any, any, any>
+): SystemDefinition<any, any, any, any, any, any> {
+  type Spec = SystemSpec<Schema.Any, SystemAccessInput, unknown>
+
+  const normalizedSpec = {
+    schema: spec.schema,
+    queries: spec.queries ?? {},
+    resources: spec.resources ?? {},
+    events: spec.events ?? {},
+    services: spec.services ?? {},
+    states: spec.states ?? {},
+    machines: spec.machines ?? {},
+    nextMachines: spec.nextMachines ?? {},
+    transitionEvents: spec.transitionEvents ?? {},
+    removed: spec.removed ?? {},
+    despawned: spec.despawned ?? {},
+    relationFailures: spec.relationFailures ?? {},
+    when: spec.when ?? [],
+    transitions: spec.transitions ?? {},
+    __schemaRoot: undefined
+  } as Spec
+
   return {
     name,
-    requirements: undefined as unknown as SystemRequirements<SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>>,
-    __schemaRoot: undefined as unknown as Root,
+    requirements: collectSystemRequirements(normalizedSpec),
+    __schemaRoot: undefined,
     ordering: {
       key: Symbol.for(`bevy-ts/system/${name}`),
       name
     },
-    spec: {
-      schema: spec.schema,
-      queries: (spec.queries ?? {}) as Queries,
-      resources: (spec.resources ?? {}) as Resources,
-      events: (spec.events ?? {}) as Events,
-      services: (spec.services ?? {}) as Services,
-      states: (spec.states ?? {}) as States,
-      machines: (spec.machines ?? {}) as Machines,
-      nextMachines: (spec.nextMachines ?? {}) as NextMachines,
-      transitionEvents: (spec.transitionEvents ?? {}) as TransitionEvents,
-      removed: (spec.removed ?? {}) as Removed,
-      despawned: (spec.despawned ?? {}) as Despawned,
-      relationFailures: (spec.relationFailures ?? {}) as RelationFailures,
-      when: (spec.when ?? []) as When,
-      transitions: (spec.transitions ?? {}) as Transitions,
-      __schemaRoot: undefined as unknown as Root
-    },
+    spec: normalizedSpec,
     run
-  } as SystemDefinition<
-    SystemSpec<S, Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, Root, RelationFailures>,
-    A,
-    E,
-    Root,
-    Name
-  >
+  } as SystemDefinition<any, any, any, any, any, any>
 }

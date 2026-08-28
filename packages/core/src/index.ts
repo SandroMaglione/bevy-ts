@@ -41,6 +41,10 @@ export * as InputAxis from "./InputAxis.ts"
  */
 export * as Result from "./Result.ts"
 /**
+ * Runtime requirement tokens and normalization helpers.
+ */
+export * as Requirement from "./requirement.ts"
+/**
  * Validated scalar brands and scalar combinators.
  */
 export * as Scalar from "./Scalar.ts"

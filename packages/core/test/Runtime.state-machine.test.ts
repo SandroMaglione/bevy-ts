@@ -1021,8 +1021,9 @@ describe("Runtime state machine", () => {
     const invalidEnter = Game.Schedule.onEnter(AppState, "Playing", [invalidFragment])
 
     const runtime = makeRuntime()
+    const runInvalidSchedule = runtime.runSchedule as (schedule: unknown) => void
     expect(() =>
-      runtime.runSchedule(Game.Schedule(queuePlaying, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(invalidEnter))))
+      runInvalidSchedule(Game.Schedule(queuePlaying, Game.Schedule.applyStateTransitions(Game.Schedule.transitions(invalidEnter))))
     ).toThrow("Transition schedules cannot contain applyStateTransitions() steps")
   })
 

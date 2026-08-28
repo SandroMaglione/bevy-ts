@@ -23,6 +23,7 @@
     "packages/core/src/machine.ts",
     "packages/core/src/query.ts",
     "packages/core/src/relation.ts",
+    "packages/core/src/requirement.ts",
     "packages/core/src/Result.ts",
     "packages/core/src/runtime.ts",
     "packages/core/src/Scalar.ts",
