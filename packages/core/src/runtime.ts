@@ -65,6 +65,7 @@ import type * as Machine from "./machine.ts"
 import * as Query from "./query.ts"
 import type { ConstructedWriteCell, QueryMatch, ReadCell, WriteCell } from "./query.ts"
 import * as Relation from "./relation.ts"
+import type * as Requirement from "./requirement.ts"
 import * as Result from "./Result.ts"
 import * as Schedule from "./schedule.ts"
 import type { ScheduleDefinition } from "./schedule.ts"
@@ -78,7 +79,6 @@ import type {
   RelationFailureReadView,
   RemovedReadView,
   ResourceReadView,
-  RuntimeRequirements,
   TransitionEventReadView,
   MachineReadView,
   NextMachineWriteView,
@@ -340,109 +340,92 @@ type Simplify<A> = {
   readonly [K in keyof A]: A[K]
 }
 
-type NormalizeRequirementObject<Required extends object> =
-  [Required] extends [never] ? {} : Simplify<Required>
+type RegistryKeysForDescriptor<
+  Values extends Registry,
+  D extends Descriptor.Any
+> = {
+  readonly [K in keyof Values]:
+    [Values[K]] extends [D]
+      ? [D] extends [Values[K]] ? K : never
+      : never
+}[keyof Values]
 
-type KnownObjectKeys<Value extends object> =
-  keyof Simplify<Value> extends infer Key
-    ? Key extends string
-      ? string extends Key
-        ? never
-        : Key
-      : Key extends number
-        ? number extends Key
-          ? never
-          : Key
-        : Key extends symbol
-          ? symbol extends Key
-            ? never
-            : Key
-          : never
-    : never
+type ProvisionedDescriptorValue<
+  Values extends Registry,
+  Provided extends object,
+  D extends Descriptor.Any
+> = Provided[Extract<RegistryKeysForDescriptor<Values, D>, keyof Provided>]
 
-type NormalizeMachineRequirementObject<Required extends object> =
-  [Required] extends [never]
-    ? {}
+type DescriptorProvisionError<
+  Kind extends string,
+  Values extends Registry,
+  Provided extends object,
+  D extends Descriptor.Any
+> = [Extract<RegistryKeysForDescriptor<Values, D>, keyof Provided>] extends [never]
+  ? {
+      readonly __runtimeRequirementError__: `Missing ${Kind}`
+      readonly __requirement__: Descriptor.Name<D>
+    }
+  : [ProvisionedDescriptorValue<Values, Provided, D>] extends [Descriptor.Value<D>]
+    ? never
     : {
-        readonly [K in KnownObjectKeys<Required>]: unknown
+        readonly __runtimeRequirementError__: `Incompatible ${Kind}`
+        readonly __requirement__: Descriptor.Name<D>
       }
 
-/**
- * Produces a readable type-level label name.
- */
-type ScheduleName<Schedule> = Schedule extends { readonly label: { readonly name: infer Name extends string } }
-  ? Name
-  : "(anonymous schedule)"
-
-type MissingKeys<Required extends object, Provided extends object> = Exclude<keyof Required, keyof Provided>
-
-type IncompatibleKeys<Required extends object, Provided extends object> = {
-  readonly [K in Extract<keyof Required, keyof Provided>]:
-    [Provided[K]] extends [Required[K]] ? never : K
-}[Extract<keyof Required, keyof Provided>]
-
-type CategoryRequirementErrors<
-  Kind extends string,
-  ScheduleLabel extends string,
-  Required extends object,
-  Provided extends object
-> =
-  | ([MissingKeys<Required, Provided>] extends [never]
-    ? never
-    : {
-        readonly __runtimeRequirementError__: Kind
-        readonly __schedule__: ScheduleLabel
-        readonly __missing__: MissingKeys<Required, Provided>
-      })
-  | ([IncompatibleKeys<Required, Provided>] extends [never]
-    ? never
-    : {
-        readonly __runtimeRequirementError__: `${Kind} (incompatible)`
-        readonly __schedule__: ScheduleLabel
-        readonly __missing__: IncompatibleKeys<Required, Provided>
-      })
-
-type CategoryMissingRequirementErrors<
-  Kind extends string,
-  ScheduleLabel extends string,
-  Required extends object,
-  Provided extends object
-> =
-  [MissingKeys<Required, Provided>] extends [never]
-    ? never
-    : {
-        readonly __runtimeRequirementError__: Kind
-        readonly __schedule__: ScheduleLabel
-        readonly __missing__: MissingKeys<Required, Provided>
+type RequirementErrorFor<
+  Need extends Requirement.Requirement,
+  S extends Schema.Any,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = Need extends Descriptor<"service", infer Name, infer Value>
+  ? Name extends keyof Services
+    ? [Services[Name]] extends [Value] ? never : {
+        readonly __runtimeRequirementError__: "Incompatible service"
+        readonly __requirement__: Name
       }
+    : {
+        readonly __runtimeRequirementError__: "Missing service"
+        readonly __requirement__: Name
+      }
+  : Need extends Descriptor<"resource", string, any>
+    ? DescriptorProvisionError<"resource", Schema.Resources<S>, Resources, Need>
+  : Need extends Descriptor<"state", string, any>
+    ? DescriptorProvisionError<"state", Schema.States<S>, States, Need>
+  : Need extends Machine.StateMachineDefinition<infer Name, infer Values, any>
+    ? Name extends keyof Machines
+      ? [Machines[Name]] extends [Values[number]] ? never : {
+          readonly __runtimeRequirementError__: "Incompatible machine"
+          readonly __requirement__: Name
+        }
+      : {
+          readonly __runtimeRequirementError__: "Missing machine"
+          readonly __requirement__: Name
+        }
+  : never
 
 type RequirementErrorsFor<
-  Requirements extends RuntimeRequirements,
-  ScheduleLabel extends string,
+  Needs extends Requirement.Requirement,
+  S extends Schema.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
   Machines extends object
-> =
-  | CategoryRequirementErrors<"Missing or incompatible services", ScheduleLabel, NormalizeRequirementObject<Requirements["services"]>, Services>
-  | CategoryRequirementErrors<"Missing or incompatible resources", ScheduleLabel, NormalizeRequirementObject<Requirements["resources"]>, Resources>
-  | CategoryRequirementErrors<"Missing or incompatible states", ScheduleLabel, NormalizeRequirementObject<Requirements["states"]>, States>
-  | CategoryMissingRequirementErrors<"Missing machines", ScheduleLabel, NormalizeMachineRequirementObject<Requirements["machines"]>, Machines>
+> = Needs extends Requirement.Requirement
+  ? RequirementErrorFor<Needs, S, Services, Resources, States, Machines>
+  : never
 
 type RequirementErrorsOfSchedule<
-  Schedule extends ExecutableScheduleDefinition<any, any, any, any>,
+  Selected extends ExecutableScheduleDefinition<any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
   Machines extends object
-> = RequirementErrorsFor<
-  Schedule.CarriedRuntimeRequirementsOf<Schedule>,
-  ScheduleName<Schedule>,
-  Services,
-  Resources,
-  States,
-  Machines
->
+> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any>
+  ? RequirementErrorsFor<Requirement.Of<Selected>, S, Services, Resources, States, Machines>
+  : never
 
 export type ValidateSchedules<
   Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
@@ -497,7 +480,19 @@ type ValidateSchedule<
       readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedule, Services, Resources, States, Machines>
     }
 
-export type AnyRequirements = RuntimeRequirements<any, any, any, any>
+export type AnyRequirements = Requirement.Requirement
+
+/** One runtime requirement that is not currently provisioned. */
+export interface MissingRuntimeRequirement {
+  readonly kind: Requirement.RequirementValue["kind"]
+  readonly name: string
+}
+
+/** Explicit failure returned by the dynamic schedule execution path. */
+export interface MissingRuntimeRequirements {
+  readonly kind: "MissingRuntimeRequirements"
+  readonly requirements: ReadonlyArray<MissingRuntimeRequirement>
+}
 
 /**
  * The caller-facing initialization shape for one descriptor registry.
@@ -674,6 +669,15 @@ export interface Runtime<
         & ValidateSchedule<NoInfer<Selected>, Services, Resources, States, Machines>
     ): void
   }
+  /**
+   * Runs a schedule whose exact requirements are not statically known.
+   *
+   * This path validates the carried nominal tokens against current runtime
+   * provisioning and returns missing requirements as data.
+   */
+  readonly tryRunSchedule: (
+    schedule: ExecutableScheduleDefinition<S, any, any, any>
+  ) => Result.Result<void, MissingRuntimeRequirements>
   /**
    * Runs multiple schedules in sequence.
    *
@@ -2135,6 +2139,37 @@ export const makeRuntime = <
     }
   }
 
+  const hasRequirement = (requirement: Requirement.RequirementValue): boolean => {
+    switch (requirement.kind) {
+      case "service":
+        return Object.prototype.hasOwnProperty.call(providedServices, requirement.name)
+      case "resource":
+        return resources.has(requirement.key)
+      case "state":
+        return states.has(requirement.key)
+      case "stateMachine":
+        return currentMachines.has(requirement.key)
+    }
+  }
+
+  const tryRunSchedule = (
+    schedule: ExecutableScheduleDefinition<S, any, any, any>
+  ): Result.Result<void, MissingRuntimeRequirements> => {
+    const missing = schedule.requirements
+      .filter((requirement) => !hasRequirement(requirement))
+      .map(({ kind, name }) => ({ kind, name }))
+
+    if (missing.length > 0) {
+      return Result.failure({
+        kind: "MissingRuntimeRequirements",
+        requirements: missing
+      })
+    }
+
+    runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
+    return Result.success(undefined)
+  }
+
   /**
    * The final loop-agnostic runtime value returned to users.
    */
@@ -2157,6 +2192,7 @@ export const makeRuntime = <
     runSchedule(schedule) {
       runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root>)
     },
+    tryRunSchedule,
     tick(...schedules) {
       tickUnsafe(schedules)
     }

@@ -6,6 +6,8 @@ It keeps Bevy-style ECS concepts, but the public API is stricter and more explic
 
 Documentation: https://sandromaglione.github.io/bevy-ts/
 
+The carried-type design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ```ts
 import { App, Descriptor, Fx, Schema } from "bevy-ts"
 

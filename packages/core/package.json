@@ -20,7 +20,7 @@
     "dist/**/*.d.ts.map"
   ],
   "scripts": {
-    "check": "tsgo -b tsconfig.json",
+    "check": "tsc -b tsconfig.json --pretty false",
     "test": "vitest"
   }
 }
