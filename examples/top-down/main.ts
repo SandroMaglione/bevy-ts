@@ -1,4 +1,6 @@
-import { MAX_DELTA_SECONDS } from "./constants.ts"
+import { FixedLoop } from "@bevy-ts/browser"
+
+import { FIXED_STEP_SECONDS, MAX_FRAME_SECONDS, MAX_STEPS_PER_FRAME } from "./constants.ts"
 import { createTopDownBrowserHost } from "./host.ts"
 import { createTopDownRuntime } from "./runtime.ts"
 import { setupSchedule, updateSchedule } from "./schedules.ts"
@@ -21,16 +23,38 @@ export const startTopDownExample = async (mount: HTMLElement): Promise<BrowserEx
   }
   runtime.value.initialize(setupSchedule)
 
-  const tick = (ticker: { readonly deltaMS: number }) => {
-    browserHost.host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, MAX_DELTA_SECONDS)
-    runtime.value.runSchedule(updateSchedule)
-  }
+  const loop = FixedLoop.start({
+    source: FixedLoop.source((onTick) => {
+      const tick = (ticker: { readonly deltaMS: number }) => onTick(ticker)
+      browserHost.host.application.ticker.add(tick)
+      return {
+        stop: () => browserHost.host.application.ticker.remove(tick)
+      }
+    }),
+    stepSeconds: FIXED_STEP_SECONDS,
+    maxFrameSeconds: MAX_FRAME_SECONDS,
+    maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+    update: (stepSeconds) => {
+      browserHost.host.clock.deltaSeconds = stepSeconds
+      return runtime.value.runSchedule(updateSchedule)
+    },
+    render: () => {},
+    onFailure: (failure) => {
+      mount.textContent = failure.kind === "InvalidTickDelta"
+        ? `Invalid frame delta: ${failure.deltaMS}`
+        : "The game update stopped after an expected system failure."
+    }
+  })
 
-  browserHost.host.application.ticker.add(tick)
+  if (!loop.ok) {
+    await browserHost.destroy()
+    mount.textContent = `Invalid fixed-loop option: ${loop.error.field}`
+    return failedHandle()
+  }
 
   return {
     async destroy() {
-      browserHost.host.application.ticker.remove(tick)
+      loop.value.stop()
       await browserHost.destroy()
     }
   }

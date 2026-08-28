@@ -7,8 +7,10 @@ export const PLAYER_SIZE = 36
 export const PLAYER_INTERACT_RADIUS = 72
 export const PLAYER_FRAME_SECONDS = 0.1
 export const PLAYER_FRAME_SIZE = 16
-export const MAX_DELTA_SECONDS = 0.05
-export const PLAYER_SHEET_URL = new URL("../../../assets/spr_player.png", import.meta.url).href
+export const FIXED_STEP_SECONDS = 1 / 60
+export const MAX_FRAME_SECONDS = 0.1
+export const MAX_STEPS_PER_FRAME = 5
+export const PLAYER_SHEET_URL = new URL("../../assets/spr_player.png", import.meta.url).href
 
 export const facingRows: Readonly<Record<FacingValue, 1 | 2 | 3 | 4>> = {
   Down: 1,

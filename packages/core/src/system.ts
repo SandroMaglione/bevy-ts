@@ -61,7 +61,7 @@ import type { Fx } from "./fx.ts"
 import * as Machine from "./machine.ts"
 import type * as Relation from "./relation.ts"
 import type { Query, QueryMatch } from "./query.ts"
-import type { ConstructedWriteCell, ReadCell, WriteCell } from "./query.ts"
+import type { ConstructedWriteCell, ReadCell, ReadonlyValue, WriteCell } from "./query.ts"
 import * as Requirement from "./requirement.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
@@ -388,7 +388,7 @@ export type StateWriteView<D extends Descriptor<"state", string, any>> =
  * A read-only event stream view.
  */
 export interface EventReadView<T> {
-  all(): ReadonlyArray<T>
+  all(): ReadonlyArray<ReadonlyValue<T>>
 }
 
 /**
@@ -953,6 +953,22 @@ export type SystemAccessNeeds<Access extends SystemAccessInput> =
         ? Machine.MachineNeedsFromConditions<NonNullable<Access["when"]>>
         : never
       : never)
+
+/** One expected failure returned by a named system. */
+export interface SystemFailure<
+  out Name extends string = string,
+  out Error = unknown
+> {
+  readonly kind: "SystemFailure"
+  readonly system: Name
+  readonly error: Error
+}
+
+/** Extracts the normalized failure carried by one system definition. */
+export type FailureOf<Value> =
+  Value extends SystemDefinition<any, any, infer Error, any, infer Name, any>
+    ? [Error] extends [never] ? never : SystemFailure<Name, Error>
+    : never
 
 /**
  * A fully defined system value ready to be placed into a schedule.

@@ -72,10 +72,10 @@ describe("System", () => {
         Fx.sync(() => {
           expect(queries.moving.each()).type.toBe<ReadonlyArray<{
             readonly entity: EntityMut<typeof schema, {
-              readonly position: Vector2.Vector2
-              readonly velocity: { x: number; y: number }
+              readonly position: Query.ReadonlyValue<Vector2.Vector2>
+              readonly velocity: Query.ReadonlyValue<{ x: number; y: number }>
             }, {
-              readonly position: Vector2.Vector2
+              readonly position: Query.ReadonlyValue<Vector2.Vector2>
             }>
             readonly data: QueryTypes.Cells<typeof query>
           }>>()
@@ -138,10 +138,10 @@ describe("System", () => {
         Fx.sync(() => {
           expect(queries.moving.each()).type.toBe<ReadonlyArray<{
             readonly entity: EntityMut<typeof schema, {
-              readonly position: Vector2.Vector2
-              readonly velocity: { x: number; y: number }
+              readonly position: Query.ReadonlyValue<Vector2.Vector2>
+              readonly velocity: Query.ReadonlyValue<{ x: number; y: number }>
             }, {
-              readonly position: Vector2.Vector2
+              readonly position: Query.ReadonlyValue<Vector2.Vector2>
             }>
             readonly data: QueryTypes.Cells<typeof query>
           }>>()
