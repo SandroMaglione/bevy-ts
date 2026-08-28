@@ -29,6 +29,10 @@ export * as Definition from "./Definition.ts"
  */
 export * as Entity from "./entity.ts"
 /**
+ * Entity lifetime scopes used by scene and level ownership patterns.
+ */
+export * as EntityScope from "./entityScope.ts"
+/**
  * Minimal effect-style computation type.
  */
 export * as Fx from "./fx.ts"
@@ -36,6 +40,10 @@ export * as Fx from "./fx.ts"
  * Directional input normalization helpers.
  */
 export * as InputAxis from "./InputAxis.ts"
+/**
+ * Read-only typed world projections.
+ */
+export * as Inspector from "./inspector.ts"
 /**
  * Explicit success/failure helpers.
  */

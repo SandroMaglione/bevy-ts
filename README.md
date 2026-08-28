@@ -6,10 +6,11 @@ It keeps Bevy-style ECS concepts, but the public API is stricter and more explic
 
 Documentation: https://sandromaglione.github.io/bevy-ts/
 
-The carried-type design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+The current game API is shown in [GAME_API.md](./GAME_API.md). The carried-type
+design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "bevy-ts"
+import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
 
 // Define the ECS world shape once.
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -31,7 +32,10 @@ const Move = Game.System("Move", {
   }
 }))
 
-const app = App.makeApp(Game.Runtime.make({ resources: { DeltaTime: 1 / 60 } }))
+const app = App.makeApp(Game.Runtime.make({
+  services: Game.Runtime.services(),
+  resources: { DeltaTime: 1 / 60 }
+}))
 app.update(Game.Schedule(Move))
 ```
 

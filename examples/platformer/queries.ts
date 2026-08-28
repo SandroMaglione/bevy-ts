@@ -1,4 +1,4 @@
-import { Collider, Game, LevelEntity, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
+import { Collider, Game, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
 
 export const PlayerMovementQuery = Game.Query({
   selection: {
@@ -30,12 +30,6 @@ export const SolidCollisionQuery = Game.Query({
     position: Game.Query.read(Position),
     collider: Game.Query.read(Collider),
     solid: Game.Query.read(Solid)
-  }
-})
-
-export const LevelEntityQuery = Game.Query({
-  selection: {
-    levelEntity: Game.Query.read(LevelEntity)
   }
 })
 

@@ -61,6 +61,8 @@
 import * as Command from "./command.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
+import * as EntityScope from "./entityScope.ts"
+import * as Inspector from "./inspector.ts"
 import * as Machine from "./machine.ts"
 import * as QueryModule from "./query.ts"
 import type * as Requirement from "./requirement.ts"
@@ -176,13 +178,13 @@ type ValidateFeatureSelection<Features extends ReadonlyArray<AnyFeatureDefinitio
       }
 
 type RebindFeatureSchedule<ScheduleValue, S extends Schema.Any, Root> =
-  ScheduleValue extends Schedule.Schedule.Definition<any, infer Requirements, any, infer RuntimeRequirementValue>
-    ? Schedule.Schedule.Definition<S, Requirements, Root, RuntimeRequirementValue>
+  ScheduleValue extends Schedule.Schedule.Definition<any, infer Requirements, any, infer RuntimeRequirementValue, infer Failure>
+    ? Schedule.Schedule.Definition<S, Requirements, Root, RuntimeRequirementValue, Failure>
     : never
 
 type FeatureScheduleArray<Output, Key extends "bootstrap" | "update"> =
   Key extends keyof Output
-    ? Extract<Output[Key], ReadonlyArray<Schedule.ScheduleDefinition<any, any, any>>>
+    ? Extract<Output[Key], ReadonlyArray<Schedule.ScheduleDefinition<any, any, any, any, any>>>
     : readonly []
 
 type NormalizeFeatureOutput<
@@ -251,6 +253,17 @@ interface FeatureSystemAccess<Accessible extends Schema.Any, Root> extends Syste
   readonly transitions?: Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>>
 }
 
+interface FeatureInspectorAccess<Accessible extends Schema.Any, Root> extends Inspector.InspectorAccessInput {
+  readonly queries?: Record<string, Query.Any<Root>>
+  readonly resources?: Record<string, System.ResourceRead<FeatureResourceDescriptor<Accessible>>>
+  readonly events?: Record<string, System.EventRead<FeatureEventDescriptor<Accessible>>>
+  readonly states?: Record<string, System.StateRead<FeatureStateDescriptor<Accessible>>>
+  readonly machines?: Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>>
+  readonly transitionEvents?: Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>>
+  readonly removed?: Record<string, System.RemovedRead<FeatureComponentDescriptor<Accessible>>>
+  readonly relationFailures?: Record<string, System.RelationFailureRead<FeatureRelationDescriptor<Accessible>>>
+}
+
 interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAccessInput {
   readonly queries?: Record<string, Query.Any<Root>>
   readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>>
@@ -265,6 +278,17 @@ interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAcc
   readonly transitions?: Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>>
 }
 
+interface BoundInspectorAccess<S extends Schema.Any, Root> extends Inspector.InspectorAccessInput {
+  readonly queries?: Record<string, Query.Any<Root>>
+  readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>>>
+  readonly events?: Record<string, System.EventRead<EventDescriptor<S>>>
+  readonly states?: Record<string, System.StateRead<StateDescriptor<S>>>
+  readonly machines?: Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>>
+  readonly transitionEvents?: Record<string, Machine.TransitionEventRead<Schema.BoundStateMachine<Root>>>
+  readonly removed?: Record<string, System.RemovedRead<ComponentDescriptor<S>>>
+  readonly relationFailures?: Record<string, System.RelationFailureRead<RelationDescriptor<S>>>
+}
+
 type BoundScheduleEntryValue<S extends Schema.Any, Root> =
   | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
@@ -272,9 +296,9 @@ type BoundScheduleEntryValue<S extends Schema.Any, Root> =
   | Schedule.LifecycleUpdateStep
   | Schedule.RelationFailureUpdateStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
-  | Schema.BoundScheduleFragment<S, Root, any>
-  | Schema.BoundSchedulePhase<S, Root, any>
-  | Schema.BoundSchedule<S, Root, any>
+  | Schema.BoundScheduleFragment<S, Root, any, any>
+  | Schema.BoundSchedulePhase<S, Root, any, any>
+  | Schema.BoundSchedule<S, Root, any, any>
 
 type BoundTransitionEntryValue<S extends Schema.Any, Root> =
   | Schema.BoundSystem<S, Root, any, any, any>
@@ -282,9 +306,9 @@ type BoundTransitionEntryValue<S extends Schema.Any, Root> =
   | Schedule.EventUpdateStep
   | Schedule.LifecycleUpdateStep
   | Schedule.RelationFailureUpdateStep
-  | Schema.BoundScheduleFragment<S, Root, any>
-  | Schema.BoundSchedulePhase<S, Root, any>
-  | Schema.BoundSchedule<S, Root, any>
+  | Schema.BoundScheduleFragment<S, Root, any, any>
+  | Schema.BoundSchedulePhase<S, Root, any, any>
+  | Schema.BoundSchedule<S, Root, any, any>
 
 type BoundScheduleStepValue<S extends Schema.Any, Root> =
   | Schema.BoundSystem<S, Root, any, any, any>
@@ -318,7 +342,8 @@ type BoundSchedulePhaseResult<
   Schedule.ScheduleStep,
   Root,
   Schedule.PhaseRequirements<Steps>,
-  Schedule.PhaseRequirements<Steps>
+  Schedule.PhaseRequirements<Steps>,
+  Schedule.PhaseFailure<Steps>
 >
 
 type BoundTransitionScheduleResult<
@@ -330,12 +355,13 @@ type BoundTransitionScheduleResult<
   S,
   M,
   Schedule.CompositionExactRequirements<Entries>,
-  Root
+  Root,
+  Schedule.CompositionFailure<Entries>
 >
 
 type BoundTransitionBundleInputValue<S extends Schema.Any, Root> =
-  | Schema.BoundTransitionSchedule<S, Root, any, any>
-  | Schema.BoundTransitionBundle<S, Root, any, any>
+  | Schema.BoundTransitionSchedule<S, Root, any, any, any>
+  | Schema.BoundTransitionBundle<S, Root, any, any, any>
 
 type BoundTransitionBundleResult<
   S extends Schema.Any,
@@ -345,7 +371,9 @@ type BoundTransitionBundleResult<
   S,
   ReadonlyArray<Schedule.FlattenTransitionEntries<Entries>[number]>,
   Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
-  Root
+  Root,
+  Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
+  Schedule.TransitionBundleFailure<Schedule.FlattenTransitionEntries<Entries>>
 >
 
 export interface FeatureBuildGame<
@@ -353,6 +381,22 @@ export interface FeatureBuildGame<
   Root = unknown
 > {
   readonly schema: Accessible
+  readonly EntityScope: <const Name extends string>(name: Name) => EntityScope.EntityScope<Name, Root>
+  readonly Inspector: <
+    const Name extends string,
+    const Access extends FeatureInspectorAccess<Accessible, Root>,
+    Value
+  >(
+    name: Name,
+    spec: Inspector.ExactInspectorAccess<Access>,
+    read: (context: Inspector.InspectorContext<System.SystemSpec<Accessible, Access, Root>>) => Value
+  ) => Inspector.InspectorDefinition<
+    System.SystemSpec<Accessible, Access, Root>,
+    Value,
+    Root,
+    Name,
+    System.SystemAccessNeeds<Access>
+  >
   readonly Entity: {
     handle: (entityId: Entity.EntityId<Accessible, Root>) => Entity.Handle<Root>
     handleFrom: <P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
@@ -522,8 +566,8 @@ export interface FeatureBuildGame<
 }
 
 type FeatureBuildOutput = {
-  readonly bootstrap?: ReadonlyArray<Schedule.ScheduleDefinition<any, any, any>>
-  readonly update?: ReadonlyArray<Schedule.ScheduleDefinition<any, any, any>>
+  readonly bootstrap?: ReadonlyArray<Schedule.ScheduleDefinition<any, any, any, any, any>>
+  readonly update?: ReadonlyArray<Schedule.ScheduleDefinition<any, any, any, any, any>>
 }
 
 type FeatureBuildFunction<
@@ -578,8 +622,8 @@ export interface ComposedFeatureProject<
       RuntimeMachinesOf<ProvidedMachines>
     >) => {
       readonly runtime: Schema.BoundRuntime<S, Root, RuntimeServicesOf<ProvidedServices>, Resources, States, RuntimeMachinesOf<ProvidedMachines>>
-      readonly bootstrap: () => void
-      readonly update: () => void
+      readonly bootstrap: () => Result.Result<void, Schedule.FailureOf<FeatureBootstrapScheduleUnion<Features, S, Root>>>
+      readonly update: () => Result.Result<void, Schedule.FailureOf<FeatureUpdateScheduleUnion<Features, S, Root>>>
     }
   }
 }
@@ -651,32 +695,46 @@ export namespace Schema {
     Needs
   >
 
+  /** A schema-bound read-only world projection. */
+  export type BoundInspector<
+    S extends Any,
+    Root,
+    Spec extends System.AnySystemSpec = System.AnySystemSpec,
+    Value = unknown,
+    Name extends string = string,
+    Needs extends Requirement.Requirement = Requirement.Requirement
+  > = Inspector.InspectorDefinition<Spec & { readonly schema: S }, Value, Root, Name, Needs>
+
   /**
    * A schema-bound schedule definition branded to one bound schema root.
    */
   export type BoundSchedule<
     S extends Any,
     Root,
-    Needs extends Requirement.Requirement = Requirement.Requirement
-  > = Schedule.ScheduleDefinition<S, Needs, Root>
+    Needs extends Requirement.Requirement = Requirement.Requirement,
+    Failure extends System.SystemFailure = never
+  > = Schedule.ScheduleDefinition<S, Needs, Root, Needs, Failure>
 
   export type BoundScheduleFragment<
     S extends Any,
     Root,
-    Needs extends Requirement.Requirement = Requirement.Requirement
-  > = Schedule.ScheduleFragmentDefinition<S, Root, Needs>
+    Needs extends Requirement.Requirement = Requirement.Requirement,
+    Failure extends System.SystemFailure = never
+  > = Schedule.ScheduleFragmentDefinition<S, Root, Needs, Needs, Failure>
 
   export type BoundSchedulePhase<
     S extends Any,
     Root,
-    Needs extends Requirement.Requirement = Requirement.Requirement
-  > = Schedule.SchedulePhaseDefinition<S, Needs, BoundSystem<any, Root, any, any, any>, Schedule.ScheduleStep, Root, Needs, Needs>
+    Needs extends Requirement.Requirement = Requirement.Requirement,
+    Failure extends System.SystemFailure = never
+  > = Schedule.SchedulePhaseDefinition<S, Needs, BoundSystem<any, Root, any, any, any>, Schedule.ScheduleStep, Root, Needs, Needs, Failure>
 
   export type BoundScheduleComposition<
     Root,
     SystemValue extends BoundSystem<any, Root, any, any, any> = BoundSystem<any, Root, any, any, any>,
-    StepValue extends Schedule.ScheduleStep = Schedule.ScheduleStep
-  > = Schedule.ScheduleCompositionDefinition<SystemValue, StepValue, any, any>
+    StepValue extends Schedule.ScheduleStep = Schedule.ScheduleStep,
+    Failure extends System.SystemFailure = never
+  > = Schedule.ScheduleCompositionDefinition<SystemValue, StepValue, any, any, Failure>
 
   /**
    * A schema-bound finite-state machine.
@@ -691,15 +749,17 @@ export namespace Schema {
     S extends Any,
     Root,
     M extends BoundStateMachine<Root> = BoundStateMachine<Root>,
-    Needs extends Requirement.Requirement = Requirement.Requirement
-  > = Machine.TransitionScheduleDefinition<S, M, Needs, Root>
+    Needs extends Requirement.Requirement = Requirement.Requirement,
+    Failure extends System.SystemFailure = never
+  > = Machine.TransitionScheduleDefinition<S, M, Needs, Root, Failure>
 
   export type BoundTransitionBundle<
     S extends Any,
     Root,
-    Entries extends ReadonlyArray<BoundTransitionSchedule<S, Root, any, any>> = ReadonlyArray<BoundTransitionSchedule<S, Root, any, any>>,
-    Needs extends Requirement.Requirement = Requirement.Requirement
-  > = Schedule.TransitionBundleDefinition<S, Entries, Needs, Root>
+    Entries extends ReadonlyArray<BoundTransitionSchedule<S, Root, any, any, any>> = ReadonlyArray<BoundTransitionSchedule<S, Root, any, any, any>>,
+    Needs extends Requirement.Requirement = Requirement.Requirement,
+    Failure extends System.SystemFailure = never
+  > = Schedule.TransitionBundleDefinition<S, Entries, Needs, Root, Needs, Failure>
 
   /**
    * A schema-bound runtime branded to one bound schema root.
@@ -718,6 +778,25 @@ export namespace Schema {
    */
   export interface Game<S extends Any, Root = S> {
     readonly schema: S
+    /** Creates a typed ownership scope for scene or level entities. */
+    readonly EntityScope: <const Name extends string>(name: Name) => EntityScope.EntityScope<Name, Root>
+    /** Declares a reusable, requirement-checked read-only world projection. */
+    readonly Inspector: <
+      const Name extends string,
+      const Access extends BoundInspectorAccess<S, Root>,
+      Value
+    >(
+      name: Name,
+      spec: Inspector.ExactInspectorAccess<Access>,
+      read: (context: Inspector.InspectorContext<System.SystemSpec<S, Access, Root>>) => Value
+    ) => Schema.BoundInspector<
+      S,
+      Root,
+      System.SystemSpec<S, Access, Root>,
+      Value,
+      Name,
+      System.SystemAccessNeeds<Access>
+    >
     readonly Entity: {
       handle: (entityId: Entity.EntityId<S, Root>) => Entity.Handle<Root>
       handleFrom: <P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
@@ -893,7 +972,7 @@ export namespace Schema {
       updateEvents: typeof Schedule.updateEvents
       updateLifecycle: typeof Schedule.updateLifecycle
       updateRelationFailures: typeof Schedule.updateRelationFailures
-      applyStateTransitions: <Bundle extends Schema.BoundTransitionBundle<S, Root> | undefined = undefined>(bundle?: Bundle) => Schedule.ApplyStateTransitionsStep<Bundle, Root>
+      applyStateTransitions: <Bundle extends Schema.BoundTransitionBundle<S, Root, any, any, any> | undefined = undefined>(bundle?: Bundle) => Schedule.ApplyStateTransitionsStep<Bundle, Root>
     }
     readonly Runtime: {
       make: <
@@ -953,28 +1032,28 @@ type QuerySelectionAccess<S extends Schema.Any, Root> =
   | Relation.SelectionAccess<S, Root>
 
 type RebindAnonymousSchedule<ScheduleValue, Root> =
-  ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any>
-    ? Schedule.Schedule.Definition<S, Requirements, Root>
+  ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any, infer CarriedRequirements, infer Failure>
+    ? Schedule.Schedule.Definition<S, Requirements, Root, CarriedRequirements, Failure>
     : never
 
 type RebindScheduleFragment<FragmentValue, Root> =
-  FragmentValue extends Schedule.Schedule.Fragment<infer S, any, infer ExactRequirements, infer RuntimeRequirementsValue>
-    ? Schedule.Schedule.Fragment<S, Root, ExactRequirements, RuntimeRequirementsValue>
+  FragmentValue extends Schedule.Schedule.Fragment<infer S, any, infer ExactRequirements, infer RuntimeRequirementsValue, infer Failure>
+    ? Schedule.Schedule.Fragment<S, Root, ExactRequirements, RuntimeRequirementsValue, Failure>
     : never
 
 type RebindSchedulePhase<PhaseValue, Root> =
-  PhaseValue extends Schedule.Schedule.Phase<infer S, infer Requirements, infer SystemValue, infer StepValue, any, infer ExactRequirements, infer RuntimeRequirementsValue>
-    ? Schedule.Schedule.Phase<S, Requirements, SystemValue, StepValue, Root, ExactRequirements, RuntimeRequirementsValue>
+  PhaseValue extends Schedule.Schedule.Phase<infer S, infer Requirements, infer SystemValue, infer StepValue, any, infer ExactRequirements, infer RuntimeRequirementsValue, infer Failure>
+    ? Schedule.Schedule.Phase<S, Requirements, SystemValue, StepValue, Root, ExactRequirements, RuntimeRequirementsValue, Failure>
     : never
 
 type RebindTransitionSchedule<ScheduleValue, M extends Machine.StateMachine.Any, Root> =
-  ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any>
-    ? Machine.TransitionScheduleDefinition<S, M, Requirements, Root>
+  ScheduleValue extends Schedule.Schedule.Definition<infer S, infer Requirements, any, any, infer Failure>
+    ? Machine.TransitionScheduleDefinition<S, M, Requirements, Root, Failure>
     : never
 
 type RebindTransitionBundle<BundleValue, Root> =
-  BundleValue extends Schedule.TransitionBundleDefinition<infer S, infer Entries, infer Requirements, any>
-    ? Schedule.TransitionBundleDefinition<S, Entries, Requirements, Root>
+  BundleValue extends Schedule.TransitionBundleDefinition<infer S, infer Entries, infer Requirements, any, infer CarriedRequirements, infer Failure>
+    ? Schedule.TransitionBundleDefinition<S, Entries, Requirements, Root, CarriedRequirements, Failure>
     : never
 
 /**
@@ -1222,11 +1301,11 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
 ): Schema.Game<S, Root> => {
   type BoundAnySystem = Schema.BoundSystem<any, Root, any, any, any>
   type BoundMachine = Schema.BoundStateMachine<Root>
-  type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root>
+  type BoundTransitionSchedule = Schema.BoundTransitionSchedule<S, Root, any, any, any>
   type BoundTransitionBundleInput = BoundTransitionBundleInputValue<S, Root>
   type BoundTransitionBundleFor<Entries extends ReadonlyArray<BoundTransitionBundleInput>> =
     BoundTransitionBundleResult<S, Root, Entries>
-  type BoundTransitionBundle = Schema.BoundTransitionBundle<S, Root>
+  type BoundTransitionBundle = Schema.BoundTransitionBundle<S, Root, any, any, any>
   type BoundScheduleStep = BoundScheduleStepValue<S, Root>
   type BoundScheduleEntry = BoundScheduleEntryValue<S, Root>
   type BoundTransitionStep = BoundTransitionStepValue<S, Root>
@@ -1235,6 +1314,9 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
   type BoundTransitionScheduleFor<ScheduleValue, M extends BoundMachine> = RebindTransitionSchedule<ScheduleValue, M, Root>
   const definedMachines: Array<BoundMachine> = []
   const definedMachineNames = new Set<string>()
+
+  const defineEntityScope = <const Name extends string>(name: Name) =>
+    EntityScope.make<Name, Root>(name)
 
   const entityHandle = (entityId: Entity.EntityId<S, Root>): Entity.Handle<Root> => Entity.handle(entityId)
   const entityHandleFrom = <P extends Entity.ComponentProof, W extends Entity.ComponentProof>(
@@ -1278,6 +1360,27 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
       System.SystemAccessNeeds<Access>
     >
   }
+
+  const defineInspector = <
+    const Name extends string,
+    const Access extends BoundInspectorAccess<S, Root>,
+    Value
+  >(
+    name: Name,
+    spec: Inspector.ExactInspectorAccess<Access>,
+    read: (context: Inspector.InspectorContext<System.SystemSpec<S, Access, Root>>) => Value
+  ) => Inspector.make(
+    name,
+    { schema, ...spec } as { readonly schema: S } & Inspector.ExactInspectorAccess<Access>,
+    read
+  ) as unknown as Schema.BoundInspector<
+    S,
+    Root,
+    System.SystemSpec<S, Access, Root>,
+    Value,
+    Name,
+    System.SystemAccessNeeds<Access>
+  >
 
   const commandSpawn = () => Command.spawn<S, Root>()
 
@@ -1487,7 +1590,7 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
   const makeTransitionSchedule = <
     const Entries extends ReadonlyArray<BoundTransitionEntry>,
     M extends BoundMachine = BoundMachine
-  >(transition: Machine.TransitionScheduleDefinition<S, M, any, Root>["transition"], plan: readonly [...Entries]) => {
+  >(transition: Machine.TransitionScheduleDefinition<S, M, any, Root, any>["transition"], plan: readonly [...Entries]) => {
     const schedule = Schedule.Schedule(...plan)
     const transitionSchedule = {
       ...schedule,
@@ -1628,6 +1731,8 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
 
   return {
     schema,
+    EntityScope: defineEntityScope,
+    Inspector: defineInspector,
     Entity: {
       handle: entityHandle,
       handleFrom: entityHandleFrom,
@@ -1782,8 +1887,8 @@ export const composeFeatures = <
   const schema = buildFragments(...options.features.map((feature) => feature.schema) as unknown as FeaturesToSchemaTuple<Features>)
   const Game = bindBuiltSchema(schema, options.root)
   const builtFeatures = Object.create(null) as Record<string, object>
-  const bootstrapSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root>> = []
-  const updateSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root>> = []
+  const bootstrapSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root, any, any>> = []
+  const updateSchedules: Array<Schedule.ScheduleDefinition<typeof schema, any, Root, any, any>> = []
 
   for (const feature of options.features) {
     const built = (feature.build as FeatureBuildFunction<FeatureClosureSchema<typeof feature>, FeatureBuildOutput>)(
@@ -1796,8 +1901,8 @@ export const composeFeatures = <
       update: [...(built.update ?? [])]
     }
 
-    bootstrapSchedules.push(...normalized.bootstrap as ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>)
-    updateSchedules.push(...normalized.update as ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>)
+    bootstrapSchedules.push(...normalized.bootstrap as ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root, any, any>>)
+    updateSchedules.push(...normalized.update as ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root, any, any>>)
     builtFeatures[feature.name] = normalized
   }
 
@@ -1823,11 +1928,11 @@ export const composeFeatures = <
       }) {
         const runtime = Game.Runtime.make(runtimeOptions)
         const initializeSchedules = runtime.initialize as (
-          ...schedules: ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>
-        ) => void
+          ...schedules: ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root, any, any>>
+        ) => Result.Result<void, System.SystemFailure>
         const tickSchedules = runtime.tick as (
-          ...schedules: ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root>>
-        ) => void
+          ...schedules: ReadonlyArray<Schedule.ScheduleDefinition<typeof schema, any, Root, any, any>>
+        ) => Result.Result<void, System.SystemFailure>
         return {
           runtime,
           bootstrap: () => {

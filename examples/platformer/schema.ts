@@ -15,7 +15,6 @@ export const Renderable = Descriptor.Component<{
 }>()("Platformer/Renderable")
 export const Player = Descriptor.Component<{}>()("Platformer/Player")
 export const Solid = Descriptor.Component<{}>()("Platformer/Solid")
-export const LevelEntity = Descriptor.Component<{}>()("Platformer/LevelEntity")
 
 export const DeltaTime = Descriptor.Resource<number>()("Platformer/DeltaTime")
 export const Viewport = Descriptor.ConstructedResource(Size2)("Platformer/Viewport")
@@ -37,8 +36,7 @@ export const Game = Schema.bind(
       Collider,
       Renderable,
       Player,
-      Solid,
-      LevelEntity
+      Solid
     },
     resources: {
       DeltaTime,
@@ -52,6 +50,8 @@ export const Game = Schema.bind(
 )
 
 export const schema = Game.schema
+
+export const LevelScope = Game.EntityScope("Platformer/Level")
 
 export const SessionState = Game.StateMachine(
   "Platformer/SessionState",

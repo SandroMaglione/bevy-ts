@@ -61,9 +61,10 @@ import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
 import * as Fx from "./fx.ts"
+import type * as Inspector from "./inspector.ts"
 import type * as Machine from "./machine.ts"
 import * as Query from "./query.ts"
-import type { ConstructedWriteCell, QueryMatch, ReadCell, WriteCell } from "./query.ts"
+import type { ConstructedWriteCell, QueryMatch, ReadCell, ReadonlyValue, WriteCell } from "./query.ts"
 import * as Relation from "./relation.ts"
 import type * as Requirement from "./requirement.ts"
 import * as Result from "./Result.ts"
@@ -85,6 +86,7 @@ import type {
   ResourceWriteView,
   SystemContext,
   SystemDefinition,
+  SystemFailure,
   TransitionReadView
 } from "./system.ts"
 
@@ -418,17 +420,17 @@ type RequirementErrorsFor<
   : never
 
 type RequirementErrorsOfSchedule<
-  Selected extends ExecutableScheduleDefinition<any, any, any, any>,
+  Selected extends ExecutableScheduleDefinition<any, any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
   Machines extends object
-> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any>
+> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any, any>
   ? RequirementErrorsFor<Requirement.Of<Selected>, S, Services, Resources, States, Machines>
   : never
 
 export type ValidateSchedules<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -436,7 +438,7 @@ export type ValidateSchedules<
 > = {
   readonly [K in keyof Schedules]:
     Schedules[K] & ValidateSchedule<
-      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any>>,
+      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any, any>>,
       Services,
       Resources,
       States,
@@ -445,7 +447,7 @@ export type ValidateSchedules<
 }
 
 export type ValidateScheduleArray<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -457,7 +459,7 @@ export type ValidateScheduleArray<
     }
 
 type ValidateScheduleArgs<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -469,7 +471,7 @@ type ValidateScheduleArgs<
     }
 
 type ValidateSchedule<
-  Schedule extends ExecutableScheduleDefinition<any, any, any, any>,
+  Schedule extends ExecutableScheduleDefinition<any, any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
   States extends object,
@@ -478,6 +480,28 @@ type ValidateSchedule<
   ? unknown
   : {
       readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedule, Services, Resources, States, Machines>
+    }
+
+type RequirementErrorsOfInspector<
+  Selected extends Inspector.Inspector.Any,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = Selected extends Inspector.InspectorDefinition<infer Spec, any, any, any, infer Needs>
+  ? RequirementErrorsFor<Needs, Spec["schema"], Services, Resources, States, Machines>
+  : never
+
+type ValidateInspector<
+  Selected extends Inspector.Inspector.Any,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  States extends object,
+  Machines extends object
+> = [RequirementErrorsOfInspector<Selected, Services, Resources, States, Machines>] extends [never]
+  ? unknown
+  : {
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfInspector<Selected, Services, Resources, States, Machines>
     }
 
 export type AnyRequirements = Requirement.Requirement
@@ -650,9 +674,9 @@ export interface Runtime<
    * repeating update loop.
    */
   readonly initialize: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any>>>(
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any>>>(
       ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, States, Machines>
-    ): void
+    ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
   /**
    * Runs one schedule once.
@@ -664,10 +688,10 @@ export interface Runtime<
    * of schedules.
    */
   readonly runSchedule: {
-    <const Selected extends ExecutableScheduleDefinition<S, any, Root, any>>(
+    <const Selected extends ExecutableScheduleDefinition<S, any, Root, any, any>>(
       schedule: Selected
         & ValidateSchedule<NoInfer<Selected>, Services, Resources, States, Machines>
-    ): void
+    ): Result.Result<void, Schedule.FailureOf<Selected>>
   }
   /**
    * Runs a schedule whose exact requirements are not statically known.
@@ -675,9 +699,17 @@ export interface Runtime<
    * This path validates the carried nominal tokens against current runtime
    * provisioning and returns missing requirements as data.
    */
-  readonly tryRunSchedule: (
-    schedule: ExecutableScheduleDefinition<S, any, any, any>
-  ) => Result.Result<void, MissingRuntimeRequirements>
+  readonly tryRunSchedule: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
+    schedule: Selected
+  ) => Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>>
+  /**
+   * Evaluates one read-only projection without advancing schedule visibility.
+   */
+  readonly inspect: {
+    <const Selected extends Inspector.InspectorDefinition<any, any, Root, any, any>>(
+      inspector: Selected & ValidateInspector<Selected, Services, Resources, States, Machines>
+    ): Inspector.Inspector.Value<Selected>
+  }
   /**
    * Runs multiple schedules in sequence.
    *
@@ -686,9 +718,9 @@ export interface Runtime<
    * updates produced by earlier schedules.
    */
   readonly tick: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any>>>(
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any>>>(
       ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, States, Machines>
-    ): void
+    ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
 }
 
@@ -747,6 +779,15 @@ export const makeRuntime = <
    * Component storage indexed by runtime entity id.
    */
   const entities: EntityStore = new Map()
+  /**
+   * Component-keyed entity indexes used to seed query iteration.
+   */
+  const componentEntities = new Map<symbol, Set<number>>()
+  /**
+   * Entity ownership used by scene and level lifetime scopes.
+   */
+  const entityScopeByEntity = new Map<number, symbol>()
+  const entityScopeMembers = new Map<symbol, Set<number>>()
   /**
    * Descriptor-keyed world resource storage.
    */
@@ -870,6 +911,33 @@ export const makeRuntime = <
   }
 
   const entityExists = (entityId: number): boolean => entities.has(entityId)
+
+  const indexComponent = (descriptorKey: symbol, entityId: number): void => {
+    const indexed = componentEntities.get(descriptorKey) ?? new Set<number>()
+    indexed.add(entityId)
+    componentEntities.set(descriptorKey, indexed)
+  }
+
+  const unindexComponent = (descriptorKey: symbol, entityId: number): void => {
+    const indexed = componentEntities.get(descriptorKey)
+    indexed?.delete(entityId)
+    if (indexed?.size === 0) {
+      componentEntities.delete(descriptorKey)
+    }
+  }
+
+  const clearEntityScope = (entityId: number): void => {
+    const scopeKey = entityScopeByEntity.get(entityId)
+    if (!scopeKey) {
+      return
+    }
+    entityScopeByEntity.delete(entityId)
+    const members = entityScopeMembers.get(scopeKey)
+    members?.delete(entityId)
+    if (members?.size === 0) {
+      entityScopeMembers.delete(scopeKey)
+    }
+  }
 
   const ensureRelationTargetStore = (descriptorKey: symbol): Map<number, number> => {
     const store = relationTargets.get(descriptorKey)
@@ -1084,10 +1152,28 @@ export const makeRuntime = <
         unrelateEntity(id.value, relation)
       }
       for (const descriptorKey of store.keys()) {
+        unindexComponent(descriptorKey, id.value)
         recordRemovedComponent(descriptorKey, id.value)
       }
+      clearEntityScope(id.value)
       recordDespawnedEntity(id.value)
       entities.delete(id.value)
+    },
+    assignEntityScope(id, scope) {
+      if (!entities.has(id.value)) {
+        return
+      }
+      clearEntityScope(id.value)
+      const members = entityScopeMembers.get(scope.key) ?? new Set<number>()
+      members.add(id.value)
+      entityScopeMembers.set(scope.key, members)
+      entityScopeByEntity.set(id.value, scope.key)
+    },
+    destroyEntityScope(scope) {
+      const members = [...(entityScopeMembers.get(scope.key) ?? [])]
+      for (const entityId of members) {
+        internalWorld.destroyEntity(Entity.makeEntityId<S, Root>(entityId))
+      }
     },
     removeComponent(id, descriptor) {
       const store = entities.get(id.value)
@@ -1095,6 +1181,7 @@ export const makeRuntime = <
         return
       }
       store.delete(descriptor.key)
+      unindexComponent(descriptor.key, id.value)
       recordRemovedComponent(descriptor.key, id.value)
     },
     writeComponent(id, descriptor, value) {
@@ -1105,6 +1192,7 @@ export const makeRuntime = <
       const existed = store.has(descriptor.key)
       store.set(descriptor.key, value)
       if (!existed) {
+        indexComponent(descriptor.key, id.value)
         recordAddedComponent(descriptor.key, id.value)
       }
       recordChangedComponent(descriptor.key, id.value)
@@ -1153,7 +1241,7 @@ export const makeRuntime = <
    * Creates a read-only cell view over an arbitrary storage source.
    */
   const makeReadCell = <T>(readValue: () => T): ReadCell<T> => ({
-    get: readValue
+    get: readValue as () => ReadonlyValue<T>
   })
 
   /**
@@ -1161,7 +1249,7 @@ export const makeRuntime = <
    */
   const makePresentOptionalReadCell = <T>(readValue: () => T): import("./query.ts").PresentOptionalReadCell<T> => ({
     present: true,
-    get: readValue
+    get: readValue as () => ReadonlyValue<T>
   })
 
   /**
@@ -1189,7 +1277,7 @@ export const makeRuntime = <
     constructor?: DescriptorModule.ResultConstructor<T, Raw, Error>
   ): WriteCell<T> | ConstructedWriteCell<T, Raw, Error> {
     const base: WriteCell<T> = {
-      get: readValue,
+      get: readValue as () => ReadonlyValue<T>,
       set: writeValue,
       setResult<E>(result: Result.Result<T, E>): Result.Result<void, E> {
         if (!result.ok) {
@@ -1199,10 +1287,10 @@ export const makeRuntime = <
         return Result.success(undefined)
       },
       update(f) {
-        writeValue(f(readValue()))
+        writeValue(f(readValue() as ReadonlyValue<T>))
       },
-      updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E> {
-        const result = f(readValue())
+      updateResult<E>(f: (current: ReadonlyValue<T>) => Result.Result<T, E>): Result.Result<void, E> {
+        const result = f(readValue() as ReadonlyValue<T>)
         if (!result.ok) {
           return Result.failure(result.error)
         }
@@ -1226,7 +1314,7 @@ export const makeRuntime = <
         return Result.success(undefined)
       },
       updateRaw(f) {
-        const result = constructor.result(f(readValue()))
+        const result = constructor.result(f(readValue() as ReadonlyValue<T>))
         if (!result.ok) {
           return Result.failure(result.error)
         }
@@ -1257,6 +1345,131 @@ export const makeRuntime = <
   const recordDespawnedEntity = (entityId: number): void => {
     pendingDespawnedEntities.add(entityId)
   }
+
+  /**
+   * Keeps one system execution atomic with respect to ECS-owned state.
+   *
+   * Component, resource, state, event, and queued-machine writes are committed
+   * only when the system effect succeeds. External service side effects remain
+   * the responsibility of the service implementation.
+   */
+  const makeSystemTransaction = () => {
+    const absent = Symbol("SystemTransactionAbsent")
+    const componentOriginals = new Map<number, Map<symbol, unknown | typeof absent>>()
+    const resourceOriginals = new Map<symbol, unknown | typeof absent>()
+    const stateOriginals = new Map<symbol, unknown | typeof absent>()
+    const machineOriginals = new Map<symbol, { value: unknown; skipIfSame: boolean } | typeof absent>()
+    const changedComponents = new Map<symbol, Set<number>>()
+    const emittedEvents = new Map<symbol, Array<unknown>>()
+
+    const rememberRegistryValue = (
+      source: Map<symbol, unknown>,
+      originals: Map<symbol, unknown | typeof absent>,
+      key: symbol
+    ): void => {
+      if (!originals.has(key)) {
+        originals.set(key, source.has(key) ? source.get(key) : absent)
+      }
+    }
+
+    const restoreRegistry = (
+      source: Map<symbol, unknown>,
+      originals: Map<symbol, unknown | typeof absent>
+    ): void => {
+      for (const [key, value] of originals) {
+        if (value === absent) {
+          source.delete(key)
+        } else {
+          source.set(key, value)
+        }
+      }
+    }
+
+    return {
+      writeComponent(
+        entityId: number,
+        store: Map<symbol, unknown>,
+        descriptorKey: symbol,
+        value: unknown
+      ): void {
+        const originals = componentOriginals.get(entityId) ?? new Map<symbol, unknown | typeof absent>()
+        if (!originals.has(descriptorKey)) {
+          originals.set(descriptorKey, store.has(descriptorKey) ? store.get(descriptorKey) : absent)
+          componentOriginals.set(entityId, originals)
+        }
+        store.set(descriptorKey, value)
+        const changed = changedComponents.get(descriptorKey) ?? new Set<number>()
+        changed.add(entityId)
+        changedComponents.set(descriptorKey, changed)
+      },
+      writeResource(descriptorKey: symbol, value: unknown): void {
+        rememberRegistryValue(resources, resourceOriginals, descriptorKey)
+        resources.set(descriptorKey, value)
+      },
+      writeState(descriptorKey: symbol, value: unknown): void {
+        rememberRegistryValue(states, stateOriginals, descriptorKey)
+        states.set(descriptorKey, value)
+      },
+      emitEvent(descriptorKey: symbol, value: unknown): void {
+        const values = emittedEvents.get(descriptorKey) ?? []
+        values.push(value)
+        emittedEvents.set(descriptorKey, values)
+      },
+      getPendingMachine(machineKey: symbol): unknown {
+        return pendingMachines.get(machineKey)?.value
+      },
+      setPendingMachine(machineKey: symbol, value: unknown, skipIfSame: boolean): void {
+        if (!machineOriginals.has(machineKey)) {
+          machineOriginals.set(machineKey, pendingMachines.get(machineKey) ?? absent)
+        }
+        pendingMachines.set(machineKey, { value, skipIfSame })
+      },
+      resetPendingMachine(machineKey: symbol): void {
+        if (!machineOriginals.has(machineKey)) {
+          machineOriginals.set(machineKey, pendingMachines.get(machineKey) ?? absent)
+        }
+        pendingMachines.delete(machineKey)
+      },
+      commit(): void {
+        for (const [descriptorKey, entityIds] of changedComponents) {
+          for (const entityId of entityIds) {
+            recordChangedComponent(descriptorKey, entityId)
+          }
+        }
+        for (const [descriptorKey, values] of emittedEvents) {
+          const pending = pendingEvents.get(descriptorKey) ?? []
+          pending.push(...values)
+          pendingEvents.set(descriptorKey, pending)
+        }
+      },
+      rollback(): void {
+        for (const [entityId, originals] of componentOriginals) {
+          const store = entities.get(entityId)
+          if (!store) {
+            continue
+          }
+          for (const [descriptorKey, value] of originals) {
+            if (value === absent) {
+              store.delete(descriptorKey)
+            } else {
+              store.set(descriptorKey, value)
+            }
+          }
+        }
+        restoreRegistry(resources, resourceOriginals)
+        restoreRegistry(states, stateOriginals)
+        for (const [machineKey, value] of machineOriginals) {
+          if (value === absent) {
+            pendingMachines.delete(machineKey)
+          } else {
+            pendingMachines.set(machineKey, value)
+          }
+        }
+      }
+    }
+  }
+
+  type SystemTransaction = ReturnType<typeof makeSystemTransaction>
 
   const matchesLifecycleFilters = (entityId: number, store: Map<symbol, unknown>, query: Query.Query.Any<Root>): boolean => {
     for (const filter of query.filters) {
@@ -1300,16 +1513,50 @@ export const makeRuntime = <
     return true
   }
 
+  const queryCandidateIds = (query: Query.Query.Any<Root>): Iterable<number> => {
+    const requiredKeys = new Set<symbol>()
+    for (const descriptor of query.with) {
+      requiredKeys.add(descriptor.key)
+    }
+    for (const filter of query.filters) {
+      requiredKeys.add(filter.descriptor.key)
+    }
+    for (const access of Object.values(query.selection)) {
+      if (access.mode === "read" || access.mode === "write") {
+        requiredKeys.add(access.descriptor.key)
+      }
+    }
+
+    let smallest: Set<number> | undefined
+    for (const key of requiredKeys) {
+      const indexed = componentEntities.get(key)
+      if (!indexed) {
+        return []
+      }
+      if (!smallest || indexed.size < smallest.size) {
+        smallest = indexed
+      }
+    }
+    return smallest ?? entities.keys()
+  }
+
   /**
    * Compiles a query spec into a runtime query handle.
    *
    * The handle performs filtering, builds typed cells, and attaches the
    * matching entity proof for each result.
    */
-  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q): QueryHandle<S, Q> => ({
+  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(
+    query: Q,
+    transaction: SystemTransaction
+  ): QueryHandle<S, Q> => ({
     each() {
       const matches: Array<QueryMatch<S, Q>> = []
-      for (const [idValue, store] of entities) {
+      for (const idValue of queryCandidateIds(query)) {
+        const store = entities.get(idValue)
+        if (!store) {
+          continue
+        }
         let include = true
         for (const descriptor of query.with) {
           if (!store.has(descriptor.key)) {
@@ -1320,11 +1567,11 @@ export const makeRuntime = <
         if (!include) {
           continue
         }
-      for (const descriptor of query.without) {
-        if (store.has(descriptor.key)) {
-          include = false
-          break
-        }
+        for (const descriptor of query.without) {
+          if (store.has(descriptor.key)) {
+            include = false
+            break
+          }
         }
         if (!include) {
           continue
@@ -1394,15 +1641,13 @@ export const makeRuntime = <
               ? makeWriteCell(
                   () => store.get(access.descriptor.key) as never,
                   (value) => {
-                    store.set(access.descriptor.key, value)
-                    recordChangedComponent(access.descriptor.key, idValue)
+                    transaction.writeComponent(idValue, store, access.descriptor.key, value)
                   }
                 )
               : makeWriteCell(
                   () => store.get(access.descriptor.key) as never,
                   (value) => {
-                    store.set(access.descriptor.key, value)
-                    recordChangedComponent(access.descriptor.key, idValue)
+                    transaction.writeComponent(idValue, store, access.descriptor.key, value)
                   },
                   constructor
                 )
@@ -1433,7 +1678,7 @@ export const makeRuntime = <
       return matches
     },
     get(entityId) {
-      const match = lookup.get(entityId, query)
+      const match = makeLookup(transaction).get(entityId, query)
       return match
     },
     single() {
@@ -1458,7 +1703,7 @@ export const makeRuntime = <
     }
   })
 
-  const lookup = {
+  const makeLookup = (transaction: SystemTransaction) => ({
     get<Q extends Query.Query.Any<Root>>(entityId: Entity.EntityId<S, Root>, query: Q): Query.Query.Result<QueryMatch<S, Q>, Query.Query.LookupError> {
       const store = entities.get(entityId.value)
       if (!store) {
@@ -1536,15 +1781,13 @@ export const makeRuntime = <
           ? makeWriteCell(
               () => store.get(access.descriptor.key) as never,
               (value) => {
-                store.set(access.descriptor.key, value)
-                recordChangedComponent(access.descriptor.key, entityId.value)
+                transaction.writeComponent(entityId.value, store, access.descriptor.key, value)
               }
             )
           : makeWriteCell(
               () => store.get(access.descriptor.key) as never,
               (value) => {
-                store.set(access.descriptor.key, value)
-                recordChangedComponent(access.descriptor.key, entityId.value)
+                transaction.writeComponent(entityId.value, store, access.descriptor.key, value)
               },
               constructor
             )
@@ -1667,7 +1910,7 @@ export const makeRuntime = <
       }
       return Relation.success(Entity.makeEntityId<S, Root>(current))
     }
-  } satisfies import("./system.ts").LookupApi<S, Root>
+  }) satisfies import("./system.ts").LookupApi<S, Root>
 
   /**
    * Creates a read-only resource or state view.
@@ -1680,23 +1923,27 @@ export const makeRuntime = <
    */
   const makeResourceWriteView = <D extends Descriptor<"resource" | "state", string, any>>(
     descriptor: D,
-    source: Map<symbol, unknown>
+    source: Map<symbol, unknown>,
+    transaction: SystemTransaction
   ) => {
+    const write = (value: Descriptor.Value<D>): void => {
+      if (source === states) {
+        transaction.writeState(descriptor.key, value)
+      } else {
+        transaction.writeResource(descriptor.key, value)
+      }
+    }
     if (DescriptorModule.hasConstructor(descriptor)) {
       const constructor = DescriptorModule.constructorOf(descriptor)
       return makeWriteCell(
         () => source.get(descriptor.key) as Descriptor.Value<D>,
-        (value) => {
-          source.set(descriptor.key, value)
-        },
-        constructor
+        write,
+        constructor as DescriptorModule.ResultConstructor<Descriptor.Value<D>, unknown, unknown>
       )
     }
     return makeWriteCell(
       () => source.get(descriptor.key) as Descriptor.Value<D>,
-      (value) => {
-        source.set(descriptor.key, value)
-      }
+      write
     )
   }
 
@@ -1705,18 +1952,19 @@ export const makeRuntime = <
    */
   const makeEventReadView = <T>(descriptorKey: symbol): EventReadView<T> => ({
     all() {
-      return (readableEvents.get(descriptorKey) ?? []) as ReadonlyArray<T>
+      return (readableEvents.get(descriptorKey) ?? []) as ReadonlyArray<ReadonlyValue<T>>
     }
   })
 
   /**
    * Creates a writable event stream view.
    */
-  const makeEventWriteView = <T>(descriptorKey: symbol): EventWriteView<T> => ({
+  const makeEventWriteView = <T>(
+    descriptorKey: symbol,
+    transaction: SystemTransaction
+  ): EventWriteView<T> => ({
     emit(value) {
-      const queue = pendingEvents.get(descriptorKey) ?? []
-      queue.push(value)
-      pendingEvents.set(descriptorKey, queue)
+      transaction.emitEvent(descriptorKey, value)
     }
   })
 
@@ -1770,22 +2018,19 @@ export const makeRuntime = <
   /**
    * Creates a queued-write machine transition view.
    */
-  const makeNextMachineWriteView = <M extends Machine.StateMachine.Any>(stateMachine: M): NextMachineWriteView<M> => ({
-    getPending: () => pendingMachines.get(stateMachine.key)?.value as Machine.StateMachine.Value<M> | undefined,
+  const makeNextMachineWriteView = <M extends Machine.StateMachine.Any>(
+    stateMachine: M,
+    transaction: SystemTransaction
+  ): NextMachineWriteView<M> => ({
+    getPending: () => transaction.getPendingMachine(stateMachine.key) as Machine.StateMachine.Value<M> | undefined,
     set(value) {
-      pendingMachines.set(stateMachine.key, {
-        value,
-        skipIfSame: false
-      })
+      transaction.setPendingMachine(stateMachine.key, value, false)
     },
     setIfChanged(value) {
-      pendingMachines.set(stateMachine.key, {
-        value,
-        skipIfSame: true
-      })
+      transaction.setPendingMachine(stateMachine.key, value, true)
     },
     reset() {
-      pendingMachines.delete(stateMachine.key)
+      transaction.resetPendingMachine(stateMachine.key)
     }
   })
 
@@ -1822,18 +2067,20 @@ export const makeRuntime = <
    * is allowed to see.
    */
   const makeContext = (
-    system: SystemDefinition<any, any, any>
+    system: SystemDefinition<any, any, any>,
+    transaction: SystemTransaction
   ): SystemContext<any> => {
     const commands = Command.makeCommands<S, Root>(() => internalWorld.nextEntityId())
+    const lookup = makeLookup(transaction)
     const queries = Object.fromEntries(
-      Object.entries(system.spec.queries as Record<string, Query.Query.Any<Root>>).map(([key, query]) => [key, makeQueryHandle(query)])
+      Object.entries(system.spec.queries as Record<string, Query.Query.Any<Root>>).map(([key, query]) => [key, makeQueryHandle(query, transaction)])
     )
     const resourceViews = Object.fromEntries(
       Object.entries(system.spec.resources as Record<string, any>).map(([key, access]) => [
         key,
         access.mode === "read"
           ? makeResourceReadView(access.descriptor.key, resources)
-          : makeResourceWriteView(access.descriptor, resources)
+          : makeResourceWriteView(access.descriptor, resources, transaction)
       ])
     )
     const eventViews = Object.fromEntries(
@@ -1841,14 +2088,14 @@ export const makeRuntime = <
         key,
         access.mode === "read"
           ? makeEventReadView(access.descriptor.key)
-          : makeEventWriteView(access.descriptor.key)
+          : makeEventWriteView(access.descriptor.key, transaction)
       ])
     )
     const stateViews = Object.fromEntries(
       Object.entries(system.spec.states as Record<string, any>).map(([key, access]) => [
         key,
         access.mode === "write"
-          ? makeResourceWriteView(access.descriptor, states)
+          ? makeResourceWriteView(access.descriptor, states, transaction)
           : makeResourceReadView(access.descriptor.key, states)
       ])
     )
@@ -1861,7 +2108,7 @@ export const makeRuntime = <
     const nextMachineViews = Object.fromEntries(
       Object.entries((system.spec.nextMachines ?? {}) as Record<string, any>).map(([key, access]) => [
         key,
-        makeNextMachineWriteView(access.machine)
+        makeNextMachineWriteView(access.machine, transaction)
       ])
     )
     const transitionEventViews = Object.fromEntries(
@@ -1927,14 +2174,29 @@ export const makeRuntime = <
    */
   const runSystem = (
     system: SystemDefinition<any, any, any>
-  ): ReadonlyArray<Command.DeferredCommand<S>> => {
+  ): Result.Result<ReadonlyArray<Command.DeferredCommand<S>>, SystemFailure> => {
     if ((system.spec.when as ReadonlyArray<Machine.Condition> | undefined)?.some((condition) => !evaluateCondition(condition))) {
-      return []
+      return Result.success([])
     }
-    const context = makeContext(system)
-    const effect = system.run(context)
-    Fx.runSync(Fx.provide(effect as never, context.services))
-    return context.commands.flush()
+    const transaction = makeSystemTransaction()
+    const context = makeContext(system, transaction)
+    try {
+      const effect = system.run(context)
+      const outcome = Fx.runSync(Fx.provide(effect as never, context.services))
+      if (!outcome.ok) {
+        transaction.rollback()
+        return Result.failure({
+          kind: "SystemFailure",
+          system: system.name,
+          error: outcome.error
+        })
+      }
+      transaction.commit()
+      return Result.success(context.commands.flush())
+    } catch (defect) {
+      transaction.rollback()
+      throw defect
+    }
   }
 
   /**
@@ -1996,15 +2258,18 @@ export const makeRuntime = <
   const runTransitionSchedule = (
     schedule: Machine.StateMachine.AnyTransitionSchedule<S, Root>,
     snapshot: Machine.TransitionSnapshot
-  ): void => {
+  ): Result.Result<void, SystemFailure> => {
     if (schedule.steps.some((step) => !Schedule.isSystemStep(step) && step.kind === "applyStateTransitions")) {
       throw new Error("Transition schedules cannot contain applyStateTransitions() steps")
     }
     activeTransitions.set(schedule.transition.machine.key, snapshot)
-    runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root>, {
-      resetChangedMachines: false
-    })
-    activeTransitions.delete(schedule.transition.machine.key)
+    try {
+      return runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>, {
+        resetChangedMachines: false
+      })
+    } finally {
+      activeTransitions.delete(schedule.transition.machine.key)
+    }
   }
 
   /**
@@ -2012,8 +2277,8 @@ export const makeRuntime = <
    */
   const applyStateTransitions = (
     deferred: Array<Command.DeferredCommand<S>>,
-    bundle?: Schedule.TransitionBundleDefinition<S, ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>, any, Root>
-  ): void => {
+    bundle?: Schedule.TransitionBundleDefinition<S, ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>, any, Root, any, any>
+  ): Result.Result<void, SystemFailure> => {
     applyDeferred(deferred)
     changedMachines = new Set()
     const scheduledTransitions = Array.from(pendingMachines.entries())
@@ -2022,11 +2287,8 @@ export const makeRuntime = <
         - (machineDefinitionOrder.get(rightKey) ?? Number.MAX_SAFE_INTEGER)
       )
 
-    for (const [machineKey] of scheduledTransitions) {
-      pendingMachines.delete(machineKey)
-    }
-
     for (const [machineKey, pending] of scheduledTransitions) {
+      pendingMachines.delete(machineKey)
       const current = currentMachines.get(machineKey)
       if (current === undefined) {
         continue
@@ -2055,10 +2317,18 @@ export const makeRuntime = <
       )
 
       for (const schedule of exitSchedules) {
-        runTransitionSchedule(schedule, snapshot)
+        const result = runTransitionSchedule(schedule, snapshot)
+        if (!result.ok) {
+          pendingMachines.set(machineKey, pending)
+          return result
+        }
       }
       for (const schedule of transitionSchedules) {
-        runTransitionSchedule(schedule, snapshot)
+        const result = runTransitionSchedule(schedule, snapshot)
+        if (!result.ok) {
+          pendingMachines.set(machineKey, pending)
+          return result
+        }
       }
 
       currentMachines.set(machineKey, pending.value)
@@ -2073,20 +2343,24 @@ export const makeRuntime = <
         && schedule.transition.state === snapshot.to
       )
       for (const schedule of enterSchedules) {
-        runTransitionSchedule(schedule, snapshot)
+        const result = runTransitionSchedule(schedule, snapshot)
+        if (!result.ok) {
+          return result
+        }
       }
     }
+    return Result.success(undefined)
   }
 
   /**
    * The final loop-agnostic runtime value returned to users.
    */
   const runScheduleUnsafe = (
-    schedule: ScheduleDefinition<S, AnyRequirements, Root>,
+    schedule: ScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>,
     options: {
       readonly resetChangedMachines?: boolean
     } = {}
-  ): void => {
+  ): Result.Result<void, SystemFailure> => {
     const deferred: Array<Command.DeferredCommand<S>> = []
     if (options.resetChangedMachines ?? true) {
       changedMachines = new Set()
@@ -2095,7 +2369,12 @@ export const makeRuntime = <
       if (Schedule.isSystemStep(step)) {
         const blockedByWhen = step.spec.when.some((condition: Machine.Condition) => !evaluateCondition(condition))
         if (!blockedByWhen) {
-          deferred.push(...runSystem(step as SystemDefinition<any, any, any>))
+          const result = runSystem(step as SystemDefinition<any, any, any>)
+          if (!result.ok) {
+            finalizeSchedule(deferred, step)
+            return result
+          }
+          deferred.push(...result.value)
         }
         continue
       }
@@ -2104,7 +2383,11 @@ export const makeRuntime = <
         continue
       }
       if (step.kind === "applyStateTransitions") {
-        applyStateTransitions(deferred, step.bundle as never)
+        const result = applyStateTransitions(deferred, step.bundle as never)
+        if (!result.ok) {
+          finalizeSchedule(deferred, step)
+          return result
+        }
         continue
       }
       if (step.kind === "eventUpdate") {
@@ -2117,7 +2400,14 @@ export const makeRuntime = <
       }
       updateRelationFailures()
     }
-    const lastStep = schedule.steps.at(-1)
+    finalizeSchedule(deferred, schedule.steps.at(-1))
+    return Result.success(undefined)
+  }
+
+  const finalizeSchedule = (
+    deferred: Array<Command.DeferredCommand<S>>,
+    lastStep: Schedule.ScheduleStep | undefined
+  ): void => {
     applyDeferred(deferred)
     if (!lastStep || Schedule.isSystemStep(lastStep) || lastStep.kind !== "eventUpdate") {
       updateEvents()
@@ -2133,10 +2423,16 @@ export const makeRuntime = <
   /**
    * Executes multiple schedules after their requirement checks have passed.
    */
-  const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root>>): void => {
+  const tickUnsafe = (
+    schedules: ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>>
+  ): Result.Result<void, SystemFailure> => {
     for (const schedule of schedules) {
-      runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
+      const result = runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>)
+      if (!result.ok) {
+        return result
+      }
     }
+    return Result.success(undefined)
   }
 
   const hasRequirement = (requirement: Requirement.RequirementValue): boolean => {
@@ -2152,9 +2448,11 @@ export const makeRuntime = <
     }
   }
 
-  const tryRunSchedule = (
-    schedule: ExecutableScheduleDefinition<S, any, any, any>
-  ): Result.Result<void, MissingRuntimeRequirements> => {
+  const tryRunSchedule = <
+    const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>
+  >(
+    schedule: Selected
+  ): Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>> => {
     const missing = schedule.requirements
       .filter((requirement) => !hasRequirement(requirement))
       .map(({ kind, name }) => ({ kind, name }))
@@ -2166,8 +2464,20 @@ export const makeRuntime = <
       })
     }
 
-    runScheduleUnsafe(schedule as ScheduleDefinition<S, AnyRequirements, Root>)
-    return Result.success(undefined)
+    return runScheduleUnsafe(
+      schedule as ScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>
+    ) as Result.Result<void, Schedule.FailureOf<Selected>>
+  }
+
+  /**
+   * Evaluates a declared read-only world projection without running a schedule
+   * or advancing any visibility boundary.
+   */
+  const inspect = <const Selected extends Inspector.InspectorDefinition<any, any, Root, any, any>>(
+    inspector: Selected
+  ): Inspector.Inspector.Value<Selected> => {
+    const context = makeContext(inspector.system, makeSystemTransaction())
+    return inspector.read(context) as Inspector.Inspector.Value<Selected>
   }
 
   /**
@@ -2187,14 +2497,15 @@ export const makeRuntime = <
     stateValues: (options.states ?? {}) as States,
     machineValues: providedMachines as RuntimeMachinesOf<ProvidedMachines>,
     initialize(...schedules) {
-      tickUnsafe(schedules)
+      return tickUnsafe(schedules as ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>>) as never
     },
     runSchedule(schedule) {
-      runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root>)
+      return runScheduleUnsafe(schedule as unknown as ScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>) as never
     },
     tryRunSchedule,
+    inspect,
     tick(...schedules) {
-      tickUnsafe(schedules)
+      return tickUnsafe(schedules as ReadonlyArray<ExecutableScheduleDefinition<S, AnyRequirements, Root, AnyRequirements, SystemFailure>>) as never
     }
   }
 

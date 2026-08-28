@@ -2,7 +2,7 @@ import { Fx } from "@bevy-ts/core"
 
 import { levelSolids } from "../content.ts"
 import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
-import { Game, LoseMessage, PlayerContacts } from "../schema.ts"
+import { Game, LevelScope, LoseMessage, PlayerContacts } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
 export const SetupWorldSystem = Game.System(
@@ -20,13 +20,13 @@ export const SetupWorldSystem = Game.System(
 
       const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
-        commands.spawn(playerDraft.value)
+        commands.spawnIn(LevelScope, playerDraft.value)
       }
 
       for (const solid of levelSolids) {
         const solidDraft = makeSolidDraft(solid)
         if (solidDraft.ok) {
-          commands.spawn(solidDraft.value)
+          commands.spawnIn(LevelScope, solidDraft.value)
         }
       }
     })
