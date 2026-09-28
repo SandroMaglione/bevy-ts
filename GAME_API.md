@@ -164,8 +164,8 @@ const summary = runtime.inspect(WorldSummary)
 
 An inspector cannot declare write queries, write resources, commands, event
 writers, or state-transition writers. Runtime provisioning is checked at the
-call, and inspection does not advance events. Like a system, an inspector's
-`added`/`changed` filters report changes since its previous evaluation.
+call. Like a system, an inspector's `added`/`changed` filters and event
+reads report what was published since its previous evaluation.
 
 ## Save and load
 

@@ -593,7 +593,6 @@ describe("Runtime relationships", () => {
         relate,
         observeBefore,
         Game.Schedule.applyDeferred(),
-        Game.Schedule.updateRelationFailures(),
         observeAfter
       )
     )
@@ -664,13 +663,13 @@ describe("Runtime relationships", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Game.Schedule(spawn, Game.Schedule.applyDeferred()),
-      Game.Schedule(clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe)
+      Game.Schedule(clear, Game.Schedule.applyDeferred(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Summary)).toBe("MissingRelation/0/0")
   })
 
-  it("surfaces failed deferred relation mutations only after updateRelationFailures and leaves world state unchanged", () => {
+  it("surfaces failed deferred relation mutations to readers after applyDeferred and leaves world state unchanged", () => {
     let alphaId: Entity.EntityId<typeof schema, any> | undefined
     let betaId: Entity.EntityId<typeof schema, any> | undefined
 
@@ -753,7 +752,6 @@ describe("Runtime relationships", () => {
       queueInvalid,
       Game.Schedule.applyDeferred(),
       readBefore,
-      Game.Schedule.updateRelationFailures(),
       readAfter
     )
     runtime.tick(spawnSchedule, failureSchedule)
@@ -763,7 +761,7 @@ describe("Runtime relationships", () => {
     )
   })
 
-  it("surfaces failed hierarchy reorders only after updateRelationFailures and keeps child order unchanged", () => {
+  it("surfaces failed hierarchy reorders to readers after applyDeferred and keeps child order unchanged", () => {
     let rootId: Entity.EntityId<typeof schema, any> | undefined
     let firstId: Entity.EntityId<typeof schema, any> | undefined
     let secondId: Entity.EntityId<typeof schema, any> | undefined
@@ -856,7 +854,6 @@ describe("Runtime relationships", () => {
         queueInvalid,
         Game.Schedule.applyDeferred(),
         readBefore,
-        Game.Schedule.updateRelationFailures(),
         readAfter
       )
     )

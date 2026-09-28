@@ -1,286 +1,113 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/Runtime"
-import * as Schedule from "@bevy-ts/core/Schedule"
-import * as System from "@bevy-ts/core/System"
-import { readResourceValue } from "./utils/fixtures.ts"
+import { Descriptor, Fx, Schema } from "@bevy-ts/core"
 
-const Log = Descriptor.Resource<ReadonlyArray<number>>()("Log")
 const Ping = Descriptor.Event<{ value: number }>()("Ping")
+const Game = Schema.bind(Schema.fragment({ events: { Ping } }))
 
-const Game = Schema.bind(Schema.fragment({
-  resources: {
-    Log
-  },
-  events: {
-    Ping
-  }
-}))
-const schema = Game.schema
+const makeRuntime = () => Game.Runtime.make({ services: Game.Runtime.services() })
 
-const makeRuntime = () =>
-  Runtime.make({
-    schema,
-    services: Runtime.services(),
-    resources: {
-      Log: []
-    }
+const emitter = (name: string, values: ReadonlyArray<number>) =>
+  Game.System(name, { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
+    for (const value of values) events.ping.emit({ value })
+  })
+
+const reader = (name: string, log: Array<ReadonlyArray<number>>) =>
+  Game.System(name, { events: { ping: Game.System.readEvent(Ping) } }, ({ events }) => {
+    log.push(events.ping.all().map((event) => event.value))
   })
 
 describe("Runtime events", () => {
-  it("later schedules in one tick observe earlier events once they advance the event buffer", () => {
-    const emit = System.System(
-      "RuntimeEvents/Emit",
-      {
-        schema,
-        events: {
-          ping: System.writeEvent(Ping)
-        }
-      },
-      ({ events }) =>
-        {
-          events.ping.emit({ value: 1 })
-        }
-    )
-
-    const observe = System.System(
-      "RuntimeEvents/ObserveLaterSchedule",
-      {
-        schema,
-        events: {
-          ping: System.readEvent(Ping)
-        },
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ events, resources }) =>
-        {
-          resources.log.set(events.ping.all().map((event) => event.value))
-        }
-    )
-
+  it("delivers events to later systems in the same schedule without a marker", () => {
+    const log: Array<ReadonlyArray<number>> = []
     const runtime = makeRuntime()
-    runtime.tick(
-      Schedule.Schedule(emit),
-      Schedule.Schedule(Schedule.updateEvents(), observe)
-    )
-
-    expect(readResourceValue(runtime, schema, Log)).toEqual([1])
+    runtime.tick(Game.Schedule(emitter("Events/Emit", [1, 2]), reader("Events/Read", log)))
+    expect(log).toEqual([[1, 2]])
   })
 
-  it("keeps events pending across schedule runs until an explicit updateEvents()", () => {
-    const emit = System.System(
-      "RuntimeEvents/EmitPending",
-      {
-        schema,
-        events: {
-          ping: System.writeEvent(Ping)
-        }
-      },
-      ({ events }) =>
-        {
-          events.ping.emit({ value: 8 })
-        }
-    )
-
-    const observe = System.System(
-      "RuntimeEvents/ObservePending",
-      {
-        schema,
-        events: {
-          ping: System.readEvent(Ping)
-        },
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ events, resources }) =>
-        {
-          resources.log.set(events.ping.all().map((event) => event.value))
-        }
-    )
-
+  it("delivers events emitted after a reader ran on its next run", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    const read = reader("Events/ReadFirst", log)
+    const schedule = Game.Schedule(read, emitter("Events/EmitAfter", [7]))
     const runtime = makeRuntime()
-    runtime.tick(
-      Schedule.Schedule(emit),
-      Schedule.Schedule(observe)
-    )
-    expect(readResourceValue(runtime, schema, Log)).toEqual([])
-
-    runtime.tick(Schedule.Schedule(Schedule.updateEvents(), observe))
-    expect(readResourceValue(runtime, schema, Log)).toEqual([8])
+    runtime.tick(schedule)
+    runtime.tick(schedule)
+    expect(log).toEqual([[], [7]])
   })
 
-  it("does not expose newly emitted events before updateEvents in the same schedule", () => {
-    const emit = System.System(
-      "RuntimeEvents/EmitBefore",
-      {
-        schema,
-        events: {
-          ping: System.writeEvent(Ping)
-        }
-      },
-      ({ events }) =>
-        {
-          events.ping.emit({ value: 2 })
-        }
-    )
-
-    const readBefore = System.System(
-      "RuntimeEvents/ReadBefore",
-      {
-        schema,
-        events: {
-          ping: System.readEvent(Ping)
-        },
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ events, resources }) =>
-        {
-          resources.log.update((entries) => [...entries, events.ping.all().length])
-        }
-    )
-
+  it("delivers every event exactly once to each reader, independently", () => {
+    const first: Array<ReadonlyArray<number>> = []
+    const second: Array<ReadonlyArray<number>> = []
+    const emit = emitter("Events/EmitOnce", [1])
+    const readFirst = reader("Events/ReaderA", first)
+    const readSecond = reader("Events/ReaderB", second)
     const runtime = makeRuntime()
-    runtime.tick(Schedule.Schedule(emit, readBefore))
-
-    expect(readResourceValue(runtime, schema, Log)).toEqual([0])
+    runtime.tick(Game.Schedule(emit, readFirst))
+    runtime.tick(Game.Schedule(readFirst, readSecond))
+    runtime.tick(Game.Schedule(readFirst, readSecond))
+    expect(first).toEqual([[1], [], []])
+    expect(second).toEqual([[1], []])
   })
 
-  it("makes pending events readable after updateEvents in the same schedule", () => {
-    const emit = System.System(
-      "RuntimeEvents/EmitAfter",
-      {
-        schema,
-        events: {
-          ping: System.writeEvent(Ping)
-        }
-      },
-      ({ events }) =>
-        {
-          events.ping.emit({ value: 3 })
-        }
-    )
-
-    const readAfter = System.System(
-      "RuntimeEvents/ReadAfter",
-      {
-        schema,
-        events: {
-          ping: System.readEvent(Ping)
-        },
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ events, resources }) =>
-        {
-          resources.log.set(events.ping.all().map((event) => event.value))
-        }
-    )
-
+  it("keeps emission order across systems and runs", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    const read = reader("Events/ReadOrdered", log)
     const runtime = makeRuntime()
-    runtime.tick(Schedule.Schedule(emit, Schedule.updateEvents(), readAfter))
-
-    expect(readResourceValue(runtime, schema, Log)).toEqual([3])
+    runtime.tick(Game.Schedule(emitter("Events/EmitA", [1, 2]), emitter("Events/EmitB", [3])))
+    runtime.tick(Game.Schedule(emitter("Events/EmitC", [4]), read))
+    expect(log).toEqual([[1, 2, 3, 4]])
   })
 
-  it("preserves event order within one update phase", () => {
-    const emit = System.System(
-      "RuntimeEvents/EmitMany",
-      {
-        schema,
-        events: {
-          ping: System.writeEvent(Ping)
-        }
-      },
-      ({ events }) =>
-        {
-          events.ping.emit({ value: 4 })
-          events.ping.emit({ value: 5 })
-          events.ping.emit({ value: 6 })
-        }
-    )
-
-    const observe = System.System(
-      "RuntimeEvents/ObserveMany",
-      {
-        schema,
-        events: {
-          ping: System.readEvent(Ping)
-        },
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ events, resources }) =>
-        {
-          resources.log.set(events.ping.all().map((event) => event.value))
-        }
-    )
-
+  it("publishes nothing from a failed system and redelivers to a failed reader", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    const failingEmit = Game.System("Events/FailingEmit", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
+      events.ping.emit({ value: 9 })
+      return Fx.fail("Boom" as const)
+    })
+    let fail = true
+    const flakyRead = Game.System("Events/FlakyRead", { events: { ping: Game.System.readEvent(Ping) } }, ({ events }) => {
+      log.push(events.ping.all().map((event) => event.value))
+      if (fail) {
+        fail = false
+        return Fx.fail("NotYet" as const)
+      }
+      return Fx.succeed(undefined)
+    })
     const runtime = makeRuntime()
-    runtime.tick(Schedule.Schedule(emit, Schedule.updateEvents(), observe))
-
-    expect(readResourceValue(runtime, schema, Log)).toEqual([4, 5, 6])
+    expect(runtime.tick(Game.Schedule(failingEmit)).ok).toBe(false)
+    expect(runtime.tick(Game.Schedule(emitter("Events/EmitValid", [1]), flakyRead)).ok).toBe(false)
+    expect(runtime.tick(Game.Schedule(flakyRead)).ok).toBe(true)
+    expect(log).toEqual([[1], [1]])
   })
 
-  it("refreshes readable events across updates instead of accumulating stale values", () => {
-    const observe = System.System(
-      "RuntimeEvents/ObserveAcrossUpdates",
-      {
-        schema,
-        events: {
-          ping: System.readEvent(Ping)
-        },
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ events, resources }) =>
-        {
-          resources.log.set(events.ping.all().map((event) => event.value))
-        }
-    )
-
-    const emitOne = System.System(
-      "RuntimeEvents/EmitOne",
-      {
-        schema,
-        events: {
-          ping: System.writeEvent(Ping)
-        }
-      },
-      ({ events }) =>
-        {
-          events.ping.emit({ value: 7 })
-        }
-    )
-
-    const emitNone = System.System(
-      "RuntimeEvents/EmitNone",
-      {
-        schema
-      },
-      () => {}
-    )
-
+  it("lets a system read the events it emitted on its next run", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    let next = 0
+    const echo = Game.System("Events/Echo", {
+      events: { read: Game.System.readEvent(Ping), write: Game.System.writeEvent(Ping) }
+    }, ({ events }) => {
+      log.push(events.read.all().map((event) => event.value))
+      events.write.emit({ value: next++ })
+    })
     const runtime = makeRuntime()
-    runtime.tick(
-      Schedule.Schedule(emitOne),
-      Schedule.Schedule(Schedule.updateEvents(), observe)
-    )
+    runtime.tick(Game.Schedule(echo))
+    runtime.tick(Game.Schedule(echo))
+    runtime.tick(Game.Schedule(echo))
+    expect(log).toEqual([[], [0], [1]])
+  })
 
-    expect(readResourceValue(runtime, schema, Log)).toEqual([7])
+  it("keeps events for the current and previous tick only", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    const read = reader("Events/ReadLate", log)
+    const idle = Game.Schedule()
+    const runtime = makeRuntime()
 
-    runtime.tick(
-      Schedule.Schedule(emitNone),
-      Schedule.Schedule(Schedule.updateEvents(), observe)
-    )
+    runtime.tick(Game.Schedule(emitter("Events/EmitKept", [1])))
+    runtime.tick(Game.Schedule(read))
+    expect(log).toEqual([[1]])
 
-    expect(readResourceValue(runtime, schema, Log)).toEqual([])
+    runtime.tick(Game.Schedule(emitter("Events/EmitDropped", [2])))
+    runtime.tick(idle)
+    runtime.tick(Game.Schedule(read))
+    expect(log).toEqual([[1], []])
   })
 })

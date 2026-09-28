@@ -372,7 +372,7 @@ const events: BenchCase = {
       for (const value of events.ping.all()) total += value
       resources.sum.set(total)
     })
-    const schedule = Game.Schedule(Emit, Game.Schedule.updateEvents(), Read)
+    const schedule = Game.Schedule(Emit, Read)
     return { run: () => runtime.tick(schedule) }
   }
 }
@@ -500,7 +500,6 @@ const frame: BenchCase = {
       ...movement,
       ...eventWriters,
       Game.Schedule.applyDeferred(),
-      Game.Schedule.updateEvents(),
       ...eventReaders,
       ...readers,
       Cleanup,

@@ -114,7 +114,6 @@ export const setup = Game.Schedule(Spawn, Game.Schedule.applyDeferred())
 export const update = Game.Schedule(
   Move,
   Attack,
-  Game.Schedule.updateEvents(),
   ApplyHits,
   Game.Schedule.applyStateTransitions(),
   Report

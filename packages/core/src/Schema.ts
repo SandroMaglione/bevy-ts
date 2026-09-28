@@ -333,8 +333,6 @@ interface BoundInspectorAccess<S extends Schema.Any, Root> extends Inspector.Ins
 type BoundScheduleEntry<S extends Schema.Any, Root> =
   | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
-  | Schedule.EventUpdateStep
-  | Schedule.RelationFailureUpdateStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
   | Schema.BoundSchedule<S, Root, any, any>
 
@@ -613,8 +611,6 @@ export namespace Schema {
         plan: readonly [...Entries]
       ) => BoundTransitionScheduleResult<S, Root, M, Entries>
       applyDeferred: typeof Schedule.applyDeferred
-      updateEvents: typeof Schedule.updateEvents
-      updateRelationFailures: typeof Schedule.updateRelationFailures
       applyStateTransitions: <Bundle extends BoundTransitionBundle<S, Root, any, any, any> | undefined = undefined>(
         bundle?: Bundle
       ) => Schedule.ApplyStateTransitionsStep<Bundle, Root>

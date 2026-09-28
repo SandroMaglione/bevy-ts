@@ -45,7 +45,8 @@ const schedule = Game.Schedule(A, Game.Schedule.applyDeferred(), B)
 ## Explicit Runtime Semantics
 - Long-lived references are storage-safe handles, not proof of liveness.
 - Lookups and dynamic reads must stay explicit and typed as fallible when they depend on current runtime state.
-- Schedule boundaries stay explicit: deferred commands, lifecycle visibility, events, and state transitions are advanced only by explicit schedule markers.
+- Schedule boundaries stay explicit: deferred commands and state transitions are applied only by explicit schedule markers (`applyDeferred()`, `applyStateTransitions(...)`).
+- Reads are per-reader streams, not marker-driven: change detection, events, transition events, and relation failures show each system what was published since its own previous run, once, with a two-tick retention window.
 
 ```ts
 const target = lookup.getHandle(handle, query)

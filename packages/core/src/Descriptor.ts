@@ -45,7 +45,7 @@
  * // Resources describe singleton world data shared across systems.
  * const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
  *
- * // Events describe staged cross-system messages.
+ * // Events describe messages between systems, read once per reader.
  * const DamageTaken = Descriptor.Event<{ amount: number }>()("DamageTaken")
  *
  * // Services describe host capabilities that live outside ECS storage.
@@ -343,8 +343,12 @@ export const TransientResource = <Value>() => <const Name extends string>(
  * Use event descriptors to model append-only messages flowing between systems
  * without exposing untyped channels.
  *
- * Writers emit into a pending buffer. Readers observe only the committed
- * readable buffer after an explicit `Game.Schedule.updateEvents()` boundary.
+ * Events are per-reader streams, like change detection: each reading system
+ * sees the events published since its own previous run, once, in emission
+ * order. A system's events are published when it completes successfully, so
+ * later systems in the same schedule see them, and a failed system publishes
+ * nothing. Events are kept for the current and previous `runtime.tick(...)`
+ * call.
  *
  * @example
  * ```ts

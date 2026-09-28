@@ -738,8 +738,8 @@ const EnemyBulletCollisionSystem = Game.System(
           if (Matter.Collision.collides(bulletBody, enemyBody)?.collided ?? false) {
             consumedBullets.add(bulletId.value)
             consumedEnemies.add(enemyId.value)
-            // The destroy event is read only after updateEvents(), so emit
-            // storage-safe handles and re-resolve them later.
+            // The destroy event is read by a later system, so emit
+            // storage-safe handles and re-resolve them there.
             events.destroyEnemy.emit({
               bullet: Game.Entity.handle(bulletId, Bullet),
               enemy: Game.Entity.handle(enemyId, Enemy)
@@ -841,8 +841,6 @@ const updateSchedule = Game.Schedule(
   EnemyDescentSystem,
   SyncMatterBodyTransformsSystem,
   EnemyBulletCollisionSystem,
-  // DestroyEnemy becomes readable only after this explicit event boundary.
-  Game.Schedule.updateEvents(),
   EnemyDestroySystem,
   CullingSystem,
   Game.Schedule.applyDeferred(),

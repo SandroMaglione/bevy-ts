@@ -75,11 +75,11 @@ if (enemy.ok) { /* the entity still exists and has Health */ }
 - `lookup.getHandle` returns a `Result`.
 - A handle with an intent (`Health` here) can only be resolved through a query that proves that component.
 
-## 6. Events are double-buffered
+## 6. Events are read once per reader
 
-- Systems emit into a pending buffer.
-- `updateEvents()` makes the pending events readable and drops the ones read before.
-- Readers after the marker see this frame's events.
+- A system's events are published when it completes; a failed system publishes nothing.
+- Each reader sees the events published since its own previous run, once, in order: from earlier systems in this schedule, and from anything that ran after it last time.
+- Events are kept for the current and previous tick, like the removed and despawned logs, so a reader that skips longer misses them.
 
 ## 7. Expected failures are typed and roll back
 
@@ -118,11 +118,11 @@ const Flow = Game.StateMachine("Concepts/Flow", ["Playing", "Won"])
 ## 10. Schedules make every boundary visible
 
 ```ts
-const update = Game.Schedule(Move, Attack, Game.Schedule.updateEvents(), ApplyHits, Game.Schedule.applyStateTransitions(), Report)
+const update = Game.Schedule(Move, Attack, ApplyHits, Game.Schedule.applyStateTransitions(), Report)
 ```
 
 - Steps run in the order written. Nested schedules are flattened in place.
-- Only markers advance visibility: `applyDeferred`, `updateEvents`, `applyStateTransitions`, `updateRelationFailures`.
+- Only markers apply queued work: `applyDeferred` (commands) and `applyStateTransitions` (commands, then machine transitions). Reads (change detection, events, relation failures) are per system and need no marker.
 - Nothing is flushed when a schedule ends.
 
 ## 11. The runtime is driven by your host

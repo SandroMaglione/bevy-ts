@@ -589,9 +589,10 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
 
   /**
    * Starts a new frame (one `runtime.tick(...)` call): log entries older than
-   * the previous frame are dropped.
+   * the previous frame are dropped. Returns that boundary tick (entries at or
+   * before it are gone), or `0` when nothing was dropped yet.
    */
-  const advanceFrame = (): void => {
+  const advanceFrame = (): number => {
     for (let ordinal = 0; ordinal < descriptors.length; ordinal++) {
       // Keep membership changes from the current and previous frame.
       const boundary = frameVersions[ordinal]!
@@ -612,6 +613,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       retainedAfter = frameStart
     }
     frameStart = tick
+    return retainedAfter
   }
 
   const entriesSince = (log: TickLog | undefined, since: number): ReadonlyArray<number> => {

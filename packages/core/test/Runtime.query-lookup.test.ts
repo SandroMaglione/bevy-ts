@@ -772,7 +772,7 @@ describe("Runtime query and lookup", () => {
     })
 
     runtime.tick(
-      Game.Schedule(spawn, Game.Schedule.applyDeferred(), Game.Schedule.updateEvents(), observe)
+      Game.Schedule(spawn, Game.Schedule.applyDeferred(), observe)
     )
 
     expect(readResourceValue(runtime, schema, LastX)).toBe(24)
@@ -780,7 +780,7 @@ describe("Runtime query and lookup", () => {
 
     runtime.tick(
       Game.Schedule(destroy, Game.Schedule.applyDeferred()),
-      Game.Schedule(emitStored, Game.Schedule.updateEvents(), observe)
+      Game.Schedule(emitStored, observe)
     )
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("MissingEntity/MissingEntity")
