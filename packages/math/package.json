@@ -1,6 +1,6 @@
 {
   "name": "@typeonce/bevy-ts-math",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Validated math values (Scalar, Vector2, Size2, Aabb, InputAxis) for bevy-ts games",
   "author": "Sandro Maglione",
   "license": "MIT",
