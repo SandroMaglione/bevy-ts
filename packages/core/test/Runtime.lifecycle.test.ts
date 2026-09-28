@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import * as Entity from "@bevy-ts/core/entity"
 import { readResourceValue } from "./utils/fixtures.ts"
 
@@ -51,11 +51,11 @@ describe("Runtime lifecycle", () => {
       "Lifecycle/Spawn",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Game.Command.spawnWith(
+        {
+          commands.spawn(Game.Command.spawn(
             [Position, { x: 1, y: 2 }]
           ))
-        })
+        }
     )
 
     const ObserveBeforeSystem = Game.System(
@@ -81,10 +81,10 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.addedBefore.set(queries.added.each().length)
           resources.changedBefore.set(queries.changed.each().length)
-        })
+        }
     )
 
     const ObserveAfterSystem = Game.System(
@@ -110,10 +110,10 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.addedAfter.set(queries.added.each().length)
           resources.changedAfter.set(queries.changed.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -124,7 +124,7 @@ describe("Runtime lifecycle", () => {
       Game.Schedule.updateLifecycle(),
       ObserveAfterSystem
     )
-    runtime.runSchedule(lifecycleSchedule)
+    runtime.tick(lifecycleSchedule)
 
     expect(readResourceValue(runtime, schema, AddedBefore)).toBe(0)
     expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)
@@ -140,21 +140,21 @@ describe("Runtime lifecycle", () => {
       "Lifecycle/SpawnForRemoval",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          removableId = commands.spawn(Game.Command.spawnWith(
+        {
+          removableId = commands.spawn(Game.Command.spawn(
             [Position, { x: 1, y: 1 }]
           )).value
-          doomedId = commands.spawn(Game.Command.spawnWith(
+          doomedId = commands.spawn(Game.Command.spawn(
             [Position, { x: 2, y: 2 }]
           )).value
-        })
+        }
     )
 
     const CleanupSystem = Game.System(
       "Lifecycle/Cleanup",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!removableId || !doomedId) {
             return
           }
@@ -165,7 +165,7 @@ describe("Runtime lifecycle", () => {
           commands.despawn(
             Entity.makeEntityId<typeof schema, typeof schema>(doomedId)
           )
-        })
+        }
     )
 
     const ObserveBeforeSystem = Game.System(
@@ -183,10 +183,10 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ removed, despawned, resources }) =>
-        Fx.sync(() => {
+        {
           resources.removedBefore.set(removed.positions.all().length)
           resources.despawnedBefore.set(despawned.entities.all().length)
-        })
+        }
     )
 
     const ObserveAfterSystem = Game.System(
@@ -204,10 +204,10 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ removed, despawned, resources }) =>
-        Fx.sync(() => {
+        {
           resources.removedAfter.set(removed.positions.all().length)
           resources.despawnedAfter.set(despawned.entities.all().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -232,11 +232,11 @@ describe("Runtime lifecycle", () => {
       "Lifecycle/SpawnRefresh",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Game.Command.spawnWith(
+        {
+          commands.spawn(Game.Command.spawn(
             [Position, { x: 3, y: 4 }]
           ))
-        })
+        }
     )
 
     const ObserveChanged = Game.System(
@@ -262,10 +262,10 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.addedAfter.set(queries.added.each().length)
           resources.changedAfter.set(queries.changed.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -277,7 +277,7 @@ describe("Runtime lifecycle", () => {
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
 
     const refreshSchedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveChanged)
-    runtime.runSchedule(refreshSchedule)
+    runtime.tick(refreshSchedule)
 
     expect(readResourceValue(runtime, schema, AddedAfter)).toBe(0)
     expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(0)
@@ -290,27 +290,26 @@ describe("Runtime lifecycle", () => {
       "Lifecycle/SpawnForOverwrite",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          existingId = commands.spawn(Game.Command.spawnWith(
+        {
+          existingId = commands.spawn(Game.Command.spawn(
             [Position, { x: 1, y: 1 }]
           )).value
-        })
+        }
     )
 
     const OverwriteSystem = Game.System(
       "Lifecycle/OverwriteExisting",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!existingId) {
             return
           }
           commands.insert(
             Entity.makeEntityId<typeof schema, typeof schema>(existingId),
-            Position,
-            { x: 9, y: 9 }
+            [Position, { x: 9, y: 9 }]
           )
-        })
+        }
     )
 
     const ObserveBeforeSystem = Game.System(
@@ -329,9 +328,9 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.changedBefore.set(queries.changed.each().length)
-        })
+        }
     )
 
     const ObserveAfterSystem = Game.System(
@@ -350,9 +349,9 @@ describe("Runtime lifecycle", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.changedAfter.set(queries.changed.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()

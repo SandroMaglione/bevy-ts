@@ -19,24 +19,22 @@
  * @example
  * ```ts
  * // Build drafts as values so spawn intent stays explicit inside the system.
- * const EnemyWave = Game.System("EnemyWave", {}, ({ commands }) =>
- *   Fx.sync(() => {
- *     const enemy = Game.Command.spawnWithMixed(
- *       // Validate raw authored input through the constructed descriptor.
- *       Game.Command.entryRaw(Position, { x: 96, y: 32 }),
- *       // Add already-validated marker or config components directly.
- *       Game.Command.entry(Enemy, {}),
- *       Game.Command.entry(Health, 3)
- *     )
+ * const EnemyWave = Game.System("EnemyWave", {}, ({ commands }) => {
+ *   const enemy = Game.Command.spawn(
+ *     // Validate raw authored input through the constructed descriptor.
+ *     Game.Command.entryRaw(Position, { x: 96, y: 32 }),
+ *     // Add already-validated marker or config components directly.
+ *     [Enemy, {}],
+ *     [Health, 3]
+ *   )
  *
- *     if (!enemy.ok) {
- *       return
- *     }
+ *   if (!enemy.ok) {
+ *     return
+ *   }
  *
- *     // Queue the world write now. The entity becomes visible later.
- *     commands.spawn(enemy.value)
- *   })
- * )
+ *   // Queue the world write now. The entity becomes visible later.
+ *   commands.spawn(enemy.value)
+ * })
  *
  * // Make the deferred mutation boundary part of the schedule itself.
  * const update = Game.Schedule(
@@ -99,19 +97,6 @@ export namespace Draft {
   > = Entry extends readonly [infer D extends Descriptor<"component", string, any>, infer _Value]
     ? Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>
     : P
-
-  /**
-   * Folds a readonly tuple of entries into one final component proof.
-   */
-  export type FoldEntries<
-    Entries extends ReadonlyArray<readonly [Descriptor<"component", string, any>, unknown]>,
-    P extends Entity.ComponentProof = {}
-  > = Entries extends readonly [
-    infer Head extends readonly [Descriptor<"component", string, any>, unknown],
-    ...infer Tail extends Array<readonly [Descriptor<"component", string, any>, unknown]>
-  ]
-    ? FoldEntries<Tail, InsertEntry<P, Head>>
-    : P
 }
 
 /**
@@ -125,73 +110,58 @@ export type Entry<D extends Descriptor<"component", string, any>> = readonly [D,
 type SchemaComponentDescriptor<S extends Schema.Any> =
   Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
 
-type ConstructedSchemaComponentDescriptor<S extends Schema.Any> =
-  Extract<Schema.Components<S>[keyof Schema.Components<S>], DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>
-
 /**
  * Any component entry accepted by a schema-aware command API.
  */
 export type SchemaEntry<S extends Schema.Any> = Entry<SchemaComponentDescriptor<S>>
 
-export type MixedEntry<S extends Schema.Any> = SchemaEntry<S> | Result.Result<SchemaEntry<S>, any>
+/**
+ * One entry accepted by `spawn(...)` and `insert(...)`: a plain descriptor/value
+ * pair, or a `Result` of one (from `entryRaw(...)` or `entryResult(...)`).
+ */
+export type SpawnEntry<S extends Schema.Any> = SchemaEntry<S> | Result.Result<SchemaEntry<S>, any>
 
-type ResultValue<T> =
-  [T] extends [Result.Result<infer Value extends readonly [Descriptor<"component", string, any>, unknown], any>]
-    ? Value
-    : never
-
-type MixedEntryValue<T> =
+type EntryValue<T> =
   [T] extends [Result.Result<infer Value extends readonly [Descriptor<"component", string, any>, unknown], any>]
     ? Value
     : [T] extends [readonly [Descriptor<"component", string, any>, unknown]]
       ? T
       : never
 
-export type FoldResultEntries<
-  Entries extends ReadonlyArray<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>,
+/**
+ * Folds entries into the component proof of the resulting draft.
+ */
+export type FoldEntries<
+  Entries extends ReadonlyArray<SpawnEntry<any>>,
   P extends Entity.ComponentProof = {}
 > = Entries extends readonly [
-  infer Head extends Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>,
-  ...infer Tail extends Array<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>
+  infer Head extends SpawnEntry<any>,
+  ...infer Tail extends Array<SpawnEntry<any>>
 ]
-  ? FoldResultEntries<Tail, Draft.InsertEntry<P, ResultValue<Head>>>
+  ? FoldEntries<Tail, Draft.InsertEntry<P, EntryValue<Head>>>
   : P
 
-export type ResultEntryErrors<
-  Entries extends ReadonlyArray<Result.Result<readonly [Descriptor<"component", string, any>, unknown], any>>
-> = {
-  readonly [K in keyof Entries]:
-    Entries[K] extends Result.Result<any, infer Error> ? Error | null : never
-}
-
-export type MixedEntryErrors<
-  Entries extends ReadonlyArray<MixedEntry<any>>
-> = {
+/**
+ * Per-entry failures, aligned with the entries: `null` for entries that
+ * succeeded or could not fail.
+ */
+export type EntryErrors<Entries extends ReadonlyArray<SpawnEntry<any>>> = {
   readonly [K in keyof Entries]:
     Entries[K] extends Result.Result<any, infer Error> ? Error | null : null
 }
 
-type SuccessfulResultEntries<
-  Entries extends ReadonlyArray<Result.Result<SchemaEntry<any>, any>>
-> = Extract<{
-  readonly [K in keyof Entries]: ResultValue<Entries[K]>
-}, ReadonlyArray<SchemaEntry<any>>>
-
-type SuccessfulMixedEntries<
-  Entries extends ReadonlyArray<MixedEntry<any>>
-> = Extract<{
-  readonly [K in keyof Entries]: MixedEntryValue<Entries[K]>
-}, ReadonlyArray<SchemaEntry<any>>>
-
-export type FoldMixedEntries<
-  Entries extends ReadonlyArray<MixedEntry<any>>,
-  P extends Entity.ComponentProof = {}
-> = Entries extends readonly [
-  infer Head extends MixedEntry<any>,
-  ...infer Tail extends Array<MixedEntry<any>>
-]
-  ? FoldMixedEntries<Tail, Draft.InsertEntry<P, MixedEntryValue<Head>>>
-  : P
+/**
+ * The draft produced from `Entries`, wrapped in a `Result` exactly when at
+ * least one entry is a `Result` and can therefore fail.
+ */
+export type DraftFor<
+  S extends Schema.Any,
+  Entries extends ReadonlyArray<SpawnEntry<S>>,
+  P extends Entity.ComponentProof,
+  Root
+> = [Extract<Entries[number], { readonly ok: boolean }>] extends [never]
+  ? Entity.EntityDraft<S, FoldEntries<Entries, P>, Root>
+  : Result.Result<Entity.EntityDraft<S, FoldEntries<Entries, P>, Root>, EntryErrors<Entries>>
 
 /**
  * A deferred world mutation.
@@ -252,7 +222,7 @@ export interface InternalWorld<S extends Schema.Any> {
     id: Entity.EntityId<S, any>,
     relation: Relation.Relation.Any,
     target: Entity.EntityId<S, any>
-  ) => Relation.Relation.Result<void, Relation.Relation.MutationError>
+  ) => Result.Result<void, Relation.Relation.MutationError>
   /**
    * Removes one outgoing relation from an entity when present.
    */
@@ -267,17 +237,8 @@ export interface InternalWorld<S extends Schema.Any> {
     id: Entity.EntityId<S, any>,
     relation: Relation.Relation.Hierarchy,
     children: ReadonlyArray<Entity.EntityId<S, any>>
-  ) => Relation.Relation.Result<void, Relation.Relation.MutationError>
+  ) => Result.Result<void, Relation.Relation.MutationError>
 }
-
-/**
- * Starts a staged entity definition.
- *
- * Use this inside a system to build an entity with an exact compile-time
- * component proof before the spawn command is queued.
- */
-export const spawn = <S extends Schema.Any, Root = unknown>(): Entity.EntityDraft<S, {}, Root> =>
-  Entity.draft(unspawnedId as Entity.EntityId<S, Root>, {})
 
 /**
  * Placeholder id carried by drafts; `commands.spawn(...)` reserves the real id.
@@ -286,11 +247,6 @@ const unspawnedId = Entity.makeEntityId<any, any>(-1)
 
 /**
  * Creates a typed component entry.
- *
- * Use this when building drafts through the flat variadic helpers and you want
- * the component/value pairing to stay visually explicit. It is especially
- * useful once entries come from small factories or conditional branches rather
- * than inline tuple literals.
  */
 export const entry = <D extends Descriptor<"component", string, any>>(
   descriptor: D,
@@ -298,12 +254,8 @@ export const entry = <D extends Descriptor<"component", string, any>>(
 ): Entry<D> => [descriptor, value]
 
 /**
- * Lifts a validated result into a typed component entry result.
- *
- * This is the bridge between constructor-first validation and command
- * authoring: validate a value separately, then preserve that success/failure
- * shape while turning it into an entry for `spawnWithResult(...)` or
- * `spawnWithMixed(...)`.
+ * Lifts an already validated value into an entry result, keeping the failure
+ * visible to `spawn(...)` / `insert(...)`.
  */
 export const entryResult = <D extends Descriptor<"component", string, any>, Error>(
   descriptor: D,
@@ -314,127 +266,112 @@ export const entryResult = <D extends Descriptor<"component", string, any>, Erro
     : Result.failure(result.error)
 
 /**
- * Creates a typed component entry by validating raw input through a
- * constructed descriptor.
- *
- * Use this when spawn or reset data starts as raw numbers, vectors, sizes, or
- * other host/authored input and you want the command path itself to surface
- * validation failure explicitly.
+ * Validates raw input through a constructed descriptor and returns an entry
+ * result.
  *
  * @example
  * ```ts
- * // Keep raw input validation attached to the descriptor that owns it.
- * const position = Game.Command.entryRaw(Position, { x: 10, y: 20 })
- *
- * // Carry the result forward into a mixed draft builder.
- * const draft = Game.Command.spawnWithMixed(
- *   position,
- *   Game.Command.entry(Player, {})
+ * const draft = Game.Command.spawn(
+ *   Game.Command.entryRaw(Position, { x: 8, y: 12 }),
+ *   [Player, {}]
  * )
+ * if (!draft.ok) return
+ * commands.spawn(draft.value)
  * ```
  */
 export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>(
   descriptor: D,
   raw: Descriptor.Raw<D>
-): Result.Result<Entry<D>, Descriptor.ConstructionError<D>> => {
-  return entryResult(descriptor, DescriptorModule.constructorOf(descriptor)!.result(raw) as Result.Result<Descriptor.Value<D>, Descriptor.ConstructionError<D>>)
-}
+): Result.Result<Entry<D>, Descriptor.ConstructionError<D>> =>
+  entryResult(descriptor, DescriptorModule.constructorOf(descriptor).result(raw) as Result.Result<Descriptor.Value<D>, Descriptor.ConstructionError<D>>)
 
 /**
- * Adds a component to an entity draft and returns a more precise draft type.
- *
- * This is the command-building equivalent of a typed builder pattern: each call
- * enriches the proof carried by the draft.
+ * Adds entries to a draft. Plain entries return the new draft; if any entry is
+ * a `Result`, the draft is returned as a `Result` whose error lists every
+ * entry's failure (or `null`).
  */
 export const insert = <
   S extends Schema.Any,
   P extends Entity.ComponentProof,
-  D extends Descriptor<"component", string, any>,
-  Root = unknown
->(
-  draft: Entity.EntityDraft<S, P, Root>,
-  descriptor: D,
-  value: Descriptor.Value<D>
-): Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root> =>
-  Entity.draft(
-    draft.id,
-    {
-      ...(draft.proof as object),
-      [descriptor.name]: value
-    } as Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>,
-    [...draft.components, [descriptor, value]],
-    draft.relations
-  )
-
-/**
- * Adds multiple components to an entity draft in one flat call.
- *
- * This preserves the same exact proof precision as repeated `insert(...)`
- * calls, but folds the proof internally instead of forcing users to nest
- * builders manually.
- */
-export const insertMany = <
-  S extends Schema.Any,
-  P extends Entity.ComponentProof,
-  Root = unknown,
-  const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
+  Root,
+  const Entries extends ReadonlyArray<SpawnEntry<S>>
 >(
   draft: Entity.EntityDraft<S, P, Root>,
   ...entries: Entries
-): Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root> => {
-  const proof: Record<string, unknown> = { ...draft.proof }
-  const components: Array<Entity.StagedComponent> = [...draft.components]
-  for (const [descriptor, value] of entries) {
-    proof[descriptor.name] = value
-    components.push([descriptor, value])
-  }
-  return Entity.draft(draft.id, proof, components, draft.relations) as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root>
-}
-
-export const insertResult = <
-  S extends Schema.Any,
-  P extends Entity.ComponentProof,
-  D extends Descriptor<"component", string, any>,
-  Error = never,
-  Root = unknown
->(
-  draft: Entity.EntityDraft<S, P, Root>,
-  result: Result.Result<Entry<D>, Error>
-): Result.Result<Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, Error> =>
-  result.ok
-    ? Result.success(insert(draft, result.value[0], result.value[1]) as Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>)
-    : Result.failure(result.error)
+): DraftFor<S, Entries, P, Root> =>
+  build(draft.id, { ...draft.proof }, [...draft.components], draft.relations, entries) as DraftFor<S, Entries, P, Root>
 
 /**
- * Inserts one raw component value into a draft through a constructed
- * descriptor.
+ * Shared draft builder. Plain entries take a fast path; the first `Result`
+ * entry switches to collecting per-entry errors.
+ */
+const build = (
+  id: Entity.EntityId<any, any>,
+  proof: Record<string, unknown>,
+  components: Array<Entity.StagedComponent>,
+  relations: ReadonlyArray<Relation.StagedRelation<any, any>>,
+  entries: ReadonlyArray<SpawnEntry<any>>
+): Entity.EntityDraft<any, any, any> | Result.Result<Entity.EntityDraft<any, any, any>, ReadonlyArray<unknown>> => {
+  let errors: Array<unknown> | undefined
+  let failed = false
+  for (let index = 0; index < entries.length; index++) {
+    const candidate = entries[index]!
+    let resolved: SchemaEntry<any>
+    if (Array.isArray(candidate)) {
+      resolved = candidate as SchemaEntry<any>
+      errors?.push(null)
+    } else {
+      errors ??= new Array<unknown>(index).fill(null)
+      const result = candidate as Result.Result<SchemaEntry<any>, unknown>
+      if (!result.ok) {
+        failed = true
+        errors.push(result.error)
+        continue
+      }
+      errors.push(null)
+      resolved = result.value
+    }
+    proof[resolved[0].name] = resolved[1]
+    components.push(resolved)
+  }
+  if (errors === undefined) {
+    return Entity.draft(id, proof, components, relations)
+  }
+  return failed ? Result.failure(errors) : Result.success(Entity.draft(id, proof, components, relations))
+}
+
+/**
+ * Starts a staged entity from component entries.
+ *
+ * Drafts are plain values: build them anywhere (including small factories),
+ * then queue them with `commands.spawn(...)`. Entries may be `[Descriptor,
+ * value]` pairs or results from `entryRaw(...)`; see `insert(...)` for how
+ * failures are reported.
  *
  * @example
  * ```ts
- * const updated = Game.Command.insertRaw(
- *   Game.Command.spawn(),
- *   Position,
- *   { x: 12, y: 18 }
- * )
+ * const makeBullet = (x: number, y: number) =>
+ *   Game.Command.spawn([Position, { x, y }], [Velocity, { x: 0, y: -8 }])
+ *
+ * commands.spawn(makeBullet(10, 20))
  * ```
  */
-export const insertRaw = <
+export const spawn = <
   S extends Schema.Any,
-  P extends Entity.ComponentProof,
-  D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>,
-  Root = unknown
+  Root = unknown,
+  const Entries extends ReadonlyArray<SpawnEntry<S>> = readonly []
 >(
-  draft: Entity.EntityDraft<S, P, Root>,
-  descriptor: D,
-  raw: Descriptor.Raw<D>
-): Result.Result<Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root>, Descriptor.ConstructionError<D>> =>
-  insertResult(draft, entryRaw(descriptor, raw))
+  ...entries: Entries
+): DraftFor<S, Entries, {}, Root> =>
+  build(unspawnedId, {}, [], noRelations, entries) as DraftFor<S, Entries, {}, Root>
+
+const noRelations: ReadonlyArray<Relation.StagedRelation<any, any>> = []
 
 /**
  * Stages one outgoing relation edge on an entity draft.
  *
  * Drafts stay pure: this only records intent so the runtime can attempt to
- * attach the relation when the spawn command is flushed.
+ * attach the relation when the spawn command is applied.
  */
 export const relate = <
   S extends Schema.Any,
@@ -453,157 +390,6 @@ export const relate = <
       target
     }
   ])
-
-/**
- * Starts a staged entity definition and inserts multiple components at once.
- *
- * This is the recommended authoring API for new entity drafts because it keeps
- * the exact proof typing without the visual noise of nested `insert(...)`
- * chains.
- *
- * Reset and restart systems should prefer this helper when rebuilding world
- * content after a transition boundary, because it keeps respawn logic flat and
- * explicit.
- *
- * This is also the normal bootstrap/setup path for initial world content:
- * build one typed draft with `spawnWith(...)`, then queue it through
- * `commands.spawn(...)` and commit it later at the schedule's
- * `applyDeferred()` boundary.
- *
- * When the same entity shape appears more than once, the normal scaling path
- * is to extract a small local draft factory that just returns
- * `Game.Command.spawnWith(...)`. Keep spawning explicit through
- * `commands.spawn(...)`.
- *
- * @example
- * ```ts
- * const SetupSystem = Game.System("Setup", {}, ({ commands }) =>
- *   Fx.sync(() => {
- *     commands.spawn(
- *       Game.Command.spawnWith(
- *         [Position, { x: 0, y: 0 }],
- *         [Velocity, { x: 1, y: 0 }]
- *       )
- *     )
- *   })
- * )
- *
- * const makeProjectileDraft = (x: number, y: number) =>
- *   Game.Command.spawnWith(
- *     [Position, { x, y }],
- *     [Velocity, { x: 4, y: 0 }]
- *   )
- * ```
- */
-export const spawnWith = <
-  S extends Schema.Any,
-  Root = unknown,
-  const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
->(
-  ...entries: Entries
-): Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root> => {
-  const proof: Record<string, unknown> = {}
-  for (const [descriptor, value] of entries) {
-    proof[descriptor.name] = value
-  }
-  return Entity.draft(unspawnedId, proof, entries) as Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root>
-}
-
-export const spawnWithResult = <
-  S extends Schema.Any,
-  const Entries extends ReadonlyArray<Result.Result<SchemaEntry<S>, any>>,
-  Root = unknown
->(
-  ...entries: Entries
-): Result.Result<Entity.EntityDraft<S, FoldResultEntries<Entries>, Root>, ResultEntryErrors<Entries>> => {
-  const normalized = [] as Array<SchemaEntry<S>>
-  const errors = [] as Array<unknown>
-  let hasFailure = false
-
-  for (const entry of entries) {
-    if (entry.ok) {
-      normalized.push(entry.value)
-      errors.push(null)
-      continue
-    }
-    hasFailure = true
-    errors.push(entry.error)
-  }
-
-  if (hasFailure) {
-    return Result.failure(errors as ResultEntryErrors<Entries>)
-  }
-
-  const successfulEntries = normalized as unknown as SuccessfulResultEntries<Entries> as ReadonlyArray<SchemaEntry<S>>
-  return Result.success(
-    spawnWith<S, Root, typeof successfulEntries>(...(successfulEntries as typeof successfulEntries)) as Entity.EntityDraft<S, FoldResultEntries<Entries>, Root>
-  )
-}
-
-/**
- * Starts a staged entity definition from a mix of plain validated entries and
- * explicit result-wrapped entries.
- *
- * This is the practical "normal game code" helper when some components are
- * already valid and others must cross a constructor boundary first. It keeps
- * the whole spawn path flat while still refusing to hide validation failure.
- *
- * @example
- * ```ts
- * // Validate only the components that need constructor-backed checks.
- * const draft = Game.Command.spawnWithMixed(
- *   Game.Command.entryRaw(Position, { x: 8, y: 12 }),
- *   Game.Command.entryRaw(Collider, { width: 12, height: 12 }),
- *   // Keep plain marker/data components inline when no extra validation is needed.
- *   Game.Command.entry(Player, {}),
- *   Game.Command.entry(Health, 5)
- * )
- *
- * if (!draft.ok) {
- *   return
- * }
- *
- * // Queue the staged entity after all component inputs are known to be valid.
- * commands.spawn(draft.value)
- * ```
- */
-export const spawnWithMixed = <
-  S extends Schema.Any,
-  const Entries extends ReadonlyArray<MixedEntry<S>>,
-  Root = unknown
->(
-  ...entries: Entries
-): Result.Result<Entity.EntityDraft<S, FoldMixedEntries<Entries>, Root>, MixedEntryErrors<Entries>> => {
-  const normalized = [] as Array<SchemaEntry<S>>
-  const errors = [] as Array<unknown>
-  let hasFailure = false
-
-  for (const entry of entries) {
-    if ("ok" in entry) {
-      if (!entry.ok) {
-        hasFailure = true
-        errors.push(entry.error)
-        continue
-      }
-
-      normalized.push(entry.value)
-      errors.push(null)
-      continue
-    }
-
-    normalized.push(entry)
-    errors.push(null)
-  }
-
-  if (hasFailure) {
-    return Result.failure(errors as MixedEntryErrors<Entries>)
-  }
-
-  const successfulEntries = normalized as unknown as SuccessfulMixedEntries<Entries> as ReadonlyArray<SchemaEntry<S>>
-  return Result.success(
-    spawnWith<S, Root, typeof successfulEntries>(...(successfulEntries as typeof successfulEntries)) as Entity.EntityDraft<S, FoldMixedEntries<Entries>, Root>
-  )
-}
 
 /**
  * Public command API exposed to systems.
@@ -630,17 +416,12 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
     draft: Entity.EntityDraft<S, P, Root>
   ) => Entity.EntityId<S, Root>
   /**
-   * Queues a component insert on an existing entity.
+   * Queues component inserts (or replacements) on an existing entity.
+   *
+   * Entries must already be valid; validate raw input with
+   * `Game.Command.entryRaw(...)` first.
    */
-  readonly insert: <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>>(
-    entity: Entity.EntityId<S, Root>,
-    descriptor: D,
-    value: Descriptor.Value<D>
-  ) => Entity.EntityId<S, Root>
-  /**
-   * Queues multiple component inserts on an existing entity.
-   */
-  readonly insertMany: (
+  readonly insert: (
     entity: Entity.EntityId<S, Root>,
     ...entries: ReadonlyArray<SchemaEntry<S>>
   ) => Entity.EntityId<S, Root>
@@ -736,18 +517,9 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       })
       return id
     },
-    insert(entity, descriptor, value) {
+    insert(entity, ...entries) {
       queue.push({
         tag: "insert",
-        apply(world) {
-          world.writeComponent(entity, descriptor, value)
-        }
-      })
-      return entity
-    },
-    insertMany(entity, ...entries) {
-      queue.push({
-        tag: "insertMany",
         apply(world) {
           for (const [descriptor, value] of entries) {
             world.writeComponent(entity, descriptor, value)

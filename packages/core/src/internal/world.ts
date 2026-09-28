@@ -17,6 +17,7 @@
 import type { Descriptor } from "../descriptor.ts"
 import * as Entity from "../entity.ts"
 import * as Relation from "../relation.ts"
+import * as Result from "../Result.ts"
 import type { Schema } from "../schema.ts"
 
 /**
@@ -411,18 +412,18 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     sourceId: number,
     relation: Relation.Relation.Any,
     targetId: number
-  ): Relation.Relation.Result<void, Relation.Relation.MutationError> => {
+  ): Result.Result<void, Relation.Relation.MutationError> => {
     if (!records.has(sourceId)) {
-      return Relation.failure(Relation.missingEntityError(sourceId))
+      return Result.failure(Relation.missingEntityError(sourceId))
     }
     if (!records.has(targetId)) {
-      return Relation.failure(Relation.missingTargetEntityError(sourceId, targetId, relation.name))
+      return Result.failure(Relation.missingTargetEntityError(sourceId, targetId, relation.name))
     }
     if (!relation.allowSelf && sourceId === targetId) {
-      return Relation.failure(Relation.selfRelationNotAllowedError(sourceId, relation.name))
+      return Result.failure(Relation.selfRelationNotAllowedError(sourceId, relation.name))
     }
     if (relation.relationKind === "hierarchy" && wouldCreateHierarchyCycle(relation, sourceId, targetId)) {
-      return Relation.failure(Relation.hierarchyCycleError(sourceId, targetId, relation.name))
+      return Result.failure(Relation.hierarchyCycleError(sourceId, targetId, relation.name))
     }
 
     let targets = relationTargets.get(relation.key)
@@ -437,16 +438,16 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     targets.set(sourceId, targetId)
     addRelatedSource(relation, targetId, sourceId)
     bumpRelation(relation.key)
-    return Relation.success(undefined)
+    return Result.success(undefined)
   }
 
   const reorderChildren = (
     parentId: number,
     relation: Relation.Relation.Any,
     childIds: ReadonlyArray<number>
-  ): Relation.Relation.Result<void, Relation.Relation.MutationError> => {
+  ): Result.Result<void, Relation.Relation.MutationError> => {
     if (!records.has(parentId)) {
-      return Relation.failure(Relation.missingEntityError(parentId))
+      return Result.failure(Relation.missingEntityError(parentId))
     }
 
     const currentChildren = relatedSourceIds(relation, parentId)
@@ -454,23 +455,23 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
 
     for (const childId of childIds) {
       if (!records.has(childId)) {
-        return Relation.failure(Relation.missingChildEntityError(parentId, childId, relation.name))
+        return Result.failure(Relation.missingChildEntityError(parentId, childId, relation.name))
       }
       if (seenChildren.has(childId)) {
-        return Relation.failure(Relation.duplicateChildError(parentId, childId, relation.name))
+        return Result.failure(Relation.duplicateChildError(parentId, childId, relation.name))
       }
       seenChildren.add(childId)
       if (relationTarget(relation, childId) !== parentId) {
-        return Relation.failure(Relation.childNotRelatedToParentError(parentId, childId, relation.name))
+        return Result.failure(Relation.childNotRelatedToParentError(parentId, childId, relation.name))
       }
     }
 
     if (currentChildren.length !== childIds.length) {
-      return Relation.failure(Relation.childSetMismatchError(parentId, relation.name))
+      return Result.failure(Relation.childSetMismatchError(parentId, relation.name))
     }
     for (const childId of currentChildren) {
       if (!seenChildren.has(childId)) {
-        return Relation.failure(Relation.childSetMismatchError(parentId, relation.name))
+        return Result.failure(Relation.childSetMismatchError(parentId, relation.name))
       }
     }
 
@@ -478,7 +479,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       relatedSources.get(relation.key)!.set(parentId, [...childIds])
       bumpRelation(relation.key)
     }
-    return Relation.success(undefined)
+    return Result.success(undefined)
   }
 
   const destroyEntity = (id: number): void => {

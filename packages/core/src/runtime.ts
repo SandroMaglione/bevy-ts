@@ -2,7 +2,7 @@
  * Runtime creation, world storage, and schedule execution.
  *
  * The runtime is the concrete owner of the ECS world. It holds entities,
- * resources, states, relation graphs, machines, event buffers, lifecycle
+ * resources, relation graphs, machines, event buffers, lifecycle
  * buffers, and the host-provided services declared by systems.
  *
  * This module is where the library's explicit execution model becomes real:
@@ -23,8 +23,8 @@
  *   Game.Runtime.service(Random, { next: Math.random })
  * )
  *
- * // Bootstrap the runtime from raw host values through constructed descriptors.
- * const runtime = Game.Runtime.makeConstructed({
+ * // Viewport is a constructed resource, so the runtime comes back as a Result.
+ * const runtime = Game.Runtime.make({
  *   services,
  *   resources: {
  *     viewport: { width: 800, height: 600 }
@@ -39,7 +39,7 @@
  * }
  *
  * // The runtime owns the world and executes explicit schedules.
- * runtime.value.initialize(setupSchedule)
+ * runtime.value.tick(setupSchedule)
  * runtime.value.tick(updateSchedule)
  * ```
  *
@@ -93,8 +93,7 @@ import type {
  * Runtime provisioning and schedule execution.
  *
  * `Runtime` owns ECS state and host-provided services, but not the outer game
- * loop. Host code decides when to call `initialize(...)`, `runSchedule(...)`,
- * or `tick(...)`.
+ * loop. Host code decides when to call `tick(...)`.
  *
  * The runtime keeps dynamic behavior explicit:
  *
@@ -136,110 +135,56 @@ const runtimeMachinesTypeId: RuntimeMachinesTypeId = "~bevy-ts/RuntimeMachines"
 const runtimeMachinesEntries = Symbol("RuntimeMachinesEntries")
 
 /**
- * The runtime-facing initialization shape for schema resources.
+ * Initial resource values accepted by `Game.Runtime.make(...)`, keyed by
+ * schema key. Resources owned by a constructed descriptor take the raw input
+ * of their constructor and are validated when the runtime is made.
  */
 export type RuntimeResources<S extends Schema.Any> = Partial<{
-  readonly [K in keyof Schema.Resources<S>]: Schema.ResourceValue<S, K>
-}>
-
-/**
- * The runtime-facing initialization shape for schema states.
- */
-export type RuntimeStates<S extends Schema.Any> = Partial<{
-  readonly [K in keyof Schema.States<S>]: Schema.StateValue<S, K>
-}>
-
-export type RuntimeResultResources<S extends Schema.Any> = Partial<{
-  readonly [K in keyof Schema.Resources<S>]: Result.Result<Schema.ResourceValue<S, K>, unknown>
-}>
-
-export type RuntimeResultStates<S extends Schema.Any> = Partial<{
-  readonly [K in keyof Schema.States<S>]: Result.Result<Schema.StateValue<S, K>, unknown>
-}>
-
-export type RuntimeConstructedResources<S extends Schema.Any> = Partial<{
   readonly [K in keyof Schema.Resources<S>]:
     Schema.Resources<S>[K] extends DescriptorModule.ConstructedDescriptor<"resource", string, any, infer Raw, any>
       ? Raw
       : Schema.ResourceValue<S, K>
 }>
 
-export type RuntimeConstructedStates<S extends Schema.Any> = Partial<{
-  readonly [K in keyof Schema.States<S>]:
-    Schema.States<S>[K] extends DescriptorModule.ConstructedDescriptor<"state", string, any, infer Raw, any>
-      ? Raw
-      : Schema.StateValue<S, K>
+type ConstructedKeys<S extends Schema.Any, Provided> = {
+  readonly [K in keyof Provided]: K extends keyof Schema.Resources<S>
+    ? Schema.Resources<S>[K] extends DescriptorModule.ConstructedDescriptor<"resource", string, any, any, any> ? K : never
+    : never
+}[keyof Provided]
+
+/**
+ * The provided resources after validation, carried by the runtime type for
+ * requirement checks.
+ */
+export type ProvidedResources<S extends Schema.Any, Provided> = Simplify<{
+  readonly [K in keyof Provided]: K extends keyof Schema.Resources<S> ? Schema.ResourceValue<S, K> : never
 }>
 
-export type ValidatedRuntimeResources<
-  S extends Schema.Any,
-  Provided extends RuntimeResultResources<S>
-> = Simplify<{
-  readonly [K in keyof Provided]:
-    K extends keyof Schema.Resources<S> ? Schema.ResourceValue<S, K> : never
-}>
-
-export type ValidatedRuntimeStates<
-  S extends Schema.Any,
-  Provided extends RuntimeResultStates<S>
-> = Simplify<{
-  readonly [K in keyof Provided]:
-    K extends keyof Schema.States<S> ? Schema.StateValue<S, K> : never
-}>
-
-export type RuntimeConstructionError<
-  S extends Schema.Any,
-  Resources extends RuntimeResultResources<S>,
-  States extends RuntimeResultStates<S>
-> = Simplify<{
+/**
+ * Validation failures for constructed resources, keyed by schema key.
+ */
+export type RuntimeConstructionError<S extends Schema.Any, Provided> = Simplify<{
   readonly resources: Partial<{
-    readonly [K in keyof Resources]:
-      Resources[K] extends Result.Result<any, infer Error> ? Error : never
-  }>
-  readonly states: Partial<{
-    readonly [K in keyof States]:
-      States[K] extends Result.Result<any, infer Error> ? Error : never
-  }>
-}>
-
-export type ValidatedConstructedRuntimeResources<
-  S extends Schema.Any,
-  Provided extends RuntimeConstructedResources<S>
-> = Simplify<{
-  readonly [K in keyof Provided]:
-    K extends keyof Schema.Resources<S> ? Schema.ResourceValue<S, K> : never
-}>
-
-export type ValidatedConstructedRuntimeStates<
-  S extends Schema.Any,
-  Provided extends RuntimeConstructedStates<S>
-> = Simplify<{
-  readonly [K in keyof Provided]:
-    K extends keyof Schema.States<S> ? Schema.StateValue<S, K> : never
-}>
-
-export type RuntimeConstructedConstructionError<
-  S extends Schema.Any,
-  Resources extends RuntimeConstructedResources<S>,
-  States extends RuntimeConstructedStates<S>
-> = Simplify<{
-  readonly resources: Partial<{
-    readonly [K in keyof Resources]:
-      K extends keyof Schema.Resources<S>
-        ? Schema.Resources<S>[K] extends DescriptorModule.ConstructedDescriptor<"resource", string, any, any, infer Error>
-          ? Error
-          : never
-        : never
-  }>
-  readonly states: Partial<{
-    readonly [K in keyof States]:
-      K extends keyof Schema.States<S>
-        ? Schema.States<S>[K] extends DescriptorModule.ConstructedDescriptor<"state", string, any, any, infer Error>
-          ? Error
-          : never
+    readonly [K in ConstructedKeys<S, Provided>]:
+      Schema.Resources<S>[K & keyof Schema.Resources<S>] extends DescriptorModule.ConstructedDescriptor<"resource", string, any, any, infer Error>
+        ? Error
         : never
   }>
 }>
+
+/**
+ * The runtime returned by `make`, wrapped in a `Result` exactly when a
+ * provided resource goes through a constructor and can therefore fail.
+ */
+export type MakeRuntimeResult<
+  S extends Schema.Any,
+  Services extends Record<string, unknown>,
+  Provided,
+  Root,
+  Machines extends Record<string, unknown>
+> = [ConstructedKeys<S, Provided>] extends [never]
+  ? Runtime<S, Services, ProvidedResources<S, Provided>, Root, Machines>
+  : Result.Result<Runtime<S, Services, ProvidedResources<S, Provided>, Root, Machines>, RuntimeConstructionError<S, Provided>>
 
 /**
  * One machine-backed runtime state provision.
@@ -370,7 +315,6 @@ type RequirementErrorFor<
   S extends Schema.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
 > = Need extends Descriptor<"service", infer Name, infer Value>
   ? Name extends keyof Services
@@ -384,8 +328,6 @@ type RequirementErrorFor<
       }
   : Need extends Descriptor<"resource", string, any>
     ? DescriptorProvisionError<"resource", Schema.Resources<S>, Resources, Need>
-  : Need extends Descriptor<"state", string, any>
-    ? DescriptorProvisionError<"state", Schema.States<S>, States, Need>
   : Need extends Machine.StateMachineDefinition<infer Name, infer Values, any>
     ? Name extends keyof Machines
       ? [Machines[Name]] extends [Values[number]] ? never : {
@@ -403,27 +345,24 @@ type RequirementErrorsFor<
   S extends Schema.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
 > = Needs extends Requirement.Requirement
-  ? RequirementErrorFor<Needs, S, Services, Resources, States, Machines>
+  ? RequirementErrorFor<Needs, S, Services, Resources, Machines>
   : never
 
 type RequirementErrorsOfSchedule<
   Selected extends ExecutableScheduleDefinition<any, any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
 > = Selected extends ExecutableScheduleDefinition<infer S, any, any, any, any>
-  ? RequirementErrorsFor<Requirement.Of<Selected>, S, Services, Resources, States, Machines>
+  ? RequirementErrorsFor<Requirement.Of<Selected>, S, Services, Resources, Machines>
   : never
 
 export type ValidateSchedules<
   Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
 > = {
   readonly [K in keyof Schedules]:
@@ -431,7 +370,6 @@ export type ValidateSchedules<
       Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any, any>>,
       Services,
       Resources,
-      States,
       Machines
     >
 }
@@ -440,58 +378,53 @@ export type ValidateScheduleArray<
   Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
-> = [RequirementErrorsOfSchedule<Schedules[number], Services, Resources, States, Machines>] extends [never]
+> = [RequirementErrorsOfSchedule<Schedules[number], Services, Resources, Machines>] extends [never]
   ? unknown
   : {
-      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedules[number], Services, Resources, States, Machines>
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedules[number], Services, Resources, Machines>
     }
 
 type ValidateScheduleArgs<
   Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
-> = [RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, States, Machines>] extends [never]
+> = [RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, Machines>] extends [never]
   ? Schedules
   : Schedules & {
-      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, States, Machines>
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, Machines>
     }
 
 type ValidateSchedule<
   Schedule extends ExecutableScheduleDefinition<any, any, any, any, any>,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
-> = [RequirementErrorsOfSchedule<Schedule, Services, Resources, States, Machines>] extends [never]
+> = [RequirementErrorsOfSchedule<Schedule, Services, Resources, Machines>] extends [never]
   ? unknown
   : {
-      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedule, Services, Resources, States, Machines>
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<Schedule, Services, Resources, Machines>
     }
 
 type RequirementErrorsOfInspector<
   Selected extends Inspector.Inspector.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
 > = Selected extends Inspector.InspectorDefinition<infer Spec, any, any, any, infer Needs>
-  ? RequirementErrorsFor<Needs, Spec["schema"], Services, Resources, States, Machines>
+  ? RequirementErrorsFor<Needs, Spec["schema"], Services, Resources, Machines>
   : never
 
 type ValidateInspector<
   Selected extends Inspector.Inspector.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
-  States extends object,
   Machines extends object
-> = [RequirementErrorsOfInspector<Selected, Services, Resources, States, Machines>] extends [never]
+> = [RequirementErrorsOfInspector<Selected, Services, Resources, Machines>] extends [never]
   ? unknown
   : {
-      readonly __fixRuntimeRequirements__: RequirementErrorsOfInspector<Selected, Services, Resources, States, Machines>
+      readonly __fixRuntimeRequirements__: RequirementErrorsOfInspector<Selected, Services, Resources, Machines>
     }
 
 export type AnyRequirements = Requirement.Requirement
@@ -512,14 +445,10 @@ export interface MissingRuntimeRequirements {
  * The caller-facing initialization shape for one descriptor registry.
  *
  * Initialization is keyed by schema property names, not descriptor names. This
- * is the same key space exposed by `Schema.Resources<S>` and `Schema.States<S>`.
+ * is the same key space exposed by `Schema.Resources<S>`.
  */
 type InitialRegistryValues<R extends Registry> = Partial<{
   readonly [K in keyof R]: Descriptor.Value<R[K]>
-}>
-
-type ResultRegistryValues<R extends Registry> = Partial<{
-  readonly [K in keyof R]: Result.Result<Descriptor.Value<R[K]>, unknown>
 }>
 
 /**
@@ -545,36 +474,6 @@ const seedRegistryStore = <R extends Registry>(
       target.set(descriptor.key, initial)
     }
   }
-}
-
-const collectRegistryResults = <R extends Registry>(
-  registry: R,
-  provided: ResultRegistryValues<R> | undefined
-): Result.Result<InitialRegistryValues<R>, Partial<{ readonly [K in keyof R]: unknown }>> => {
-  if (!provided) {
-    return Result.success({})
-  }
-
-  const validated = {} as Partial<Record<keyof R, unknown>>
-  const errors = {} as Partial<Record<keyof R, unknown>>
-
-  for (const schemaKey of Object.keys(registry) as Array<keyof R>) {
-    const next = provided[schemaKey]
-    if (next === undefined) {
-      continue
-    }
-    if (!next.ok) {
-      errors[schemaKey] = next.error
-      continue
-    }
-    validated[schemaKey] = next.value
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return Result.failure(errors as Partial<{ readonly [K in keyof R]: unknown }>)
-  }
-
-  return Result.success(validated as InitialRegistryValues<R>)
 }
 
 const collectConstructedRegistryValues = <R extends Registry>(
@@ -619,14 +518,13 @@ const collectConstructedRegistryValues = <R extends Registry>(
 /**
  * A loop-agnostic execution runtime.
  *
- * The runtime owns world state and services, but it does not own the outer game
- * loop. Call `runSchedule` or `tick` from any host you want.
+ * The runtime owns world state and services, but not the outer game loop:
+ * call `tick(...)` from whatever host drives the game.
  */
 export interface Runtime<
   S extends Schema.Any,
   Services extends Record<string, unknown>,
-  Resources extends RuntimeResources<S> = {},
-  States extends RuntimeStates<S> = {},
+  Resources extends object = {},
   Root = unknown,
   Machines extends Record<string, unknown> = {}
 > {
@@ -639,15 +537,11 @@ export interface Runtime<
    */
   readonly services: Services
   /**
-   * The schema-keyed resources that were initialized when the runtime was made.
+   * The validated resources provided when the runtime was made.
    */
   readonly resourceValues: Resources
   /**
-   * The schema-keyed states that were initialized when the runtime was made.
-   */
-  readonly stateValues: States
-  /**
-   * The machine values that were initialized when the runtime was made.
+   * The machine values provided when the runtime was made.
    */
   readonly machineValues: Machines
   /**
@@ -655,43 +549,32 @@ export interface Runtime<
    */
   readonly __schemaRoot?: Root | undefined
   /**
-   * Runs one or more schedules as an initialization step.
+   * Runs schedules in order.
    *
-   * This is a semantic alias for a one-off bootstrap phase before entering the
-   * repeating outer loop.
+   * Every resource, service, and machine the schedules need must have been
+   * provided when the runtime was made; missing ones are compile errors.
    *
-   * Use this for startup or setup phases that should run before the normal
-   * repeating update loop.
+   * Deferred commands, events, lifecycle records, and relation failures
+   * advance only at explicit schedule marker steps. Nothing is flushed when a
+   * schedule ends: pending work stays pending, across schedules and ticks,
+   * until a later marker advances it.
+   *
+   * The first expected system failure stops the tick and is returned; that
+   * system's ECS writes are rolled back and earlier systems stay committed.
    */
-  readonly initialize: {
+  readonly tick: {
     <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any>>>(
-      ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, States, Machines>
+      ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, Machines>
     ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
   /**
-   * Runs one schedule once.
+   * Runs a schedule whose exact requirements are not statically known, for
+   * example one loaded through a plugin boundary.
    *
-   * Deferred commands, events, lifecycle records, and relation failures
-   * advance only at explicit schedule marker steps. Nothing is flushed when
-   * the schedule ends: anything still pending stays pending, across schedule
-   * runs, until a later marker advances it.
-   *
-   * Use this when you want one explicit schedule execution rather than a batch
-   * of schedules.
+   * Requirements are checked against current provisioning first and missing
+   * ones are returned as data.
    */
-  readonly runSchedule: {
-    <const Selected extends ExecutableScheduleDefinition<S, any, Root, any, any>>(
-      schedule: Selected
-        & ValidateSchedule<NoInfer<Selected>, Services, Resources, States, Machines>
-    ): Result.Result<void, Schedule.FailureOf<Selected>>
-  }
-  /**
-   * Runs a schedule whose exact requirements are not statically known.
-   *
-   * This path validates the carried nominal tokens against current runtime
-   * provisioning and returns missing requirements as data.
-   */
-  readonly tryRunSchedule: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
+  readonly tryTick: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
     schedule: Selected
   ) => Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>>
   /**
@@ -699,21 +582,8 @@ export interface Runtime<
    */
   readonly inspect: {
     <const Selected extends Inspector.InspectorDefinition<any, any, Root, any, any>>(
-      inspector: Selected & ValidateInspector<Selected, Services, Resources, States, Machines>
+      inspector: Selected & ValidateInspector<Selected, Services, Resources, Machines>
     ): Inspector.Inspector.Value<Selected>
-  }
-  /**
-   * Runs multiple schedules in sequence.
-   *
-   * Schedules share the runtime's pending buffers, so a later schedule
-   * observes an earlier schedule's commands or events once it (or anything
-   * before it) runs the matching marker, such as `applyDeferred()` or
-   * `updateEvents()`.
-   */
-  readonly tick: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any>>>(
-      ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, States, Machines>
-    ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
 }
 
@@ -741,28 +611,19 @@ export interface Runtime<
  * })
  * ```
  */
-export const makeRuntime = <
+const makeValidatedRuntime = <
   S extends Schema.Any,
-  const ProvidedServices extends RuntimeServices<any>,
-  const Resources extends RuntimeResources<S> = {},
-  const States extends RuntimeStates<S> = {},
-  Root = unknown,
-  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Root,
+  Machines extends Record<string, unknown>
 >(options: {
   readonly schema: S
-  readonly services: ProvidedServices
-  readonly resources?: Resources
-  readonly states?: States
-  readonly machines?: ProvidedMachines
-  readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-}): Runtime<
-  S,
-  Simplify<RuntimeServicesOf<ProvidedServices>>,
-  Resources,
-  States,
-  Root,
-  RuntimeMachinesOf<ProvidedMachines>
-> => {
+  readonly services: RuntimeServices<any>
+  readonly resources: Partial<Record<string, unknown>>
+  readonly machines: RuntimeMachines<any> | undefined
+  readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
+}): Runtime<S, Services, Resources, Root, Machines> => {
   const world = makeWorld(options.schema)
   const queries = makeQueryEngine(world)
 
@@ -770,9 +631,7 @@ export const makeRuntime = <
    * Descriptor-keyed world resource and state storage.
    */
   const resources = new Map<symbol, unknown>()
-  const states = new Map<symbol, unknown>()
-  seedRegistryStore(options.schema.resources, options.resources, resources)
-  seedRegistryStore(options.schema.states, options.states, states)
+  seedRegistryStore(options.schema.resources, options.resources as InitialRegistryValues<Registry>, resources)
 
   /**
    * Machine-keyed committed, pending, and previous values.
@@ -808,11 +667,11 @@ export const makeRuntime = <
    */
   const pendingCommands: Array<Command.DeferredCommand<S>> = []
 
-  const providedServices = options.services as unknown as Simplify<RuntimeServicesOf<ProvidedServices>>
-  const providedMachines = (options.machines ?? machines()) as unknown as Simplify<RuntimeMachinesOf<ProvidedMachines>>
+  const providedServices = options.services as unknown as Services
+  const providedMachines = (options.machines ?? machines()) as unknown as Machines
   const machineEntries = (options.machines ?? machines())[runtimeMachinesEntries]
   const machineDefinitionOrder = new Map(
-    (options.machineDefinitions ?? []).map((machine, index) => [machine.key, index] as const)
+    options.machineDefinitions.map((machine, index) => [machine.key, index] as const)
   )
 
   for (const provision of machineEntries) {
@@ -888,20 +747,20 @@ export const makeRuntime = <
   const entityId = (id: number): Entity.EntityId<S, Root> => world.entityIdOf(id) as Entity.EntityId<S, Root>
 
   const resolve = <Q extends Query.Query.Any<Root>>(id: number, query: Q) =>
-    queries.get(id, query) as Query.Query.Result<QueryMatch<S, Q>, Query.Query.LookupError>
+    queries.get(id, query) as Result.Result<QueryMatch<S, Q>, Query.Query.LookupError>
 
   const relatedTarget = (
     target: Entity.EntityId<S, Root>,
     relation: Relation.Relation.Any
-  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError> => {
+  ): Result.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError> => {
     if (!world.records.has(target.value)) {
-      return Relation.failure(Relation.missingEntityError(target.value))
+      return Result.failure(Relation.missingEntityError(target.value))
     }
     const targetId = world.relationTarget(relation, target.value)
     if (targetId === undefined) {
-      return Relation.failure(Relation.missingRelationError(target.value, relation.name))
+      return Result.failure(Relation.missingRelationError(target.value, relation.name))
     }
-    return Relation.success(entityId(targetId))
+    return Result.success(entityId(targetId))
   }
 
   const lookup: LookupApi<S, Root> = {
@@ -914,13 +773,13 @@ export const makeRuntime = <
     related: relatedTarget,
     relatedSources(target, relation) {
       if (!world.records.has(target.value)) {
-        return Relation.failure(Relation.missingEntityError(target.value))
+        return Result.failure(Relation.missingEntityError(target.value))
       }
-      return Relation.success(world.relatedSourceIds(relation, target.value).map(entityId))
+      return Result.success(world.relatedSourceIds(relation, target.value).map(entityId))
     },
     childMatches(target, relation, query) {
       if (!world.records.has(target.value)) {
-        return Relation.failure(Relation.missingEntityError(target.value))
+        return Result.failure(Relation.missingEntityError(target.value))
       }
       const matches: Array<QueryMatch<S, typeof query>> = []
       for (const sourceId of world.relatedSourceIds(relation, target.value)) {
@@ -929,12 +788,12 @@ export const makeRuntime = <
           matches.push(resolved.value)
         }
       }
-      return Relation.success(matches)
+      return Result.success(matches)
     },
     parent: relatedTarget,
     ancestors(target, relation) {
       if (!world.records.has(target.value)) {
-        return Relation.failure(Relation.missingEntityError(target.value))
+        return Result.failure(Relation.missingEntityError(target.value))
       }
       const ancestors: Array<Entity.EntityId<S, Root>> = []
       let current = world.relationTarget(relation, target.value)
@@ -942,11 +801,11 @@ export const makeRuntime = <
         ancestors.push(entityId(current))
         current = world.relationTarget(relation, current)
       }
-      return Relation.success(ancestors)
+      return Result.success(ancestors)
     },
     descendants(target, relation, options) {
       if (!world.records.has(target.value)) {
-        return Relation.failure(Relation.missingEntityError(target.value))
+        return Result.failure(Relation.missingEntityError(target.value))
       }
       const descendants: Array<Entity.EntityId<S, Root>> = []
       if (options?.order === "breadth") {
@@ -967,7 +826,7 @@ export const makeRuntime = <
           }
         }
       }
-      return Relation.success(descendants)
+      return Result.success(descendants)
     },
     descendantMatches(target, relation, query, options) {
       const descendants = lookup.descendants(target, relation, options)
@@ -981,11 +840,11 @@ export const makeRuntime = <
           matches.push(resolved.value)
         }
       }
-      return Relation.success(matches)
+      return Result.success(matches)
     },
     root(target, relation) {
       if (!world.records.has(target.value)) {
-        return Relation.failure(Relation.missingEntityError(target.value))
+        return Result.failure(Relation.missingEntityError(target.value))
       }
       let current = target.value
       let parentId = world.relationTarget(relation, current)
@@ -993,7 +852,7 @@ export const makeRuntime = <
         current = parentId
         parentId = world.relationTarget(relation, current)
       }
-      return Relation.success(entityId(current))
+      return Result.success(entityId(current))
     }
   }
 
@@ -1007,19 +866,19 @@ export const makeRuntime = <
       single() {
         const matches = each()
         if (matches.length === 0) {
-          return Query.failure(Query.noEntitiesError())
+          return Result.failure(Query.noEntitiesError())
         }
         if (matches.length > 1) {
-          return Query.failure(Query.multipleEntitiesError(matches.length))
+          return Result.failure(Query.multipleEntitiesError(matches.length))
         }
-        return Query.success(matches[0]!)
+        return Result.success(matches[0]!)
       },
       singleOptional() {
         const matches = each()
         if (matches.length > 1) {
-          return Query.failure(Query.multipleEntitiesError(matches.length))
+          return Result.failure(Query.multipleEntitiesError(matches.length))
         }
-        return Query.success(matches[0])
+        return Result.success(matches[0])
       }
     }
   }
@@ -1032,7 +891,6 @@ export const makeRuntime = <
    */
   const absentValue = Symbol("bevy-ts/absent-value")
   const resourceOriginals = new Map<symbol, unknown>()
-  const stateOriginals = new Map<symbol, unknown>()
   const machineOriginals = new Map<symbol, { value: unknown; skipIfSame: boolean } | typeof absentValue>()
   const emittedEvents = new Map<symbol, Array<unknown>>()
 
@@ -1044,7 +902,6 @@ export const makeRuntime = <
       store.set(key, value)
     }
   const writeResource = journalStoreWrite(resources, resourceOriginals)
-  const writeState = journalStoreWrite(states, stateOriginals)
 
   const journalMachine = (key: symbol): void => {
     if (!machineOriginals.has(key)) {
@@ -1068,7 +925,6 @@ export const makeRuntime = <
     }
     emittedEvents.clear()
     resourceOriginals.clear()
-    stateOriginals.clear()
     machineOriginals.clear()
   }
 
@@ -1086,7 +942,6 @@ export const makeRuntime = <
   const rollbackSystemTransaction = (): void => {
     world.rollbackTransaction()
     restoreStore(resources, resourceOriginals)
-    restoreStore(states, stateOriginals)
     for (const [key, value] of machineOriginals) {
       if (value === absentValue) {
         pendingMachines.delete(key)
@@ -1099,7 +954,7 @@ export const makeRuntime = <
   }
 
   const makeResourceWriteView = (
-    descriptor: Descriptor<"resource" | "state", string, any>,
+    descriptor: Descriptor<"resource", string, any>,
     store: Map<symbol, unknown>,
     write: (key: symbol, value: unknown) => void
   ) => Cells.storeWrite(store, descriptor.key, write, DescriptorModule.constructorOf(descriptor))
@@ -1218,10 +1073,6 @@ export const makeRuntime = <
         access.mode === "read"
           ? makeEventReadView(access.descriptor.key)
           : makeEventWriteView(access.descriptor.key)),
-      states: mapRecord(spec.states as Record<string, any>, (access) =>
-        access.mode === "write"
-          ? makeResourceWriteView(access.descriptor, states, writeState)
-          : Cells.storeRead(states, access.descriptor.key)),
       machines: mapRecord(spec.machines as Record<string, any>, (access) => makeMachineReadView(access.machine)),
       nextMachines: mapRecord(spec.nextMachines as Record<string, any>, (access) => makeNextMachineWriteView(access.machine)),
       transitionEvents: mapRecord(spec.transitionEvents as Record<string, any>, (access) => makeTransitionEventReadView(access.machine)),
@@ -1230,7 +1081,7 @@ export const makeRuntime = <
       despawned: mapRecord(spec.despawned as Record<string, any>, makeDespawnedReadView),
       relationFailures: mapRecord(spec.relationFailures as Record<string, any>, (access) => makeRelationFailureReadView(access.relation)),
       services: mapRecord(spec.services as Record<string, any>, (access) =>
-        providedServices[access.descriptor.name as keyof RuntimeServicesOf<ProvidedServices>]),
+        providedServices[access.descriptor.name as keyof Services]),
       commands: Command.makeCommands<S, Root>(() => world.allocateEntity() as Entity.EntityId<S, Root>)
     } as SystemContext<any>
   }
@@ -1265,8 +1116,10 @@ export const makeRuntime = <
     beginSystemTransaction()
     let outcome: Result.Result<unknown, unknown>
     try {
-      // Equivalent to `Fx.runSync(Fx.provide(effect, services))` without the wrapper allocations.
-      outcome = system.run(context).run(context.services)
+      // A system that returns nothing cannot fail. Otherwise run its effect,
+      // equivalent to `Fx.runSync(Fx.provide(effect, services))` without the wrapper allocations.
+      const effect = system.run(context)
+      outcome = effect === undefined ? succeeded : effect.run(context.services)
     } catch (defect) {
       rollbackSystemTransaction()
       context.commands.flush()
@@ -1464,8 +1317,6 @@ export const makeRuntime = <
         return Object.prototype.hasOwnProperty.call(providedServices, requirement.name)
       case "resource":
         return resources.has(requirement.key)
-      case "state":
-        return states.has(requirement.key)
       case "stateMachine":
         return currentMachines.has(requirement.key)
     }
@@ -1500,146 +1351,67 @@ export const makeRuntime = <
   return {
     schema: options.schema,
     services: providedServices,
-    resourceValues: (options.resources ?? {}) as Resources,
-    stateValues: (options.states ?? {}) as States,
-    machineValues: providedMachines as RuntimeMachinesOf<ProvidedMachines>,
-    initialize(...schedules) {
-      return tickUnsafe(schedules) as never
-    },
-    runSchedule(schedule) {
-      return runScheduleUnsafe(schedule) as never
-    },
-    tryRunSchedule,
-    inspect,
+    resourceValues: options.resources as Resources,
+    machineValues: providedMachines,
     tick(...schedules) {
       return tickUnsafe(schedules) as never
-    }
+    },
+    tryTick: tryRunSchedule,
+    inspect
   }
 }
 
 /**
- * Builds one runtime from explicit result-wrapped resource and state values.
+ * Creates a runtime for a fully built schema and a set of external services.
+ *
+ * Resources owned by constructed descriptors take raw input and are validated
+ * here; when any are provided the runtime comes back as a `Result`. Otherwise
+ * the runtime is returned directly.
+ *
+ * The runtime does not own the outer frame loop. It only owns ECS state plus
+ * the host-provided services that systems are allowed to depend on.
  *
  * @example
  * ```ts
- * const runtime = Game.Runtime.makeResult({
- *   services: Game.Runtime.services(),
- *   resources: {
- *     viewport: Size2.result({ width: 800, height: 600 })
- *   }
+ * const runtime = Game.Runtime.make({
+ *   services: Game.Runtime.services(
+ *     Game.Runtime.service(Logger, { log: console.log })
+ *   ),
+ *   resources: { Score: 0 },
+ *   machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Menu"))
  * })
  * ```
  */
-export const makeRuntimeResult = <
+export const make = <
   S extends Schema.Any,
   const ProvidedServices extends RuntimeServices<any>,
-  const Resources extends RuntimeResultResources<S> = {},
-  const States extends RuntimeResultStates<S> = {},
+  const Resources extends RuntimeResources<S> = {},
   Root = unknown,
   const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>
 >(options: {
   readonly schema: S
   readonly services: ProvidedServices
   readonly resources?: Resources
-  readonly states?: States
   readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-}): Result.Result<
-  Runtime<
-    S,
-    Simplify<RuntimeServicesOf<ProvidedServices>>,
-    ValidatedRuntimeResources<S, Resources>,
-    ValidatedRuntimeStates<S, States>,
-    Root,
-    RuntimeMachinesOf<ProvidedMachines>
-  >,
-  RuntimeConstructionError<S, Resources, States>
-> => {
-  const resources = collectRegistryResults(options.schema.resources, options.resources)
-  const states = collectRegistryResults(options.schema.states, options.states)
-
-  if (!resources.ok || !states.ok) {
-    return Result.failure({
-      resources: resources.ok ? {} : resources.error,
-      states: states.ok ? {} : states.error
-    } as RuntimeConstructionError<S, Resources, States>)
-  }
-
-  return Result.success(
-    makeRuntime<S, ProvidedServices, ValidatedRuntimeResources<S, Resources>, ValidatedRuntimeStates<S, States>, Root, ProvidedMachines>({
-      schema: options.schema,
-      services: options.services,
-      resources: resources.value as ValidatedRuntimeResources<S, Resources>,
-      states: states.value as ValidatedRuntimeStates<S, States>,
-      ...(options.machines === undefined ? {} : { machines: options.machines }),
-      ...(options.machineDefinitions === undefined ? {} : { machineDefinitions: options.machineDefinitions })
-    })
+}): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>> => {
+  const fallible = Object.entries(options.schema.resources).some(([key, descriptor]) =>
+    options.resources !== undefined
+    && (options.resources as Record<string, unknown>)[key] !== undefined
+    && DescriptorModule.hasConstructor(descriptor)
   )
-}
-
-/**
- * Builds one runtime from raw values routed through constructed resource and
- * state descriptors.
- *
- * Use this when runtime bootstrap naturally starts from raw host or authored
- * data and you want descriptor-carried validation to stay explicit at the
- * bootstrap boundary.
- *
- * @example
- * ```ts
- * const runtime = Game.Runtime.makeConstructed({
- *   services: Game.Runtime.services(),
- *   resources: {
- *     viewport: { width: 800, height: 600 }
- *   }
- * })
- * ```
- */
-export const makeRuntimeConstructed = <
-  S extends Schema.Any,
-  const ProvidedServices extends RuntimeServices<any>,
-  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>,
-  const Resources extends RuntimeConstructedResources<S> = {},
-  const States extends RuntimeConstructedStates<S> = {},
-  Root = unknown
->(options: {
-  readonly schema: S
-  readonly services: ProvidedServices
-  readonly resources?: Resources
-  readonly states?: States
-  readonly machines?: ProvidedMachines
-  readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-}): Result.Result<
-  Runtime<
-    S,
-    Simplify<RuntimeServicesOf<ProvidedServices>>,
-    ValidatedConstructedRuntimeResources<S, Resources>,
-    ValidatedConstructedRuntimeStates<S, States>,
-    Root,
-    RuntimeMachinesOf<ProvidedMachines>
-  >,
-  RuntimeConstructedConstructionError<S, Resources, States>
-> => {
-  const resources = collectConstructedRegistryValues(options.schema.resources, options.resources)
-  const states = collectConstructedRegistryValues(options.schema.states, options.states)
-
-  if (!resources.ok || !states.ok) {
-    return Result.failure({
-      resources: resources.ok ? {} : resources.error,
-      states: states.ok ? {} : states.error
-    } as RuntimeConstructedConstructionError<S, Resources, States>)
+  const validated = collectConstructedRegistryValues(options.schema.resources, options.resources)
+  if (!validated.ok) {
+    return Result.failure({ resources: validated.error }) as never
   }
-
-  return Result.success(
-    makeRuntime<S, ProvidedServices, ValidatedConstructedRuntimeResources<S, Resources>, ValidatedConstructedRuntimeStates<S, States>, Root, ProvidedMachines>({
-      schema: options.schema,
-      services: options.services,
-      resources: resources.value as ValidatedConstructedRuntimeResources<S, Resources>,
-      states: states.value as ValidatedConstructedRuntimeStates<S, States>,
-      ...(options.machines === undefined ? {} : { machines: options.machines }),
-      ...(options.machineDefinitions === undefined ? {} : { machineDefinitions: options.machineDefinitions })
-    })
-  )
+  const runtime = makeValidatedRuntime({
+    schema: options.schema,
+    services: options.services,
+    resources: validated.value,
+    machines: options.machines,
+    machineDefinitions: options.machineDefinitions ?? []
+  })
+  return (fallible ? Result.success(runtime) : runtime) as never
 }
 
 /**

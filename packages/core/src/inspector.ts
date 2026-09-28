@@ -9,7 +9,6 @@
  * @module inspector
  * @docGroup runtime
  */
-import * as Fx from "./fx.ts"
 import type * as Machine from "./machine.ts"
 import type * as Query from "./query.ts"
 import type * as Relation from "./relation.ts"
@@ -36,7 +35,6 @@ export interface InspectorAccessInput {
   readonly resources?: Record<string, System.ResourceRead<Descriptor<"resource", string, any>>>
   readonly events?: Record<string, System.EventRead<Descriptor<"event", string, any>>>
   readonly services?: Record<string, System.ServiceRead<Descriptor<"service", string, any>>>
-  readonly states?: Record<string, System.StateRead<Descriptor<"state", string, any>>>
   readonly machines?: Record<string, Machine.MachineRead<Machine.StateMachine.Any>>
   readonly transitionEvents?: Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>>
   readonly removed?: Record<string, System.RemovedRead<Descriptor<"component", string, any>>>
@@ -58,7 +56,6 @@ export type InspectorContext<Spec extends System.AnySystemSpec> = Pick<
   | "queries"
   | "resources"
   | "events"
-  | "states"
   | "machines"
   | "transitionEvents"
   | "removed"
@@ -110,8 +107,8 @@ export const make = <
 > => {
   const system = System.System(
     name,
-    spec as { readonly schema: S } & Access,
-    () => Fx.succeed(undefined)
+    spec as never,
+    () => undefined
   ) as unknown as System.SystemDefinition<
     System.SystemSpec<S, Access, Root>,
     void,

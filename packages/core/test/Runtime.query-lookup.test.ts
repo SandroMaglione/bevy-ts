@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Schema } from "@bevy-ts/core"
 import * as Command from "@bevy-ts/core/command"
 import type { EntityId } from "@bevy-ts/core/entity"
 import * as Query from "@bevy-ts/core/query"
@@ -41,7 +41,7 @@ const HandleGame = Schema.bind(Schema.fragment({
 const schema = HandleGame.schema
 
 const makeRuntime = () =>
-  Runtime.makeRuntime({
+  Runtime.make({
     schema,
     services: Runtime.services(),
     resources: {
@@ -70,13 +70,13 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.count.set(queries.positions.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(observe))
+    runtime.tick(Schedule.Schedule(observe))
 
     expect(readResourceValue(runtime, schema, Count)).toBe(0)
   })
@@ -98,14 +98,14 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.single()
           resources.lastError.set(result.ok ? "" : result.error._tag)
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(observe))
+    runtime.tick(Schedule.Schedule(observe))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("NoEntities")
   })
@@ -117,10 +117,10 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 1, y: 1 }] as const))
-          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 2, y: 2 }] as const))
-        })
+        {
+          commands.spawn(HandleGame.Command.spawn([Position, { x: 1, y: 1 }] as const))
+          commands.spawn(HandleGame.Command.spawn([Position, { x: 2, y: 2 }] as const))
+        }
     )
 
     const observe = System.System(
@@ -139,10 +139,10 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.single()
           resources.lastError.set(result.ok ? "" : result.error._tag)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -172,15 +172,15 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.singleOptional()
           resources.lastError.set(result.ok ? "" : result.error._tag)
           resources.lastX.set(result.ok && result.value ? result.value.data.position.get().x : -1)
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(observe))
+    runtime.tick(Schedule.Schedule(observe))
 
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
     expect(readResourceValue(runtime, schema, LastX)).toBe(-1)
@@ -193,9 +193,9 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 7, y: 3 }] as const))
-        })
+        {
+          commands.spawn(HandleGame.Command.spawn([Position, { x: 7, y: 3 }] as const))
+        }
     )
 
     const observe = System.System(
@@ -215,7 +215,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.singleOptional()
           resources.lastError.set(result.ok ? "" : result.error._tag)
           if (!result.ok || !result.value) {
@@ -228,7 +228,7 @@ describe("Runtime query and lookup", () => {
             x: position.x + 1
           }))
           resources.lastX.set(result.value.data.position.get().x)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -248,10 +248,10 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 1, y: 1 }] as const))
-          commands.spawn(Command.spawnWith<typeof schema>([Position, { x: 2, y: 2 }] as const))
-        })
+        {
+          commands.spawn(HandleGame.Command.spawn([Position, { x: 1, y: 1 }] as const))
+          commands.spawn(HandleGame.Command.spawn([Position, { x: 2, y: 2 }] as const))
+        }
     )
 
     const observe = System.System(
@@ -270,10 +270,10 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.singleOptional()
           resources.lastError.set(result.ok ? "" : result.error._tag)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -294,11 +294,11 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          existingId = commands.spawn(Command.spawnWith<typeof schema>(
+        {
+          existingId = commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 1, y: 1 }] as const
           ))
-        })
+        }
     )
 
     const observe = System.System(
@@ -310,7 +310,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!existingId) {
             resources.lastError.set("MissingSetup")
             return
@@ -326,7 +326,7 @@ describe("Runtime query and lookup", () => {
             }
           }))
           resources.lastError.set(`${missing.ok ? "ok" : missing.error._tag}/${mismatch.ok ? "ok" : mismatch.error._tag}`)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -345,15 +345,15 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Command.spawnWith<typeof schema>(
+        {
+          commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 1, y: 1 }] as const
           ))
-          commands.spawn(Command.spawnWith<typeof schema>(
+          commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 2, y: 2 }] as const,
             [Hidden, { hidden: true }] as const
           ))
-        })
+        }
     )
 
     const observe = System.System(
@@ -374,9 +374,9 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.count.set(queries.visible.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -395,15 +395,15 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Command.spawnWith<typeof schema>(
+        {
+          commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 1, y: 1 }] as const
           ))
-          commands.spawn(Command.spawnWith<typeof schema>(
+          commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 2, y: 2 }] as const,
             [Velocity, { x: 4, y: 0 }] as const
           ))
-        })
+        }
     )
 
     const observe = System.System(
@@ -424,7 +424,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           let totalX = 0
           for (const match of queries.moving.each()) {
             if (match.data.velocity.present) {
@@ -434,7 +434,7 @@ describe("Runtime query and lookup", () => {
 
           resources.count.set(queries.moving.each().length)
           resources.lastX.set(totalX)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -456,11 +456,11 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          existingId = commands.spawn(Command.spawnWith<typeof schema>(
+        {
+          existingId = commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 3, y: 7 }] as const
           ))
-        })
+        }
     )
 
     const observe = System.System(
@@ -473,7 +473,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!existingId) {
             resources.lastError.set("MissingSetup")
             return
@@ -493,7 +493,7 @@ describe("Runtime query and lookup", () => {
 
           resources.lastError.set(result.value.data.velocity.present ? "Present" : "Missing")
           resources.lastX.set(result.value.data.position.get().x)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -513,11 +513,11 @@ describe("Runtime query and lookup", () => {
         schema
       },
       ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Command.spawnWith<typeof schema>(
+        {
+          commands.spawn(HandleGame.Command.spawn(
             [Position, { x: 1, y: 1 }] as const
           ))
-        })
+        }
     )
 
     const write = System.System(
@@ -533,7 +533,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.single()
           if (result.ok) {
             result.value.data.position.update((position) => ({
@@ -541,7 +541,7 @@ describe("Runtime query and lookup", () => {
               x: 9
             }))
           }
-        })
+        }
     )
 
     const read = System.System(
@@ -560,10 +560,10 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.positions.single()
           resources.lastX.set(result.ok ? result.value.data.position.get().x : -1)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -583,10 +583,10 @@ describe("Runtime query and lookup", () => {
       "RuntimeQuery/SpawnHandle",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          const target = commands.spawn(Game.Command.spawnWith([Position, { x: 5, y: 9 }] as const))
-          currentHandle = Game.Entity.handleAs(Position, target)
-        })
+        {
+          const target = commands.spawn(Game.Command.spawn([Position, { x: 5, y: 9 }] as const))
+          currentHandle = Game.Entity.handle(target, Position)
+        }
     )
 
     const observe = Game.System(
@@ -598,7 +598,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!currentHandle) {
             resources.lastError.set("MissingSetup")
             return
@@ -617,14 +617,14 @@ describe("Runtime query and lookup", () => {
 
           resources.lastX.set(result.value.data.position.get().x)
           resources.lastError.set("")
-        })
+        }
     )
 
     const destroy = Game.System(
       "RuntimeQuery/DestroyHandleTarget",
       {},
       ({ lookup, commands }) =>
-        Fx.sync(() => {
+        {
           if (!currentHandle) {
             return
           }
@@ -636,7 +636,7 @@ describe("Runtime query and lookup", () => {
           if (result.ok) {
             commands.despawn(result.value.entity.id)
           }
-        })
+        }
     )
 
     const runtime = Game.Runtime.make({
@@ -680,12 +680,12 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ resources, events, commands }) =>
-        Fx.sync(() => {
-          spawnedTarget = commands.spawn(Game.Command.spawnWith([Position, { x: 12, y: 8 }] as const))
-          const handle = Game.Entity.handleAs(Position, spawnedTarget)
+        {
+          spawnedTarget = commands.spawn(Game.Command.spawn([Position, { x: 12, y: 8 }] as const))
+          const handle = Game.Entity.handle(spawnedTarget, Position)
           resources.storedHandle.set(handle)
           events.followTarget.emit({ target: handle })
-        })
+        }
     )
 
     const observe = Game.System(
@@ -701,7 +701,7 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ lookup, resources, events }) =>
-        Fx.sync(() => {
+        {
           const resourceHandle = resources.storedHandle.get()
           const eventHandle = events.followTarget.all().at(0)?.target
 
@@ -728,18 +728,18 @@ describe("Runtime query and lookup", () => {
 
           resources.lastX.set(resourceResult.value.data.position.get().x + eventResult.value.data.position.get().x)
           resources.lastError.set("")
-        })
+        }
     )
 
     const destroy = Game.System(
       "RuntimeQuery/DestroyStoredHandleTarget",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (spawnedTarget) {
             commands.despawn(spawnedTarget)
           }
-        })
+        }
     )
 
     const emitStored = Game.System(
@@ -753,12 +753,12 @@ describe("Runtime query and lookup", () => {
         }
       },
       ({ resources, events }) =>
-        Fx.sync(() => {
+        {
           const handle = resources.storedHandle.get()
           if (handle) {
             events.followTarget.emit({ target: handle })
           }
-        })
+        }
     )
 
     const runtime = Game.Runtime.make({

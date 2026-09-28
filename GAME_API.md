@@ -41,7 +41,7 @@ const Move = Game.System(
     queries: { moving: Moving },
     resources: { dt: Game.System.readResource(DeltaTime) }
   },
-  ({ queries, resources }) => Fx.sync(() => {
+  ({ queries, resources }) => {
     const dt = resources.dt.get()
     for (const { data } of queries.moving.each()) {
       const position = data.position.get()
@@ -51,7 +51,7 @@ const Move = Game.System(
         y: position.y + velocity.y * dt
       })
     }
-  })
+  }
 )
 ```
 
@@ -82,7 +82,7 @@ const SpendHealth = Game.System(
       return Fx.fail("AlreadyDead" as const)
     }
 
-    return Fx.sync(() => target.value.data.health.set(health - 1))
+    target.value.data.health.set(health - 1)
   }
 )
 
@@ -92,7 +92,7 @@ const runtime = Game.Runtime.make({
   resources: { DeltaTime: 1 / 60 }
 })
 
-const update = runtime.runSchedule(gameplay)
+const update = runtime.tick(gameplay)
 if (!update.ok) {
   // update.error is the exact named-system failure union:
   // SystemFailure<"Game/SpendHealth", "TargetMissing" | "AlreadyDead">
@@ -100,7 +100,7 @@ if (!update.ok) {
 }
 ```
 
-Component, resource, state, event, queued-machine, and deferred-command writes
+Component, resource, event, queued-machine, and deferred-command writes
 from the failing system are rolled back or discarded. Earlier successful
 systems remain committed. External service effects, such as network or audio
 calls, cannot be rolled back by the ECS.
@@ -117,16 +117,16 @@ only to delete a level. Entity scopes model ownership directly.
 const Level = Game.EntityScope("Game/Level")
 
 const LoadLevel = Game.System("Game/LoadLevel", {}, ({ commands }) =>
-  Fx.sync(() => {
-    commands.spawnIn(Level, Game.Command.spawnWith(
+  {
+    commands.spawnIn(Level, Game.Command.spawn(
       Game.Command.entry(Position, { x: 10, y: 20 }),
       Game.Command.entry(Health, 3)
     ))
-  })
+  }
 )
 
 const UnloadLevel = Game.System("Game/UnloadLevel", {}, ({ commands }) =>
-  Fx.sync(() => commands.despawnScope(Level))
+  { commands.despawnScope(Level) }
 )
 ```
 
@@ -182,7 +182,7 @@ const loop = FixedLoop.start({
   update: (stepSeconds) => {
     // A capture system can copy this host value into DeltaTime first.
     hostClock.deltaSeconds = stepSeconds
-    return runtime.runSchedule(gameplay)
+    return runtime.tick(gameplay)
   },
   render: ({ alpha, droppedSeconds }) => {
     renderer.render({ alpha })

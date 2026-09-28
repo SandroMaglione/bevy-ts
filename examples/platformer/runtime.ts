@@ -23,7 +23,7 @@ const makeRuntime = (
   host: PlatformerHostValue,
   inputManager: PlatformerInputManager
 ) =>
-  Game.Runtime.makeConstructed({
+  Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(PlatformerHost, host)

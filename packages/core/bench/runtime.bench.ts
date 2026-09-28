@@ -8,7 +8,7 @@
  * `calibration` case is plain JavaScript work used to normalize scores across
  * machines (see `scripts/bench.ts`).
  */
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import type * as Entity from "@bevy-ts/core/entity"
 import type { BenchCase } from "./harness.ts"
 
@@ -43,27 +43,27 @@ const makeRuntime = () => Game.Runtime.make({
 
 type BenchRuntime = ReturnType<typeof makeRuntime>
 
-const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {}, ({ commands }) => Fx.sync(() => {
+const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {}, ({ commands }) => {
   for (let index = 0; index < count; index++) {
-    commands.spawn(Game.Command.spawnWith(
+    commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: index }],
       [Velocity, { x: 1, y: 1 }],
       [Health, 100]
     ))
   }
-}))
+})
 
-const spawnStatics = (count: number) => Game.System("Bench/SpawnStatics", {}, ({ commands }) => Fx.sync(() => {
+const spawnStatics = (count: number) => Game.System("Bench/SpawnStatics", {}, ({ commands }) => {
   for (let index = 0; index < count; index++) {
-    commands.spawn(Game.Command.spawnWith(
+    commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: 0 }],
       [Static, {}]
     ))
   }
-}))
+})
 
 const populate = (runtime: BenchRuntime, movers: number, statics: number): void => {
-  runtime.runSchedule(Game.Schedule(
+  runtime.tick(Game.Schedule(
     spawnMovers(movers),
     spawnStatics(statics),
     Game.Schedule.applyDeferred()
@@ -116,7 +116,7 @@ const spawn: BenchCase = {
       prepare: () => {
         runtime = makeRuntime()
       },
-      run: () => runtime.runSchedule(schedule)
+      run: () => runtime.tick(schedule)
     }
   }
 }
@@ -126,11 +126,11 @@ const despawn: BenchCase = {
   description: "Despawn 10k entities through commands + applyDeferred",
   setup: () => {
     const DespawnAll = Game.System("Bench/DespawnAll", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
-      Fx.sync(() => {
+      {
         for (const match of queries.movers.each()) {
           commands.despawn(match.entity.id)
         }
-      }))
+      })
     const schedule = Game.Schedule(DespawnAll, Game.Schedule.applyDeferred())
     let runtime = makeRuntime()
     return {
@@ -138,7 +138,7 @@ const despawn: BenchCase = {
         runtime = makeRuntime()
         populate(runtime, N, 0)
       },
-      run: () => runtime.runSchedule(schedule)
+      run: () => runtime.tick(schedule)
     }
   }
 }
@@ -152,15 +152,15 @@ const iterateRead: BenchCase = {
     const SumPositions = Game.System("Bench/SumPositions", {
       queries: { movers: ReadMovers },
       resources: { sum: Game.System.writeResource(Sum) }
-    }, ({ queries, resources }) => Fx.sync(() => {
+    }, ({ queries, resources }) => {
       let total = 0
       for (const { data } of queries.movers.each()) {
         total += data.position.get().x + data.velocity.get().x
       }
       resources.sum.set(total)
-    }))
+    })
     const schedule = Game.Schedule(SumPositions)
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 
@@ -170,14 +170,14 @@ const iterateWrite: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
-    const Move = Game.System("Bench/Move", { queries: { movers: Movers } }, ({ queries }) => Fx.sync(() => {
+    const Move = Game.System("Bench/Move", { queries: { movers: Movers } }, ({ queries }) => {
       for (const { data } of queries.movers.each()) {
         const velocity = data.velocity.get()
         data.position.update((position) => ({ x: position.x + velocity.x, y: position.y + velocity.y }))
       }
-    }))
+    })
     const schedule = Game.Schedule(Move)
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 
@@ -187,26 +187,26 @@ const sparseSingle: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, N)
-    const SpawnPlayer = Game.System("Bench/SpawnPlayer", {}, ({ commands }) => Fx.sync(() => {
-      commands.spawn(Game.Command.spawnWith([Position, { x: 0, y: 0 }], [Player, {}]))
-    }))
-    runtime.runSchedule(Game.Schedule(SpawnPlayer, Game.Schedule.applyDeferred()))
+    const SpawnPlayer = Game.System("Bench/SpawnPlayer", {}, ({ commands }) => {
+      commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Player, {}]))
+    })
+    runtime.tick(Game.Schedule(SpawnPlayer, Game.Schedule.applyDeferred()))
     const PlayerQuery = Game.Query({
       selection: { position: Game.Query.write(Position) },
       with: [Player]
     })
     const MovePlayer = Game.System("Bench/MovePlayer", { queries: { player: PlayerQuery } }, ({ queries }) =>
-      Fx.sync(() => {
+      {
         const player = queries.player.single()
         if (player.ok) {
           player.value.data.position.update((position) => ({ x: position.x + 1, y: position.y }))
         }
-      }))
+      })
     const schedule = Game.Schedule(MovePlayer)
     return {
       run: () => {
         for (let index = 0; index < 10; index++) {
-          runtime.runSchedule(schedule)
+          runtime.tick(schedule)
         }
       }
     }
@@ -220,21 +220,21 @@ const changedFilter: BenchCase = {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
     const TagHot = Game.System("Bench/TagHot", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
-      Fx.sync(() => {
+      {
         let tagged = 0
         for (const match of queries.movers.each()) {
           if (tagged++ >= 100) break
-          commands.insert(match.entity.id, Hot, {})
+          commands.insert(match.entity.id, [Hot, {}])
         }
-      }))
-    runtime.runSchedule(Game.Schedule(TagHot, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()))
+      })
+    runtime.tick(Game.Schedule(TagHot, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()))
     const Writer = Game.System("Bench/WriteHot", {
       queries: { hot: Game.Query({ selection: { position: Game.Query.write(Position) }, with: [Hot] }) }
-    }, ({ queries }) => Fx.sync(() => {
+    }, ({ queries }) => {
       for (const { data } of queries.hot.each()) {
         data.position.update((position) => ({ x: position.x + 1, y: position.y }))
       }
-    }))
+    })
     const Reader = Game.System("Bench/ReadChanged", {
       queries: {
         changed: Game.Query({
@@ -243,15 +243,15 @@ const changedFilter: BenchCase = {
         })
       },
       resources: { sum: Game.System.writeResource(Sum) }
-    }, ({ queries, resources }) => Fx.sync(() => {
+    }, ({ queries, resources }) => {
       let total = 0
       for (const { data } of queries.changed.each()) {
         total += data.position.get().x
       }
       resources.sum.set(total)
-    }))
+    })
     const schedule = Game.Schedule(Writer, Game.Schedule.updateLifecycle(), Reader)
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 
@@ -262,29 +262,29 @@ const churn: BenchCase = {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
     const TagHot = Game.System("Bench/TagChurn", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
-      Fx.sync(() => {
+      {
         let tagged = 0
         for (const match of queries.movers.each()) {
           if (tagged++ >= 1_000) break
-          commands.insert(match.entity.id, Hot, {})
+          commands.insert(match.entity.id, [Hot, {}])
         }
-      }))
-    runtime.runSchedule(Game.Schedule(TagHot, Game.Schedule.applyDeferred()))
+      })
+    runtime.tick(Game.Schedule(TagHot, Game.Schedule.applyDeferred()))
     const Toggle = Game.System("Bench/ToggleMarker", {
       queries: {
         unmarked: Game.Query({ selection: { hot: Game.Query.read(Hot) }, without: [Marker] }),
         marked: Game.Query({ selection: { hot: Game.Query.read(Hot), marker: Game.Query.read(Marker) } })
       }
-    }, ({ queries, commands }) => Fx.sync(() => {
+    }, ({ queries, commands }) => {
       for (const match of queries.unmarked.each()) {
-        commands.insert(match.entity.id, Marker, {})
+        commands.insert(match.entity.id, [Marker, {}])
       }
       for (const match of queries.marked.each()) {
         commands.remove(match.entity.id, Marker)
       }
-    }))
+    })
     const schedule = Game.Schedule(Toggle, Game.Schedule.applyDeferred())
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 
@@ -295,14 +295,14 @@ const scheduleOverhead: BenchCase = {
     const runtime = makeRuntime()
     const systems = Array.from({ length: 100 }, (_, index) =>
       Game.System(`Bench/Tiny${index}`, { resources: { sum: Game.System.readResource(Sum) } }, ({ resources }) =>
-        Fx.sync(() => {
+        {
           if (resources.sum.get() < 0) throw new Error("unreachable")
-        })))
+        }))
     const schedule = Game.Schedule(...systems)
     return {
       run: () => {
         for (let index = 0; index < 10; index++) {
-          runtime.runSchedule(schedule)
+          runtime.tick(schedule)
         }
       }
     }
@@ -315,23 +315,23 @@ const lookupGet: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     const ids: Array<Id> = []
-    const SpawnTracked = Game.System("Bench/SpawnTracked", {}, ({ commands }) => Fx.sync(() => {
+    const SpawnTracked = Game.System("Bench/SpawnTracked", {}, ({ commands }) => {
       for (let index = 0; index < N; index++) {
-        ids.push(commands.spawn(Game.Command.spawnWith([Position, { x: index, y: 0 }], [Velocity, { x: 1, y: 0 }])))
+        ids.push(commands.spawn(Game.Command.spawn([Position, { x: index, y: 0 }], [Velocity, { x: 1, y: 0 }])))
       }
-    }))
-    runtime.runSchedule(Game.Schedule(SpawnTracked, Game.Schedule.applyDeferred()))
+    })
+    runtime.tick(Game.Schedule(SpawnTracked, Game.Schedule.applyDeferred()))
     const Resolve = Game.System("Bench/Resolve", { resources: { sum: Game.System.writeResource(Sum) } }, ({ lookup, resources }) =>
-      Fx.sync(() => {
+      {
         let total = 0
         for (const id of ids) {
           const match = lookup.get(id, ReadMovers)
           if (match.ok) total += match.value.data.position.get().x
         }
         resources.sum.set(total)
-      }))
+      })
     const schedule = Game.Schedule(Resolve)
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 
@@ -341,19 +341,19 @@ const events: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     const Emit = Game.System("Bench/Emit", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) =>
-      Fx.sync(() => {
+      {
         for (let index = 0; index < N; index++) events.ping.emit(index)
-      }))
+      })
     const Read = Game.System("Bench/Read", {
       events: { ping: Game.System.readEvent(Ping) },
       resources: { sum: Game.System.writeResource(Sum) }
-    }, ({ events, resources }) => Fx.sync(() => {
+    }, ({ events, resources }) => {
       let total = 0
       for (const value of events.ping.all()) total += value
       resources.sum.set(total)
-    }))
+    })
     const schedule = Game.Schedule(Emit, Game.Schedule.updateEvents(), Read)
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 
@@ -363,35 +363,35 @@ const hierarchy: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     const roots: Array<Id> = []
-    const SpawnRoots = Game.System("Bench/SpawnRoots", {}, ({ commands }) => Fx.sync(() => {
+    const SpawnRoots = Game.System("Bench/SpawnRoots", {}, ({ commands }) => {
       for (let index = 0; index < 100; index++) {
-        roots.push(commands.spawn(Game.Command.spawnWith([Position, { x: index, y: 0 }])))
+        roots.push(commands.spawn(Game.Command.spawn([Position, { x: index, y: 0 }])))
       }
-    }))
-    const SpawnChildren = Game.System("Bench/SpawnChildren", {}, ({ commands }) => Fx.sync(() => {
+    })
+    const SpawnChildren = Game.System("Bench/SpawnChildren", {}, ({ commands }) => {
       for (const root of roots) {
         for (let index = 0; index < 100; index++) {
-          commands.spawn(Game.Command.relate(Game.Command.spawnWith([Health, index]), ChildOf, root))
+          commands.spawn(Game.Command.relate(Game.Command.spawn([Health, index]), ChildOf, root))
         }
       }
-    }))
-    runtime.runSchedule(Game.Schedule(
+    })
+    runtime.tick(Game.Schedule(
       SpawnRoots,
       Game.Schedule.applyDeferred(),
       SpawnChildren,
       Game.Schedule.applyDeferred()
     ))
     const Traverse = Game.System("Bench/Traverse", { resources: { sum: Game.System.writeResource(Sum) } }, ({ lookup, resources }) =>
-      Fx.sync(() => {
+      {
         let total = 0
         for (const root of roots) {
           const descendants = lookup.descendants(root, ChildOf)
           if (descendants.ok) total += descendants.value.length
         }
         resources.sum.set(total)
-      }))
+      })
     const schedule = Game.Schedule(Traverse)
-    return { run: () => runtime.runSchedule(schedule) }
+    return { run: () => runtime.tick(schedule) }
   }
 }
 

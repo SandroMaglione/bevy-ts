@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 import { DeltaTime, Game, InputManager, InputState, PlatformerHost, Viewport } from "../schema.ts"
 
 export const CaptureFrameContextSystem = Game.System(
@@ -15,12 +14,12 @@ export const CaptureFrameContextSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.deltaTime.set(services.host.clock.deltaSeconds)
       resources.viewport.setRaw({
         width: services.host.application.screen.width,
         height: services.host.application.screen.height
       })
       resources.input.set(services.input.snapshot())
-    })
+    }
 )

@@ -41,7 +41,7 @@ const renderableForSolid = (
 }
 
 export const makePlayerDraft = () => {
-  return Game.Command.spawnWithMixed(
+  return Game.Command.spawn(
     Game.Command.entryResult(Position, playerSpawn),
     Game.Command.entryResult(Velocity, playerZeroVelocity),
     Game.Command.entryResult(Collider, playerCollider),
@@ -57,7 +57,7 @@ export const makePlayerDraft = () => {
 }
 
 export const makeSolidDraft = (layout: LevelSolidLayout) => {
-  return Game.Command.spawnWithMixed(
+  return Game.Command.spawn(
     Game.Command.entryRaw(Position, { x: layout.x, y: layout.y }),
     Game.Command.entryRaw(Collider, { width: layout.width, height: layout.height }),
     Game.Command.entry(Renderable, renderableForSolid(layout)),

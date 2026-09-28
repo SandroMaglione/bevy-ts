@@ -4,10 +4,12 @@
  * Two suites run:
  *
  * - runtime: wall-clock medians of `packages/core/bench/runtime.bench.ts`.
- *   Every score is `medianMs / calibrationMs`, where calibration is plain JS
- *   work measured in the same process. That normalizes most machine-speed
- *   differences between a laptop and a CI runner. Regressions are allowed a
- *   tolerance because wall-clock time is noisy.
+ *   Every score is `minMs / calibrationMinMs`: the fastest observed run of the
+ *   case divided by the fastest run of plain-JS calibration work in the same
+ *   process. Minimums are far less sensitive to other load on the machine
+ *   than medians, and the ratio normalizes most machine-speed differences.
+ *   Regressions are still allowed a tolerance because wall-clock time is
+ *   noisy.
  * - types: checker metrics (types, instantiations) for the generated
  *   `packages/core/bench/types/stress.ts` program. These are deterministic for
  *   a given TypeScript version, so the tolerance is small.
@@ -37,6 +39,7 @@ const typesProject = fileURLToPath(new URL("../packages/core/bench/types/tsconfi
 const RUNTIME_TOLERANCE = 0.35
 const TYPES_TOLERANCE = 0.05
 const RETRIES = 2
+const UPDATE_RUNS = 3
 
 const measureOptions: MeasureOptions = {
   warmupMs: 150,
@@ -46,6 +49,7 @@ const measureOptions: MeasureOptions = {
 }
 
 interface RuntimeResult {
+  readonly minMs: number
   readonly medianMs: number
   readonly score: number
 }
@@ -88,7 +92,7 @@ if (!calibrationCase) {
   throw new Error("The runtime suite must define a calibration case")
 }
 
-const measureCalibration = (): number => measure(calibrationCase, measureOptions).medianMs
+const measureCalibration = (): number => measure(calibrationCase, measureOptions).minMs
 
 const runRuntime = (): { calibrationMs: number; results: Record<string, RuntimeResult & BenchSample> } => {
   const calibrationMs = measureCalibration()
@@ -97,7 +101,7 @@ const runRuntime = (): { calibrationMs: number; results: Record<string, RuntimeR
     if (bench === calibrationCase) continue
     if (filter && !bench.name.includes(filter)) continue
     const sample = measure(bench, measureOptions)
-    results[bench.name] = { ...sample, score: sample.medianMs / calibrationMs }
+    results[bench.name] = { ...sample, score: sample.minMs / calibrationMs }
   }
   return { calibrationMs, results }
 }
@@ -154,10 +158,21 @@ const main = (): void => {
   const referenceLabel = comparePath === undefined ? "baseline" : "compare"
   const tolerance = baseline?.runtime.tolerance ?? RUNTIME_TOLERANCE
   console.log(`Runtime suite (${environment})`)
-  const runtime = runRuntime()
+  let runtime = runRuntime()
+  if (mode === "update") {
+    // Record the best of several full runs so one noisy run cannot skew the baseline.
+    for (let run = 1; run < UPDATE_RUNS; run++) {
+      const next = runRuntime()
+      const results = { ...runtime.results }
+      for (const [name, result] of Object.entries(next.results)) {
+        if (result.score < results[name]!.score) results[name] = result
+      }
+      runtime = { calibrationMs: Math.min(runtime.calibrationMs, next.calibrationMs), results }
+    }
+  }
   const failures: Array<string> = []
 
-  const rows: Array<Array<string>> = [["case", "median ms", "score", referenceLabel, "delta"]]
+  const rows: Array<Array<string>> = [["case", "min ms", "median ms", "score", referenceLabel, "delta"]]
   for (const [name, result] of Object.entries(runtime.results)) {
     let current = result
     const base = reference?.[name]
@@ -168,7 +183,7 @@ const main = (): void => {
         const calibrationMs = measureCalibration()
         const bench = cases.find((candidate) => candidate.name === name)!
         const sample = measure(bench, measureOptions)
-        const retried = { ...sample, score: sample.medianMs / calibrationMs }
+        const retried = { ...sample, score: sample.minMs / calibrationMs }
         if (retried.score < current.score) current = retried
       }
       if (current.score > limit) {
@@ -177,6 +192,7 @@ const main = (): void => {
     }
     rows.push([
       name,
+      formatMs(current.minMs),
       formatMs(current.medianMs),
       current.score.toFixed(3),
       base ? base.score.toFixed(3) : "-",
@@ -217,6 +233,7 @@ const main = (): void => {
         calibrationMs: Number(runtime.calibrationMs.toFixed(4)),
         environment,
         cases: Object.fromEntries(Object.entries(runtime.results).map(([name, result]) => [name, {
+          minMs: Number(result.minMs.toFixed(4)),
           medianMs: Number(result.medianMs.toFixed(4)),
           score: Number(result.score.toFixed(4))
         }]))

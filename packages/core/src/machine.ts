@@ -252,7 +252,7 @@ export type MachineNeedsFromConditions<C extends ReadonlyArray<Condition>> =
  * This is the intended default for gameplay phases and other discrete modes
  * where the transition boundary itself matters.
  *
- * Prefer a machine over `Descriptor.State(...)` when code depends on:
+ * Prefer a machine over a plain resource when code depends on:
  *
  * - queued `nextState(...)` writes
  * - explicit `applyStateTransitions(...)`

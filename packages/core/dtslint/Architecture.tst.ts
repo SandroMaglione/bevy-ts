@@ -1,4 +1,4 @@
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import * as Runtime from "@bevy-ts/core/runtime"
 import { describe, it } from "tstyche"
 
@@ -31,9 +31,9 @@ const define = <
   descriptor: D
 ) => Game.System(name, {
   resources: { value: Game.System.writeResource(descriptor) }
-}, ({ resources }) => Fx.sync(() => {
+}, ({ resources }) => {
   resources.value.update((value) => value + 1)
-}))
+})
 
 const S01 = define("Architecture/S01", R01)
 const S02 = define("Architecture/S02", R02)
@@ -54,18 +54,14 @@ const S16 = define("Architecture/S16", R16)
 
 describe("normalized type architecture", () => {
   it("composes a wide schedule without rebuilding requirement object maps", () => {
-    const first = Game.Schedule.fragment({
-      entries: [S01, S02, S03, S04, S05, S06, S07, S08]
-    })
-    const second = Game.Schedule.phase({
-      steps: [S09, S10, S11, S12, S13, S14, S15, S16]
-    })
+    const first = Game.Schedule(S01, S02, S03, S04, S05, S06, S07, S08)
+    const second = Game.Schedule(S09, S10, S11, S12, S13, S14, S15, S16)
     const schedule = Game.Schedule(first, Game.Schedule.applyDeferred(), second)
 
     const incomplete = Game.Runtime.make({ services: Runtime.services() })
     // @ts-expect-error!
-    incomplete.runSchedule(schedule)
-    incomplete.tryRunSchedule(schedule)
+    incomplete.tick(schedule)
+    incomplete.tryTick(schedule)
 
     const complete = Game.Runtime.make({
       services: Runtime.services(),
@@ -76,6 +72,6 @@ describe("normalized type architecture", () => {
         R13: 0, R14: 0, R15: 0, R16: 0
       }
     })
-    complete.runSchedule(schedule)
+    complete.tick(schedule)
   })
 })

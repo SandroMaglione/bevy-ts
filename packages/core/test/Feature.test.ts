@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import * as Runtime from "@bevy-ts/core/runtime"
 import * as Schedule from "@bevy-ts/core/schedule"
 import * as System from "@bevy-ts/core/system"
@@ -18,211 +18,8 @@ const Game = Schema.bind(Schema.fragment({
 }))
 const schema = Game.schema
 
-describe("App", () => {
-  it("runs one schedule once through update", () => {
-    let captured = -1
-
-    const increment = System.System(
-      "AppTest/Increment",
-      {
-        schema,
-        resources: {
-          counter: System.writeResource(Counter)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.counter.update((value) => value + 1)
-        })
-    )
-
-    const read = System.System(
-      "AppTest/ReadCounter",
-      {
-        schema,
-        resources: {
-          counter: System.readResource(Counter)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          captured = resources.counter.get()
-        })
-    )
-
-    const updateSchedule = Schedule.Schedule(increment)
-
-    const readSchedule = Schedule.Schedule(read)
-
-    const runtime = Runtime.makeRuntime({
-      schema,
-      services: Runtime.services(),
-      resources: {
-        Counter: 0,
-        Log: []
-      }
-    })
-
-    const app = App.makeApp(runtime)
-    app.update(updateSchedule)
-    app.update(readSchedule)
-
-    expect(captured).toBe(1)
-  })
-
-  it("runs multiple schedules in order within one update call", () => {
-    let captured: ReadonlyArray<string> = []
-
-    const first = System.System(
-      "AppTest/First",
-      {
-        schema,
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "first"])
-        })
-    )
-
-    const second = System.System(
-      "AppTest/Second",
-      {
-        schema,
-        resources: {
-          log: System.writeResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.log.update((entries) => [...entries, "second"])
-        })
-    )
-
-    const read = System.System(
-      "AppTest/CaptureLog",
-      {
-        schema,
-        resources: {
-          log: System.readResource(Log)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          captured = resources.log.get()
-        })
-    )
-
-    const firstSchedule = Schedule.Schedule(first)
-
-    const secondSchedule = Schedule.Schedule(second)
-
-    const readSchedule = Schedule.Schedule(read)
-
-    const runtime = Runtime.makeRuntime({
-      schema,
-      services: Runtime.services(),
-      resources: {
-        Counter: 0,
-        Log: []
-      }
-    })
-
-    const app = App.makeApp(runtime)
-    app.update(firstSchedule, secondSchedule, readSchedule)
-
-    expect(captured).toEqual(["first", "second"])
-  })
-
-  it("runs bootstrap schedules through the runtime initialization path", () => {
-    let captured = -1
-
-    const setup = System.System(
-      "AppTest/BootstrapSetup",
-      {
-        schema,
-        resources: {
-          counter: System.writeResource(Counter)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.counter.set(42)
-        })
-    )
-
-    const read = System.System(
-      "AppTest/BootstrapRead",
-      {
-        schema,
-        resources: {
-          counter: System.readResource(Counter)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          captured = resources.counter.get()
-        })
-    )
-
-    const setupSchedule = Schedule.Schedule(setup)
-
-    const readSchedule = Schedule.Schedule(read)
-
-    const runtime = Runtime.makeRuntime({
-      schema,
-      services: Runtime.services(),
-      resources: {
-        Counter: 0,
-        Log: []
-      }
-    })
-
-    const app = App.makeApp(runtime)
-    app.bootstrap(setupSchedule)
-    app.update(readSchedule)
-
-    expect(captured).toBe(42)
-  })
-
-  it("repeated update calls accumulate world changes", () => {
-    const increment = System.System(
-      "AppTest/RepeatedIncrement",
-      {
-        schema,
-        resources: {
-          counter: System.writeResource(Counter)
-        }
-      },
-      ({ resources }) =>
-        Fx.sync(() => {
-          resources.counter.update((value) => value + 1)
-        })
-    )
-
-    const runtime = Runtime.makeRuntime({
-      schema,
-      services: Runtime.services(),
-      resources: {
-        Counter: 0,
-        Log: []
-      }
-    })
-
-    const app = App.makeApp(runtime)
-    const schedule = Schedule.Schedule(increment)
-
-    app.update(schedule)
-    app.update(schedule)
-    app.update(schedule)
-
-    const captured = readCounter(runtime)
-    expect(captured).toBe(3)
-  })
-
-  it("composes typed features before bind and runs aggregated app phases", () => {
+describe("Features", () => {
+  it("composes typed features before bind and runs their aggregated schedules", () => {
     const Root = Schema.defineRoot("FeatureApp")
 
     const Core = Schema.Feature.define("Core", {
@@ -243,10 +40,10 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.bootCount.update((value) => value + 1)
               resources.log.update((entries) => [...entries, "bootstrap"])
-            })
+            }
         )
 
         return {
@@ -272,10 +69,10 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.counter.update((value) => value + 1)
               resources.log.update((entries) => [...entries, "combat"])
-            })
+            }
         )
 
         const capture = Game.System(
@@ -288,11 +85,11 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               capturedCounter = resources.counter.get()
               capturedBootCount = resources.bootCount.get()
               capturedLog = resources.log.get()
-            })
+            }
         )
 
         return {
@@ -313,7 +110,7 @@ describe("App", () => {
       features: [Core, Combat] as const
     })
 
-    const app = project.App.make({
+    const runtime = project.Game.Runtime.make({
       services: project.Game.Runtime.services(),
       resources: {
         Counter: 0,
@@ -322,15 +119,15 @@ describe("App", () => {
       }
     })
 
-    app.bootstrap()
-    app.update()
+    runtime.tick(...project.schedules.bootstrap)
+    runtime.tick(...project.schedules.update)
 
     expect(capturedCounter).toBe(1)
     expect(capturedBootCount).toBe(1)
     expect(capturedLog).toEqual(["bootstrap", "combat"])
   })
 
-  it("uses selected feature order for aggregated phases and matches manual schedule execution", () => {
+  it("uses selected feature order for aggregated schedules", () => {
     const Root = Schema.defineRoot("FeatureOrderApp")
     const Trace = Descriptor.Resource<ReadonlyArray<string>>()("FeatureOrder/Trace")
 
@@ -349,9 +146,9 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.trace.update((entries) => [...entries, "core-bootstrap"])
-            })
+            }
         )
 
         const update = Game.System(
@@ -362,9 +159,9 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.trace.update((entries) => [...entries, "core-update"])
-            })
+            }
         )
 
         return {
@@ -386,9 +183,9 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.trace.update((entries) => [...entries, "combat-bootstrap"])
-            })
+            }
         )
 
         const update = Game.System(
@@ -399,9 +196,9 @@ describe("App", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.trace.update((entries) => [...entries, "combat-update"])
-            })
+            }
         )
 
         return {
@@ -428,26 +225,9 @@ describe("App", () => {
       }
     })
 
-    manualRuntime.initialize(...project.schedules.bootstrap)
-    manualRuntime.tick(...project.schedules.update)
-
-    const app = project.App.make({
-      services: project.Game.Runtime.services(),
-      resources: {
-        Trace: []
-      }
-    })
-
-    app.bootstrap()
-    app.update()
+    manualRuntime.tick(...project.schedules.bootstrap, ...project.schedules.update)
 
     expect(readResourceValue(manualRuntime, project.schema, Trace)).toEqual([
-      "combat-bootstrap",
-      "core-bootstrap",
-      "combat-update",
-      "core-update"
-    ])
-    expect(readResourceValue(app.runtime, project.schema, Trace)).toEqual([
       "combat-bootstrap",
       "core-bootstrap",
       "combat-update",
@@ -498,7 +278,7 @@ const readCounter = (
   >
 ): number => {
   let captured = -1
-  runtime.runSchedule(Schedule.Schedule(System.System(
+  runtime.tick(Schedule.Schedule(System.System(
       "AppTest/ReadCounterHelperSystem",
       {
         schema,
@@ -507,9 +287,9 @@ const readCounter = (
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           captured = resources.counter.get()
-        })
+        }
     )))
   return captured
 }

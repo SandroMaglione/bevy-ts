@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { levelSolids } from "../content.ts"
 import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
@@ -14,7 +13,7 @@ export const SetupWorldSystem = Game.System(
     }
   },
   ({ commands, resources }) =>
-    Fx.sync(() => {
+    {
       resources.contacts.set(makeInitialPlayerContacts())
       resources.loseMessage.set("You fell into a hole.")
 
@@ -29,5 +28,5 @@ export const SetupWorldSystem = Game.System(
           commands.spawnIn(LevelScope, solidDraft.value)
         }
       }
-    })
+    }
 )

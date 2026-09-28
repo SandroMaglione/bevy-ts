@@ -92,10 +92,6 @@ export namespace Relation {
   export type Hierarchy = RelationDefinition<string, string, "hierarchy", any>
   export type MutationOperation = "relate" | "reorderChildren"
 
-  export type Result<A, E> =
-    | { readonly ok: true; readonly value: A }
-    | { readonly ok: false; readonly error: E }
-
   export interface MissingEntityError {
     readonly _tag: "MissingEntity"
     readonly entityId: number
@@ -178,16 +174,6 @@ export namespace Relation {
     readonly error: MutationError
   }
 }
-
-export const success = <A>(value: A): Relation.Result<A, never> => ({
-  ok: true,
-  value
-})
-
-export const failure = <E>(error: E): Relation.Result<never, E> => ({
-  ok: false,
-  error
-})
 
 export const missingEntityError = (entityId: number): Relation.MissingEntityError => ({
   _tag: "MissingEntity",

@@ -16,7 +16,8 @@
  * 3. bind one `Game` with `Schema.bind(...)`
  *
  * Reach for this module first whenever you introduce a new component,
- * resource, event, state, or service to the game.
+ * resource, event, or service to the game. Discrete modes whose transitions
+ * matter are state machines (`Game.StateMachine(...)`), not descriptors.
  *
  * @module descriptor
  * @docGroup core
@@ -34,7 +35,7 @@
  * Stable runtime markers used to brand descriptor kinds and constructor-aware variants.
  *
  * @groupDescription Functions
- * Authoring helpers for declaring components, resources, services, events, and states.
+ * Authoring helpers for declaring components, resources, services, and events.
  *
  * @example
  * ```ts
@@ -65,9 +66,9 @@ const descriptorConstruction = Symbol("bevy-ts/DescriptorConstruction")
  * The public categories of nominal descriptors used by the engine.
  *
  * Descriptors are the strongly typed identities behind components, resources,
- * events, states, and dependency-injected services.
+ * events, and dependency-injected services.
  */
-export type DescriptorKind = "component" | "resource" | "event" | "state" | "service"
+export type DescriptorKind = "component" | "resource" | "event" | "service"
 
 /**
  * A branded identity for a schema item.
@@ -265,35 +266,6 @@ export const ConstructedResource = <Value, Raw, Error>(
 export const Event = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"event", Name, Value> => makeDescriptor("event", name)
-
-/**
- * Defines a state descriptor.
- *
- * States are singleton schema values with no queued transition semantics.
- *
- * Use this when you need one current world-level value and the boundary of
- * changing that value is not itself meaningful. If gameplay logic depends on
- * queued transitions, enter/exit handling, or `inState(...)` gating, prefer
- * `Game.StateMachine(...)` instead.
- *
- * @example
- * ```ts
- * const ActiveLocale = Descriptor.State<"en" | "it">()("ActiveLocale")
- * ```
- */
-export const State = <Value>() => <const Name extends string>(
-  name: Name
-): Descriptor<"state", Name, Value> => makeDescriptor("state", name)
-
-/**
- * Defines a state descriptor that also knows how to validate raw values.
- */
-export const ConstructedState = <Value, Raw, Error>(
-  constructor: ResultConstructor<Value, Raw, Error>
-) => <const Name extends string>(
-  name: Name
-): ConstructedDescriptor<"state", Name, Value, Raw, Error> =>
-  makeConstructedDescriptor("state", name, constructor)
 
 /**
  * Defines a service descriptor.

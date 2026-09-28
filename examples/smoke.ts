@@ -3,9 +3,9 @@
  *
  * It keeps the scenario intentionally small while exercising the modern API:
  * schema binding, machine-gated systems, deferred commands, explicit event
- * visibility, runtime provisioning, and app bootstrap/update execution.
+ * visibility, runtime provisioning, and runtime ticks.
  */
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Smoke/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Smoke/Velocity")
@@ -51,14 +51,14 @@ const SetupSystem = Game.System(
   "Smoke/Setup",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
+    {
       commands.spawn(
-        Game.Command.spawnWith(
+        Game.Command.spawn(
           [Position, { x: 0, y: 0 }],
           [Velocity, { x: 1, y: 0.5 }]
         )
       )
-    })
+    }
 )
 
 const MoveSystem = Game.System(
@@ -80,7 +80,7 @@ const MoveSystem = Game.System(
     }
   },
   ({ queries, resources, events, services, commands }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.time.get()
       resources.tickCount.update((value) => value + 1)
       const tick = resources.tickCount.get()
@@ -94,7 +94,7 @@ const MoveSystem = Game.System(
       }
 
       commands.spawn(
-        Game.Command.spawnWith(
+        Game.Command.spawn(
           [Position, { x: tick * dt, y: tick * dt }],
           [Velocity, { x: 1, y: 1 }]
         )
@@ -102,7 +102,7 @@ const MoveSystem = Game.System(
 
       events.tick.emit({ tick, dt })
       services.logger.log(`queued tick=${tick}`)
-    })
+    }
 )
 
 const ObserveTickSystem = Game.System(
@@ -116,11 +116,11 @@ const ObserveTickSystem = Game.System(
     }
   },
   ({ events, services }) =>
-    Fx.sync(() => {
+    {
       for (const event of events.tick.all()) {
         services.logger.log(`observed tick=${event.tick} dt=${event.dt}`)
       }
-    })
+    }
 )
 
 const bootstrap = Game.Schedule(SetupSystem, Game.Schedule.applyDeferred())
@@ -150,12 +150,10 @@ const runtime = Game.Runtime.make({
 })
 
 export const createSmokeExample = () => {
-  const app = App.makeApp(runtime)
-  app.bootstrap(bootstrap)
+  runtime.tick(bootstrap)
 
   return {
     runtime,
-    app,
     updateSchedule: update
   }
 }

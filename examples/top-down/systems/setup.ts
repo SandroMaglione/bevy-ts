@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { pickupLayout, wallLayout } from "../content.ts"
 import { makePickupDraft, makePlayerDraft, makeWallDraft } from "../drafts.ts"
@@ -8,7 +7,7 @@ export const SetupWorldSystem = Game.System(
   "TopDown/SetupWorld",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
+    {
       const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawn(playerDraft.value)
@@ -27,5 +26,5 @@ export const SetupWorldSystem = Game.System(
           commands.spawn(pickupDraft.value)
         }
       }
-    })
+    }
 )

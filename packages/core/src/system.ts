@@ -30,7 +30,7 @@
  *   resources: {
  *     dt: Game.System.readResource(DeltaTime)
  *   }
- * }, ({ queries, resources }) => Fx.sync(() => {
+ * }, ({ queries, resources }) => {
  *   const dt = resources.dt.get()
  *
  *   for (const { data } of queries.moving.each()) {
@@ -40,7 +40,7 @@
  *       y: position.y + velocity.y * dt
  *     }))
  *   }
- * }))
+ * })
  * ```
  *
  * @module system
@@ -63,6 +63,7 @@ import type * as Relation from "./relation.ts"
 import type { Query, QueryMatch } from "./query.ts"
 import type { ConstructedWriteCell, ReadCell, ReadonlyValue, WriteCell } from "./query.ts"
 import * as Requirement from "./requirement.ts"
+import type * as Result from "./Result.ts"
 import type { Schema } from "./schema.ts"
 import type { CommandsApi } from "./command.ts"
 
@@ -101,7 +102,7 @@ import type { CommandsApi } from "./command.ts"
  *   resources: {
  *     dt: Game.System.readResource(DeltaTime)
  *   }
- * }, ({ queries, resources }) => Fx.sync(() => {
+ * }, ({ queries, resources }) => {
  *   const dt = resources.dt.get()
  *   for (const { data } of queries.moving.each()) {
  *     const velocity = data.velocity.get()
@@ -110,7 +111,7 @@ import type { CommandsApi } from "./command.ts"
  *       y: position.y + velocity.y * dt
  *     }))
  *   }
- * }))
+ * })
  * ```
  */
 
@@ -180,10 +181,10 @@ export const readResource = <D extends Descriptor<"resource", string, any>>(
  *   resources: {
  *     score: Game.System.writeResource(Score)
  *   }
- * }, ({ resources }) => Fx.sync(() => {
+ * }, ({ resources }) => {
  *   // Mutate the singleton through the explicit write cell.
  *   resources.score.update((score) => score + 1)
- * }))
+ * })
  * ```
  */
 export const writeResource = <D extends Descriptor<"resource", string, any>>(
@@ -233,7 +234,7 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
  * readers in the same schedule phase until `Game.Schedule.updateEvents()`.
  *
  * If the payload needs to name an entity for later work, emit a durable
- * `Game.Entity.handle(...)` or `Game.Entity.handleAs(...)` and let the later
+ * `Game.Entity.handle(...)` (optionally with an intent component) and let the later
  * reader re-resolve it through `lookup.getHandle(...)` after the event buffer
  * is committed.
  *
@@ -243,61 +244,14 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
  *   events: {
  *     hit: Game.System.writeEvent(Hit)
  *   }
- * }, ({ events }) => Fx.sync(() => {
+ * }, ({ events }) => {
  *   events.hit.emit({ amount: 1 })
- * }))
+ * })
  * ```
  */
 export const writeEvent = <D extends Descriptor<"event", string, any>>(
   descriptor: D
 ): EventWrite<D> => ({
-  mode: "write",
-  descriptor
-})
-
-/**
- * Declares read-only access to a state value.
- */
-export type StateRead<D extends Descriptor<"state", string, any>> = {
-  readonly mode: "read"
-  readonly descriptor: D
-}
-
-/**
- * Declares writable access to a state value.
- */
-export type StateWrite<D extends Descriptor<"state", string, any>> = {
-  readonly mode: "write"
-  readonly descriptor: D
-}
-
-/**
- * Creates a state-read declaration for a system spec.
- *
- * Plain states are just singleton schema values. They do not have queued
- * transition semantics, transition events, or enter/exit boundaries.
- *
- * If the behavior depends on when a mode change commits, prefer
- * `machine(...)` / `nextState(...)` on a `Game.StateMachine(...)`
- * machine instead.
- */
-export const readState = <D extends Descriptor<"state", string, any>>(
-  descriptor: D
-): StateRead<D> => ({
-  mode: "read",
-  descriptor
-})
-
-/**
- * Creates a state-write declaration for a system spec.
- *
- * This updates a singleton schema value immediately in the current world state.
- * It does not queue a transition. Use `nextState(...)` when the boundary of
- * changing mode is part of the gameplay model.
- */
-export const writeState = <D extends Descriptor<"state", string, any>>(
-  descriptor: D
-): StateWrite<D> => ({
   mode: "write",
   descriptor
 })
@@ -321,7 +275,7 @@ export const machine = <M extends Machine.StateMachine.Any>(
  * not immediately switch the committed state; the queued value is applied only
  * at an explicit `Game.Schedule.applyStateTransitions(...)` boundary.
  *
- * Use this instead of `writeState(...)` when the transition timing itself is
+ * Use this instead of writing a plain resource when the transition timing itself is
  * part of the gameplay model, such as restarting a round, leaving a menu, or
  * entering a results screen after reset/setup schedules run.
  */
@@ -368,19 +322,6 @@ export interface ResourceReadView<T> extends ReadCell<T> {}
  */
 export type ResourceWriteView<D extends Descriptor<"resource", string, any>> =
   D extends import("./descriptor.ts").ConstructedDescriptor<"resource", string, infer Value, infer Raw, infer Error>
-    ? ConstructedWriteCell<Value, Raw, Error>
-    : WriteCell<Descriptor.Value<D>>
-
-/**
- * A read-only view over a state value.
- */
-export interface StateReadView<T> extends ReadCell<T> {}
-
-/**
- * A mutable view over a state value.
- */
-export type StateWriteView<D extends Descriptor<"state", string, any>> =
-  D extends import("./descriptor.ts").ConstructedDescriptor<"state", string, infer Value, infer Raw, infer Error>
     ? ConstructedWriteCell<Value, Raw, Error>
     : WriteCell<Descriptor.Value<D>>
 
@@ -468,11 +409,11 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  *   removed: {
  *     renderables: Game.System.readRemoved(Renderable)
  *   }
- * }, ({ removed }) => Fx.sync(() => {
+ * }, ({ removed }) => {
  *   for (const entityId of removed.renderables.all()) {
  *     // destroy host-owned node here
  *   }
- * }))
+ * })
  * ```
  */
 export const readRemoved = <D extends Descriptor<"component", string, any>>(
@@ -504,11 +445,11 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
  *   despawned: {
  *     entities: Game.System.readDespawned()
  *   }
- * }, ({ despawned }) => Fx.sync(() => {
+ * }, ({ despawned }) => {
  *   for (const entityId of despawned.entities.all()) {
  *     // destroy host-owned node here
  *   }
- * }))
+ * })
  * ```
  */
 export const readDespawned = (): DespawnedRead => ({
@@ -551,11 +492,11 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
   /**
    * Retrieves the match for one specific entity id when it satisfies the query.
    */
-  get(entityId: import("./entity.ts").EntityId<S, Query.Root<Q>>): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  get(entityId: import("./entity.ts").EntityId<S, Query.Root<Q>>): Result.Result<QueryMatch<S, Q>, Query.LookupError>
   /**
    * Returns a single match when exactly one entity satisfies the query.
    */
-  single(): Query.Result<QueryMatch<S, Q>, Query.SingleError>
+  single(): Result.Result<QueryMatch<S, Q>, Query.SingleError>
   /**
    * Returns a single match when zero or one entity satisfies the query.
    *
@@ -573,7 +514,7 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
    * player.value.data.position.set({ x: 0, y: 0 })
    * ```
    */
-  singleOptional(): Query.Result<QueryMatch<S, Q> | undefined, Query.MultipleEntitiesError>
+  singleOptional(): Result.Result<QueryMatch<S, Q> | undefined, Query.MultipleEntitiesError>
 }
 
 /**
@@ -592,7 +533,7 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
   get<Q extends Query.Any<Root>>(
     entityId: Entity.EntityId<S, Root>,
     query: Q
-  ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
   /**
    * Resolves a stored durable handle back into current-world query access.
    *
@@ -611,15 +552,15 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
         ? H
         : never,
     query: Q
-  ): Query.Result<QueryMatch<S, Q>, Query.LookupError>
+  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
   related<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError>
+  ): Result.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError>
   relatedSources<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
   /**
    * Reads the direct children of one hierarchy parent as typed query matches.
    *
@@ -634,22 +575,22 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     entityId: Entity.EntityId<S, Root>,
     relation: R,
     query: Q
-  ): Relation.Relation.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
+  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   parent<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError>
+  ): Result.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError>
   ancestors<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
   descendants<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R,
     options?: {
       readonly order?: "breadth" | "depth"
     }
-  ): Relation.Relation.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
+  ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
   /**
    * Traverses hierarchy descendants and resolves only the entities that match
    * the given query.
@@ -667,11 +608,11 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     options?: {
       readonly order?: "breadth" | "depth"
     }
-  ): Relation.Relation.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
+  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   root<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
-  ): Relation.Relation.Result<Entity.EntityId<S, Root>, Relation.Relation.MissingEntityError>
+  ): Result.Result<Entity.EntityId<S, Root>, Relation.Relation.MissingEntityError>
 }
 
 /**
@@ -690,42 +631,6 @@ export interface SystemOrderingSpec {
 }
 
 /**
- * Reusable pre-definition system access fragment.
- *
- * Use this to type-check shared `queries`, `resources`, `services`, and other
- * access slices before spreading them into `Game.System(...)`.
- */
-export interface SystemAccessSpec<
-  out Queries extends Record<string, Query.Any<any>> = Record<string, Query.Any<any>>,
-  out Resources extends Record<string, ResourceAccess> = Record<string, ResourceAccess>,
-  out Events extends Record<string, EventAccess> = Record<string, EventAccess>,
-  out Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = Record<string, ServiceRead<Descriptor<"service", string, any>>>,
-  out States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>>,
-  out Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = Record<string, Machine.MachineRead<Machine.StateMachine.Any>>,
-  out NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>>,
-  out TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>>,
-  out Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = Record<string, RemovedRead<Descriptor<"component", string, any>>>,
-  out Despawned extends Record<string, DespawnedRead> = Record<string, DespawnedRead>,
-  out When extends ReadonlyArray<Machine.Condition> = readonly [],
-  out Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>,
-  out RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = Record<string, RelationFailureRead<Relation.Relation.Any>>
-> {
-  readonly queries?: Queries
-  readonly resources?: Resources
-  readonly events?: Events
-  readonly services?: Services
-  readonly states?: States
-  readonly machines?: Machines
-  readonly nextMachines?: NextMachines
-  readonly transitionEvents?: TransitionEvents
-  readonly removed?: Removed
-  readonly despawned?: Despawned
-  readonly relationFailures?: RelationFailures
-  readonly when?: When
-  readonly transitions?: Transitions
-}
-
-/**
  * An explicit system specification.
  *
  * This is the central user-facing abstraction: all ECS access, service
@@ -736,7 +641,6 @@ export interface SystemAccessInput {
   readonly resources?: Record<string, ResourceAccess>
   readonly events?: Record<string, EventAccess>
   readonly services?: Record<string, ServiceRead<Descriptor<"service", string, any>>>
-  readonly states?: Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>>
   readonly machines?: Record<string, Machine.MachineRead<Machine.StateMachine.Any>>
   readonly nextMachines?: Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>>
   readonly transitionEvents?: Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>>
@@ -746,6 +650,13 @@ export interface SystemAccessInput {
   readonly when?: ReadonlyArray<Machine.Condition>
   readonly transitions?: Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>
 }
+
+/**
+ * Reusable access fragment. Use `satisfies System.SystemAccessSpec` to check
+ * shared `queries`, `resources`, `services`, and other slices before spreading
+ * them into `Game.System(...)`.
+ */
+export type SystemAccessSpec = SystemAccessInput
 
 /** Rejects unknown system access categories at a bound constructor. */
 export type ExactAccess<Access extends SystemAccessInput> = Access & {
@@ -774,7 +685,6 @@ export type SystemSpec<
   readonly resources: AccessField<Access, "resources", {}>
   readonly events: AccessField<Access, "events", {}>
   readonly services: AccessField<Access, "services", {}>
-  readonly states: AccessField<Access, "states", {}>
   readonly machines: AccessField<Access, "machines", {}>
   readonly nextMachines: AccessField<Access, "nextMachines", {}>
   readonly transitionEvents: AccessField<Access, "transitionEvents", {}>
@@ -815,16 +725,6 @@ type EventContext<Spec extends AnySystemSpec> = {
 type ServiceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["services"]]:
     Spec["services"][K] extends ServiceRead<infer D> ? Descriptor.Value<D> : never
-}
-
-/**
- * Derives the state view context from a system spec.
- */
-type StateContext<Spec extends AnySystemSpec> = {
-  readonly [K in keyof Spec["states"]]:
-    Spec["states"][K] extends StateRead<infer D> ? StateReadView<Descriptor.Value<D>>
-    : Spec["states"][K] extends StateWrite<infer D> ? StateWriteView<D>
-    : never
 }
 
 /**
@@ -894,7 +794,6 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly lookup: LookupApi<Spec["schema"], Spec["__schemaRoot"]>
   readonly resources: ResourceContext<Spec>
   readonly events: EventContext<Spec>
-  readonly states: StateContext<Spec>
   readonly machines: MachineContext<Spec>
   readonly nextMachines: NextMachineContext<Spec>
   readonly transitionEvents: TransitionEventContext<Spec>
@@ -923,7 +822,6 @@ type DescriptorNeedsFromRecord<RecordValue> =
 export type SystemNeeds<Spec extends AnySystemSpec> =
   | DescriptorNeedsFromRecord<Spec["services"]>
   | DescriptorNeedsFromRecord<Spec["resources"]>
-  | DescriptorNeedsFromRecord<Spec["states"]>
   | Machine.MachineNeedsFromRecord<Spec["machines"]>
   | Machine.MachineNeedsFromRecord<Spec["nextMachines"]>
   | Machine.MachineNeedsFromRecord<Spec["transitionEvents"]>
@@ -947,7 +845,6 @@ export type SystemAccessNeeds<Access extends SystemAccessInput> =
   | RequirementFromAccessValue<AccessRecordValue<Access,
       | "services"
       | "resources"
-      | "states"
       | "machines"
       | "nextMachines"
       | "transitionEvents"
@@ -1012,8 +909,18 @@ export interface SystemDefinition<
   /**
    * The executable implementation of the system.
    */
-  readonly run: (context: SystemContext<Spec>) => Fx<A, E, SystemDependencies<Spec>>
+  readonly run: SystemRun<Spec, A, E>
 }
+
+/**
+ * A system implementation.
+ *
+ * Return nothing for a system that cannot fail. Return an `Fx` when the system
+ * has an expected failure (`Fx.fail(...)`) or wants to compose effects; the
+ * failure type becomes part of every schedule that contains the system.
+ */
+export type SystemRun<Spec extends AnySystemSpec, A = void, E = never> =
+  (context: SystemContext<Spec>) => Fx<A, E, SystemDependencies<Spec>> | void
 
 /**
  * Defines a system from an explicit spec and a typed implementation.
@@ -1039,9 +946,9 @@ export interface SystemDefinition<
  *   resources: {
  *     total: Game.System.writeResource(EnemyCount)
  *   }
- * }, ({ queries, resources }) => Fx.sync(() => {
+ * }, ({ queries, resources }) => {
  *   resources.total.set(queries.enemies.each().length)
- * }))
+ * })
  * ```
  */
 const requirementValuesFromRecord = (
@@ -1069,7 +976,6 @@ const collectSystemRequirements = (
 ): ReadonlyArray<Requirement.RequirementValue> => Requirement.collect([
   ...requirementValuesFromRecord(spec.services),
   ...requirementValuesFromRecord(spec.resources),
-  ...requirementValuesFromRecord(spec.states),
   ...requirementValuesFromRecord(spec.machines),
   ...requirementValuesFromRecord(spec.nextMachines),
   ...requirementValuesFromRecord(spec.transitionEvents),
@@ -1078,73 +984,23 @@ const collectSystemRequirements = (
 ])
 
 export function System<
-  S extends Schema.Any,
-  const Queries extends Record<string, Query.Any<any>> = {},
-  const Resources extends Record<string, ResourceAccess> = {},
-  const Events extends Record<string, EventAccess> = {},
-  const Services extends Record<string, ServiceRead<Descriptor<"service", string, any>>> = {},
-  const States extends Record<string, StateRead<Descriptor<"state", string, any>> | StateWrite<Descriptor<"state", string, any>>> = {},
-  const Machines extends Record<string, Machine.MachineRead<Machine.StateMachine.Any>> = {},
-  const NextMachines extends Record<string, Machine.NextMachineWrite<Machine.StateMachine.Any>> = {},
-  const TransitionEvents extends Record<string, Machine.TransitionEventRead<Machine.StateMachine.Any>> = {},
-  const Removed extends Record<string, RemovedRead<Descriptor<"component", string, any>>> = {},
-  const Despawned extends Record<string, DespawnedRead> = {},
-  const When extends ReadonlyArray<Machine.Condition> = readonly [],
-  const Transitions extends Record<string, Machine.TransitionRead<Machine.StateMachine.Any>> = {},
-  const RelationFailures extends Record<string, RelationFailureRead<Relation.Relation.Any>> = {},
-  Root = unknown,
+  const Access extends SystemAccessInput & { readonly schema: Schema.Any },
   A = void,
   E = never,
+  Root = unknown,
   const Name extends string = string
 >(
   name: Name,
-  spec: { readonly schema: S } & SystemAccessSpec<
-    Queries,
-    Resources,
-    Events,
-    Services,
-    States,
-    Machines,
-    NextMachines,
-    TransitionEvents,
-    Removed,
-    Despawned,
-    When,
-    Transitions,
-    RelationFailures
-  >,
-  run: (context: SystemContext<SystemSpec<S, SystemAccessSpec<
-    Queries,
-    Resources,
-    Events,
-    Services,
-    States,
-    Machines,
-    NextMachines,
-    TransitionEvents,
-    Removed,
-    Despawned,
-    When,
-    Transitions,
-    RelationFailures
-  >, Root>>) => Fx<
-    A,
-    E,
-    ServiceContext<SystemSpec<S, SystemAccessSpec<Queries, Resources, Events, Services, States>, Root>>
-  >
-): SystemDefinition<
-  SystemSpec<S, SystemAccessSpec<Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, RelationFailures>, Root>,
-  A,
-  E,
-  Root,
-  Name,
-  SystemAccessNeeds<SystemAccessSpec<Queries, Resources, Events, Services, States, Machines, NextMachines, TransitionEvents, Removed, Despawned, When, Transitions, RelationFailures>>
->
+  spec: Access & {
+    readonly [Key in Exclude<keyof Access, keyof SystemAccessInput | "schema">]: never
+  },
+  run: SystemRun<SystemSpec<Access["schema"], Access, Root>, A, E>
+): SystemDefinition<SystemSpec<Access["schema"], Access, Root>, A, E, Root, Name, SystemAccessNeeds<Access>>
 
 export function System(
   name: string,
   spec: { readonly schema: Schema.Any } & SystemAccessInput,
-  run: (context: any) => Fx<any, any, any>
+  run: (context: any) => Fx<any, any, any> | void
 ): SystemDefinition<any, any, any, any, any, any> {
   type Spec = SystemSpec<Schema.Any, SystemAccessInput, unknown>
 
@@ -1154,7 +1010,6 @@ export function System(
     resources: spec.resources ?? {},
     events: spec.events ?? {},
     services: spec.services ?? {},
-    states: spec.states ?? {},
     machines: spec.machines ?? {},
     nextMachines: spec.nextMachines ?? {},
     transitionEvents: spec.transitionEvents ?? {},

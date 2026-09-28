@@ -6,7 +6,7 @@ The current design has one rule: validate detailed input where the user creates 
 
 ## Descriptors and machines
 
-Resources, states, services, and state machines are runtime requirement tokens. A system stores the actual tokens it needs in `requirements`.
+Resources, services, and state machines are runtime requirement tokens. A system stores the actual tokens it needs in `requirements`.
 
 Descriptor identity is `(kind, name)`, and that is deliberate: descriptor types are structural over the same pair, so runtime identity has to match what the compiler can distinguish. Two declarations with the same kind, name, and value type are the same descriptor.
 
@@ -54,9 +54,9 @@ Nothing is flushed when a schedule ends. Pending work stays in the runtime, acro
 
 ## Runtimes
 
-`runSchedule`, `initialize`, and `tick` are the static path. TypeScript compares the schedule's token union with the services, resources, states, and machines supplied to the runtime. Missing or incompatible provisions fail compilation.
+`tick` is the static path. TypeScript compares the schedule's token union with the services, resources, and machines supplied to the runtime. Missing or incompatible provisions fail compilation.
 
-`tryRunSchedule` is the dynamic path for schedules whose exact type has been erased, such as schedules loaded through a plugin boundary. It checks the real tokens before execution and returns `MissingRuntimeRequirements` as data. It does not throw for missing provisions.
+`tryTick` is the dynamic path for schedules whose exact type has been erased, such as schedules loaded through a plugin boundary. It checks the real tokens before execution and returns `MissingRuntimeRequirements` as data. It does not throw for missing provisions.
 
 Runtime-dependent entity lookups stay fallible. An entity handle is safe to store, but it is not proof that the entity still exists.
 

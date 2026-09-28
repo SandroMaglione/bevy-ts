@@ -16,7 +16,7 @@
  * const handle = Game.Entity.handle(playerId)
  *
  * // Add an intent when later resolution should require one component proof.
- * const positioned = Game.Entity.handleAs(Position, playerId)
+ * const positioned = Game.Entity.handle(playerId, Position)
  * ```
  *
  * @module entity
@@ -54,7 +54,7 @@ import type { Schema } from "./schema.ts"
  *
  * @example
  * ```ts
- * const handle = Game.Entity.handleAs(Player, playerId)
+ * const handle = Game.Entity.handle(playerId, Player)
  * const resolved = lookup.getHandle(handle, PlayerQuery)
  * if (!resolved.ok) return
  * ```
@@ -243,48 +243,38 @@ export const makeHandle = <
   }) as Handle<Root, Intent>
 
 /**
- * Converts a current runtime id into an unqualified durable handle.
- *
- * Use this when you need a long-lived reference but do not want to assert any
- * intended component role. Resolve it later with `lookup.getHandle(...)`.
- *
- * The handle is storage-safe, not a proof of liveness. The entity may have
- * been despawned by the time it is resolved.
- *
- * @example
- * ```ts
- * const handle = Game.Entity.handle(entityId)
- * ```
+ * Anything that identifies one current-runtime entity: an id, or a query
+ * match's `entity` view.
  */
-export const handle = <S extends Schema.Any, Root = unknown>(
-  entityId: EntityId<S, Root>
-): Handle<Root> => makeHandle<Root>(entityId.value)
+export type HandleTarget<S extends Schema.Any, Root = unknown> =
+  | EntityId<S, Root>
+  | { readonly id: EntityId<S, Root> }
 
 /**
- * Converts a current runtime id into an intent-qualified durable handle.
+ * Converts a current entity into a durable handle for storage.
  *
- * The extra intent does not prove the entity still has that component later.
- * It only forces resolution through a query that statically proves the
- * component is present.
+ * The handle is storage-safe, not a proof of liveness: resolve it later with
+ * `lookup.getHandle(...)`, which fails explicitly when the entity is gone.
  *
- * This is the safer default when the handle will later be used in gameplay
- * logic that assumes a specific role, such as "player", "camera target", or
- * "damage source".
+ * Pass an `intent` component when later code assumes a role such as "player"
+ * or "damage source". An intent does not prove the component is still present;
+ * it forces resolution through a query that proves it.
  *
  * @example
  * ```ts
- * // Preserve that later resolution must prove this is still a player entity.
- * const handle = Game.Entity.handleAs(Player, playerId)
+ * const any = Game.Entity.handle(match.entity)
+ * const player = Game.Entity.handle(playerId, Player)
  * ```
  */
-export const handleAs = <
+export const handle = <
   S extends Schema.Any,
-  Root,
-  D extends Descriptor<"component", string, any>
+  Root = unknown,
+  const Intent extends Descriptor<"component", string, any> | undefined = undefined
 >(
-  _intent: D,
-  entityId: EntityId<S, Root>
-): Handle<Root, D> => makeHandle<Root, D>(entityId.value)
+  target: HandleTarget<S, Root>,
+  _intent?: Intent
+): Handle<Root, Intent> =>
+  makeHandle<Root, Intent>("kind" in target && target.kind === "EntityId" ? target.value : (target as { readonly id: EntityId<S, Root> }).id.value)
 
 /**
  * Creates a typed entity draft from an id and a proof.

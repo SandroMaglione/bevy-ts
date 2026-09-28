@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import * as Runtime from "@bevy-ts/core/runtime"
 import * as Schedule from "@bevy-ts/core/schedule"
 import * as System from "@bevy-ts/core/system"
@@ -19,7 +19,7 @@ const Game = Schema.bind(Schema.fragment({
 const schema = Game.schema
 
 const makeRuntime = () =>
-  Runtime.makeRuntime({
+  Runtime.make({
     schema,
     services: Runtime.services(),
     resources: {
@@ -38,9 +38,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events }) =>
-        Fx.sync(() => {
+        {
           events.ping.emit({ value: 1 })
-        })
+        }
     )
 
     const observe = System.System(
@@ -55,9 +55,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events, resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.set(events.ping.all().map((event) => event.value))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -79,9 +79,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events }) =>
-        Fx.sync(() => {
+        {
           events.ping.emit({ value: 8 })
-        })
+        }
     )
 
     const observe = System.System(
@@ -96,9 +96,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events, resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.set(events.ping.all().map((event) => event.value))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -108,7 +108,7 @@ describe("Runtime events", () => {
     )
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
 
-    runtime.runSchedule(Schedule.Schedule(Schedule.updateEvents(), observe))
+    runtime.tick(Schedule.Schedule(Schedule.updateEvents(), observe))
     expect(readResourceValue(runtime, schema, Log)).toEqual([8])
   })
 
@@ -122,9 +122,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events }) =>
-        Fx.sync(() => {
+        {
           events.ping.emit({ value: 2 })
-        })
+        }
     )
 
     const readBefore = System.System(
@@ -139,13 +139,13 @@ describe("Runtime events", () => {
         }
       },
       ({ events, resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, events.ping.all().length])
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(emit, readBefore))
+    runtime.tick(Schedule.Schedule(emit, readBefore))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([0])
   })
@@ -160,9 +160,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events }) =>
-        Fx.sync(() => {
+        {
           events.ping.emit({ value: 3 })
-        })
+        }
     )
 
     const readAfter = System.System(
@@ -177,13 +177,13 @@ describe("Runtime events", () => {
         }
       },
       ({ events, resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.set(events.ping.all().map((event) => event.value))
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(emit, Schedule.updateEvents(), readAfter))
+    runtime.tick(Schedule.Schedule(emit, Schedule.updateEvents(), readAfter))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([3])
   })
@@ -198,11 +198,11 @@ describe("Runtime events", () => {
         }
       },
       ({ events }) =>
-        Fx.sync(() => {
+        {
           events.ping.emit({ value: 4 })
           events.ping.emit({ value: 5 })
           events.ping.emit({ value: 6 })
-        })
+        }
     )
 
     const observe = System.System(
@@ -217,13 +217,13 @@ describe("Runtime events", () => {
         }
       },
       ({ events, resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.set(events.ping.all().map((event) => event.value))
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(emit, Schedule.updateEvents(), observe))
+    runtime.tick(Schedule.Schedule(emit, Schedule.updateEvents(), observe))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([4, 5, 6])
   })
@@ -241,9 +241,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events, resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.set(events.ping.all().map((event) => event.value))
-        })
+        }
     )
 
     const emitOne = System.System(
@@ -255,9 +255,9 @@ describe("Runtime events", () => {
         }
       },
       ({ events }) =>
-        Fx.sync(() => {
+        {
           events.ping.emit({ value: 7 })
-        })
+        }
     )
 
     const emitNone = System.System(
@@ -265,7 +265,7 @@ describe("Runtime events", () => {
       {
         schema
       },
-      () => Fx.sync<undefined, {}>(() => undefined)
+      () => {}
     )
 
     const runtime = makeRuntime()

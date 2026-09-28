@@ -9,7 +9,7 @@
  * @docGroup runtime
  */
 interface DescriptorRequirement {
-  readonly kind: "resource" | "state" | "service"
+  readonly kind: "resource" | "service"
   readonly name: string
   readonly key: symbol
 }
@@ -28,7 +28,7 @@ export type Requirement =
 
 /** Runtime metadata shared by descriptors and state machines. */
 export interface RequirementValue {
-  readonly kind: "resource" | "state" | "service" | "stateMachine"
+  readonly kind: "resource" | "service" | "stateMachine"
   readonly name: string
   readonly key: symbol
 }

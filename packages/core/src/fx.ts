@@ -5,10 +5,10 @@
  * channels. Expected failures are returned as `Result` values; exceptions are
  * reserved for unexpected defects in user code.
  *
- * In this library it mainly exists so systems can return executable work while
- * still carrying typed service requirements and explicit failure channels where
- * needed. Most game systems will use `Fx.sync(...)`, but the type keeps the
- * orchestration model uniform.
+ * Systems that cannot fail return nothing. A system returns an `Fx` when it
+ * has an expected failure: `Fx.fail(...)` rolls back the system's ECS writes
+ * and surfaces a typed `SystemFailure` from `runtime.tick(...)`. `map` and
+ * `flatMap` compose such effects.
  *
  * @example
  * ```ts

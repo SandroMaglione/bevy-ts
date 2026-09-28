@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { clamp } from "../math.ts"
 import { AddedRenderableQuery, AgentSnapshotQuery, BrowserHost, Game, GenerationClock, GenerationIndex, LiveRenderableQuery, PopulationStats, SimulationPhase, Summary } from "../schema.ts"
@@ -16,7 +15,7 @@ export const CreateRenderNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.renderables.each()) {
         if (services.browser.nodes.has(match.entity.id.value)) {
           continue
@@ -32,7 +31,7 @@ export const CreateRenderNodesSystem = Game.System(
         services.browser.scene.addChild(node)
         services.browser.nodes.set(match.entity.id.value, node)
       }
-    })
+    }
 )
 
 export const SyncRenderNodesSystem = Game.System(
@@ -46,7 +45,7 @@ export const SyncRenderNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       const live = new Set<number>()
 
       for (const match of queries.renderables.each()) {
@@ -85,7 +84,7 @@ export const SyncRenderNodesSystem = Game.System(
         node.destroy()
         services.browser.nodes.delete(entityId)
       }
-    })
+    }
 )
 
 export const SyncHudSystem = Game.System(
@@ -108,7 +107,7 @@ export const SyncHudSystem = Game.System(
     }
   },
   ({ queries, resources, machines, services }) =>
-    Fx.sync(() => {
+    {
       const hud = services.browser.hud
       const summary = resources.summary.get()
       const agents = collectAgentSnapshots(queries.agents.each())
@@ -150,5 +149,5 @@ export const SyncHudSystem = Game.System(
         summary.mode === "running"
           ? "Traits map to phenotype: sharper shapes are more aggressive, larger bodies are tougher, brighter tones live longer."
           : "The next generation is seeded from survivors unless the arena fully collapses, in which case the ecosystem reseeds from fresh founders."
-    })
+    }
 )

@@ -51,7 +51,7 @@ const makeRuntime = (
     Game.Runtime.machine(Locomotion, "Idle")
   )
 
-  return Game.Runtime.makeConstructed({
+  return Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
       Game.Runtime.service(TopDownHost, host)

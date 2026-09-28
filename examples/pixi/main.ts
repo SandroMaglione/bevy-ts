@@ -1,6 +1,6 @@
 import { Application, Container, Sprite, Texture } from "pixi.js";
 
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core";
+import { Descriptor, Schema } from "@bevy-ts/core";
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -72,7 +72,7 @@ const SetupSceneSystem = Game.System(
     },
   },
   ({ commands, services }) =>
-    Fx.sync(() => {
+    {
       const { width, height } = services.pixi.application.screen;
       const palette = [
         0xff6b35, 0xf7c948, 0x4ecdc4, 0x2d6cdf, 0xf25f5c, 0x7bd389,
@@ -85,7 +85,7 @@ const SetupSceneSystem = Game.System(
         const tint = palette[index % palette.length] ?? palette[0];
 
         commands.spawn(
-          Game.Command.spawnWith(
+          Game.Command.spawn(
             [
               Position,
               {
@@ -115,7 +115,7 @@ const SetupSceneSystem = Game.System(
           ),
         );
       }
-    }),
+    },
 );
 
 const CaptureFrameInputSystem = Game.System(
@@ -130,13 +130,13 @@ const CaptureFrameInputSystem = Game.System(
     },
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.deltaTime.set(services.pixi.clock.deltaSeconds);
       resources.viewport.set({
         width: services.pixi.application.screen.width,
         height: services.pixi.application.screen.height,
       });
-    }),
+    },
 );
 
 const IntegrateMotionSystem = Game.System(
@@ -155,7 +155,7 @@ const IntegrateMotionSystem = Game.System(
     },
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get();
       for (const match of queries.moving.each()) {
         const position = match.data.position.get();
@@ -166,7 +166,7 @@ const IntegrateMotionSystem = Game.System(
           y: position.y + velocity.y * dt,
         });
       }
-    }),
+    },
 );
 
 const BounceWithinViewportSystem = Game.System(
@@ -186,7 +186,7 @@ const BounceWithinViewportSystem = Game.System(
     },
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const viewport = resources.viewport.get();
       for (const match of queries.moving.each()) {
         const position = match.data.position.get();
@@ -238,7 +238,7 @@ const BounceWithinViewportSystem = Game.System(
           match.data.velocity.set(nextVelocity);
         }
       }
-    }),
+    },
 );
 
 const CreatePixiSpritesSystem = Game.System(
@@ -252,7 +252,7 @@ const CreatePixiSpritesSystem = Game.System(
     },
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.renderables.each()) {
         const entityId = match.entity.id.value;
         const position = match.data.position.get();
@@ -272,7 +272,7 @@ const CreatePixiSpritesSystem = Game.System(
         sprite.tint = tint.value;
         sprite.position.set(position.x, position.y);
       }
-    }),
+    },
 );
 
 const SyncPixiTransformsSystem = Game.System(
@@ -286,7 +286,7 @@ const SyncPixiTransformsSystem = Game.System(
     },
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.moved.each()) {
         const sprite = services.pixi.sprites.get(match.entity.id.value);
         if (!sprite) {
@@ -296,7 +296,7 @@ const SyncPixiTransformsSystem = Game.System(
         const position = match.data.position.get();
         sprite.position.set(position.x, position.y);
       }
-    }),
+    },
 );
 
 const setupSchedule = Game.Schedule(
@@ -354,14 +354,12 @@ export const startPixiExample = async (
       },
     },
   });
-
-  const app = App.makeApp(runtime);
-  app.bootstrap(setupSchedule);
-  app.update(updateSchedule);
+  runtime.tick(setupSchedule);
+  runtime.tick(updateSchedule);
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     host.clock.deltaSeconds = ticker.deltaMS / 1000;
-    app.update(updateSchedule);
+    runtime.tick(updateSchedule);
   };
 
   application.ticker.add(tick);

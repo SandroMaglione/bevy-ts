@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 import {
   Agent,
   AgentDecisionQuery,
@@ -64,7 +63,7 @@ export const SetupWorldSystem = Game.System(
     }
   },
   ({ commands, resources }) =>
-    Fx.sync(() => {
+    {
       const arena = resources.arena.get()
       const dynamicFoodMargin = foodMargin(arena)
       const dynamicSpawnMargin = initialSpawnMargin(arena)
@@ -99,7 +98,7 @@ export const SetupWorldSystem = Game.System(
       resources.rngSeed.set(seed)
       resources.populationStats.set(makePopulationStats(founders.length))
       resources.summary.set(makeRunningSummary())
-    })
+    }
 )
 
 export const ResetGenerationOnRunningEnterSystem = Game.System(
@@ -114,7 +113,7 @@ export const ResetGenerationOnRunningEnterSystem = Game.System(
     }
   },
   ({ queries, commands, resources }) =>
-    Fx.sync(() => {
+    {
       resources.generationClock.set({
         elapsed: 0,
         limit: GENERATION_DURATION_SECONDS,
@@ -125,7 +124,7 @@ export const ResetGenerationOnRunningEnterSystem = Game.System(
       for (const match of queries.despawnable.each()) {
         commands.despawn(match.entity.id)
       }
-    })
+    }
 )
 
 // The browser host owns viewport size and ticker timing. This system copies that
@@ -142,13 +141,13 @@ export const CaptureFrameContextSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.deltaTime.set(services.browser.clock.deltaSeconds)
       resources.arena.set({
         width: services.browser.application.screen.width,
         height: services.browser.application.screen.height
       })
-    })
+    }
 )
 
 export const TickGenerationClockSystem = Game.System(
@@ -161,13 +160,13 @@ export const TickGenerationClockSystem = Game.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
       resources.generationClock.update((clock) => ({
         ...clock,
         elapsed: clock.elapsed + dt
       }))
-    })
+    }
 )
 
 export const TickAgentVitalsSystem = Game.System(
@@ -182,7 +181,7 @@ export const TickAgentVitalsSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
       for (const match of queries.agents.each()) {
         const agent = match.data.agent.get()
@@ -209,7 +208,7 @@ export const TickAgentVitalsSystem = Game.System(
           }
         })
       }
-    })
+    }
 )
 
 // Intent selection is the densest part of the example. The comments explain the
@@ -227,7 +226,7 @@ export const ChooseIntentSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
       const foods = queries.foods.each().map((match) => ({
         position: match.data.position.get()
@@ -428,7 +427,7 @@ export const ChooseIntentSystem = Game.System(
           y: vectorY
         })
       }
-    })
+    }
 )
 
 export const ApplyMovementSystem = Game.System(
@@ -444,7 +443,7 @@ export const ApplyMovementSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
       const arena = resources.arena.get()
 
@@ -472,7 +471,7 @@ export const ApplyMovementSystem = Game.System(
           energy: clamp(vitals.energy - dt * agent.moveCost * (normalized.length > 0 ? 0.38 : 0.12), 0, agent.maxEnergy)
         }))
       }
-    })
+    }
 )
 
 export const ResolveFoodAndHazardSystem = Game.System(
@@ -485,7 +484,7 @@ export const ResolveFoodAndHazardSystem = Game.System(
     }
   },
   ({ queries, commands }) =>
-    Fx.sync(() => {
+    {
       const foods = queries.foods.each().map((match) => ({
         entityId: match.entity.id,
         position: match.data.position.get(),
@@ -511,7 +510,7 @@ export const ResolveFoodAndHazardSystem = Game.System(
           }))
         }
       }
-    })
+    }
 )
 
 export const ResolveAgentInteractionsSystem = Game.System(
@@ -530,7 +529,7 @@ export const ResolveAgentInteractionsSystem = Game.System(
     }
   },
   ({ queries, resources, commands, lookup }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
       const arena = resources.arena.get()
       const childMargin = offspringMargin(arena)
@@ -593,13 +592,13 @@ export const ResolveAgentInteractionsSystem = Game.System(
             const bondGain = dt * lerp(0.42, 0.96, (left.genes.fertility + right.genes.fertility) * 0.5)
             leftLive.value.data.vitals.update((vitals) => ({
               ...vitals,
-              matePartner: Game.Entity.handleAs(Agent, rightLive.value.entity.id),
+              matePartner: Game.Entity.handle(rightLive.value.entity.id, Agent),
               bondProgress: Math.min(2.4, vitals.bondProgress + bondGain),
               pulse: 1.08
             }))
             rightLive.value.data.vitals.update((vitals) => ({
               ...vitals,
-              matePartner: Game.Entity.handleAs(Agent, leftLive.value.entity.id),
+              matePartner: Game.Entity.handle(leftLive.value.entity.id, Agent),
               bondProgress: Math.min(2.4, vitals.bondProgress + bondGain),
               pulse: 1.08
             }))
@@ -723,7 +722,7 @@ export const ResolveAgentInteractionsSystem = Game.System(
       }
 
       resources.rngSeed.set(seed)
-    })
+    }
 )
 
 export const CleanupDeadAgentsSystem = Game.System(
@@ -738,7 +737,7 @@ export const CleanupDeadAgentsSystem = Game.System(
     }
   },
   ({ queries, commands, resources }) =>
-    Fx.sync(() => {
+    {
       let deaths = 0
       for (const match of queries.agents.each()) {
         const vitals = match.data.vitals.get()
@@ -757,7 +756,7 @@ export const CleanupDeadAgentsSystem = Game.System(
           peak: stats.peak
         }))
       }
-    })
+    }
 )
 
 export const MaintainFoodSystem = Game.System(
@@ -773,7 +772,7 @@ export const MaintainFoodSystem = Game.System(
     }
   },
   ({ queries, commands, resources }) =>
-    Fx.sync(() => {
+    {
       const foods = queries.foods.each()
       if (foods.length >= FOOD_TARGET) {
         return
@@ -799,7 +798,7 @@ export const MaintainFoodSystem = Game.System(
         commands.spawn(spawnFoodDraft({ x: xDraw.value, y: yDraw.value }))
       }
       resources.rngSeed.set(seed)
-    })
+    }
 )
 
 export const QueuePhaseOutcomeSystem = Game.System(
@@ -820,7 +819,7 @@ export const QueuePhaseOutcomeSystem = Game.System(
     }
   },
   ({ queries, resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       const survivors = collectAgentSnapshots(queries.agents.each())
       if (survivors.length === 0) {
         const pool = makeFounderPool(resources.rngSeed.get(), FOUNDER_COUNT)
@@ -897,7 +896,7 @@ export const QueuePhaseOutcomeSystem = Game.System(
         dominantLineage: `Dominant lineage ${dominantLineageId} holds ${dominantCount} survivors.`
       })
       nextMachines.phase.set("GenerationSummary")
-    })
+    }
 )
 
 export const TickTransitionStateSystem = Game.System(
@@ -915,13 +914,13 @@ export const TickTransitionStateSystem = Game.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
       resources.generationClock.update((clock) => ({
         ...clock,
         transitionTimer: Math.max(0, clock.transitionTimer - dt)
       }))
-    })
+    }
 )
 
 export const QueueResumeSystem = Game.System(
@@ -942,12 +941,12 @@ export const QueueResumeSystem = Game.System(
     }
   },
   ({ resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       if (resources.generationClock.get().transitionTimer > 0) {
         return
       }
 
       resources.generationIndex.update((value) => value + 1)
       nextMachines.phase.set("Running")
-    })
+    }
 )

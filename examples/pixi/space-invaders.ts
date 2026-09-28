@@ -1,7 +1,7 @@
 import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
-import { Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Schema } from "@bevy-ts/core"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -194,7 +194,7 @@ const idleVelocity = { vx: 0, vy: 0, speed: 6 } as const
 const shootUpVelocity = { vx: 0, vy: -10, speed: 6 } as const
 
 const makePlayerDraft = () =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, { x: 400, y: PLAYER_START_Y }],
     [Velocity, idleVelocity],
     [RenderBody, {
@@ -210,7 +210,7 @@ const makePlayerDraft = () =>
   )
 
 const makeBulletDraft = (position: { x: number; y: number }) =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, position],
     [Velocity, shootUpVelocity],
     [RenderBody, {
@@ -226,7 +226,7 @@ const makeBulletDraft = (position: { x: number; y: number }) =>
   )
 
 const makeEnemyDraft = (position: { x: number; y: number }, pattern: DescentPatternValue) =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, position],
     [RenderBody, {
       kind: "enemy",
@@ -435,9 +435,9 @@ const SpawnPlayerSystem = Game.System(
   "SpaceInvaders/SpawnPlayer",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
+    {
       commands.spawn(makePlayerDraft())
-    })
+    }
 )
 
 const CaptureFrameInputSystem = Game.System(
@@ -453,11 +453,11 @@ const CaptureFrameInputSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.frameDelta.set(services.pixi.clock.deltaFrames)
       resources.deltaMilliseconds.set(services.pixi.clock.deltaMilliseconds)
       resources.elapsedFrames.update((elapsed) => elapsed + services.pixi.clock.deltaFrames)
-    })
+    }
 )
 
 const PlayerInputSystem = Game.System(
@@ -471,7 +471,7 @@ const PlayerInputSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -485,7 +485,7 @@ const PlayerInputSystem = Game.System(
             ? velocity.speed
             : 0
       }))
-    })
+    }
 )
 
 const ShootingSystem = Game.System(
@@ -503,7 +503,7 @@ const ShootingSystem = Game.System(
     }
   },
   ({ queries, resources, services, commands }) =>
-    Fx.sync(() => {
+    {
       resources.shootCooldown.update((cooldown) =>
         Math.max(0, cooldown - resources.deltaMilliseconds.get())
       )
@@ -525,7 +525,7 @@ const ShootingSystem = Game.System(
         })
       )
       resources.shootCooldown.set(SHOOT_COOLDOWN)
-    })
+    }
 )
 
 const EnemySpawnSystem = Game.System(
@@ -537,7 +537,7 @@ const EnemySpawnSystem = Game.System(
     }
   },
   ({ resources, commands }) =>
-    Fx.sync(() => {
+    {
       resources.enemySpawnProgress.update((progress) => progress + resources.frameDelta.get())
       if (resources.enemySpawnProgress.get() < ENEMY_SPAWN_COOLDOWN) {
         return
@@ -553,7 +553,7 @@ const EnemySpawnSystem = Game.System(
           randomEnemyPattern()
         )
       )
-    })
+    }
 )
 
 const MovementSystem = Game.System(
@@ -567,7 +567,7 @@ const MovementSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const delta = resources.frameDelta.get()
       for (const match of queries.moving.each()) {
         const velocity = match.data.velocity.get()
@@ -576,7 +576,7 @@ const MovementSystem = Game.System(
           y: position.y + velocity.vy * delta
         }))
       }
-    })
+    }
 )
 
 const ClampPlayerBoundsSystem = Game.System(
@@ -587,7 +587,7 @@ const ClampPlayerBoundsSystem = Game.System(
     }
   },
   ({ queries }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -601,7 +601,7 @@ const ClampPlayerBoundsSystem = Game.System(
         x: Math.min(maxX, Math.max(minX, position.x)),
         y: position.y
       }))
-    })
+    }
 )
 
 const EnemyDescentSystem = Game.System(
@@ -616,7 +616,7 @@ const EnemyDescentSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const delta = resources.frameDelta.get()
       const elapsed = resources.elapsedFrames.get()
 
@@ -627,7 +627,7 @@ const EnemyDescentSystem = Game.System(
           y: position.y + dy * delta
         }))
       }
-    })
+    }
 )
 
 const CreateMatterBodiesSystem = Game.System(
@@ -641,7 +641,7 @@ const CreateMatterBodiesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.addedRenderables.each()) {
         ensureMatterBody(
           match.entity.id,
@@ -650,7 +650,7 @@ const CreateMatterBodiesSystem = Game.System(
           services.matter
         )
       }
-    })
+    }
 )
 
 const SyncMatterBodyTransformsSystem = Game.System(
@@ -667,7 +667,7 @@ const SyncMatterBodyTransformsSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       Matter.Engine.update(
         services.matter.engine,
         Math.min(resources.deltaMilliseconds.get(), MATTER_MAX_STEP_MS)
@@ -686,7 +686,7 @@ const SyncMatterBodyTransformsSystem = Game.System(
         )
         Matter.Body.setPosition(body, center)
       }
-    })
+    }
 )
 
 const DestroyMatterBodiesSystem = Game.System(
@@ -703,7 +703,7 @@ const DestroyMatterBodiesSystem = Game.System(
     }
   },
   ({ removed, despawned, services }) =>
-    Fx.sync(() => {
+    {
       for (const entityId of removed.renderables.all()) {
         destroyMatterBody(entityId, services.matter)
       }
@@ -711,7 +711,7 @@ const DestroyMatterBodiesSystem = Game.System(
       for (const entityId of despawned.entities.all()) {
         destroyMatterBody(entityId, services.matter)
       }
-    })
+    }
 )
 
 const EnemyBulletCollisionSystem = Game.System(
@@ -729,7 +729,7 @@ const EnemyBulletCollisionSystem = Game.System(
     }
   },
   ({ queries, events, services }) =>
-    Fx.sync(() => {
+    {
       const consumedBullets = new Set<number>()
       const consumedEnemies = new Set<number>()
 
@@ -761,14 +761,14 @@ const EnemyBulletCollisionSystem = Game.System(
             // The destroy event is read only after updateEvents(), so emit
             // storage-safe handles and re-resolve them later.
             events.destroyEnemy.emit({
-              bullet: Game.Entity.handleAs(Bullet, bulletId),
-              enemy: Game.Entity.handleAs(Enemy, enemyId)
+              bullet: Game.Entity.handle(bulletId, Bullet),
+              enemy: Game.Entity.handle(enemyId, Enemy)
             })
             break
           }
         }
       }
-    })
+    }
 )
 
 const EnemyDestroySystem = Game.System(
@@ -779,7 +779,7 @@ const EnemyDestroySystem = Game.System(
     }
   },
   ({ events, commands, lookup }) =>
-    Fx.sync(() => {
+    {
       const despawned = new Set<number>()
 
       for (const event of events.destroyEnemy.all()) {
@@ -797,7 +797,7 @@ const EnemyDestroySystem = Game.System(
           despawned.add(enemy.value.entity.id.value)
         }
       }
-    })
+    }
 )
 
 const CullingSystem = Game.System(
@@ -809,7 +809,7 @@ const CullingSystem = Game.System(
     }
   },
   ({ queries, commands }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.bullets.each()) {
         if (match.data.position.get().y >= -40) {
           continue
@@ -825,7 +825,7 @@ const CullingSystem = Game.System(
 
         commands.despawn(match.entity.id)
       }
-    })
+    }
 )
 
 const CreatePixiNodesSystem = Game.System(
@@ -839,7 +839,7 @@ const CreatePixiNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.addedRenderables.each()) {
         const entityId = match.entity.id.value
         let node = services.pixi.nodes.get(entityId)
@@ -852,7 +852,7 @@ const CreatePixiNodesSystem = Game.System(
         const position = match.data.position.get()
         node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 const SyncPixiTransformsSystem = Game.System(
@@ -866,7 +866,7 @@ const SyncPixiTransformsSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.movedRenderables.each()) {
         const entityId = match.entity.id.value
         let node = services.pixi.nodes.get(entityId)
@@ -879,7 +879,7 @@ const SyncPixiTransformsSystem = Game.System(
         const position = match.data.position.get()
         node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 const DestroyPixiNodesSystem = Game.System(
@@ -896,7 +896,7 @@ const DestroyPixiNodesSystem = Game.System(
     }
   },
   ({ removed, despawned, services }) =>
-    Fx.sync(() => {
+    {
       for (const entityId of removed.renderables.all()) {
         destroyPixiNode(entityId, services.pixi)
       }
@@ -904,7 +904,7 @@ const DestroyPixiNodesSystem = Game.System(
       for (const entityId of despawned.entities.all()) {
         destroyPixiNode(entityId, services.pixi)
       }
-    })
+    }
 )
 
 const gameplaySetupSchedule = Game.Schedule(SpawnPlayerSystem)
@@ -1017,12 +1017,12 @@ export const startSpaceInvadersExample = async (
     }
   })
 
-  runtime.initialize(setupSchedule)
+  runtime.tick(setupSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     pixiHost.clock.deltaMilliseconds = ticker.deltaMS
     pixiHost.clock.deltaFrames = ticker.deltaMS / (1000 / 60)
-    runtime.runSchedule(updateSchedule)
+    runtime.tick(updateSchedule)
   }
 
   application.ticker.add(tick)

@@ -1,52 +1,63 @@
 {
   "runtime": {
     "tolerance": 0.35,
-    "calibrationMs": 3.2717,
+    "calibrationMs": 2.976,
     "environment": "Apple M1 / node v24.16.0 / darwin",
     "cases": {
       "spawn/10k-3c": {
-        "medianMs": 6.757,
-        "score": 2.0653
+        "minMs": 5.205,
+        "medianMs": 5.4065,
+        "score": 1.7414
       },
       "despawn/10k": {
-        "medianMs": 6.8745,
-        "score": 2.1012
+        "minMs": 4.4518,
+        "medianMs": 4.8708,
+        "score": 1.4894
       },
       "query/iterate-read-10k-of-20k": {
-        "medianMs": 0.1691,
-        "score": 0.0517
+        "minMs": 0.084,
+        "medianMs": 0.0974,
+        "score": 0.0282
       },
       "query/iterate-write-10k": {
-        "medianMs": 0.7949,
-        "score": 0.243
+        "minMs": 0.4049,
+        "medianMs": 0.5645,
+        "score": 0.1361
       },
       "query/single-in-20k-x10": {
-        "medianMs": 0.0145,
-        "score": 0.0044
+        "minMs": 0.0026,
+        "medianMs": 0.0028,
+        "score": 0.0008
       },
       "query/changed-100-of-10k": {
-        "medianMs": 0.0227,
-        "score": 0.0069
+        "minMs": 0.0113,
+        "medianMs": 0.0122,
+        "score": 0.0038
       },
       "structural/insert-remove-1k": {
-        "medianMs": 0.1734,
-        "score": 0.053
+        "minMs": 0.1567,
+        "medianMs": 0.1666,
+        "score": 0.0494
       },
       "schedule/100-systems-x10": {
-        "medianMs": 0.7921,
-        "score": 0.2421
+        "minMs": 0.1922,
+        "medianMs": 0.1969,
+        "score": 0.0606
       },
       "lookup/get-10k": {
-        "medianMs": 0.7629,
-        "score": 0.2332
+        "minMs": 0.7037,
+        "medianMs": 0.7192,
+        "score": 0.2219
       },
       "events/emit-read-10k": {
-        "medianMs": 0.1146,
-        "score": 0.035
+        "minMs": 0.102,
+        "medianMs": 0.1036,
+        "score": 0.0321
       },
       "relations/descendants-100x100": {
-        "medianMs": 0.5258,
-        "score": 0.1607
+        "minMs": 0.4674,
+        "medianMs": 0.4785,
+        "score": 0.1474
       }
     }
   },
@@ -54,8 +65,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 40976,
-      "instantiations": 255506
+      "types": 35561,
+      "instantiations": 221610
     }
   }
 }

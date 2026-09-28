@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Schema } from "@bevy-ts/core"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Name = Descriptor.Component<{ value: string }>()("Name")
@@ -39,30 +39,30 @@ describe("Runtime relationships", () => {
       "SpawnRelations",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+        {
+          rootId = commands.spawn(Game.Command.spawn([Name, { value: "root" }] as const))
           childId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "child" }] as const),
+              Game.Command.spawn([Name, { value: "child" }] as const),
               ChildOf,
               rootId
             )
           )
           commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "grandchild" }] as const),
+              Game.Command.spawn([Name, { value: "grandchild" }] as const),
               ChildOf,
               childId
             )
           )
           archerId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "archer" }] as const),
+              Game.Command.spawn([Name, { value: "archer" }] as const),
               Targeting,
               rootId
             )
           )
-        })
+        }
     )
 
     const observe = Game.System(
@@ -87,7 +87,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ queries, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!rootId || !childId || !archerId) {
             resources.summary.set("missing-setup")
             return
@@ -106,7 +106,7 @@ describe("Runtime relationships", () => {
             target.ok ? target.value.value : -1,
             ancestors.ok ? ancestors.value.length : -1
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -127,34 +127,34 @@ describe("Runtime relationships", () => {
       "SpawnHierarchyForDespawn",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+        {
+          rootId = commands.spawn(Game.Command.spawn([Name, { value: "root" }] as const))
           childId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "child" }] as const),
+              Game.Command.spawn([Name, { value: "child" }] as const),
               ChildOf,
               rootId
             )
           )
           archerId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "archer" }] as const),
+              Game.Command.spawn([Name, { value: "archer" }] as const),
               Targeting,
               rootId
             )
           )
-        })
+        }
     )
 
     const destroy = Game.System(
       "DestroyRoot",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (rootId) {
             commands.despawn(rootId)
           }
-        })
+        }
     )
 
     const observe = Game.System(
@@ -165,7 +165,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!rootId || !childId || !archerId) {
             resources.summary.set("missing-setup")
             return
@@ -175,7 +175,7 @@ describe("Runtime relationships", () => {
           const archerTarget = lookup.related(archerId, Targeting)
 
           resources.summary.set(`${childRoot.ok ? "ok" : childRoot.error._tag}/${archerTarget.ok ? "ok" : archerTarget.error._tag}`)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -196,23 +196,23 @@ describe("Runtime relationships", () => {
       "SpawnGeneralCycle",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          alphaId = commands.spawn(Game.Command.spawnWith([Name, { value: "alpha" }] as const))
+        {
+          alphaId = commands.spawn(Game.Command.spawn([Name, { value: "alpha" }] as const))
           betaId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "beta" }] as const),
+              Game.Command.spawn([Name, { value: "beta" }] as const),
               Targeting,
               alphaId
             )
           )
           commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "gamma" }] as const),
+              Game.Command.spawn([Name, { value: "gamma" }] as const),
               Targeting,
               betaId
             )
           )
-        })
+        }
     )
 
     const observe = Game.System(
@@ -232,7 +232,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ queries, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             resources.summary.set("missing-setup")
             return
@@ -259,7 +259,7 @@ describe("Runtime relationships", () => {
             alphaSources.ok ? alphaSources.value.length : -1,
             optionalSummary
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -281,32 +281,32 @@ describe("Runtime relationships", () => {
       "SpawnLiveRelationEntities",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          alphaId = commands.spawn(Game.Command.spawnWith([Name, { value: "alpha" }] as const))
-          betaId = commands.spawn(Game.Command.spawnWith([Name, { value: "beta" }] as const))
-        })
+        {
+          alphaId = commands.spawn(Game.Command.spawn([Name, { value: "alpha" }] as const))
+          betaId = commands.spawn(Game.Command.spawn([Name, { value: "beta" }] as const))
+        }
     )
 
     const relate = Game.System(
       "RelateLiveEntities",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (alphaId && betaId) {
             commands.relate(alphaId, Targeting, betaId)
           }
-        })
+        }
     )
 
     const unrelate = Game.System(
       "UnrelateLiveEntities",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (alphaId) {
             commands.unrelate(alphaId, Targeting)
           }
-        })
+        }
     )
 
     const observe = Game.System(
@@ -317,7 +317,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             resources.summary.set("missing-setup")
             return
@@ -327,7 +327,7 @@ describe("Runtime relationships", () => {
           const sources = lookup.relatedSources(betaId, Targeting)
 
           resources.summary.set(`${target.ok ? target.value.value : target.error._tag}/${sources.ok ? sources.value.length : -1}`)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -349,42 +349,42 @@ describe("Runtime relationships", () => {
       "SpawnHierarchyForReorder",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+        {
+          rootId = commands.spawn(Game.Command.spawn([Name, { value: "root" }] as const))
           firstId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "first" }] as const),
+              Game.Command.spawn([Name, { value: "first" }] as const),
               ChildOf,
               rootId
             )
           )
           secondId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "second" }] as const),
+              Game.Command.spawn([Name, { value: "second" }] as const),
               ChildOf,
               rootId
             )
           )
           thirdId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "third" }] as const),
+              Game.Command.spawn([Name, { value: "third" }] as const),
               ChildOf,
               rootId
             )
           )
-        })
+        }
     )
 
     const reorder = Game.System(
       "ReorderHierarchyChildren",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!rootId || !firstId || !secondId || !thirdId) {
             return
           }
           commands.reorderChildren(rootId, ChildOf, [thirdId, firstId, secondId])
-        })
+        }
     )
 
     const observe = Game.System(
@@ -403,7 +403,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ queries, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!rootId) {
             resources.summary.set("missing-setup")
             return
@@ -418,7 +418,7 @@ describe("Runtime relationships", () => {
               fromQuery.ok ? fromQuery.value.data.children.get().map((child) => child.value).join(",") : fromQuery.error._tag
             ].join("/")
           )
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -444,30 +444,30 @@ describe("Runtime relationships", () => {
       "SpawnHierarchyMatchTraversal",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+        {
+          rootId = commands.spawn(Game.Command.spawn([Name, { value: "root" }] as const))
           commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "first" }] as const),
+              Game.Command.spawn([Name, { value: "first" }] as const),
               ChildOf,
               rootId
             )
           )
           branchId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith(),
+              Game.Command.spawn(),
               ChildOf,
               rootId
             )
           )
           commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "nested" }] as const),
+              Game.Command.spawn([Name, { value: "nested" }] as const),
               ChildOf,
               branchId
             )
           )
-        })
+        }
     )
 
     const observe = Game.System(
@@ -478,7 +478,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!rootId) {
             resources.summary.set("missing-setup")
             return
@@ -501,7 +501,7 @@ describe("Runtime relationships", () => {
               : descendants.error._tag,
             missing.ok ? "ok" : missing.error._tag
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -521,22 +521,22 @@ describe("Runtime relationships", () => {
       "SpawnSuccessfulRelationMutation",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          alphaId = commands.spawn(Game.Command.spawnWith([Name, { value: "alpha" }] as const))
-          betaId = commands.spawn(Game.Command.spawnWith([Name, { value: "beta" }] as const))
-        })
+        {
+          alphaId = commands.spawn(Game.Command.spawn([Name, { value: "alpha" }] as const))
+          betaId = commands.spawn(Game.Command.spawn([Name, { value: "beta" }] as const))
+        }
     )
 
     const relate = Game.System(
       "QueueSuccessfulRelationMutation",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             return
           }
           commands.relate(alphaId, Targeting, betaId)
-        })
+        }
     )
 
     const observeBefore = Game.System(
@@ -550,14 +550,14 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId) {
             resources.summary.set("missing-setup")
             return
           }
           const target = lookup.related(alphaId, Targeting)
           resources.summary.set(`${target.ok ? "ok" : target.error._tag}/${relationFailures.targeting.all().length}`)
-        })
+        }
     )
 
     const observeAfter = Game.System(
@@ -571,7 +571,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             resources.summary.set("missing-setup")
             return
@@ -583,7 +583,7 @@ describe("Runtime relationships", () => {
             sources.ok ? sources.value.map((source) => source.value).join(",") : sources.error._tag,
             relationFailures.targeting.all().length
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -609,30 +609,30 @@ describe("Runtime relationships", () => {
       "SpawnForRepeatedUnrelate",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          betaId = commands.spawn(Game.Command.spawnWith([Name, { value: "beta" }] as const))
+        {
+          betaId = commands.spawn(Game.Command.spawn([Name, { value: "beta" }] as const))
           alphaId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "alpha" }] as const),
+              Game.Command.spawn([Name, { value: "alpha" }] as const),
               Targeting,
               betaId
             )
           )
-        })
+        }
     )
 
     const clear = Game.System(
       "RepeatedUnrelate",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId) {
             return
           }
           commands.unrelate(alphaId, Targeting)
           commands.unrelate(alphaId, Targeting)
           commands.unrelate(Entity.makeEntityId<typeof schema, typeof Game.schema>(999), Targeting)
-        })
+        }
     )
 
     const observe = Game.System(
@@ -646,7 +646,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             resources.summary.set("missing-setup")
             return
@@ -658,7 +658,7 @@ describe("Runtime relationships", () => {
             sources.ok ? sources.value.length : 0,
             relationFailures.targeting.all().length
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -678,24 +678,24 @@ describe("Runtime relationships", () => {
       "SpawnFailureEntities",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          alphaId = commands.spawn(Game.Command.spawnWith([Name, { value: "alpha" }] as const))
-          betaId = commands.spawn(Game.Command.spawnWith([Name, { value: "beta" }] as const))
-        })
+        {
+          alphaId = commands.spawn(Game.Command.spawn([Name, { value: "alpha" }] as const))
+          betaId = commands.spawn(Game.Command.spawn([Name, { value: "beta" }] as const))
+        }
     )
 
     const queueInvalid = Game.System(
       "QueueInvalidRelations",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             return
           }
           commands.relate(alphaId, Targeting, Entity.makeEntityId<typeof schema, typeof Game.schema>(999))
           commands.relate(alphaId, ChildOf, betaId)
           commands.relate(betaId, ChildOf, alphaId)
-        })
+        }
     )
 
     const readBefore = Game.System(
@@ -710,9 +710,9 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, resources }) =>
-        Fx.sync(() => {
+        {
           resources.summary.set(`${relationFailures.targeting.all().length}/${relationFailures.childOf.all().length}`)
-        })
+        }
     )
 
     const readAfter = Game.System(
@@ -727,7 +727,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!alphaId || !betaId) {
             resources.summary.set("missing-setup")
             return
@@ -744,7 +744,7 @@ describe("Runtime relationships", () => {
             alphaTarget.ok ? "ok" : alphaTarget.error._tag,
             betaParent.ok ? "ok" : betaParent.error._tag
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -773,31 +773,31 @@ describe("Runtime relationships", () => {
       "SpawnHierarchyForReorderFailure",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          rootId = commands.spawn(Game.Command.spawnWith([Name, { value: "root" }] as const))
+        {
+          rootId = commands.spawn(Game.Command.spawn([Name, { value: "root" }] as const))
           firstId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "first" }] as const),
+              Game.Command.spawn([Name, { value: "first" }] as const),
               ChildOf,
               rootId
             )
           )
           secondId = commands.spawn(
             Game.Command.relate(
-              Game.Command.spawnWith([Name, { value: "second" }] as const),
+              Game.Command.spawn([Name, { value: "second" }] as const),
               ChildOf,
               rootId
             )
           )
-          unrelatedId = commands.spawn(Game.Command.spawnWith([Name, { value: "free" }] as const))
-        })
+          unrelatedId = commands.spawn(Game.Command.spawn([Name, { value: "free" }] as const))
+        }
     )
 
     const queueInvalid = Game.System(
       "QueueInvalidReorders",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           if (!rootId || !firstId || !secondId || !unrelatedId) {
             return
           }
@@ -805,7 +805,7 @@ describe("Runtime relationships", () => {
           commands.reorderChildren(rootId, ChildOf, [firstId])
           commands.reorderChildren(rootId, ChildOf, [firstId, unrelatedId])
           commands.reorderChildren(Entity.makeEntityId<typeof schema, typeof Game.schema>(999), ChildOf, [firstId, secondId])
-        })
+        }
     )
 
     const readBefore = Game.System(
@@ -819,9 +819,9 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, resources }) =>
-        Fx.sync(() => {
+        {
           resources.summary.set(String(relationFailures.childOf.all().length))
-        })
+        }
     )
 
     const readAfter = Game.System(
@@ -835,7 +835,7 @@ describe("Runtime relationships", () => {
         }
       },
       ({ relationFailures, lookup, resources }) =>
-        Fx.sync(() => {
+        {
           if (!rootId) {
             resources.summary.set("missing-setup")
             return
@@ -846,7 +846,7 @@ describe("Runtime relationships", () => {
             failures.map((failure) => `${failure.operation}:${failure.error._tag}`).join(","),
             children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag
           ].join("/"))
-        })
+        }
     )
 
     const runtime = makeRuntime()

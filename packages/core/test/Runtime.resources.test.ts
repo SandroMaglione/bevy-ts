@@ -1,28 +1,26 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import * as Size2 from "@bevy-ts/core/Size2"
 import * as Vector2 from "@bevy-ts/core/Vector2"
 import * as Runtime from "@bevy-ts/core/runtime"
 import * as Schedule from "@bevy-ts/core/schedule"
 import * as System from "@bevy-ts/core/system"
-import { readResourceValue, readStateValue } from "./utils/fixtures.ts"
+import { readResourceValue } from "./utils/fixtures.ts"
 import * as Result from "@bevy-ts/core/Result"
 
 const Time = Descriptor.Resource<number>()("Time")
 const Counter = Descriptor.Resource<number>()("Counter")
-const Phase = Descriptor.State<"Boot" | "Running">()("Phase")
+const Phase = Descriptor.Resource<"Boot" | "Running">()("Phase")
 const Logger = Descriptor.Service<{ readonly log: (message: string) => void }>()("Logger")
 const PrefixedLogger = Descriptor.Service<{ readonly log: (message: string) => void }>()("RuntimeResources/Logger")
 const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
-const Camera = Descriptor.ConstructedState(Vector2)("Camera")
+const Camera = Descriptor.ConstructedResource(Vector2)("Camera")
 
 const Game = Schema.bind(Schema.fragment({
   resources: {
     DeltaTime: Time,
     Counter,
-    Viewport
-  },
-  states: {
+    Viewport,
     CurrentPhase: Phase,
     Camera
   }
@@ -30,15 +28,13 @@ const Game = Schema.bind(Schema.fragment({
 const schema = Game.schema
 
 const makeRuntime = () => {
-  const runtime = Runtime.makeRuntimeConstructed({
+  const runtime = Runtime.make({
     schema,
     services: Runtime.services(),
     resources: {
       DeltaTime: 0.5,
       Counter: 0,
-      Viewport: { width: 640, height: 360 }
-    },
-    states: {
+      Viewport: { width: 640, height: 360 },
       CurrentPhase: "Boot",
       Camera: { x: 0, y: 0 }
     }
@@ -51,14 +47,14 @@ const makeRuntime = () => {
   return runtime.value
 }
 
-describe("Runtime resources and states", () => {
-  it("reads initial resource and state seeding on the first update", () => {
+describe("Runtime resources", () => {
+  it("reads initial resource seeding on the first update", () => {
     const runtime = makeRuntime()
 
     expect(readResourceValue(runtime, schema, Time)).toBe(0.5)
-    expect(readStateValue(runtime, schema, Phase)).toBe("Boot")
+    expect(readResourceValue(runtime, schema, Phase)).toBe("Boot")
     expect(readResourceValue(runtime, schema, Viewport)).toEqual({ width: 640, height: 360 })
-    expect(readStateValue(runtime, schema, Camera)).toEqual({ x: 0, y: 0 })
+    expect(readResourceValue(runtime, schema, Camera)).toEqual({ x: 0, y: 0 })
   })
 
   it("persists resource writes across updates", () => {
@@ -71,39 +67,39 @@ describe("Runtime resources and states", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.counter.update((value) => value + 1)
-        })
+        }
     )
 
     const schedule = Schedule.Schedule(increment)
 
     const runtime = makeRuntime()
-    runtime.runSchedule(schedule)
-    runtime.runSchedule(schedule)
+    runtime.tick(schedule)
+    runtime.tick(schedule)
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(2)
   })
 
-  it("persists state writes across updates", () => {
+  it("persists writes to a union-valued resource across updates", () => {
     const setRunning = System.System(
       "RuntimeResources/SetRunning",
       {
         schema,
-        states: {
-          phase: System.writeState(Phase)
+        resources: {
+          phase: System.writeResource(Phase)
         }
       },
-      ({ states }) =>
-        Fx.sync(() => {
-          states.phase.set("Running")
-        })
+      ({ resources }) =>
+        {
+          resources.phase.set("Running")
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(setRunning))
+    runtime.tick(Schedule.Schedule(setRunning))
 
-    expect(readStateValue(runtime, schema, Phase)).toBe("Running")
+    expect(readResourceValue(runtime, schema, Phase)).toBe("Running")
   })
 
   it("setResult and updateResult only write successful values", () => {
@@ -112,33 +108,31 @@ describe("Runtime resources and states", () => {
       {
         schema,
         resources: {
-          counter: System.writeResource(Counter)
-        },
-        states: {
-          phase: System.writeState(Phase)
+          counter: System.writeResource(Counter),
+          phase: System.writeResource(Phase)
         }
       },
-      ({ resources, states }) =>
-        Fx.sync(() => {
+      ({ resources }) =>
+        {
           const failedSet = resources.counter.setResult(Result.failure("invalid"))
           expect(failedSet).toEqual(Result.failure("invalid"))
 
           const successfulSet = resources.counter.setResult(Result.success(3))
           expect(successfulSet).toEqual(Result.success(undefined))
 
-          const failedUpdate = states.phase.updateResult(() => Result.failure("blocked"))
+          const failedUpdate = resources.phase.updateResult(() => Result.failure("blocked"))
           expect(failedUpdate).toEqual(Result.failure("blocked"))
 
-          const successfulUpdate = states.phase.updateResult(() => Result.success("Running" as const))
+          const successfulUpdate = resources.phase.updateResult(() => Result.success("Running" as const))
           expect(successfulUpdate).toEqual(Result.success(undefined))
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(applyValidatedWrites))
+    runtime.tick(Schedule.Schedule(applyValidatedWrites))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(3)
-    expect(readStateValue(runtime, schema, Phase)).toBe("Running")
+    expect(readResourceValue(runtime, schema, Phase)).toBe("Running")
   })
 
   it("setRaw and updateRaw only write successful constructed values", () => {
@@ -147,14 +141,12 @@ describe("Runtime resources and states", () => {
       {
         schema,
         resources: {
-          viewport: System.writeResource(Viewport)
-        },
-        states: {
-          camera: System.writeState(Camera)
+          viewport: System.writeResource(Viewport),
+          camera: System.writeResource(Camera)
         }
       },
-      ({ resources, states }) =>
-        Fx.sync(() => {
+      ({ resources }) =>
+        {
           const failedSet = resources.viewport.setRaw({
             width: Number.NaN,
             height: 360
@@ -167,37 +159,35 @@ describe("Runtime resources and states", () => {
           })
           expect(successfulSet).toEqual(Result.success(undefined))
 
-          const failedUpdate = states.camera.updateRaw(() => ({
+          const failedUpdate = resources.camera.updateRaw(() => ({
             x: Number.POSITIVE_INFINITY,
             y: 4
           }))
           expect(failedUpdate.ok).toBe(false)
 
-          const successfulUpdate = states.camera.updateRaw((camera) => ({
+          const successfulUpdate = resources.camera.updateRaw((camera) => ({
             x: camera.x + 5,
             y: camera.y + 7
           }))
           expect(successfulUpdate).toEqual(Result.success(undefined))
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(applyConstructedWrites))
+    runtime.tick(Schedule.Schedule(applyConstructedWrites))
 
     expect(readResourceValue(runtime, schema, Viewport)).toEqual({ width: 800, height: 450 })
-    expect(readStateValue(runtime, schema, Camera)).toEqual({ x: 5, y: 7 })
+    expect(readResourceValue(runtime, schema, Camera)).toEqual({ x: 5, y: 7 })
   })
 
   it("supports schema-key initialization when the descriptor name differs from the schema key", () => {
-    const runtime = Runtime.makeRuntimeConstructed({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
         DeltaTime: 0.25,
         Counter: 3,
-        Viewport: { width: 400, height: 240 }
-      },
-      states: {
+        Viewport: { width: 400, height: 240 },
         CurrentPhase: "Running",
         Camera: { x: 0, y: 0 }
       }
@@ -208,59 +198,24 @@ describe("Runtime resources and states", () => {
     }
 
     expect(readResourceValue(runtime.value, schema, Time)).toBe(0.25)
-    expect(readStateValue(runtime.value, schema, Phase)).toBe("Running")
+    expect(readResourceValue(runtime.value, schema, Phase)).toBe("Running")
   })
 
-  it("makeRuntimeResult unwraps validated seeds and returns keyed failures", () => {
-    const runtime = Runtime.makeRuntimeResult({
+  it("make returns the runtime directly when no provided resource can fail", () => {
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
-        DeltaTime: Result.success(0.25),
-        Counter: Result.failure("bad-counter"),
-        Viewport: Size2.result({ width: 400, height: 240 })
-      },
-      states: {
-        CurrentPhase: Result.failure("bad-phase"),
-        Camera: Vector2.result({ x: 0, y: 0 })
+        DeltaTime: 0.75,
+        Counter: 2
       }
     })
 
-    expect(runtime).toEqual(Result.failure({
-      resources: {
-        Counter: "bad-counter"
-      },
-      states: {
-        CurrentPhase: "bad-phase"
-      }
-    }))
+    expect(readResourceValue(runtime, schema, Counter)).toBe(2)
   })
 
-  it("makeRuntimeResult succeeds with validated seeds", () => {
-    const runtime = Runtime.makeRuntimeResult({
-      schema,
-      services: Runtime.services(),
-      resources: {
-        DeltaTime: Result.success(0.75),
-        Counter: Result.success(2),
-        Viewport: Size2.result({ width: 320, height: 180 })
-      },
-      states: {
-        CurrentPhase: Result.success("Running" as const),
-        Camera: Vector2.result({ x: 12, y: 24 })
-      }
-    })
-
-    expect(runtime.ok).toBe(true)
-    if (!runtime.ok) {
-      return
-    }
-
-    expect(runtime.value).toBeDefined()
-  })
-
-  it("makeRuntimeConstructed validates raw constructed seeds and returns keyed failures", () => {
-    const runtime = Runtime.makeRuntimeConstructed({
+  it("make validates constructed resources and returns keyed failures", () => {
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
@@ -269,9 +224,7 @@ describe("Runtime resources and states", () => {
         Viewport: {
           width: Number.NaN,
           height: 360
-        }
-      },
-      states: {
+        },
         CurrentPhase: "Running",
         Camera: {
           x: Number.POSITIVE_INFINITY,
@@ -286,36 +239,32 @@ describe("Runtime resources and states", () => {
     }
 
     expect(runtime.error.resources.Viewport).toBeDefined()
-    expect(runtime.error.states.Camera).toBeDefined()
+    expect(runtime.error.resources.Camera).toBeDefined()
   })
 
-  it("lets one system read state and write resources in the same update", () => {
+  it("lets one system read one resource and write another in the same update", () => {
     const syncFromPhase = System.System(
       "RuntimeResources/SyncFromPhase",
       {
         schema,
         resources: {
-          counter: System.writeResource(Counter)
-        },
-        states: {
-          phase: System.readState(Phase)
+          counter: System.writeResource(Counter),
+          phase: System.readResource(Phase)
         }
       },
-      ({ resources, states }) =>
-        Fx.sync(() => {
-          resources.counter.set(states.phase.get() === "Running" ? 1 : 0)
-        })
+      ({ resources }) =>
+        {
+          resources.counter.set(resources.phase.get() === "Running" ? 1 : 0)
+        }
     )
 
-    const runtime = Runtime.makeRuntimeConstructed({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
         DeltaTime: 0.5,
         Counter: 0,
-        Viewport: { width: 320, height: 180 }
-      },
-      states: {
+        Viewport: { width: 320, height: 180 },
         CurrentPhase: "Running",
         Camera: { x: 0, y: 0 }
       }
@@ -325,7 +274,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected syncFromPhase runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.Schedule(syncFromPhase))
+    runtime.value.tick(Schedule.Schedule(syncFromPhase))
 
     expect(readResourceValue(runtime.value, schema, Counter)).toBe(1)
   })
@@ -345,12 +294,12 @@ describe("Runtime resources and states", () => {
         }
       },
       ({ resources, services }) =>
-        Fx.sync(() => {
+        {
           services.logger.log(`dt=${resources.time.get()}`)
-        })
+        }
     )
 
-    const runtime = Runtime.makeRuntimeConstructed({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(
         Runtime.service(Logger, {
@@ -362,9 +311,7 @@ describe("Runtime resources and states", () => {
       resources: {
         DeltaTime: 0.25,
         Counter: 0,
-        Viewport: { width: 320, height: 180 }
-      },
-      states: {
+        Viewport: { width: 320, height: 180 },
         CurrentPhase: "Boot",
         Camera: { x: 0, y: 0 }
       }
@@ -374,7 +321,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected logger runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.Schedule(logTime))
+    runtime.value.tick(Schedule.Schedule(logTime))
 
     expect(seen).toEqual(["dt=0.25"])
   })
@@ -394,12 +341,12 @@ describe("Runtime resources and states", () => {
         }
       },
       ({ resources, services }) =>
-        Fx.sync(() => {
+        {
           services.logger.log(`dt=${resources.time.get()}`)
-        })
+        }
     )
 
-    const runtime = Runtime.makeRuntimeConstructed({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(
         Runtime.service(PrefixedLogger, {
@@ -411,9 +358,7 @@ describe("Runtime resources and states", () => {
       resources: {
         DeltaTime: 0.125,
         Counter: 0,
-        Viewport: { width: 320, height: 180 }
-      },
-      states: {
+        Viewport: { width: 320, height: 180 },
         CurrentPhase: "Boot",
         Camera: { x: 0, y: 0 }
       }
@@ -423,7 +368,7 @@ describe("Runtime resources and states", () => {
       throw new Error("expected prefixed logger runtime seeds to be valid")
     }
 
-    runtime.value.runSchedule(Schedule.Schedule(logTime))
+    runtime.value.tick(Schedule.Schedule(logTime))
 
     expect(seen).toEqual(["dt=0.125"])
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Result, Schema } from "@bevy-ts/core"
+import { Descriptor, Result, Schema } from "@bevy-ts/core"
 import type { EntityId } from "@bevy-ts/core/entity"
 import * as Vector2 from "@bevy-ts/core/Vector2"
 import { readResourceValue } from "./utils/fixtures.ts"
@@ -44,17 +44,17 @@ describe("Runtime commands", () => {
       "RuntimeCommands/SpawnInsertMany",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          const id = commands.spawn(Game.Command.spawnWith(
+        {
+          const id = commands.spawn(Game.Command.spawn(
             [Position, { x: 0, y: 0 }] as const
           ))
-          commands.insertMany(
+          commands.insert(
             id,
             [Position, { x: 1, y: 1 }] as const,
             [Position, { x: 2, y: 2 }] as const,
             [Velocity, { x: 9, y: 9 }] as const
           )
-        })
+        }
     )
 
     const observe = Game.System(
@@ -74,11 +74,11 @@ describe("Runtime commands", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.moving.single()
           resources.count.set(result.ok ? 1 : 0)
           resources.lastX.set(result.ok ? result.value.data.position.get().x : -1)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -96,13 +96,13 @@ describe("Runtime commands", () => {
       "RuntimeCommands/SpawnForRemove",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          const id = commands.spawn(Game.Command.spawnWith(
+        {
+          const id = commands.spawn(Game.Command.spawn(
             [Position, { x: 1, y: 1 }] as const,
             [Velocity, { x: 1, y: 1 }] as const
           ))
           commands.remove(id, Velocity)
-        })
+        }
     )
 
     const observe = Game.System(
@@ -121,9 +121,9 @@ describe("Runtime commands", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.count.set(queries.moving.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -142,13 +142,13 @@ describe("Runtime commands", () => {
       "RuntimeCommands/SpawnAndStoreId",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          const id = commands.spawn(Game.Command.spawnWith(
+        {
+          const id = commands.spawn(Game.Command.spawn(
             [Position, { x: 1, y: 2 }] as const
           ))
           storedId = id
           commands.despawn(id)
-        })
+        }
     )
 
     const lookup = Game.System(
@@ -159,7 +159,7 @@ describe("Runtime commands", () => {
         }
       },
       ({ lookup, resources }) =>
-        Fx.sync(() => {
+        {
           const id = storedId
           if (!id) {
             resources.count.set(-1)
@@ -171,7 +171,7 @@ describe("Runtime commands", () => {
             }
           }))
           resources.count.set(result.ok ? 0 : result.error._tag === "MissingEntity" ? 1 : -1)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -187,7 +187,7 @@ describe("Runtime commands", () => {
     const invalidEntry = ConstructedGame.Command.entryRaw(SafePosition, { x: Number.NaN, y: 0 })
     expect(invalidEntry.ok).toBe(false)
 
-    const spawned = ConstructedGame.Command.spawnWithMixed(
+    const spawned = ConstructedGame.Command.spawn(
       ConstructedGame.Command.entryRaw(SafePosition, { x: 1, y: 2 })
     )
 
@@ -196,11 +196,8 @@ describe("Runtime commands", () => {
       return
     }
 
-    const inserted = ConstructedGame.Command.insertRaw(
-      spawned.value,
-      SafePosition,
-      { x: 3, y: 4 }
-    )
+    const inserted = ConstructedGame.Command.insert(
+      spawned.value, ConstructedGame.Command.entryRaw(SafePosition, { x: 3, y: 4 }))
 
     expect(inserted.ok).toBe(true)
   })
@@ -212,24 +209,24 @@ describe("Runtime commands", () => {
       "RuntimeCommands/SpawnStoreForInsert",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
-          const id = commands.spawn(Game.Command.spawnWith(
+        {
+          const id = commands.spawn(Game.Command.spawn(
             [Position, { x: 0, y: 0 }] as const
           ))
           storedId = id
-        })
+        }
     )
 
     const insertVelocity = Game.System(
       "RuntimeCommands/InsertVelocity",
       {},
       ({ commands }) =>
-        Fx.sync(() => {
+        {
           const id = storedId
           if (id) {
-            commands.insert(id, Velocity, { x: 4, y: 5 })
+            commands.insert(id, [Velocity, { x: 4, y: 5 }])
           }
-        })
+        }
     )
 
     const observe = Game.System(
@@ -248,9 +245,9 @@ describe("Runtime commands", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.count.set(queries.moving.each().length)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -272,15 +269,15 @@ describe("Runtime commands", () => {
         }
       },
       ({ commands, resources }) =>
-        Fx.sync(() => {
-          const invalidDraft = Game.Command.spawnWithResult(
+        {
+          const invalidDraft = Game.Command.spawn(
             Game.Command.entryResult(Position, Result.success({ x: 1, y: 2 })),
             Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
           )
 
           expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
 
-          const validDraft = Game.Command.spawnWithResult(
+          const validDraft = Game.Command.spawn(
             Game.Command.entryResult(Position, Result.success({ x: 4, y: 5 })),
             Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
           )
@@ -293,7 +290,7 @@ describe("Runtime commands", () => {
           commands.spawn(validDraft.value)
           resources.count.set(1)
           resources.lastX.set(4)
-        })
+        }
     )
 
     const observe = Game.System(
@@ -313,11 +310,11 @@ describe("Runtime commands", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.moving.single()
           resources.count.set(result.ok ? 1 : 0)
           resources.lastX.set(result.ok ? result.value.data.position.get().x : -1)
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -340,15 +337,15 @@ describe("Runtime commands", () => {
         }
       },
       ({ commands, resources }) =>
-        Fx.sync(() => {
-          const invalidDraft = Game.Command.spawnWithMixed(
+        {
+          const invalidDraft = Game.Command.spawn(
             Game.Command.entry(Position, { x: 1, y: 2 }),
             Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
           )
 
           expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
 
-          const validDraft = Game.Command.spawnWithMixed(
+          const validDraft = Game.Command.spawn(
             Game.Command.entry(Position, { x: 4, y: 5 }),
             Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
           )
@@ -361,7 +358,7 @@ describe("Runtime commands", () => {
           commands.spawn(validDraft.value)
           resources.count.set(1)
           resources.lastX.set(4)
-        })
+        }
     )
 
     const observe = Game.System(
@@ -381,11 +378,11 @@ describe("Runtime commands", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           const result = queries.moving.single()
           resources.count.set(result.ok ? 1 : 0)
           resources.lastX.set(result.ok ? result.value.data.position.get().x : -1)
-        })
+        }
     )
 
     const runtime = makeRuntime()

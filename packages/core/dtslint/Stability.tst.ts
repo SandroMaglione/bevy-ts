@@ -24,19 +24,50 @@ const runtime = Game.Runtime.make({
 
 describe("stability types", () => {
   it("carries exact system failures through schedules and runtimes", () => {
-    expect(runtime.runSchedule(schedule)).type.toBe<
+    expect(runtime.tick(schedule)).type.toBe<
       Result.Result<void, System.SystemFailure<"StabilityTypes/Failing", "Rejected">>
     >()
+  })
+
+  it("infers the failure union from early Fx.fail returns in an otherwise plain system", () => {
+    const Spend = Game.System(
+      "StabilityTypes/Spend",
+      { resources: { value: Game.System.writeResource(Value) } },
+      ({ resources }) => {
+        const value = resources.value.get()
+        if (value < 0) {
+          return Fx.fail("Negative" as const)
+        }
+        if (value === 0) {
+          return Fx.fail("Empty" as const)
+        }
+        resources.value.set(value - 1)
+      }
+    )
+    expect(runtime.tick(Game.Schedule(Spend))).type.toBe<
+      Result.Result<void, System.SystemFailure<"StabilityTypes/Spend", "Negative" | "Empty">>
+    >()
+  })
+
+  it("treats a system that returns nothing as infallible", () => {
+    const Plain = Game.System(
+      "StabilityTypes/Plain",
+      { resources: { value: Game.System.writeResource(Value) } },
+      ({ resources }) => {
+        resources.value.set(2)
+      }
+    )
+    expect(runtime.tick(Game.Schedule(Plain))).type.toBe<Result.Result<void, never>>()
   })
 
   it("brands entity scopes to one bound game root", () => {
     const scope = Game.EntityScope("Level")
     expect(scope).type.toBe<EntityScope.EntityScope<"Level", typeof Game.schema>>()
 
-    const system = OtherGame.System("Other/Spawn", {}, ({ commands }) => Fx.sync(() => {
+    const system = OtherGame.System("Other/Spawn", {}, ({ commands }) => {
       // @ts-expect-error!
       commands.despawnScope(scope)
-    }))
+    })
     expect(system).type.toBeAssignableTo<Schema.Schema.BoundSystem<typeof OtherGame.schema, Schema.RootToken<"Other">>>()
   })
 
@@ -82,7 +113,7 @@ describe("stability types", () => {
     const start = Game.System(
       "StabilityTypes/Start",
       { nextMachines: { mode: Game.System.nextState(Mode) } },
-      ({ nextMachines }) => Fx.sync(() => nextMachines.mode.set("Playing"))
+      ({ nextMachines }) => { nextMachines.mode.set("Playing") }
     )
     const load = Game.System(
       "StabilityTypes/LoadLevel",
@@ -102,7 +133,7 @@ describe("stability types", () => {
       machines: Game.Runtime.machines(Game.Runtime.machine(Mode, "Menu"))
     })
 
-    expect(transitionRuntime.runSchedule(transitionSchedule)).type.toBe<
+    expect(transitionRuntime.tick(transitionSchedule)).type.toBe<
       Result.Result<void, System.SystemFailure<"StabilityTypes/LoadLevel", "LoadFailed">>
     >()
   })

@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { AddedRenderableQuery, ChangedRenderableTransformQuery } from "../queries.ts"
 import { Game, PlatformerHost, Renderable } from "../schema.ts"
@@ -18,7 +17,7 @@ export const DestroyRenderNodesSystem = Game.System(
     }
   },
   ({ removed, despawned, services }) =>
-    Fx.sync(() => {
+    {
       const host = services.host
 
       for (const entityId of removed.renderables.all()) {
@@ -42,7 +41,7 @@ export const DestroyRenderNodesSystem = Game.System(
         destroyRenderNode(renderNode)
         host.nodes.delete(entityId.value)
       }
-    })
+    }
 )
 
 export const CreateRenderNodesSystem = Game.System(
@@ -56,7 +55,7 @@ export const CreateRenderNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.renderables.each()) {
         const renderNode = ensureNode(
           services.host,
@@ -66,7 +65,7 @@ export const CreateRenderNodesSystem = Game.System(
         const position = match.data.position.get()
         renderNode.node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 export const SyncRenderableTransformsSystem = Game.System(
@@ -80,7 +79,7 @@ export const SyncRenderableTransformsSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.renderables.each()) {
         const renderNode = ensureNode(
           services.host,
@@ -90,5 +89,5 @@ export const SyncRenderableTransformsSystem = Game.System(
         const position = match.data.position.get()
         renderNode.node.position.set(position.x, position.y)
       }
-    })
+    }
 )

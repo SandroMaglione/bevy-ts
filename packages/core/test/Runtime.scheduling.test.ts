@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import * as Runtime from "@bevy-ts/core/runtime"
 import * as Schedule from "@bevy-ts/core/schedule"
 import * as System from "@bevy-ts/core/system"
@@ -17,7 +17,7 @@ const Game = Schema.bind(Schema.fragment({
 const schema = Game.schema
 
 const makeRuntime = () =>
-  Runtime.makeRuntime({
+  Runtime.make({
     schema,
     services: Runtime.services(),
     resources: {
@@ -37,9 +37,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.counter.update((value) => value + 1)
-        })
+        }
     )
 
     const append = System.System(
@@ -51,17 +51,17 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "ran"])
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(increment))
+    runtime.tick(Schedule.Schedule(increment))
 
     expect(readResourceValue(runtime, schema, Counter)).toBe(1)
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
-    runtime.runSchedule(Schedule.Schedule(append))
+    runtime.tick(Schedule.Schedule(append))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["ran"])
   })
 
@@ -75,9 +75,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "first"])
-        })
+        }
     )
 
     const second = System.System(
@@ -89,9 +89,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "second"])
-        })
+        }
     )
 
     const runtime = makeRuntime()
@@ -113,9 +113,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "first"])
-        })
+        }
     )
 
     const second = System.System(
@@ -127,13 +127,13 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "second"])
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(second, first))
+    runtime.tick(Schedule.Schedule(second, first))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["second", "first"])
   })
@@ -148,9 +148,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "first"])
-        })
+        }
     )
 
     const second = System.System(
@@ -162,13 +162,13 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "second"])
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(first, second))
+    runtime.tick(Schedule.Schedule(first, second))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
@@ -183,9 +183,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "first"])
-        })
+        }
     )
 
     const second = System.System(
@@ -197,13 +197,13 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "second"])
-        })
+        }
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(first, Schedule.updateLifecycle(), second))
+    runtime.tick(Schedule.Schedule(first, Schedule.updateLifecycle(), second))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
@@ -217,9 +217,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "first"])
-        })
+        }
     )
 
     const second = System.System(
@@ -231,9 +231,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "second"])
-        })
+        }
     )
 
     const hostMirror = Schedule.Schedule(
@@ -242,7 +242,7 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.runSchedule(Schedule.Schedule(
+    runtime.tick(Schedule.Schedule(
       first,
       Schedule.applyDeferred(),
       hostMirror
@@ -261,9 +261,9 @@ describe("Runtime scheduling", () => {
         }
       },
       ({ resources }) =>
-        Fx.sync(() => {
+        {
           resources.log.update((entries) => [...entries, "duplicate"])
-        })
+        }
     )
 
     const phase = Schedule.Schedule(duplicate)

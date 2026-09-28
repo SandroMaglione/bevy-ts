@@ -17,7 +17,7 @@ The goal is to show the normal `bevy-ts` flow in order:
 Start by defining the ECS data you want to store. Components hold per-entity data. Resources hold singleton world values. Services expose host-owned capabilities, such as a renderer or clock.
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import { Application, Container, Sprite, Texture } from "pixi.js"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -109,18 +109,18 @@ const SetupSceneSystem = Game.System(
     }
   },
   ({ commands, services }) =>
-    Fx.sync(() => {
+    {
       const { width, height } = services.pixi.application.screen
 
       commands.spawn(
-        Game.Command.spawnWith(
+        Game.Command.spawn(
           [Position, { x: width * 0.5, y: height * 0.5 }],
           [Velocity, { x: 80, y: 60 }],
           [Renderable, { size: 24 }],
           [Tint, { value: 0xff6b35 }]
         )
       )
-    })
+    }
 )
 ```
 
@@ -139,13 +139,13 @@ const CaptureFrameInputSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.deltaTime.set(services.pixi.clock.deltaSeconds)
       resources.viewport.set({
         width: services.pixi.application.screen.width,
         height: services.pixi.application.screen.height
       })
-    })
+    }
 )
 ```
 
@@ -168,7 +168,7 @@ const IntegrateMotionSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const dt = resources.deltaTime.get()
 
       for (const match of queries.moving.each()) {
@@ -180,7 +180,7 @@ const IntegrateMotionSystem = Game.System(
           y: position.y + velocity.y * dt
         })
       }
-    })
+    }
 )
 ```
 
@@ -202,7 +202,7 @@ const CreatePixiSpritesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.renderables.each()) {
         const entityId = match.entity.id.value
         let sprite = services.pixi.sprites.get(entityId)
@@ -223,7 +223,7 @@ const CreatePixiSpritesSystem = Game.System(
         sprite.tint = tint.value
         sprite.position.set(position.x, position.y)
       }
-    })
+    }
 )
 ```
 
@@ -279,17 +279,16 @@ const runtime = Game.Runtime.make({
   }
 })
 
-const app = App.makeApp(runtime)
-app.bootstrap(setupSchedule)
-app.update(updateSchedule)
+runtime.tick(setupSchedule)
+runtime.tick(updateSchedule)
 ```
 
-Finally, keep the outer loop outside ECS and call `app.update(...)` yourself.
+Finally, keep the outer loop outside ECS and call `runtime.tick(...)` yourself.
 
 ```ts
 const tick = (ticker: { readonly deltaMS: number }) => {
   host.clock.deltaSeconds = ticker.deltaMS / 1000
-  app.update(updateSchedule)
+  runtime.tick(updateSchedule)
 }
 
 application.ticker.add(tick)
@@ -308,7 +307,6 @@ The complete version, including sprite creation and viewport bounce logic, is in
 
 From here, the API reference pages are the next step if you want exact definitions for the surfaces used above:
 
-- `App`
 - `Descriptor`
 - `Schema`
 - `Query`

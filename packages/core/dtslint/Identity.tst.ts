@@ -1,4 +1,4 @@
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Identity/Position")
@@ -42,8 +42,8 @@ describe("descriptor identity", () => {
 
   it("allows distinct systems that share a display name", () => {
     const Game = Schema.bind(Schema.fragment({ components: { Health } }))
-    const First = Game.System("Identity/Same", {}, () => Fx.sync(() => undefined))
-    const Second = Game.System("Identity/Same", {}, () => Fx.sync(() => undefined))
+    const First = Game.System("Identity/Same", {}, () => {})
+    const Second = Game.System("Identity/Same", {}, () => {})
     expect(Game.Schedule(First, Second).kind).type.toBe<"schedule">()
   })
 })

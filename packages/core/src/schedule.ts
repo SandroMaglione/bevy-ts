@@ -73,54 +73,6 @@ export interface TransitionBundleDefinition<
   readonly __schemaRoot?: Root | undefined
 }
 
-export interface ScheduleFragmentDefinition<
-  S extends Schema.Any = Schema.Any,
-  out Root = unknown,
-  out Needs extends Requirement.Requirement = Requirement.Requirement,
-  out CarriedNeeds extends Requirement.Requirement = Needs,
-  out Failure extends SystemFailure = never
-> {
-  readonly kind: "fragment"
-  readonly steps: ReadonlyArray<ScheduleStep>
-  readonly systems: ReadonlyArray<AnySystem>
-  readonly schema: S
-  readonly requirements: ReadonlyArray<CarriedNeeds>
-  readonly __failure?: (_: never) => Failure
-  readonly __schemaRoot?: Root | undefined
-}
-
-export interface SchedulePhaseDefinition<
-  S extends Schema.Any = Schema.Any,
-  out Needs extends Requirement.Requirement = Requirement.Requirement,
-  out SystemValue extends AnySystem = AnySystem,
-  out StepValue extends ScheduleStep = ScheduleStep,
-  out Root = unknown,
-  out ExactNeeds extends Requirement.Requirement = Needs,
-  out CarriedNeeds extends Requirement.Requirement = ExactNeeds,
-  out Failure extends SystemFailure = never
-> {
-  readonly kind: "phase"
-  readonly steps: ReadonlyArray<StepValue>
-  readonly systems: ReadonlyArray<SystemValue>
-  readonly schema: S
-  readonly requirements: ReadonlyArray<CarriedNeeds>
-  readonly __failure?: (_: never) => Failure
-  readonly __schemaRoot?: Root | undefined
-}
-
-export interface ScheduleCompositionDefinition<
-  out SystemValue extends AnySystem = AnySystem,
-  out StepValue extends ScheduleStep = ScheduleStep,
-  out Needs extends Requirement.Requirement = Requirement.Requirement,
-  out CarriedNeeds extends Requirement.Requirement = Needs,
-  out Failure extends SystemFailure = never
-> {
-  readonly systems: ReadonlyArray<SystemValue>
-  readonly steps: ReadonlyArray<StepValue>
-  readonly requirements: ReadonlyArray<CarriedNeeds>
-  readonly __failure?: (_: never) => Failure
-}
-
 export interface ExecutableScheduleDefinition<
   S extends Schema.Any,
   out Needs extends Requirement.Requirement = Requirement.Requirement,
@@ -162,47 +114,15 @@ export namespace Schedule {
     CarriedNeeds extends Requirement.Requirement = Needs,
     Failure extends SystemFailure = never
   > = TransitionBundleDefinition<S, Entries, Needs, Root, CarriedNeeds, Failure>
-  export type Fragment<
-    S extends Schema.Any,
-    Root = unknown,
-    Needs extends Requirement.Requirement = Requirement.Requirement,
-    CarriedNeeds extends Requirement.Requirement = Needs,
-    Failure extends SystemFailure = never
-  > = ScheduleFragmentDefinition<S, Root, Needs, CarriedNeeds, Failure>
-  export type Phase<
-    S extends Schema.Any,
-    Needs extends Requirement.Requirement = Requirement.Requirement,
-    SystemValue extends AnySystem = AnySystem,
-    StepValue extends ScheduleStep = ScheduleStep,
-    Root = unknown,
-    ExactNeeds extends Requirement.Requirement = Needs,
-    CarriedNeeds extends Requirement.Requirement = ExactNeeds,
-    Failure extends SystemFailure = never
-  > = SchedulePhaseDefinition<S, Needs, SystemValue, StepValue, Root, ExactNeeds, CarriedNeeds, Failure>
-  export type Composition<
-    SystemValue extends AnySystem = AnySystem,
-    StepValue extends ScheduleStep = ScheduleStep,
-    Needs extends Requirement.Requirement = Requirement.Requirement,
-    CarriedNeeds extends Requirement.Requirement = Needs,
-    Failure extends SystemFailure = never
-  > = ScheduleCompositionDefinition<SystemValue, StepValue, Needs, CarriedNeeds, Failure>
 }
 
+/**
+ * Anything a schedule can contain: systems, marker steps, and other schedules
+ * (which are flattened in place).
+ */
 export type ScheduleEntry =
   | ScheduleStep
   | ScheduleDefinition<any, any, any, any, any>
-  | ScheduleFragmentDefinition<any, any, any, any, any>
-  | SchedulePhaseDefinition<any, any, any, any, any, any, any, any>
-
-type EntrySystems<Entry> =
-  Entry extends { readonly systems: ReadonlyArray<infer SystemValue extends AnySystem> } ? SystemValue
-  : Entry extends AnySystem ? Entry
-  : never
-
-type EntrySteps<Entry> =
-  Entry extends { readonly steps: ReadonlyArray<infer Step extends ScheduleStep> } ? Step
-  : Entry extends ScheduleStep ? Entry
-  : never
 
 type EntrySchema<Entry> =
   Entry extends { readonly schema: infer S extends Schema.Any } ? S
@@ -243,27 +163,6 @@ export type CompositionFailure<Entries extends ReadonlyArray<ScheduleEntry>> =
 export type CompositionExactRequirements<Entries extends ReadonlyArray<ScheduleEntry>> =
   EntryNeeds<Entries[number]>
 
-export type ScheduleCompositionFor<Entries extends ReadonlyArray<ScheduleEntry>> =
-  ScheduleCompositionDefinition<
-    EntrySystems<Entries[number]>,
-    EntrySteps<Entries[number]>,
-    CompositionExactRequirements<Entries>,
-    CompositionExactRequirements<Entries>,
-    CompositionFailure<Entries>
-  >
-
-export type ScheduleFragmentFor<
-  S extends Schema.Any,
-  Entries extends ReadonlyArray<ScheduleEntry>,
-  Root = unknown
-> = ScheduleFragmentDefinition<
-  S,
-  Root,
-  CompositionExactRequirements<Entries>,
-  CompositionExactRequirements<Entries>,
-  CompositionFailure<Entries>
->
-
 export type AnonymousScheduleBuildFor<
   S extends Schema.Any,
   Entries extends ReadonlyArray<ScheduleEntry>,
@@ -297,20 +196,6 @@ export type TransitionBundleFailure<
   Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<any, any>>
 > = CarriedFailure<Entries[number]>
 
-type StepSystems<Steps extends ReadonlyArray<ScheduleStep>> = Extract<Steps[number], AnySystem>
-type StepNeeds<Steps extends ReadonlyArray<ScheduleStep>> = EntryNeeds<Steps[number]>
-type StepFailure<Steps extends ReadonlyArray<ScheduleStep>> = EntryFailure<Steps[number]>
-
-export type PhaseRequirements<Steps extends ReadonlyArray<ScheduleStep>> = StepNeeds<Steps>
-export type PhaseFailure<Steps extends ReadonlyArray<ScheduleStep>> = StepFailure<Steps>
-
-export type SystemRequirementsForSchedule<Systems extends ReadonlyArray<AnySystem>> =
-  Requirement.Of<Systems[number]>
-
-export type ScheduleRequirements<
-  Systems extends ReadonlyArray<AnySystem>,
-  Steps extends ReadonlyArray<ScheduleStep> = []
-> = SystemRequirementsForSchedule<Systems> | StepNeeds<Steps>
 
 /**
  * Applies every command queued so far, including commands queued by earlier
@@ -365,80 +250,6 @@ export const transitions = <
   >
 }
 
-export const fragment = <
-  S extends Schema.Any,
-  const Entries extends ReadonlyArray<ScheduleEntry> = readonly [],
-  Root = unknown
->(options: {
-  readonly schema: S
-  readonly entries?: Entries
-  readonly steps?: ReadonlyArray<Extract<Entries[number], ScheduleStep>>
-}): ScheduleFragmentFor<S, Entries, Root> => {
-  const steps = normalizeEntries((options.entries ?? options.steps ?? []) as ReadonlyArray<ScheduleEntry>)
-  validateUniqueSystemSteps(steps, "fragment")
-  return {
-    kind: "fragment",
-    schema: options.schema,
-    steps,
-    systems: collectUniqueSystems(steps),
-    requirements: collectStepRequirements(steps)
-  } as ScheduleFragmentFor<S, Entries, Root>
-}
-
-export const phase = <
-  S extends Schema.Any,
-  const Steps extends ReadonlyArray<ScheduleStep>
->(options: {
-  readonly schema: S
-  readonly steps: Steps
-}): SchedulePhaseDefinition<
-  S,
-  PhaseRequirements<Steps>,
-  StepSystems<Steps>,
-  ScheduleStep,
-  unknown,
-  PhaseRequirements<Steps>,
-  PhaseRequirements<Steps>,
-  PhaseFailure<Steps>
-> => {
-  const steps = [...options.steps]
-  validateUniqueSystemSteps(steps, "phase")
-  return {
-    kind: "phase",
-    schema: options.schema,
-    steps,
-    systems: collectUniqueSystems(steps),
-    requirements: collectStepRequirements(steps)
-  } as unknown as SchedulePhaseDefinition<
-    S,
-    PhaseRequirements<Steps>,
-    StepSystems<Steps>,
-    ScheduleStep,
-    unknown,
-    PhaseRequirements<Steps>,
-    PhaseRequirements<Steps>,
-    PhaseFailure<Steps>
-  >
-}
-
-export function build<const Entries extends ReadonlyArray<ScheduleEntry>>(
-  ...entries: Entries
-): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
-  return Schedule(...entries)
-}
-
-export const compose = <const Entries extends ReadonlyArray<ScheduleEntry>>(options: {
-  readonly entries: Entries
-}): ScheduleCompositionFor<Entries> => {
-  const steps = normalizeEntries(options.entries)
-  validateUniqueSystemSteps(steps, "schedule composition")
-  return {
-    systems: collectUniqueSystems(steps),
-    steps,
-    requirements: collectStepRequirements(steps)
-  } as ScheduleCompositionFor<Entries>
-}
-
 export const applyStateTransitions = <
   const Bundle extends TransitionBundleDefinition<any, any, any, any, any, any> | undefined = undefined
 >(bundle?: Bundle): ApplyStateTransitionsStep<Bundle> => ({
@@ -446,22 +257,27 @@ export const applyStateTransitions = <
   bundle
 }) as ApplyStateTransitionsStep<Bundle>
 
-export type AnonymousScheduleFor<
-  S extends Schema.Any,
-  SystemValue extends AnySystem,
-  StepValue extends ScheduleStep | undefined
-> = ScheduleDefinition<
-  S,
-  Requirement.Of<SystemValue> | EntryNeeds<Extract<StepValue, ScheduleStep>>,
-  unknown,
-  Requirement.Of<SystemValue> | EntryNeeds<Extract<StepValue, ScheduleStep>>,
-  SystemFailureOf<SystemValue> | EntryFailure<Extract<StepValue, ScheduleStep>>
->
-
+/**
+ * Builds one schedule from systems, marker steps, and nested schedules.
+ *
+ * Nested schedules are flattened in place, so reusable pieces compose into
+ * one ordered step list. The schema is inferred from the first system or
+ * nested schedule; `Game.Schedule(...)` supplies it from the bound game
+ * instead, so marker-only schedules are valid there.
+ */
 export function Schedule<const Entries extends ReadonlyArray<ScheduleEntry>>(
   ...entries: Entries
 ): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
-  const schema = findPlanSchema(entries)
+  return make(findPlanSchema(entries), entries)
+}
+
+/**
+ * Builds one schedule for a known schema.
+ */
+export const make = <S extends Schema.Any, const Entries extends ReadonlyArray<ScheduleEntry>>(
+  schema: S,
+  entries: Entries
+): AnonymousScheduleBuildFor<S, Entries> => {
   const steps = normalizeEntries(entries)
   validateUniqueSystemSteps(steps, "schedule")
   return {
@@ -470,7 +286,7 @@ export function Schedule<const Entries extends ReadonlyArray<ScheduleEntry>>(
     steps,
     systems: collectUniqueSystems(steps),
     requirements: collectStepRequirements(steps)
-  } as AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries>
+  } as AnonymousScheduleBuildFor<S, Entries>
 }
 
 export const isSystemStep = (step: ScheduleStep | ScheduleEntry): step is AnySystem =>
@@ -479,15 +295,9 @@ export const isSystemStep = (step: ScheduleStep | ScheduleEntry): step is AnySys
 const isScheduleEntry = (entry: ScheduleEntry): entry is ScheduleDefinition<any, any, any, any, any> =>
   typeof entry === "object" && entry !== null && "kind" in entry && entry.kind === "schedule"
 
-const isPhaseEntry = (entry: ScheduleEntry): entry is SchedulePhaseDefinition<any, any, any, any, any, any, any, any> =>
-  typeof entry === "object" && entry !== null && "kind" in entry && entry.kind === "phase"
-
-const isFragmentEntry = (entry: ScheduleEntry): entry is ScheduleFragmentDefinition<any, any, any, any, any> =>
-  typeof entry === "object" && entry !== null && "kind" in entry && entry.kind === "fragment"
-
 const normalizeEntries = (entries: ReadonlyArray<ScheduleEntry>): ReadonlyArray<ScheduleStep> =>
   entries.flatMap((entry) =>
-    isScheduleEntry(entry) || isFragmentEntry(entry) || isPhaseEntry(entry)
+    isScheduleEntry(entry)
       ? [...entry.steps]
       : [entry]
   )
@@ -497,7 +307,7 @@ const findPlanSchema = <Entries extends ReadonlyArray<ScheduleEntry>>(
 ): EntrySchema<Entries[number]> => {
   const owner = entries.find((entry) => isSystemStep(entry) || "schema" in entry)
   if (!owner) {
-    throw new Error("Schedule plan must include at least one system, schedule, fragment, or phase to infer schema")
+    throw new Error("Schedule plan must include at least one system or schedule to infer its schema; use Game.Schedule(...) for marker-only schedules")
   }
   return (isSystemStep(owner) ? owner.spec.schema : owner.schema) as EntrySchema<Entries[number]>
 }

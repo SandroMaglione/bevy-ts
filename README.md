@@ -10,7 +10,7 @@ The current game API is shown in [GAME_API.md](./GAME_API.md). The carried-type
 design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 
 // Define the ECS world shape once.
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -24,19 +24,19 @@ const Game = Schema.bind(Schema.fragment({ components: { Position, Velocity }, r
 const Move = Game.System("Move", {
   queries: { moving: Game.Query({ selection: { position: Game.Query.write(Position), velocity: Game.Query.read(Velocity) } }) },
   resources: { deltaTime: Game.System.readResource(DeltaTime) }
-}, ({ queries, resources }) => Fx.sync(() => {
+}, ({ queries, resources }) => {
   for (const match of queries.moving.each()) {
     const position = match.data.position.get()
     const velocity = match.data.velocity.get()
     match.data.position.set({ x: position.x + velocity.x * resources.deltaTime.get(), y: position.y + velocity.y * resources.deltaTime.get() })
   }
-}))
+})
 
-const app = App.makeApp(Game.Runtime.make({
+const runtime = Game.Runtime.make({
   services: Game.Runtime.services(),
   resources: { DeltaTime: 1 / 60 }
-}))
-app.update(Game.Schedule(Move))
+})
+runtime.tick(Game.Schedule(Move))
 ```
 
 Start with the docs homepage for the full step-by-step Pixi example:

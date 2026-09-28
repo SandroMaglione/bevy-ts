@@ -35,7 +35,7 @@
  * const MoveActors = Game.System("MoveActors", {
  *   queries: { moving: MovingActors },
  *   resources: { dt: Game.System.readResource(DeltaTime) }
- * }, ({ queries, resources }) => Fx.sync(() => {
+ * }, ({ queries, resources }) => {
  *   const dt = resources.dt.get()
  *
  *   for (const { data } of queries.moving.each()) {
@@ -50,7 +50,7 @@
  *       void data.sprite.get()
  *     }
  *   }
- * }))
+ * })
  * ```
  *
  * @module query
@@ -348,16 +348,6 @@ export interface QuerySpec<
  */
 export namespace Query {
   /**
-   * Small result type used by lookup-style query operations.
-   *
-   * Query handles use a value-level result instead of throwing so callers can
-   * keep failure cases explicit and type-directed.
-   */
-  export type Result<A, E> =
-    | { readonly ok: true; readonly value: A }
-    | { readonly ok: false; readonly error: E }
-
-  /**
    * A non-empty readonly array.
    */
   export type NonEmptyReadonlyArray<T> = readonly [T, ...T[]]
@@ -600,22 +590,6 @@ export type QueryMatch<S extends Schema.Any, Q extends Query.Any> =
         readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>, Query.Root<Q>>
         readonly data: Query.Cells<Q>
       }
-
-/**
- * Successful result constructor used by runtime query helpers.
- */
-export const success = <A>(value: A): Query.Result<A, never> => ({
-  ok: true,
-  value
-})
-
-/**
- * Failed result constructor used by runtime query helpers.
- */
-export const failure = <E>(error: E): Query.Result<never, E> => ({
-  ok: false,
-  error
-})
 
 /**
  * Creates a typed missing-entity error.

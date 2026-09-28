@@ -19,6 +19,7 @@ import type * as Entity from "../entity.ts"
 import * as Query from "../query.ts"
 import type { QueryMatch } from "../query.ts"
 import type * as Relation from "../relation.ts"
+import * as Result from "../Result.ts"
 import * as Cells from "./cells.ts"
 import type { EntityRecord, World } from "./world.ts"
 
@@ -370,16 +371,16 @@ export const makeQueryEngine = (world: World) => {
   const get = (
     id: number,
     query: AnyQuery
-  ): Query.Query.Result<AnyMatch, Query.Query.LookupError> => {
+  ): Result.Result<AnyMatch, Query.Query.LookupError> => {
     const record = world.records.get(id)
     if (!record) {
-      return Query.failure(Query.missingEntityError(id))
+      return Result.failure(Query.missingEntityError(id))
     }
     const state = stateOf(query)
     if (!matchesStructure(state, record) || !matchesFilters(state, record)) {
-      return Query.failure(Query.queryMismatchError(id))
+      return Result.failure(Query.queryMismatchError(id))
     }
-    return Query.success(matchFor(state, record))
+    return Result.success(matchFor(state, record))
   }
 
   return { each, get }

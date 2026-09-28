@@ -29,14 +29,12 @@ export const setupSchedule = Game.Schedule(
   SyncHudSystem
 )
 
-const restartOnPlayingEnter = Game.Schedule.fragment({
-  entries: [
+const restartOnPlayingEnter = Game.Schedule(
     ResetWorldResourcesOnPlayingEnterSystem,
     DespawnLevelEntitiesOnPlayingEnterSystem,
     Game.Schedule.applyDeferred(),
     SpawnWorldOnPlayingEnterSystem
-  ]
-})
+  )
 
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Playing", [

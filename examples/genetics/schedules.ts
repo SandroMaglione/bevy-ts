@@ -17,13 +17,11 @@ import {
 } from "./systems/simulation.ts"
 import { CreateRenderNodesSystem, SyncHudSystem, SyncRenderNodesSystem } from "./systems/render.ts"
 
-const runningEntry = Game.Schedule.fragment({
-  entries: [
+const runningEntry = Game.Schedule(
     ResetGenerationOnRunningEnterSystem,
     Game.Schedule.applyDeferred(),
     SetupWorldSystem
-  ]
-})
+  )
 
 const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SimulationPhase, "Running", [runningEntry])

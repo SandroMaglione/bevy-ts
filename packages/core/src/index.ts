@@ -5,10 +5,6 @@
  * small number of stable namespaces instead of many deep internal paths.
  */
 /**
- * Application facade helpers.
- */
-export * as App from "./app.ts"
-/**
  * Axis-aligned bounding box helpers.
  */
 export * as Aabb from "./Aabb.ts"

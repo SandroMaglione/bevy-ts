@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 import { levelBounds } from "../content.ts"
 import { PlayerCameraQuery } from "../queries.ts"
 import { Camera, Game, PlatformerHost, Viewport } from "../schema.ts"
@@ -16,7 +15,7 @@ export const SyncCameraSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -29,7 +28,7 @@ export const SyncCameraSystem = Game.System(
         x: clamp(position.x, viewport.width * 0.5, levelBounds.width - viewport.width * 0.5),
         y: clamp(position.y - 96, viewport.height * 0.5, levelBounds.height - viewport.height * 0.5)
       })
-    })
+    }
 )
 
 export const ApplyWorldCameraTransformSystem = Game.System(
@@ -44,10 +43,10 @@ export const ApplyWorldCameraTransformSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       services.host.world.position.set(
         resources.viewport.get().width * 0.5 - resources.camera.get().x,
         resources.viewport.get().height * 0.5 - resources.camera.get().y
       )
-    })
+    }
 )

@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { PLAYER_FRAME_SECONDS, facingRows } from "../constants.ts"
 import { advanceFrameIndex, lengthSquared } from "../math.ts"
@@ -26,7 +25,7 @@ export const ResolveFacingSystem = Game.System(
     }
   },
   ({ queries, machines, nextMachines }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -46,7 +45,7 @@ export const ResolveFacingSystem = Game.System(
         : current
 
       nextMachines.facing.setIfChanged(nextFacing)
-    })
+    }
 )
 
 export const ResolveLocomotionSystem = Game.System(
@@ -60,7 +59,7 @@ export const ResolveLocomotionSystem = Game.System(
     }
   },
   ({ queries, nextMachines }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -70,7 +69,7 @@ export const ResolveLocomotionSystem = Game.System(
       nextMachines.locomotion.setIfChanged(
         lengthSquared(velocity) > 0 ? "Walking" : "Idle"
       )
-    })
+    }
 )
 
 export const ResetAnimationClockSystem = Game.System(
@@ -87,12 +86,12 @@ export const ResetAnimationClockSystem = Game.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => {
+    {
       resources.clock.set({
         frameIndex: 0,
         elapsed: 0
       })
-    })
+    }
 )
 
 export const AdvanceAnimationClockSystem = Game.System(
@@ -107,7 +106,7 @@ export const AdvanceAnimationClockSystem = Game.System(
     }
   },
   ({ resources, machines }) =>
-    Fx.sync(() => {
+    {
       const locomotion = machines.locomotion.get()
       const clock = resources.clock.get()
 
@@ -131,7 +130,7 @@ export const AdvanceAnimationClockSystem = Game.System(
         frameIndex,
         elapsed
       })
-    })
+    }
 )
 
 export const ResolveCurrentPlayerFrameSystem = Game.System(
@@ -147,7 +146,7 @@ export const ResolveCurrentPlayerFrameSystem = Game.System(
     }
   },
   ({ resources, machines }) =>
-    Fx.sync(() => {
+    {
       const facing = machines.facing.get()
       const locomotion = machines.locomotion.get()
       const clock = resources.clock.get()
@@ -156,5 +155,5 @@ export const ResolveCurrentPlayerFrameSystem = Game.System(
         row: facingRows[facing],
         column: locomotion === "Idle" ? 1 : (clock.frameIndex + 1) as import("../types.ts").CurrentPlayerFrameValue["column"]
       })
-    })
+    }
 )
