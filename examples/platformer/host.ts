@@ -1,9 +1,9 @@
 import { Keyboard } from "@bevy-ts/browser"
+import { NodeRegistry } from "@bevy-ts/pixi"
 import { Application, Container } from "pixi.js"
 
 import { createHud } from "./render/hud.ts"
 import { createWorldBackdrop } from "./render/backdrop.ts"
-import { destroyRenderNode } from "./render/nodes.ts"
 import type { InputStateValue, PlatformerHostValue } from "./types.ts"
 
 export type PlatformerBrowserHost = {
@@ -59,7 +59,7 @@ export const createPlatformerBrowserHost = async (
     application,
     world,
     actorLayer,
-    nodes: new Map(),
+    nodes: NodeRegistry.inContainer(actorLayer),
     hud: hud.refs,
     clock: {
       deltaSeconds: 1 / 60
@@ -86,10 +86,6 @@ export const createPlatformerBrowserHost = async (
     async destroy() {
       keyboard.dispose()
       window.removeEventListener("pointerdown", onPointerDown)
-
-      for (const renderNode of host.nodes.values()) {
-        destroyRenderNode(renderNode)
-      }
 
       host.nodes.clear()
       application.destroy(true)

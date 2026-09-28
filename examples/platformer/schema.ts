@@ -27,6 +27,7 @@ export const InputManager = Descriptor.Service<{
   readonly snapshot: () => InputStateValue
 }>()("Platformer/InputManager")
 export const PlatformerHost = Descriptor.Service<PlatformerHostValue>()("Platformer/Host")
+export const RenderNodes = Descriptor.Service<PlatformerHostValue["nodes"]>()("Platformer/RenderNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({

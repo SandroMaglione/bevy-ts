@@ -1,6 +1,5 @@
 import { Container, Graphics } from "pixi.js"
 
-import type { PlatformerHostValue, RenderNode } from "../types.ts"
 
 type AnyRenderable = {
   kind: "player" | "ground" | "block" | "pipe"
@@ -137,47 +136,16 @@ const createSolidNode = (renderable: {
   return node
 }
 
-export const destroyRenderNode = (renderNode: RenderNode): void => {
-  renderNode.node.destroy({
-    children: true
-  })
-}
-
-export const ensureNode = (
-  host: PlatformerHostValue,
-  entityId: number,
-  renderable: AnyRenderable
-): RenderNode => {
-  const existing = host.nodes.get(entityId)
-  if (existing) {
-    return existing
-  }
-
-  if (renderable.kind === "player") {
-    const node = {
-      kind: "player" as const,
-      node: createPlayerNode(renderable)
-    }
-
-    host.actorLayer.addChild(node.node)
-    host.nodes.set(entityId, node)
-    return node
-  }
-
-  const solidRenderable: SolidRenderable = {
-    kind: renderable.kind,
-    width: renderable.width,
-    height: renderable.height,
-    color: renderable.color,
-    accent: renderable.accent
-  }
-
-  const node = {
-    kind: solidRenderable.kind,
-    node: createSolidNode(solidRenderable)
-  }
-
-  host.actorLayer.addChild(node.node)
-  host.nodes.set(entityId, node)
-  return node
-}
+/**
+ * Builds the Pixi node for one renderable; `RenderSync` attaches it.
+ */
+export const createRenderNode = (renderable: Readonly<AnyRenderable>): Container =>
+  renderable.kind === "player"
+    ? createPlayerNode(renderable)
+    : createSolidNode({
+        kind: renderable.kind,
+        width: renderable.width,
+        height: renderable.height,
+        color: renderable.color,
+        accent: renderable.accent
+      })

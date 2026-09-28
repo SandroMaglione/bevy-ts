@@ -1,3 +1,4 @@
+import type { NodeRegistry } from "@bevy-ts/pixi"
 import type { Application, Container } from "pixi.js"
 import type * as Scalar from "@bevy-ts/core/Scalar"
 import type * as Size2Value from "@bevy-ts/core/Size2"
@@ -32,16 +33,11 @@ export type HudRefs = {
   overlayHint: HTMLElement
 }
 
-export type RenderNode = {
-  kind: "player" | "ground" | "block" | "pipe"
-  node: Container
-}
-
 export type PlatformerHostValue = {
   application: Application
   world: Container
   actorLayer: Container
-  nodes: Map<number, RenderNode>
+  nodes: NodeRegistry.NodeRegistry<Container>
   hud: HudRefs
   clock: {
     deltaSeconds: number

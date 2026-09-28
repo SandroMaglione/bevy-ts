@@ -229,6 +229,36 @@ snapshot.left.held
 input.dispose()
 ```
 
+## 7. Mirror entities into Pixi
+
+`@bevy-ts/pixi` owns the node bookkeeping; what a node looks like stays yours.
+
+```ts
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
+
+const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Container>>()("Game/RenderNodes")
+
+const render = RenderSync.systems(Game, {
+  name: "Game/Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: RenderNodes,
+  create: (renderable) => makeNode(renderable),
+  apply: (node, position) => node.position.set(position.x, position.y)
+})
+
+const runtime = Game.Runtime.make({
+  services: Game.Runtime.services(
+    Game.Runtime.service(RenderNodes, NodeRegistry.inContainer(actorLayer))
+  )
+})
+
+const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.destroy, render.create, render.sync)
+```
+
+The registry service is a normal requirement: ticking the render systems on a
+runtime that does not provide it is a compile error.
+
 ## What remains adapter code
 
 The core deliberately does not choose an asset loader, renderer, audio engine,

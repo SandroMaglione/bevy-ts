@@ -8,6 +8,7 @@
     { "id": "core", "label": "Core" },
     { "id": "runtime", "label": "Runtime" },
     { "id": "browser", "label": "Browser" },
+    { "id": "pixi", "label": "Pixi" },
     { "id": "data-structures", "label": "Data Structures" },
     { "id": "helpers", "label": "Helpers" }
   ],
@@ -36,6 +37,8 @@
     "packages/core/src/system.ts",
     "packages/core/src/Vector2.ts",
     "packages/browser/src/FixedLoop.ts",
-    "packages/browser/src/Keyboard.ts"
+    "packages/browser/src/Keyboard.ts",
+    "packages/pixi/src/NodeRegistry.ts",
+    "packages/pixi/src/RenderSync.ts"
   ]
 }

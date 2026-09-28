@@ -1,6 +1,8 @@
 import * as Result from "@bevy-ts/core/Result"
 import { levelBounds } from "./content.ts"
-import { Camera, DeltaTime, Game, InputManager, InputState, LoseMessage, PlatformerHost, PlayerContacts, SessionState, Viewport } from "./schema.ts"
+import { Camera, DeltaTime, Game, InputManager, InputState, LoseMessage, PlatformerHost, PlayerContacts, SessionState, Viewport,
+  RenderNodes
+} from "./schema.ts"
 import type { InputStateValue, PlatformerHostValue, PlatformerInputManager, PlayerContactsValue } from "./types.ts"
 
 export const makeEmptyInputState = (): InputStateValue => ({
@@ -26,7 +28,8 @@ const makeRuntime = (
   Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
-      Game.Runtime.service(PlatformerHost, host)
+      Game.Runtime.service(PlatformerHost, host),
+      Game.Runtime.service(RenderNodes, host.nodes)
     ),
     resources: {
       DeltaTime: host.clock.deltaSeconds,
