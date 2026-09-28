@@ -5,6 +5,7 @@ import * as Vector2 from "@bevy-ts/math/Vector2"
 import type {
   AnimationClockValue,
   CurrentPlayerFrameValue,
+  FrameContextValue,
   InputStateValue,
   KeyboardInput as KeyboardInputValue,
   TopDownHostValue
@@ -47,6 +48,7 @@ export const AnimationClock = Descriptor.Resource<AnimationClockValue>()("TopDow
 export const CurrentPlayerFrame = Descriptor.Resource<CurrentPlayerFrameValue>()("TopDown/CurrentPlayerFrame")
 
 export const KeyboardInput = Descriptor.Service<KeyboardInputValue>()("TopDown/KeyboardInput")
+export const FrameContext = Descriptor.Service<FrameContextValue>()("TopDown/FrameContext")
 export const TopDownHost = Descriptor.Service<TopDownHostValue>()("TopDown/Host")
 export const RenderNodes = Descriptor.Service<TopDownHostValue["nodes"]>()("TopDown/RenderNodes")
 

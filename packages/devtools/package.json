@@ -1,0 +1,21 @@
+{
+  "name": "@bevy-ts/devtools",
+  "type": "module",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Debug sessions, trace history, and text reports for bevy-ts runtimes",
+  "sideEffects": [],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./internal/*": null,
+    "./*/index": null
+  },
+  "scripts": {
+    "check": "tsc -b tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@bevy-ts/core": "workspace:*"
+  }
+}

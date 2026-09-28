@@ -1,72 +1,72 @@
 {
   "runtime": {
     "tolerance": 0.35,
-    "calibrationMs": 2.8978,
+    "calibrationMs": 2.8866,
     "environment": "Apple M1 / node v24.16.0 / darwin",
     "cases": {
       "spawn/10k-3c": {
-        "minMs": 4.8422,
-        "medianMs": 4.9982,
-        "score": 1.6599
+        "minMs": 4.7652,
+        "medianMs": 4.9021,
+        "score": 1.6508
       },
       "despawn/10k": {
-        "minMs": 4.7521,
-        "medianMs": 5.5849,
-        "score": 1.6399
+        "minMs": 4.749,
+        "medianMs": 5.3695,
+        "score": 1.637
       },
       "query/iterate-read-10k-of-20k": {
-        "minMs": 0.099,
-        "medianMs": 0.1079,
-        "score": 0.034
+        "minMs": 0.0793,
+        "medianMs": 0.0822,
+        "score": 0.0275
       },
       "query/iterate-write-10k": {
-        "minMs": 0.3527,
-        "medianMs": 0.3667,
-        "score": 0.1217
+        "minMs": 0.3959,
+        "medianMs": 0.4132,
+        "score": 0.1365
       },
       "query/single-in-20k-x1000": {
-        "minMs": 0.2798,
-        "medianMs": 0.2885,
-        "score": 0.0966
+        "minMs": 0.2825,
+        "medianMs": 0.2875,
+        "score": 0.0979
       },
       "query/changed-100-of-10k-x20": {
-        "minMs": 0.2981,
-        "medianMs": 0.3057,
-        "score": 0.1022
+        "minMs": 0.301,
+        "medianMs": 0.3058,
+        "score": 0.1043
       },
       "structural/insert-remove-1k": {
-        "minMs": 0.1662,
-        "medianMs": 0.1738,
-        "score": 0.0573
+        "minMs": 0.1678,
+        "medianMs": 0.1776,
+        "score": 0.0581
       },
       "schedule/100-systems-x10": {
-        "minMs": 0.1822,
-        "medianMs": 0.1882,
-        "score": 0.0625
+        "minMs": 0.171,
+        "medianMs": 0.1773,
+        "score": 0.0589
       },
       "lookup/get-10k": {
-        "minMs": 0.5961,
-        "medianMs": 0.6109,
-        "score": 0.2043
+        "minMs": 0.5968,
+        "medianMs": 0.604,
+        "score": 0.2033
       },
       "events/emit-read-10k": {
-        "minMs": 0.094,
-        "medianMs": 0.0963,
-        "score": 0.0325
+        "minMs": 0.0944,
+        "medianMs": 0.0955,
+        "score": 0.0327
       },
       "relations/descendants-100x100": {
-        "minMs": 0.4576,
-        "medianMs": 0.4766,
-        "score": 0.1579
+        "minMs": 0.4608,
+        "medianMs": 0.4687,
+        "score": 0.157
       },
       "snapshot/json-roundtrip-10k": {
-        "minMs": 19.3983,
-        "medianMs": 23.954,
-        "score": 6.684
+        "minMs": 18.9766,
+        "medianMs": 23.6672,
+        "score": 6.4654
       },
       "frame/50-systems-5k": {
-        "minMs": 2.1902,
-        "medianMs": 2.3159,
+        "minMs": 2.1816,
+        "medianMs": 2.2789,
         "score": 0.7558
       }
     }
@@ -75,8 +75,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 36109,
-      "instantiations": 222495
+      "types": 38032,
+      "instantiations": 225603
     }
   }
 }

@@ -72,6 +72,12 @@ component solely for cleanup.
 Inspectors reuse the system access model but admit only read capabilities. They
 return a projection directly and do not advance schedule visibility.
 
+`debug: true` attaches a read-only `Debug.Handle`; without it the runtime has
+no `debug` member at all. Tracing is enabled only while an `observe` listener is
+registered: system, schedule, and marker boundaries check one boolean, and
+component writes are reported from the rollback journal each system already
+keeps, so untraced runs do no extra work per write.
+
 Values obtained through read cells are deeply readonly. This prevents in-place
 object or collection mutation from bypassing write capabilities, validation,
 lifecycle tracking, and system rollback. Updates go through `set`, `update`,

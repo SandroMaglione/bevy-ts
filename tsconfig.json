@@ -25,7 +25,9 @@
       "@bevy-ts/pixi": ["./packages/pixi/src/index.ts"],
       "@bevy-ts/pixi/*": ["./packages/pixi/src/*"],
       "@bevy-ts/math": ["./packages/math/src/index.ts"],
-      "@bevy-ts/math/*": ["./packages/math/src/*"]
+      "@bevy-ts/math/*": ["./packages/math/src/*"],
+      "@bevy-ts/devtools": ["./packages/devtools/src/index.ts"],
+      "@bevy-ts/devtools/*": ["./packages/devtools/src/*"]
     }
   }
 }

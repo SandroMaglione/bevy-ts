@@ -13,6 +13,10 @@ export * as Brand from "./Brand.ts"
  */
 export * as Decode from "./Decode.ts"
 /**
+ * Opt-in runtime introspection for tools and agents.
+ */
+export * as Debug from "./Debug.ts"
+/**
  * Descriptor authoring helpers.
  */
 export * as Descriptor from "./Descriptor.ts"

@@ -119,6 +119,9 @@ importers:
       '@bevy-ts/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bevy-ts/devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@bevy-ts/math':
         specifier: workspace:*
         version: link:../../packages/math
@@ -133,6 +136,12 @@ importers:
         version: link:../core
 
   packages/core: {}
+
+  packages/devtools:
+    dependencies:
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/math:
     dependencies:

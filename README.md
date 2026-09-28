@@ -12,7 +12,8 @@ documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 Packages: `@bevy-ts/core` (ECS), `@bevy-ts/math` (validated vectors and sizes),
 `@bevy-ts/browser` (fixed-step loop, keyboard actions), `@bevy-ts/pixi` (entity
-to Pixi node sync).
+to Pixi node sync), `@bevy-ts/devtools` (headless debug sessions and trace
+reports; see [its README](./packages/devtools/README.md)).
 
 ```ts
 import { Descriptor, Schema } from "@bevy-ts/core"

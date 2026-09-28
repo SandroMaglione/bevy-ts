@@ -59,6 +59,7 @@ import type { Query } from "./Query.ts"
 import type * as Relation from "./Relation.ts"
 import type * as Requirement from "./Requirement.ts"
 import type * as Result from "./Result.ts"
+import type * as Debug from "./Debug.ts"
 import type * as Runtime from "./Runtime.ts"
 import type * as Schedule from "./Schedule.ts"
 import type * as System from "./System.ts"
@@ -623,12 +624,15 @@ export namespace Schema {
       make: <
         const ProvidedServices extends Runtime.RuntimeServices<any>,
         const Resources extends Runtime.RuntimeResources<S> = {},
-        const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>
+        const ProvidedMachines extends Runtime.RuntimeMachines<any> = Runtime.RuntimeMachines<{}>,
+        const Enabled extends Debug.Option | undefined = undefined
       >(options: {
         readonly services: ProvidedServices
         readonly resources?: Resources
         readonly machines?: ProvidedMachines
-      }) => Runtime.MakeRuntimeResult<S, RuntimeServicesOf<ProvidedServices>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>>
+        /** Attaches a `debug` handle to the runtime; see the `Debug` module. */
+        readonly debug?: Enabled
+      }) => Runtime.MakeRuntimeResult<S, RuntimeServicesOf<ProvidedServices>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>, Enabled>
       service: typeof Runtime.service
       services: typeof Runtime.services
       machine: typeof Runtime.machine
