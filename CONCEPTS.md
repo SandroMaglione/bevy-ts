@@ -46,6 +46,7 @@ const Move = Game.System("Concepts/Move", {
 
 - The callback receives only what the spec declares.
 - `read` slots are deeply readonly. `write` slots expose `set` / `update`.
+- Values from `get()` are `ReadonlyValue<T>`. Type helpers that receive them as `ReadonlyValue<T>` (from `@typeonce/bevy-ts/Query`), not `T`, so a config resource or component value passes straight in without a cast: `const spawnRate = (tuning: ReadonlyValue<Tuning>) => ...`.
 - Queries also take `with`, `without`, `optional(...)`, relation selections, and the change filters described in section 8.
 - Query results come back in spawn order.
 
