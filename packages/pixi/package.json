@@ -1,6 +1,6 @@
 {
   "name": "@typeonce/bevy-ts-pixi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pixi render-node registry and render sync for bevy-ts",
   "author": "Sandro Maglione",
   "license": "MIT",
