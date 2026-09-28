@@ -10,13 +10,22 @@ New to the library? Start with [CONCEPTS.md](./CONCEPTS.md) (the model in five
 minutes), then [GAME_API.md](./GAME_API.md). Type architecture and storage are
 documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-Packages: `@bevy-ts/core` (ECS), `@bevy-ts/math` (validated vectors and sizes),
-`@bevy-ts/browser` (fixed-step loop, keyboard actions), `@bevy-ts/pixi` (entity
-to Pixi node sync), `@bevy-ts/devtools` (headless debug sessions and trace
-reports; see [its README](./packages/devtools/README.md)).
+```sh
+pnpm add @typeonce/bevy-ts
+```
+
+| Package | Contents |
+|---|---|
+| `@typeonce/bevy-ts` | The ECS runtime |
+| `@typeonce/bevy-ts-math` | Validated vectors, sizes, and bounding boxes |
+| `@typeonce/bevy-ts-browser` | Fixed-step loop, keyboard actions, input capture |
+| `@typeonce/bevy-ts-pixi` | Entity to Pixi node sync |
+| `@typeonce/bevy-ts-devtools` | Headless debug sessions and trace reports ([README](./packages/devtools/README.md)) |
+
+All packages are released together with the same version.
 
 ```ts
-import { Descriptor, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
 
 // Define the ECS world shape once.
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

@@ -35,6 +35,9 @@ jobs:
       - name: Check
         run: pnpm check
 
+      - name: Check packed packages
+        run: pnpm pack:check
+
   bench:
     name: Performance regressions
     runs-on: ubuntu-latest

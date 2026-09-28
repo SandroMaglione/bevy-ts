@@ -1,21 +1,72 @@
 {
-  "name": "@bevy-ts/devtools",
-  "type": "module",
+  "name": "@typeonce/bevy-ts-devtools",
   "version": "0.1.0",
+  "description": "Headless debug sessions, trace history, and text reports for bevy-ts runtimes",
+  "author": "Sandro Maglione",
   "license": "MIT",
-  "description": "Debug sessions, trace history, and text reports for bevy-ts runtimes",
-  "sideEffects": [],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandroMaglione/bevy-ts.git",
+    "directory": "packages/devtools"
+  },
+  "bugs": {
+    "url": "https://github.com/SandroMaglione/bevy-ts/issues"
+  },
+  "homepage": "https://sandromaglione.github.io/bevy-ts/",
+  "keywords": [
+    "ecs",
+    "gamedev",
+    "bevy",
+    "devtools",
+    "debugging",
+    "agents"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "src/**/*.ts",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     "./package.json": "./package.json",
-    ".": "./src/index.ts",
-    "./*": "./src/*.ts",
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.ts"
+    },
     "./internal/*": null,
     "./*/index": null
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./*": {
+        "types": "./dist/*.d.ts",
+        "import": "./dist/*.js"
+      },
+      "./internal/*": null,
+      "./*/index": null
+    }
+  },
   "scripts": {
+    "build": "tsc -b tsconfig.json --pretty false",
     "check": "tsc -b tsconfig.json --pretty false"
   },
   "dependencies": {
-    "@bevy-ts/core": "workspace:*"
+    "@typeonce/bevy-ts": "workspace:^"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

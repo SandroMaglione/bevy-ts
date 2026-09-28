@@ -20,11 +20,17 @@
     "example:genetics": "vite --open /examples/genetics/",
     "example:pixi": "vite --open /examples/pixi/",
     "example:platformer": "vite --open /examples/platformer/",
-    "example:top-down": "vite --open /examples/top-down/"
+    "example:top-down": "vite --open /examples/top-down/",
+    "build": "rm -rf packages/*/dist packages/*/tsconfig.tsbuildinfo && tsc -b tsconfig.packages.json --pretty false",
+    "pack:check": "node --import tsx scripts/pack-check.ts",
+    "changeset": "changeset",
+    "version-packages": "changeset version && pnpm install --lockfile-only",
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
-    "@bevy-ts/math": "workspace:*",
+    "@changesets/cli": "2.31.1",
     "@effect/platform-node": "4.0.0-beta.43",
+    "@typeonce/bevy-ts-math": "workspace:*",
     "@types/markdown-it": "^14.1.2",
     "@types/matter-js": "^0.20.2",
     "@types/node": "^25.5.0",

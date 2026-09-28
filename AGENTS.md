@@ -15,6 +15,8 @@
 - Build APIs as small composable lego blocks that remain independently type-safe.
 
 All changes to be complete MUST BE VERIFIED by running `pnpm run check`.
+Changes to what a package publishes (exports, `package.json`, build config) must also pass `pnpm pack:check`.
+Every change to a published package needs a changeset (`pnpm changeset`); all `@typeonce/bevy-ts*` packages share one version.
 Changes to runtime internals or public types must also pass `pnpm bench:check`; if a change intentionally moves the numbers, record it with `pnpm bench:update` and commit the new baseline.
 
 ## Public API Rules
@@ -58,7 +60,7 @@ if (!target.ok) {
 
 ## Debugging Game Behavior
 - Reproduce headless before changing code: build the game's simulation schedules on a runtime made with `debug: true` and scripted input (`Keyboard.scripted`). [`examples/top-down/simulation.ts`](./examples/top-down/simulation.ts) is the reference; copy [`examples/top-down/debug.ts`](./examples/top-down/debug.ts) and run it with `node --import tsx <script>`.
-- Use `@bevy-ts/devtools` sessions: read the lints at the top of `describe()` first, then orient, `run(name, { frames })` with an `Invariant` that encodes the bug, then `why(entity, Component)`, `journal({ frames, entity })`, and `report()` to explain it. See [`packages/devtools/README.md`](./packages/devtools/README.md).
+- Use `@typeonce/bevy-ts-devtools` sessions: read the lints at the top of `describe()` first, then orient, `run(name, { frames })` with an `Invariant` that encodes the bug, then `why(entity, Component)`, `journal({ frames, entity })`, and `report()` to explain it. See [`packages/devtools/README.md`](./packages/devtools/README.md).
 - Once the script reproduces the bug, turn it into a test next to the game.
 
 ## Design References
