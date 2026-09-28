@@ -227,7 +227,7 @@ const BounceWithinViewportSystem = Game.System(
 );
 
 // Pixi owns the sprites; RenderSync keeps one per Renderable entity in sync.
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "Render",
   renderable: Renderable,
   transform: Position,
@@ -249,16 +249,14 @@ const render = RenderSync.systems(Game, {
 const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
-  render.create,
+  render,
 );
 
 const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,
-  render.destroy,
-  render.create,
-  render.sync,
+  render,
 );
 
 /**

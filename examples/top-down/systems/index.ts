@@ -12,10 +12,8 @@ export {
 export { SyncCameraSystem } from "./camera.ts"
 export {
   ApplyWorldCameraTransformSystem,
-  CreateRenderNodesSystem,
-  DestroyRenderNodesSystem,
+  RenderNodesSystem,
   SyncPickupPresentationSystem,
-  SyncPlayerSpriteSystem,
-  SyncRenderableTransformsSystem
+  SyncPlayerSpriteSystem
 } from "./render-sync.ts"
 export { SyncHudSystem } from "./hud.ts"

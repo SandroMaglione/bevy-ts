@@ -35,7 +35,7 @@ export const ApplyWorldCameraTransformSystem = Game.System(
     }
 )
 
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "TopDown/Render",
   renderable: Renderable,
   transform: Position,
@@ -49,9 +49,7 @@ const render = RenderSync.systems(Game, {
   }
 })
 
-export const DestroyRenderNodesSystem = render.destroy
-export const CreateRenderNodesSystem = render.create
-export const SyncRenderableTransformsSystem = render.sync
+export const RenderNodesSystem = render
 
 export const SyncPlayerSpriteSystem = Game.System(
   "TopDown/SyncPlayerSprite",

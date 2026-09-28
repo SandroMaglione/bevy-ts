@@ -411,7 +411,7 @@ export const FadeTransitionNoticeSystem = Game.System(
     }
 )
 
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "StateMachineExample/Render",
   renderable: Actor,
   transform: Position,
@@ -420,9 +420,7 @@ const render = RenderSync.systems(Game, {
   apply: (node, { transform }) => node.position.set(transform.x, transform.y)
 })
 
-export const DestroyRenderNodesSystem = render.destroy
-export const CreateRenderNodesSystem = render.create
-export const SyncRenderableTransformsSystem = render.sync
+export const RenderNodesSystem = render
 
 export const SyncHudSystem = Game.System(
   "StateMachineExample/SyncHud",

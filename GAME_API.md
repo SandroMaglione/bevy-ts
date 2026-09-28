@@ -288,7 +288,7 @@ import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
 
 const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Container>>()("Game/RenderNodes")
 
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "Game/Render",
   renderable: Renderable,
   transform: Position,
@@ -303,10 +303,10 @@ const runtime = Game.Runtime.make({
   )
 })
 
-const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.destroy, render.create, render.sync)
+const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render)
 ```
 
-The registry service is a normal requirement: ticking the render systems on a
+The registry service is a normal requirement: ticking the render system on a
 runtime that does not provide it is a compile error. `select`, `resources`,
 and `services` pass extra read-only data to the callbacks, and `redrawOn`
 lists components whose changes re-run `apply` (animation frames, tints,

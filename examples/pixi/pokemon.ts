@@ -356,7 +356,7 @@ const AdvanceMovementSystem = Game.System(
 // Moving entities are drawn between their `from` and `to` tiles, so the
 // node is re-applied whenever `Movement` advances, not only when the tile
 // position changes.
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "Pokemon/Render",
   renderable: Renderable,
   transform: Position,
@@ -387,7 +387,7 @@ const setupSchedule = Game.Schedule(SetupSystem)
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
   Game.Schedule.applyDeferred(),
-  render.create
+  render
 )
 
 const updateSchedule = Game.Schedule(
@@ -401,9 +401,7 @@ const browserUpdateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  render.destroy,
-  render.create,
-  render.sync
+  render
 )
 
 export const createPokemonExample = (input: {

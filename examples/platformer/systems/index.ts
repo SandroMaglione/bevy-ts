@@ -7,7 +7,7 @@ export {
   MovePlayerSystem,
   ResolveMoveIntentSystem
 } from "./movement.ts"
-export { CreateRenderNodesSystem, DestroyRenderNodesSystem, SyncRenderableTransformsSystem } from "./render-sync.ts"
+export { RenderNodesSystem } from "./render-sync.ts"
 export { SetupWorldSystem } from "./setup.ts"
 export {
   DespawnLevelEntitiesOnPlayingEnterSystem,

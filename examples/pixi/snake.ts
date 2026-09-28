@@ -725,7 +725,7 @@ const EnsureFoodSystem = Game.System(
 )
 
 // Positions are both what makes an entity drawable and what moves it.
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "Snake/Render",
   renderable: Position,
   transform: Position,
@@ -791,7 +791,7 @@ const setupSchedule = Game.Schedule(
 
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
-  render.create,
+  render,
   SyncHudSystem
 )
 
@@ -822,9 +822,7 @@ const browserUpdateSchedule = Game.Schedule(
   BrowserInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  render.destroy,
-  render.create,
-  render.sync,
+  render,
   SyncHudSystem
 )
 

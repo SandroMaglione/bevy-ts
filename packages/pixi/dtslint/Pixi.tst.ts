@@ -19,7 +19,7 @@ describe("@bevy-ts/pixi", () => {
   })
 
   it("types node callbacks from the descriptors and the registry service", () => {
-    const render = RenderSync.systems(Game, {
+    const render = RenderSync.system(Game, {
       name: "PixiTypes/Render",
       renderable: Sprite,
       transform: Position,
@@ -37,16 +37,16 @@ describe("@bevy-ts/pixi", () => {
     const withRegistry = Game.Runtime.make({
       services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
     })
-    expect(withRegistry.tick(Game.Schedule(render.create, render.sync, render.destroy))).type.toBe<Result.Result<void, never>>()
+    expect(withRegistry.tick(Game.Schedule(render))).type.toBe<Result.Result<void, never>>()
 
     const withoutRegistry = Game.Runtime.make({ services: Game.Runtime.services() })
     // @ts-expect-error!
-    withoutRegistry.tick(Game.Schedule(render.create))
+    withoutRegistry.tick(Game.Schedule(render))
   })
 
   it("types extra selections and services, and requires the extra services", () => {
     const Scale = Descriptor.Service<{ readonly factor: number }>()("PixiTypes/Scale")
-    const render = RenderSync.systems(Game, {
+    const render = RenderSync.system(Game, {
       name: "PixiTypes/Extra",
       renderable: Sprite,
       transform: Position,
@@ -67,14 +67,14 @@ describe("@bevy-ts/pixi", () => {
       services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
     })
     // @ts-expect-error!
-    withoutScale.tick(Game.Schedule(render.create))
+    withoutScale.tick(Game.Schedule(render))
   })
 
   it("types resources as read cells and only accepts schema resources", () => {
     const Zoom = Descriptor.Resource<number>()("PixiTypes/Zoom")
     const Other = Descriptor.Resource<number>()("PixiTypes/Other")
     const Zoomed = Schema.bind(Schema.fragment({ components: { Position, Sprite }, resources: { Zoom } }))
-    RenderSync.systems(Zoomed, {
+    RenderSync.system(Zoomed, {
       name: "PixiTypes/Zoom",
       renderable: Sprite,
       transform: Position,
@@ -89,7 +89,7 @@ describe("@bevy-ts/pixi", () => {
       }
     })
 
-    RenderSync.systems(Zoomed, {
+    RenderSync.system(Zoomed, {
       name: "PixiTypes/Unknown",
       renderable: Sprite,
       transform: Position,
@@ -102,7 +102,7 @@ describe("@bevy-ts/pixi", () => {
   })
 
   it("only accepts read-only extra slots", () => {
-    RenderSync.systems(Game, {
+    RenderSync.system(Game, {
       name: "PixiTypes/WriteSlot",
       renderable: Sprite,
       transform: Position,
@@ -115,7 +115,7 @@ describe("@bevy-ts/pixi", () => {
   })
 
   it("only accepts schema components in redrawOn", () => {
-    RenderSync.systems(Game, {
+    RenderSync.system(Game, {
       name: "PixiTypes/Redraw",
       renderable: Sprite,
       transform: Position,
@@ -124,7 +124,7 @@ describe("@bevy-ts/pixi", () => {
       create: () => ({ destroy() {}, x: 0 }),
       apply: () => {}
     })
-    RenderSync.systems(Game, {
+    RenderSync.system(Game, {
       name: "PixiTypes/RedrawInvalid",
       renderable: Sprite,
       transform: Position,
@@ -137,7 +137,7 @@ describe("@bevy-ts/pixi", () => {
   })
 
   it("only accepts components registered in the bound schema", () => {
-    RenderSync.systems(Game, {
+    RenderSync.system(Game, {
       name: "PixiTypes/Invalid",
       // @ts-expect-error!
       renderable: Health,

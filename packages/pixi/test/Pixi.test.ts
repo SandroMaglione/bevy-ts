@@ -55,7 +55,7 @@ describe("@bevy-ts/pixi", () => {
   it("mirrors spawns, moves, and despawns into registry nodes", () => {
     const layer = new FakeContainer()
     const registry = NodeRegistry.inContainer(layer)
-    const render = RenderSync.systems(Game, {
+    const render = RenderSync.system(Game, {
       name: "PixiTest/Render",
       renderable: Sprite,
       transform: Position,
@@ -86,7 +86,7 @@ describe("@bevy-ts/pixi", () => {
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services(Game.Runtime.service(Nodes, registry))
     })
-    const sync = Game.Schedule(render.destroy, render.create, render.sync)
+    const sync = Game.Schedule(render)
 
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred(), sync))
     expect(layer.children.map((node) => [node.label, node.x, node.y])).toEqual([["hero", 1, 2]])
@@ -106,7 +106,7 @@ describe("@bevy-ts/pixi", () => {
     const Prefix = Descriptor.Service<string>()("PixiTest/Prefix")
     const Zoomed = Schema.bind(Schema.fragment({ components: { Position, Sprite }, resources: { Zoom } }))
     const layer = new FakeContainer()
-    const render = RenderSync.systems(Zoomed, {
+    const render = RenderSync.system(Zoomed, {
       name: "PixiTest/Zoomed",
       renderable: Position,
       transform: Position,
@@ -131,7 +131,7 @@ describe("@bevy-ts/pixi", () => {
       ),
       resources: { Zoom: 2 }
     })
-    runtime.tick(Zoomed.Schedule(Spawn, Zoomed.Schedule.applyDeferred(), render.create))
+    runtime.tick(Zoomed.Schedule(Spawn, Zoomed.Schedule.applyDeferred(), render))
     expect(layer.children.map((node) => [node.label, node.x])).toEqual([["#hero", 6], ["#none", 2]])
   })
 
@@ -140,7 +140,7 @@ describe("@bevy-ts/pixi", () => {
     const Animated = Schema.bind(Schema.fragment({ components: { Position, Sprite, Frame } }))
     const layer = new FakeContainer()
     const applied: Array<string> = []
-    const render = RenderSync.systems(Animated, {
+    const render = RenderSync.system(Animated, {
       name: "PixiTest/Animated",
       renderable: Sprite,
       transform: Position,
@@ -169,10 +169,40 @@ describe("@bevy-ts/pixi", () => {
     const runtime = Animated.Runtime.make({
       services: Animated.Runtime.services(Animated.Runtime.service(Nodes, NodeRegistry.inContainer(layer)))
     })
-    runtime.tick(Animated.Schedule(Spawn, Animated.Schedule.applyDeferred(), render.create, render.sync))
-    runtime.tick(Animated.Schedule(step(false), render.sync))
-    runtime.tick(Animated.Schedule(step(true), render.sync))
-    // Spawn tick: `create` applies, then `sync` sees the new entity as changed.
-    expect(applied).toEqual(["hero:0:0", "hero:0:0", "hero:0:1", "hero:1:2"])
+    runtime.tick(Animated.Schedule(Spawn, Animated.Schedule.applyDeferred(), render))
+    runtime.tick(Animated.Schedule(step(false), render))
+    runtime.tick(Animated.Schedule(step(true), render))
+    // Each node is applied once per run, including the run that creates it.
+    expect(applied).toEqual(["hero:0:0", "hero:0:1", "hero:1:2"])
+  })
+
+  it("replaces the node of an entity that lost and regained its renderable in one run", () => {
+    const layer = new FakeContainer()
+    const render = RenderSync.system(Game, {
+      name: "PixiTest/Readd",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: () => {}
+    })
+    const ids: Array<Id> = []
+    const Spawn = Game.System("PixiTest/SpawnReadd", {}, ({ commands }) => {
+      ids.push(commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "old" }])))
+    })
+    const Swap = Game.System("PixiTest/Swap", {}, ({ commands }) => {
+      commands.remove(ids[0]!, Sprite)
+    })
+    const Readd = Game.System("PixiTest/ReaddSprite", {}, ({ commands }) => {
+      commands.insert(ids[0]!, [Sprite, { label: "new" }])
+    })
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.inContainer(layer)))
+    })
+    runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred(), render))
+    const old = layer.children[0]!
+    runtime.tick(Game.Schedule(Swap, Game.Schedule.applyDeferred(), Readd, Game.Schedule.applyDeferred(), render))
+    expect(old.destroyed).toBe(true)
+    expect(layer.children.map((node) => node.label)).toEqual(["new"])
   })
 })

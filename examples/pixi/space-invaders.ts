@@ -810,7 +810,7 @@ const CullingSystem = Game.System(
 
 // Matter bodies stay custom (they feed collisions back into the ECS); Pixi
 // nodes are a plain mirror of `RenderBody` + `Position`.
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "SpaceInvaders/Render",
   renderable: RenderBody,
   transform: Position,
@@ -825,7 +825,7 @@ const setupSchedule = Game.Schedule(
   gameplaySetupSchedule,
   Game.Schedule.applyDeferred(),
   CreateMatterBodiesSystem,
-  render.create
+  render
 )
 
 const updateSchedule = Game.Schedule(
@@ -835,7 +835,6 @@ const updateSchedule = Game.Schedule(
   EnemySpawnSystem,
   Game.Schedule.applyDeferred(),
   CreateMatterBodiesSystem,
-  render.create,
   MovementSystem,
   ClampPlayerBoundsSystem,
   EnemyDescentSystem,
@@ -845,8 +844,7 @@ const updateSchedule = Game.Schedule(
   CullingSystem,
   Game.Schedule.applyDeferred(),
   DestroyMatterBodiesSystem,
-  render.destroy,
-  render.sync
+  render
 )
 
 export const startSpaceInvadersExample = async (
