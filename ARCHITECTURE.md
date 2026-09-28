@@ -106,4 +106,4 @@ If yes, add one nominal requirement token and teach the runtime how to validate 
 
 ## Verification
 
-`pnpm run check` runs the TypeScript 7 native compiler, type assertions through TSTyche's supported TypeScript API, and runtime tests. `packages/core/dtslint/Architecture.tst.ts` composes a wide schedule to guard against the dependency-depth failures that stopped earlier development. `pnpm bench:check` guards runtime and checker performance.
+`pnpm run check` runs the TypeScript 7 compiler (`typescript`), type assertions through TSTyche on the TypeScript 6 JavaScript API (`typescript6`, which TypeScript 7 no longer ships; the docs generator uses it too), and runtime tests. `pnpm pack:check` type-checks the published packages from a consumer project with both TypeScript 7 and 6. `packages/core/dtslint/Architecture.tst.ts` composes a wide schedule to guard against the dependency-depth failures that stopped earlier development. `pnpm bench:check` guards runtime and checker performance.

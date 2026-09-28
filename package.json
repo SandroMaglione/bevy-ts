@@ -5,7 +5,7 @@
   "scripts": {
     "typecheck": "tsc -b tsconfig.json --pretty false",
     "test": "vitest run",
-    "test-types": "TSTYCHE_STORE_PATH=.tstyche TSTYCHE_TYPESCRIPT_MODULE=typescript tstyche",
+    "test-types": "TSTYCHE_STORE_PATH=.tstyche TSTYCHE_TYPESCRIPT_MODULE=typescript6/lib/typescript.js tstyche",
     "check": "pnpm typecheck && pnpm test-types && pnpm test",
     "bench": "node --expose-gc --import tsx scripts/bench.ts",
     "bench:check": "node --expose-gc --import tsx scripts/bench.ts --check",
@@ -34,7 +34,6 @@
     "@types/markdown-it": "^14.1.2",
     "@types/matter-js": "^0.20.2",
     "@types/node": "^25.5.0",
-    "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "4.0.18",
     "@vitest/expect": "4.0.18",
     "effect": "4.0.0-beta.43",
@@ -45,7 +44,8 @@
     "shiki": "^4.0.2",
     "tstyche": "7.2.3",
     "tsx": "^4.21.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript": "7.0.2",
+    "typescript6": "npm:@typescript/typescript6@6.0.2",
     "vite": "^8.0.3",
     "vite-tsconfig-paths": "6.0.5",
     "vitest": "4.0.18"

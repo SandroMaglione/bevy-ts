@@ -7,7 +7,7 @@ import * as Path from "effect/Path"
 import * as Schema from "effect/Schema"
 import { transform } from "lightningcss"
 import { createHighlighter } from "shiki"
-import * as ts from "typescript"
+import * as ts from "typescript6"
 
 type TagMap = Map<string, Array<string>>
 
