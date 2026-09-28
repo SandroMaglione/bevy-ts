@@ -865,7 +865,7 @@ export type SystemNeeds<Spec extends AnySystemSpec> =
   | Machine.MachineNeedsFromRecord<Spec["nextMachines"]>
   | Machine.MachineNeedsFromRecord<Spec["transitionEvents"]>
   | Machine.MachineNeedsFromRecord<Spec["transitions"]>
-  | Machine.MachineNeedsFromConditions<Spec["when"]>
+  | Machine.ConditionNeedsFromConditions<Spec["when"]>
 
 type AccessRecordValue<Access, Key extends PropertyKey> =
   Key extends keyof Access
@@ -890,7 +890,7 @@ export type SystemAccessNeeds<Access extends SystemAccessInput> =
       | "transitions">>
   | ("when" extends keyof Access
       ? NonNullable<Access["when"]> extends ReadonlyArray<Machine.Condition>
-        ? Machine.MachineNeedsFromConditions<NonNullable<Access["when"]>>
+        ? Machine.ConditionNeedsFromConditions<NonNullable<Access["when"]>>
         : never
       : never)
 

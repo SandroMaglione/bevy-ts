@@ -6,6 +6,7 @@
 import type * as Debug from "../Debug.ts"
 import * as DescriptorModule from "../Descriptor.ts"
 import type { Descriptor } from "../Descriptor.ts"
+import type * as Inspector from "../Inspector.ts"
 import type * as Machine from "../Machine.ts"
 import type * as Query from "../Query.ts"
 import type * as Relation from "../Relation.ts"
@@ -34,8 +35,26 @@ export const renderCondition = (condition: Machine.Condition): string => {
       return condition.conditions.map(renderCondition).join(" and ")
     case "or":
       return `(${condition.conditions.map(renderCondition).join(" or ")})`
+    case "check":
+      return `check(${condition.name})`
   }
 }
+
+/** Every `check` condition inside a condition list, through `not`/`and`/`or`. */
+const checksOf = (conditions: ReadonlyArray<Machine.Condition>): Array<Machine.CheckCondition> =>
+  conditions.flatMap((condition): Array<Machine.CheckCondition> => {
+    switch (condition.kind) {
+      case "check":
+        return [condition]
+      case "not":
+        return checksOf([condition.condition])
+      case "and":
+      case "or":
+        return checksOf(condition.conditions)
+      default:
+        return []
+    }
+  })
 
 export const transitionScheduleName = (schedule: TransitionSchedule): string => {
   const { machine, phase, state, from, to } = schedule.transition
@@ -101,14 +120,27 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
   const byMode = (record: Record<string, Mode>, mode: "read" | "write") =>
     Object.values(record).filter((access) => access.mode === mode).map((access) => access.descriptor.name)
   const machineName = (access: { readonly machine: Machine.StateMachine.Any }) => access.machine.name
+  // A system also reads whatever its `check` conditions read.
+  const checks = checksOf(spec.when as ReadonlyArray<Machine.Condition>).map((check) => ({
+    name: check.name,
+    spec: (check.projection as Inspector.InspectorDefinition).system.spec
+  }))
+  const unique = (values: ReadonlyArray<string>) => [...new Set(values)]
   return {
     name: system.name,
     placements,
-    queries: Object.entries(spec.queries as Record<string, Query.Query.Any<any>>).map(([slot, query]) => describeQuery(slot, query)),
-    resources: { reads: byMode(spec.resources, "read"), writes: byMode(spec.resources, "write") },
+    queries: [
+      ...Object.entries(spec.queries as Record<string, Query.Query.Any<any>>).map(([slot, query]) => describeQuery(slot, query)),
+      ...checks.flatMap((check) =>
+        Object.entries(check.spec.queries as Record<string, Query.Query.Any<any>>).map(([slot, query]) => describeQuery(`check(${check.name}).${slot}`, query)))
+    ],
+    resources: {
+      reads: unique([...byMode(spec.resources, "read"), ...checks.flatMap((check) => byMode(check.spec.resources, "read"))]),
+      writes: byMode(spec.resources, "write")
+    },
     events: { reads: byMode(spec.events, "read"), writes: byMode(spec.events, "write") },
     machines: {
-      reads: names(spec.machines, machineName),
+      reads: unique([...names(spec.machines, machineName), ...checks.flatMap((check) => names(check.spec.machines, machineName))]),
       next: names(spec.nextMachines, machineName),
       transitions: names(spec.transitions, machineName),
       transitionEvents: names(spec.transitionEvents, machineName)

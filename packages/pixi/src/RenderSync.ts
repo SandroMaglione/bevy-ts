@@ -43,7 +43,7 @@
  * ```
  */
 import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
-import type { Condition, MachineNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
+import type { Condition, ConditionNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
 import type * as Entity from "@typeonce/bevy-ts/Entity"
 import type { OptionalReadAccess, OptionalReadCell, ReadAccess, ReadCell, ReadonlyValue } from "@typeonce/bevy-ts/Query"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
@@ -162,7 +162,7 @@ export interface Options<
  * The generated system. It requires the registry and any extra resources and
  * services.
  */
-export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | MachineNeedsFromConditions<ReadonlyArray<Condition>>> =
+export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | ConditionNeedsFromConditions<ReadonlyArray<Condition>>> =
   Schema.BoundSystem<S, Root, any, void, never, string, Needs>
 
 /**
@@ -181,7 +181,7 @@ export const system = <
 >(
   Game: Schema.Game<S, Root>,
   options: Options<S, Root, Renderable, Transform, Registry, Select, Services, Resources, When>
-): RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | MachineNeedsFromConditions<When>> => {
+): RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | ConditionNeedsFromConditions<When>> => {
   type Node = NodeOf<Registry>
   type Context = NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>
   // Internally the generic descriptors are erased; the public result type
@@ -253,7 +253,7 @@ export const system = <
         if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
       }
     }
-  }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | MachineNeedsFromConditions<When>>
+  }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | ConditionNeedsFromConditions<When>>
 }
 
 /** A 2D position, the value `interpolate` blends. */
@@ -329,7 +329,7 @@ export const interpolate = <
 >(
   Game: Schema.Game<S, Root>,
   options: InterpolateOptions<S, Root, Previous, Current, Registry, Clock, When>
-): RenderSystem<S, Root, Registry | Clock | MachineNeedsFromConditions<When>> => {
+): RenderSystem<S, Root, Registry | Clock | ConditionNeedsFromConditions<When>> => {
   type Node = NodeOf<Registry>
   const System = Game.System as unknown as (name: string, spec: object, run: (context: any) => void) => unknown
   const Query = Game.Query as unknown as (spec: object) => object
@@ -356,5 +356,5 @@ export const interpolate = <
       const to = data.current.get() as Planar
       options.place(node, { x: from.x + (to.x - from.x) * alpha, y: from.y + (to.y - from.y) * alpha }, entity.id)
     }
-  }) as RenderSystem<S, Root, Registry | Clock | MachineNeedsFromConditions<When>>
+  }) as RenderSystem<S, Root, Registry | Clock | ConditionNeedsFromConditions<When>>
 }

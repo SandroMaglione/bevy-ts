@@ -5,6 +5,7 @@
  * module functions; the precise public types live on `Schema.Game`.
  */
 import * as Command from "../Command.ts"
+import * as Condition from "../Condition.ts"
 import * as Entity from "../Entity.ts"
 import * as EntityScope from "../EntityScope.ts"
 import * as Inspector from "../Inspector.ts"
@@ -68,7 +69,9 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
       stateChanged: Machine.stateChanged,
       not: Machine.not,
       and: Machine.and,
-      or: Machine.or
+      or: Machine.or,
+      check: (name: string, spec: Condition.CheckAccessInput, predicate: (context: any) => boolean) =>
+        Condition.check(schema, name, spec as never, predicate)
     },
     System: Object.assign(
       (name: string, spec: object, run: (context: any) => any) =>

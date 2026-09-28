@@ -52,6 +52,7 @@ import type * as Entity from "./Entity.ts"
 import type * as EntityScope from "./EntityScope.ts"
 import { buildSchema, emptySchema, mergeSchemas } from "./internal/fragments.ts"
 import { makeGame } from "./internal/game.ts"
+import type * as Condition from "./Condition.ts"
 import type * as Inspector from "./Inspector.ts"
 import type * as Machine from "./Machine.ts"
 import type * as QueryModule from "./Query.ts"
@@ -321,6 +322,12 @@ interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAcc
   readonly transitions?: Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>>
 }
 
+interface BoundCheckAccess<S extends Schema.Any, Root> extends Condition.CheckAccessInput {
+  readonly queries?: Record<string, Query.Any<Root>>
+  readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>>>
+  readonly machines?: Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>>
+}
+
 interface BoundInspectorAccess<S extends Schema.Any, Root> extends Inspector.InspectorAccessInput {
   readonly queries?: Record<string, Query.Any<Root>>
   readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>>>
@@ -560,6 +567,16 @@ export namespace Schema {
       not: typeof Machine.not
       and: typeof Machine.and
       or: typeof Machine.or
+      /**
+       * A condition computed by a read-only predicate over declared resources,
+       * machines, and plain queries; see the `Condition` module. The reads
+       * become requirements of whatever the check gates.
+       */
+      check: <const Name extends string, const Access extends BoundCheckAccess<S, Root>>(
+        name: Name,
+        spec: Condition.ExactCheckAccess<Access>,
+        predicate: (context: Condition.CheckContext<System.SystemSpec<S, Access, Root>>) => boolean
+      ) => Machine.CheckCondition<Root, System.SystemAccessNeeds<Access>>
     }
     readonly System: {
       <
