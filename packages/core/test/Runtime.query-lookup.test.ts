@@ -147,7 +147,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -233,7 +233,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -278,7 +278,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -331,7 +331,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -381,7 +381,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -439,7 +439,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -498,7 +498,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(observe)
     )
 
@@ -568,7 +568,7 @@ describe("Runtime query and lookup", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Schedule.Schedule(spawn),
+      Schedule.Schedule(spawn, Schedule.applyDeferred()),
       Schedule.Schedule(write, read)
     )
 
@@ -650,7 +650,7 @@ describe("Runtime query and lookup", () => {
     })
 
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -658,7 +658,7 @@ describe("Runtime query and lookup", () => {
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
 
     runtime.tick(
-      Game.Schedule(destroy),
+      Game.Schedule(destroy, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -779,7 +779,7 @@ describe("Runtime query and lookup", () => {
     expect(readResourceValue(runtime, schema, LastError)).toBe("")
 
     runtime.tick(
-      Game.Schedule(destroy),
+      Game.Schedule(destroy, Game.Schedule.applyDeferred()),
       Game.Schedule(emitStored, Game.Schedule.updateEvents(), observe)
     )
 

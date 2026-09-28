@@ -261,7 +261,7 @@ This is why the walkthrough builds in this order:
 - `updateLifecycle()` makes `added(...)` and `changed(...)` filters see the new world state.
 - only then can `CreatePixiSpritesSystem` react to `added(Renderable)`.
 
-The same rule applies every frame. Schedule markers are explicit runtime semantics, not hidden engine magic.
+The same rule applies every frame. Schedule markers are explicit runtime semantics, not hidden engine magic: nothing is flushed when a schedule ends, so work queued after the last marker stays pending until a later schedule reaches one.
 
 ## 7. Build the runtime and start the app
 

@@ -141,10 +141,22 @@ export interface EntityDraft<S extends Schema.Any, out P extends ComponentProof,
    */
   readonly proof: P
   /**
+   * Staged components in insertion order, keyed by their descriptors.
+   *
+   * `proof` is the typed view of the same data; the runtime applies these
+   * entries so storage identity always comes from the descriptor itself.
+   */
+  readonly components: ReadonlyArray<StagedComponent>
+  /**
    * Staged relationship edges attached to the entity before spawn.
    */
   readonly relations: ReadonlyArray<StagedRelation<S, Root>>
 }
+
+/**
+ * One staged component value paired with the descriptor that owns it.
+ */
+export type StagedComponent = readonly [Descriptor<"component", string, any>, unknown]
 
 /**
  * A read capability for an entity together with a proof of readable components.
@@ -280,12 +292,14 @@ export const handleAs = <
 export const draft = <S extends Schema.Any, P extends ComponentProof, Root = unknown>(
   id: EntityId<S, Root>,
   proof: P,
+  components: ReadonlyArray<StagedComponent> = [],
   relations: ReadonlyArray<StagedRelation<S, Root>> = []
 ): EntityDraft<S, P, Root> => ({
   kind: "EntityDraft",
   id,
   __schemaRoot: undefined as unknown as Root,
   proof,
+  components,
   relations
 })
 

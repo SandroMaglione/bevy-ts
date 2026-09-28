@@ -111,7 +111,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -180,8 +180,8 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
-      Game.Schedule(destroy),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
+      Game.Schedule(destroy, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -264,7 +264,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -331,7 +331,7 @@ describe("Runtime relationships", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule(spawn)
+    const spawnSchedule = Game.Schedule(spawn, Game.Schedule.applyDeferred())
     const relateSchedule = Game.Schedule(relate, Game.Schedule.applyDeferred(), observe)
     const unrelateSchedule = Game.Schedule(unrelate, Game.Schedule.applyDeferred(), observe)
     runtime.tick(spawnSchedule, relateSchedule, unrelateSchedule)
@@ -423,7 +423,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(reorder, Game.Schedule.applyDeferred(), observe)
     )
 
@@ -506,7 +506,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -588,7 +588,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(
         relate,
         observeBefore,
@@ -663,7 +663,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(clear, Game.Schedule.applyDeferred(), Game.Schedule.updateRelationFailures(), observe)
     )
 
@@ -748,7 +748,7 @@ describe("Runtime relationships", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule(spawn)
+    const spawnSchedule = Game.Schedule(spawn, Game.Schedule.applyDeferred())
     const failureSchedule = Game.Schedule(
       queueInvalid,
       Game.Schedule.applyDeferred(),
@@ -851,7 +851,7 @@ describe("Runtime relationships", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(
         queueInvalid,
         Game.Schedule.applyDeferred(),

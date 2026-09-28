@@ -9,7 +9,7 @@ Documentation: https://sandromaglione.github.io/bevy-ts/
 The carried-type design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "bevy-ts"
+import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
 
 // Define the ECS world shape once.
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -31,10 +31,31 @@ const Move = Game.System("Move", {
   }
 }))
 
-const app = App.makeApp(Game.Runtime.make({ resources: { DeltaTime: 1 / 60 } }))
+const app = App.makeApp(Game.Runtime.make({ services: Game.Runtime.services(), resources: { DeltaTime: 1 / 60 } }))
 app.update(Game.Schedule(Move))
 ```
 
 Start with the docs homepage for the full step-by-step Pixi example:
 
 - https://sandromaglione.github.io/bevy-ts/
+
+## Runtime semantics
+
+- Descriptor identity is `(kind, name)`. A bound schema rejects two descriptors of one kind with the same name at compile time, and a look-alike descriptor with a different value type is not accepted in place of the registered one.
+- Nothing becomes visible implicitly. Queued commands, events, lifecycle records, and relation failures stay pending, across schedule runs if needed, until a schedule reaches `applyDeferred()`, `updateEvents()`, `updateLifecycle()`, `updateRelationFailures()`, or `applyStateTransitions(...)`.
+- Query results come back in spawn order.
+
+## Performance
+
+Queries only visit entities that carry their rarest required component, cache their match set until a component or relation they depend on changes membership, and reuse match objects between runs. See [ARCHITECTURE.md](./ARCHITECTURE.md#storage).
+
+The benchmark suite in [`packages/core/bench`](./packages/core/bench) covers spawn/despawn, query iteration, change detection, structural churn, schedule overhead, lookups, events, relations, and type-checker cost:
+
+```sh
+pnpm bench          # run and print
+pnpm bench:check    # compare with packages/core/bench/baseline.json (exit 1 on regression)
+pnpm bench:update   # record a new baseline
+```
+
+CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 35%, or type-checker growth over 5%.
+

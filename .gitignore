@@ -6,3 +6,4 @@ docs/
 .DS_Store
 
 *.tsbuildinfo
+.bench/

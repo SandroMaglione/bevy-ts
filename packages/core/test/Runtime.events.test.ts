@@ -28,7 +28,7 @@ const makeRuntime = () =>
   })
 
 describe("Runtime events", () => {
-  it("later schedules in one tick can observe events emitted by earlier schedules", () => {
+  it("later schedules in one tick observe earlier events once they advance the event buffer", () => {
     const emit = System.System(
       "RuntimeEvents/Emit",
       {
@@ -63,10 +63,53 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.Schedule(emit),
-      Schedule.Schedule(observe)
+      Schedule.Schedule(Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([1])
+  })
+
+  it("keeps events pending across schedule runs until an explicit updateEvents()", () => {
+    const emit = System.System(
+      "RuntimeEvents/EmitPending",
+      {
+        schema,
+        events: {
+          ping: System.writeEvent(Ping)
+        }
+      },
+      ({ events }) =>
+        Fx.sync(() => {
+          events.ping.emit({ value: 8 })
+        })
+    )
+
+    const observe = System.System(
+      "RuntimeEvents/ObservePending",
+      {
+        schema,
+        events: {
+          ping: System.readEvent(Ping)
+        },
+        resources: {
+          log: System.writeResource(Log)
+        }
+      },
+      ({ events, resources }) =>
+        Fx.sync(() => {
+          resources.log.set(events.ping.all().map((event) => event.value))
+        })
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(
+      Schedule.Schedule(emit),
+      Schedule.Schedule(observe)
+    )
+    expect(readResourceValue(runtime, schema, Log)).toEqual([])
+
+    runtime.runSchedule(Schedule.Schedule(Schedule.updateEvents(), observe))
+    expect(readResourceValue(runtime, schema, Log)).toEqual([8])
   })
 
   it("does not expose newly emitted events before updateEvents in the same schedule", () => {
@@ -228,14 +271,14 @@ describe("Runtime events", () => {
     const runtime = makeRuntime()
     runtime.tick(
       Schedule.Schedule(emitOne),
-      Schedule.Schedule(observe)
+      Schedule.Schedule(Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([7])
 
     runtime.tick(
       Schedule.Schedule(emitNone),
-      Schedule.Schedule(observe)
+      Schedule.Schedule(Schedule.updateEvents(), observe)
     )
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])

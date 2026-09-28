@@ -911,6 +911,8 @@ const gameplaySetupSchedule = Game.Schedule(SpawnPlayerSystem)
 
 const setupSchedule = Game.Schedule(
   gameplaySetupSchedule,
+  Game.Schedule.applyDeferred(),
+  Game.Schedule.updateLifecycle(),
   CreateMatterBodiesSystem,
   CreatePixiNodesSystem
 )

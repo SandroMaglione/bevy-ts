@@ -74,7 +74,7 @@ import type * as Result from "./Result.ts"
 import type * as Relation from "./relation.ts"
 import type { Schema } from "./schema.ts"
 
-type ComponentDescriptor = Descriptor<"component", string, unknown>
+type ComponentDescriptor = Descriptor<"component", string, any>
 
 /**
  * Query declarations and typed query result cells.

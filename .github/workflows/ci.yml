@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check
+        run: pnpm check
+
+  bench:
+    name: Performance regressions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Wall-clock numbers only compare on the same machine, so the base commit
+      # is measured in this job with the head's benchmark suite. If the base
+      # cannot run that suite (for example before the suite existed), runtime
+      # cases are reported without gating.
+      - name: Benchmark base commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          mkdir -p .bench
+          if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            git worktree add --detach .bench/base "$BASE_SHA"
+            ln -s "$PWD/node_modules" .bench/base/node_modules
+            rm -rf .bench/base/packages/core/bench
+            cp -r packages/core/bench .bench/base/packages/core/bench
+            cp scripts/bench.ts .bench/base/scripts/bench.ts
+            (cd .bench/base && node --expose-gc --import tsx scripts/bench.ts --json ../base.json) \
+              || echo "::warning::Base commit could not run the benchmark suite; runtime cases are not gated."
+          else
+            echo "::warning::No base commit available; runtime cases are not gated."
+          fi
+
+      # Runtime cases are compared with the base commit; type metrics are
+      # deterministic and compared with packages/core/bench/baseline.json.
+      - name: Benchmark head and compare
+        run: pnpm bench --compare .bench/base.json

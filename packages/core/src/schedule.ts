@@ -4,6 +4,16 @@
  * Authoring-time structure is validated once, then schedules carry only their
  * normalized steps, systems, and nominal requirement union.
  *
+ * Steps run in authored order. Marker steps are the only way queued work
+ * becomes visible, and nothing is flushed implicitly when a schedule ends:
+ *
+ * - `applyDeferred()` applies queued commands
+ * - `updateEvents()` makes emitted events (and transition events) readable
+ * - `updateLifecycle()` makes added/changed/removed/despawned records readable
+ * - `updateRelationFailures()` makes relation mutation failures readable
+ * - `applyStateTransitions(...)` applies queued commands, then queued machine
+ *   transitions
+ *
  * @module schedule
  * @docGroup runtime
  */
@@ -242,9 +252,28 @@ export type ScheduleRequirements<
   Steps extends ReadonlyArray<ScheduleStep> = []
 > = SystemRequirementsForSchedule<Systems> | StepNeeds<Steps>
 
+/**
+ * Applies every command queued so far, including commands queued by earlier
+ * schedule runs.
+ */
 export const applyDeferred = (): ApplyDeferredStep => ({ kind: "applyDeferred" })
+
+/**
+ * Makes events emitted since the previous `updateEvents()` readable and drops
+ * the previously readable ones.
+ */
 export const updateEvents = (): EventUpdateStep => ({ kind: "eventUpdate" })
+
+/**
+ * Makes lifecycle records collected since the previous `updateLifecycle()`
+ * readable to `added(...)`/`changed(...)` filters and removed/despawned reads.
+ */
 export const updateLifecycle = (): LifecycleUpdateStep => ({ kind: "lifecycleUpdate" })
+
+/**
+ * Makes relation mutation failures collected since the previous
+ * `updateRelationFailures()` readable.
+ */
 export const updateRelationFailures = (): RelationFailureUpdateStep => ({ kind: "relationFailureUpdate" })
 
 export const transitions = <

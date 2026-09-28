@@ -977,55 +977,86 @@ type RebindTransitionBundle<BundleValue, Root> =
     ? Schedule.TransitionBundleDefinition<S, Entries, Requirements, Root>
     : never
 
-/**
- * Computes overlapping keys between two registries.
- *
- * This is used to reject accidental duplicate schema entries when fragments are
- * composed.
- */
-type Overlap<A extends object, B extends object> = Extract<keyof A, keyof B>
+type SchemaKind = "components" | "resources" | "events" | "states" | "relations"
+
+type EntryName<Entry> = Entry extends { readonly name: infer Name extends string }
+  ? string extends Name ? never : Name
+  : never
 
 /**
- * Produces an impossible type when two registries contain duplicate keys.
- *
- * The runtime still validates duplicates too, but this type catches many
- * mistakes earlier during authoring.
+ * Registry keys known at compile time. Erased registries (`Record<string, ...>`)
+ * cannot be checked statically; the runtime merge guard covers them.
  */
-type Distinct<A extends object, B extends object> = [Overlap<A, B>] extends [never]
-  ? unknown
-  : {
-      readonly __duplicate_keys: Overlap<A, B>
-    }
+type LiteralKeys<R> = {
+  readonly [K in keyof R]-?: string extends K ? never : K
+}[keyof R]
 
 /**
- * Merges two runtime registries after checking for duplicate keys.
+ * Descriptor names declared more than once inside one registry.
  */
-const mergeRegistry = <A extends Registry, B extends Registry>(
+type DuplicateNamesIn<R> = {
+  readonly [K in LiteralKeys<R>]: [EntryName<R[K]>] extends [EntryName<R[Exclude<LiteralKeys<R>, K>]>]
+    ? EntryName<R[K]>
+    : never
+}[LiteralKeys<R>]
+
+/**
+ * Every identity one schema claims: its registry keys and its descriptor names.
+ *
+ * Descriptor identity is `(kind, name)`. Types are structural over the same
+ * pair, so a closed schema must never contain two descriptors of one kind with
+ * the same name: at runtime they would share storage while the compiler
+ * treats them as different values.
+ */
+type SchemaIdentities<S extends Schema.Any> = {
+  readonly [Kind in SchemaKind]:
+    | `${Kind} key "${LiteralKeys<S[Kind]> & string}"`
+    | `${Kind} name "${EntryName<S[Kind][LiteralKeys<S[Kind]>]>}"`
+}[SchemaKind]
+
+type SchemaDuplicateNames<S extends Schema.Any> = {
+  readonly [Kind in SchemaKind]: `${Kind} name "${DuplicateNamesIn<S[Kind]>}"`
+}[SchemaKind]
+
+type FragmentConflicts<
+  Fragments extends ReadonlyArray<Schema.Any>,
+  Seen = never
+> = Fragments extends readonly [infer Head extends Schema.Any, ...infer Tail extends ReadonlyArray<Schema.Any>]
+  ? SchemaDuplicateNames<Head> | Extract<SchemaIdentities<Head>, Seen> | FragmentConflicts<Tail, Seen | SchemaIdentities<Head>>
+  : never
+
+/**
+ * Rejects schema fragments whose registry keys or descriptor names collide.
+ *
+ * Resolves to `unknown` when the fragments compose cleanly, otherwise to an
+ * object type naming every conflicting key or descriptor name.
+ */
+export type ValidateFragments<Fragments extends ReadonlyArray<Schema.Any>> =
+  [FragmentConflicts<Fragments>] extends [never]
+    ? unknown
+    : {
+        readonly __schemaConflicts__: FragmentConflicts<Fragments>
+      }
+
+/**
+ * Merges two runtime registries after checking for duplicate keys and names.
+ *
+ * The type-level `ValidateFragments` check rejects the same conflicts at
+ * compile time; this guard covers schemas assembled from erased types.
+ */
+const mergeRegistry = <A extends Record<string, { readonly name: string }>, B extends Record<string, { readonly name: string }>>(
   left: A,
   right: B
 ): A & B => {
-  for (const key of Object.keys(right)) {
+  const names = new Set(Object.values(left).map((entry) => entry.name))
+  for (const [key, entry] of Object.entries(right)) {
     if (key in left) {
       throw new Error(`Duplicate schema key: ${key}`)
     }
-  }
-  return {
-    ...left,
-    ...right
-  } as A & B
-}
-
-const mergeRelations = <
-  A extends Record<string, Relation.Relation.Any>,
-  B extends Record<string, Relation.Relation.Any>
->(
-  left: A,
-  right: B
-): A & B => {
-  for (const key of Object.keys(right)) {
-    if (key in left) {
-      throw new Error(`Duplicate schema key: ${key}`)
+    if (names.has(entry.name)) {
+      throw new Error(`Duplicate descriptor name: ${entry.name}`)
     }
+    names.add(entry.name)
   }
   return {
     ...left,
@@ -1110,7 +1141,7 @@ export const fragment = <
   readonly events?: Events
   readonly states?: States
   readonly relations?: Relations
-}): SchemaDefinition<Components, Resources, Events, States, Relations> => ({
+} & ValidateFragments<[SchemaDefinition<Components, Resources, Events, States, Relations>]>): SchemaDefinition<Components, Resources, Events, States, Relations> => ({
   components: (definition.components ?? {}) as Components,
   resources: (definition.resources ?? {}) as Resources,
   events: (definition.events ?? {}) as Events,
@@ -1129,12 +1160,7 @@ export const merge = <
   B extends Schema.Any
 >(
   left: A,
-  right: B
-    & Distinct<Schema.Components<A>, Schema.Components<B>>
-    & Distinct<Schema.Resources<A>, Schema.Resources<B>>
-    & Distinct<Schema.Events<A>, Schema.Events<B>>
-    & Distinct<Schema.States<A>, Schema.States<B>>
-    & Distinct<Schema.Relations<A>, Schema.Relations<B>>
+  right: B & ValidateFragments<[A, B]>
 ): SchemaDefinition<
   Schema.Components<A> & Schema.Components<B>,
   Schema.Resources<A> & Schema.Resources<B>,
@@ -1146,7 +1172,7 @@ export const merge = <
   resources: mergeRegistry(left.resources, right.resources),
   events: mergeRegistry(left.events, right.events),
   states: mergeRegistry(left.states, right.states),
-  relations: mergeRelations(left.relations, right.relations)
+  relations: mergeRegistry(left.relations, right.relations)
 })
 
 const buildFragments = <
@@ -1689,18 +1715,18 @@ const bindBuiltSchema = <S extends Schema.Any, Root = S>(
  */
 export function bind<
   S extends Schema.Any
->(schema: S): Schema.Game<S, S>
+>(schema: S & ValidateFragments<[S]>): Schema.Game<S, S>
 export function bind<
   S extends Schema.Any,
   const Name extends string
->(schema: S, root: RootToken<Name>): Schema.Game<S, RootToken<Name>>
+>(schema: S & ValidateFragments<[S]>, root: RootToken<Name>): Schema.Game<S, RootToken<Name>>
 export function bind<
   const Fragments extends readonly [Schema.Any, Schema.Any, ...Array<Schema.Any>]
->(...fragments: Fragments): Schema.Game<BuildFragments<Fragments>, BuildFragments<Fragments>>
+>(...fragments: Fragments & ValidateFragments<Fragments>): Schema.Game<BuildFragments<Fragments>, BuildFragments<Fragments>>
 export function bind<
   const Fragments extends readonly [Schema.Any, Schema.Any, ...Array<Schema.Any>],
   const Name extends string
->(...args: [...Fragments, RootToken<Name>]): Schema.Game<BuildFragments<Fragments>, RootToken<Name>>
+>(...args: [...Fragments, RootToken<Name>] & ValidateFragments<Fragments>): Schema.Game<BuildFragments<Fragments>, RootToken<Name>>
 export function bind(...args: ReadonlyArray<Schema.Any | RootToken>) {
   const maybeRoot = args[args.length - 1]
   const fragments = (isRootToken(maybeRoot) ? args.slice(0, -1) : args) as Array<Schema.Any>

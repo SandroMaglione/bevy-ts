@@ -123,7 +123,7 @@ const ObserveTickSystem = Game.System(
     })
 )
 
-const bootstrap = Game.Schedule(SetupSystem)
+const bootstrap = Game.Schedule(SetupSystem, Game.Schedule.applyDeferred())
 
 const update = Game.Schedule(
   MoveSystem,

@@ -83,7 +83,7 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -128,7 +128,7 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -176,7 +176,7 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(lookup)
     )
 
@@ -254,7 +254,7 @@ describe("Runtime commands", () => {
     )
 
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule(spawn)
+    const spawnSchedule = Game.Schedule(spawn, Game.Schedule.applyDeferred())
     const observeSchedule = Game.Schedule(insertVelocity, Game.Schedule.applyDeferred(), observe)
 
     runtime.tick(spawnSchedule, observeSchedule)
@@ -322,7 +322,7 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 
@@ -390,7 +390,7 @@ describe("Runtime commands", () => {
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
       Game.Schedule(observe)
     )
 

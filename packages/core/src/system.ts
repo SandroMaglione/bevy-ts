@@ -681,6 +681,10 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
  * surface instead of repeatedly expanding the full system spec.
  */
 export interface SystemOrderingSpec {
+  /**
+   * Identity of this system value. Every `Game.System(...)` call gets its own
+   * key, so two systems may share a display name without colliding.
+   */
   readonly key: symbol
   readonly name: string
 }
@@ -1151,7 +1155,7 @@ export function System(
     requirements: collectSystemRequirements(normalizedSpec),
     __schemaRoot: undefined,
     ordering: {
-      key: Symbol.for(`bevy-ts/system/${name}`),
+      key: Symbol(name),
       name
     },
     spec: normalizedSpec,

@@ -78,13 +78,13 @@ export type DescriptorKind = "component" | "resource" | "event" | "state" | "ser
 export interface Descriptor<
   out Kind extends DescriptorKind,
   out Name extends string,
-  out Value
+  in out Value
 > {
   readonly kind: Kind
   readonly name: Name
   readonly key: symbol
   readonly [descriptorTypeId]: {
-    readonly _Value: (_: never) => Value
+    readonly _Value: (_: Value) => Value
   }
 }
 
@@ -105,7 +105,7 @@ export interface ResultConstructor<Value, Raw, Error> {
 export interface ConstructedDescriptor<
   out Kind extends DescriptorKind,
   out Name extends string,
-  out Value,
+  in out Value,
   Raw,
   Error
 > extends Descriptor<Kind, Name, Value> {
@@ -123,8 +123,8 @@ export namespace Descriptor {
   /**
    * Any supported descriptor.
    */
-  export type Any = Descriptor<DescriptorKind, string, unknown>
-  export type AnyConstructed = ConstructedDescriptor<DescriptorKind, string, unknown, unknown, unknown>
+  export type Any = Descriptor<DescriptorKind, string, any>
+  export type AnyConstructed = ConstructedDescriptor<DescriptorKind, string, any, any, any>
   /**
    * Extracts the runtime value associated with a descriptor.
    */

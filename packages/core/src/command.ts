@@ -212,38 +212,27 @@ export type DeferredCommand<S extends Schema.Any> = {
 /**
  * Minimal internal world surface required to apply deferred commands.
  *
- * This stays intentionally small so the public API can remain type-safe while
- * the runtime uses simple mutable internals.
+ * Commands addressed to entities that no longer exist are ignored: a despawn
+ * queued earlier in the same flush wins over later inserts or removals.
  */
 export interface InternalWorld<S extends Schema.Any> {
   /**
-   * Allocates a fresh entity id.
+   * Creates the entity for an id reserved by `commands.spawn(...)` with its
+   * staged components.
    */
-  readonly nextEntityId: () => Entity.EntityId<S, any>
+  readonly spawnEntity: (id: Entity.EntityId<S, any>, components: ReadonlyArray<Entity.StagedComponent>) => void
   /**
-   * Retrieves or creates the component storage map for an entity.
-   */
-  readonly ensureEntityStore: (id: Entity.EntityId<S, any>) => Map<symbol, unknown>
-  /**
-   * Removes an entity from storage.
+   * Removes an entity and its outgoing and incoming relations.
    */
   readonly destroyEntity: (id: Entity.EntityId<S, any>) => void
   /**
-   * Removes a component from an entity.
+   * Removes a component from a live entity.
    */
-  readonly removeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor.Any) => void
+  readonly removeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor<"component", string, any>) => void
   /**
-   * Writes a component on an entity, recording lifecycle semantics precisely.
+   * Inserts or replaces a component on a live entity.
    */
-  readonly writeComponent: (id: Entity.EntityId<S, any>, descriptorKey: Descriptor<"component", string, any>, value: unknown) => void
-  /**
-   * Writes a world-level resource or state value.
-   */
-  readonly writeResource: (descriptor: Descriptor.Any, value: unknown) => void
-  /**
-   * Appends an event payload to the event queue for a descriptor.
-   */
-  readonly appendEvent: (descriptor: Descriptor.Any, value: unknown) => void
+  readonly writeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor<"component", string, any>, value: unknown) => void
   /**
    * Attempts to attach one relation edge between two live entities.
    */
@@ -276,7 +265,12 @@ export interface InternalWorld<S extends Schema.Any> {
  * component proof before the spawn command is queued.
  */
 export const spawn = <S extends Schema.Any, Root = unknown>(): Entity.EntityDraft<S, {}, Root> =>
-  Entity.draft(Entity.makeEntityId<S, Root>(-1), {})
+  Entity.draft(unspawnedId as Entity.EntityId<S, Root>, {})
+
+/**
+ * Placeholder id carried by drafts; `commands.spawn(...)` reserves the real id.
+ */
+const unspawnedId = Entity.makeEntityId<any, any>(-1)
 
 /**
  * Creates a typed component entry.
@@ -350,10 +344,15 @@ export const insert = <
   descriptor: D,
   value: Descriptor.Value<D>
 ): Entity.EntityDraft<S, Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>, Root> =>
-  Entity.draft(draft.id, {
-    ...(draft.proof as object),
-    [descriptor.name]: value
-  } as Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>)
+  Entity.draft(
+    draft.id,
+    {
+      ...(draft.proof as object),
+      [descriptor.name]: value
+    } as Draft.Insert<P, Descriptor.Name<D>, Descriptor.Value<D>>,
+    [...draft.components, [descriptor, value]],
+    draft.relations
+  )
 
 /**
  * Adds multiple components to an entity draft in one flat call.
@@ -371,11 +370,13 @@ export const insertMany = <
   draft: Entity.EntityDraft<S, P, Root>,
   ...entries: Entries
 ): Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root> => {
-  let current: Entity.EntityDraft<S, Entity.ComponentProof, Root> = draft
+  const proof: Record<string, unknown> = { ...draft.proof }
+  const components: Array<Entity.StagedComponent> = [...draft.components]
   for (const [descriptor, value] of entries) {
-    current = insert(current, descriptor, value)
+    proof[descriptor.name] = value
+    components.push([descriptor, value])
   }
-  return current as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root>
+  return Entity.draft(draft.id, proof, components, draft.relations) as Entity.EntityDraft<S, Draft.FoldEntries<Entries, P>, Root>
 }
 
 export const insertResult = <
@@ -433,7 +434,7 @@ export const relate = <
   relation: R,
   target: Entity.EntityId<S, Root>
 ): Entity.EntityDraft<S, P, Root> =>
-  Entity.draft(draft.id, draft.proof, [
+  Entity.draft(draft.id, draft.proof, draft.components, [
     ...draft.relations,
     {
       relation,
@@ -488,8 +489,13 @@ export const spawnWith = <
   const Entries extends ReadonlyArray<SchemaEntry<S>> = ReadonlyArray<SchemaEntry<S>>
 >(
   ...entries: Entries
-): Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root> =>
-  insertMany(spawn<S, Root>(), ...entries)
+): Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root> => {
+  const proof: Record<string, unknown> = {}
+  for (const [descriptor, value] of entries) {
+    proof[descriptor.name] = value
+  }
+  return Entity.draft(unspawnedId, proof, entries) as Entity.EntityDraft<S, Draft.FoldEntries<Entries>, Root>
+}
 
 export const spawnWithResult = <
   S extends Schema.Any,
@@ -590,9 +596,12 @@ export const spawnWithMixed = <
 /**
  * Public command API exposed to systems.
  *
- * This is the only mutation entrypoint in the runtime model. Systems can queue
- * spawns, inserts, despawns, resource writes, and emitted events, then the
- * runtime flushes them in order after the system effect completes.
+ * Commands are the structural mutation entrypoint: spawns, inserts, removals,
+ * despawns, and relation edits. They are queued in order and applied only at
+ * the next `applyDeferred()` (or `applyStateTransitions(...)`) schedule step.
+ *
+ * Resource and event writes are not commands: they go through the
+ * `writeResource(...)` / `writeEvent(...)` access a system declares.
  */
 export interface CommandsApi<S extends Schema.Any, Root = unknown> {
   /**
@@ -649,20 +658,6 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
     children: ReadonlyArray<Entity.EntityId<S, Root>>
   ) => void
   /**
-   * Queues a resource write.
-   */
-  readonly setResource: <K extends keyof Schema.Resources<S>>(
-    descriptor: Schema.Resources<S>[K],
-    value: Schema.ResourceValue<S, K>
-  ) => void
-  /**
-   * Queues an emitted event.
-   */
-  readonly emit: <K extends keyof Schema.Events<S>>(
-    descriptor: Schema.Events<S>[K],
-    value: Schema.EventValue<S, K>
-  ) => void
-  /**
    * Drains the queued commands in insertion order.
    */
   readonly flush: () => ReadonlyArray<DeferredCommand<S>>
@@ -691,15 +686,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "spawn",
         apply(world) {
-          world.ensureEntityStore(id)
-          for (const [key, value] of Object.entries(draft.proof)) {
-            const descriptor = {
-              kind: "component",
-              name: key,
-              key: Symbol.for(`bevy-ts/component/${key}`)
-            } as Descriptor<"component", string, unknown>
-            world.writeComponent(id, descriptor, value)
-          }
+          world.spawnEntity(id, draft.components)
           for (const stagedRelation of draft.relations) {
             world.tryRelate(id, stagedRelation.relation, stagedRelation.target)
           }
@@ -711,7 +698,6 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "insert",
         apply(world) {
-          world.ensureEntityStore(entity)
           world.writeComponent(entity, descriptor, value)
         }
       })
@@ -721,7 +707,6 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "insertMany",
         apply(world) {
-          world.ensureEntityStore(entity)
           for (const [descriptor, value] of entries) {
             world.writeComponent(entity, descriptor, value)
           }
@@ -767,22 +752,6 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
         tag: "reorderChildren",
         apply(world) {
           world.reorderChildren(entity, relation, children)
-        }
-      })
-    },
-    setResource(descriptor, value) {
-      queue.push({
-        tag: "resource",
-        apply(world) {
-          world.writeResource(descriptor, value)
-        }
-      })
-    },
-    emit(descriptor, value) {
-      queue.push({
-        tag: "event",
-        apply(world) {
-          world.appendEvent(descriptor, value)
         }
       })
     },

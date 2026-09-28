@@ -1,0 +1,61 @@
+{
+  "runtime": {
+    "tolerance": 0.35,
+    "calibrationMs": 2.959,
+    "environment": "Apple M1 / node v24.16.0 / darwin",
+    "cases": {
+      "spawn/10k-3c": {
+        "medianMs": 6.1114,
+        "score": 2.0653
+      },
+      "despawn/10k": {
+        "medianMs": 5.4219,
+        "score": 1.8323
+      },
+      "query/iterate-read-10k-of-20k": {
+        "medianMs": 0.1052,
+        "score": 0.0356
+      },
+      "query/iterate-write-10k": {
+        "medianMs": 0.3232,
+        "score": 0.1092
+      },
+      "query/single-in-20k-x10": {
+        "medianMs": 0.0109,
+        "score": 0.0037
+      },
+      "query/changed-100-of-10k": {
+        "medianMs": 0.0189,
+        "score": 0.0064
+      },
+      "structural/insert-remove-1k": {
+        "medianMs": 0.159,
+        "score": 0.0537
+      },
+      "schedule/100-systems-x10": {
+        "medianMs": 0.5751,
+        "score": 0.1944
+      },
+      "lookup/get-10k": {
+        "medianMs": 0.6645,
+        "score": 0.2246
+      },
+      "events/emit-read-10k": {
+        "medianMs": 0.1122,
+        "score": 0.0379
+      },
+      "relations/descendants-100x100": {
+        "medianMs": 0.479,
+        "score": 0.1619
+      }
+    }
+  },
+  "types": {
+    "tolerance": 0.05,
+    "typescript": "Version 7.0.2",
+    "metrics": {
+      "types": 37845,
+      "instantiations": 239628
+    }
+  }
+}

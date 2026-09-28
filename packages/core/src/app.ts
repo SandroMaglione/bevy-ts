@@ -28,7 +28,6 @@
  * ```ts
  * // Build the runtime first. `App` wraps it, but does not replace it.
  * const runtime = Game.Runtime.make({
- *   schema: Game,
  *   services: Game.Runtime.services(
  *     Game.Runtime.service(RenderClock, { now: () => performance.now() })
  *   )
@@ -86,7 +85,6 @@ export interface App<
  * ```ts
  * // Construct the ECS runtime with the services the systems declared.
  * const runtime = Game.Runtime.make({
- *   schema: Game,
  *   services: Game.Runtime.services(
  *     Game.Runtime.service(RenderClock, { now: () => performance.now() })
  *   )
