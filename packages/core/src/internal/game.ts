@@ -110,6 +110,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         readonly services: Runtime.RuntimeServices<any>
         readonly resources?: object
         readonly machines?: Runtime.RuntimeMachines<any>
+        readonly debug?: true
       }) => Runtime.make({ schema, ...options, machineDefinitions: definedMachines } as never),
       service: Runtime.service,
       services: Runtime.services,

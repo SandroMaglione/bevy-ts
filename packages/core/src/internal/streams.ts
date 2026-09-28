@@ -32,6 +32,15 @@ export interface Cursor {
 
 const noValues: ReadonlyArray<never> = []
 
+/** Debug view of one stream key. */
+export interface StreamInspection {
+  readonly key: symbol
+  readonly size: number
+  /** Tick of the oldest retained batch. */
+  readonly oldestTick: number | undefined
+  readonly readers: ReadonlyArray<Cursor>
+}
+
 export interface Streams<T> {
   /** Makes `cursor` hold `key`'s batches until it has read them. */
   register(key: symbol, cursor: Cursor): void
@@ -50,6 +59,9 @@ export interface Streams<T> {
    */
   trim(windowBoundary: number): void
   clear(): void
+  /** Every key with retained entries or registered readers. */
+  inspect(): ReadonlyArray<StreamInspection>
+  readonly capacity: number
 }
 
 export const make = <T>(capacity: number): Streams<T> => {
@@ -137,6 +149,19 @@ export const make = <T>(capacity: number): Streams<T> => {
     },
     clear() {
       logs.clear()
-    }
+    },
+    inspect() {
+      const keys = new Set<symbol>([...logs.keys(), ...readers.keys()])
+      return [...keys].map((key) => {
+        const log = logs.get(key)
+        return {
+          key,
+          size: log?.size ?? 0,
+          oldestTick: log?.ticks[0],
+          readers: [...(readers.get(key) ?? [])]
+        }
+      })
+    },
+    capacity
   }
 }

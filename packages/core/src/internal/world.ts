@@ -104,6 +104,21 @@ const noSources: ReadonlyArray<number> = Object.freeze([])
 
 export type World = ReturnType<typeof makeWorld>
 
+/**
+ * Structural-change callbacks used by the debug tracer. Installed only while
+ * a trace listener is registered; component writes made through system
+ * transactions are reported from the journal instead.
+ */
+export interface WorldHooks {
+  spawned(id: number, components: Readonly<Record<string, unknown>>): void
+  despawned(id: number): void
+  inserted(id: number, ordinal: number, value: unknown): void
+  overwritten(id: number, ordinal: number, before: unknown, after: unknown): void
+  removed(id: number, ordinal: number): void
+  related(sourceId: number, relation: Relation.Relation.Any, targetId: number): void
+  unrelated(sourceId: number, relation: Relation.Relation.Any): void
+}
+
 export const makeWorld = <S extends Schema.Any>(schema: S) => {
   let nextEntity = 1
   const records = new Map<number, EntityRecord>()
@@ -172,6 +187,10 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
    */
   const scopeByEntity = new Map<number, symbol>()
   const scopeMembers = new Map<symbol, Set<number>>()
+
+  let hooks: WorldHooks | undefined
+  /** Suppresses per-component and relation hooks inside spawns and despawns. */
+  let hookDepth = 0
 
   const ordinalOf = (descriptor: ComponentDescriptor): number => {
     const known = ordinals.get(descriptor.key)
@@ -277,6 +296,18 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       }
       records.set(record.id, record)
       entitiesVersion += 1
+    }
+    if (hooks !== undefined) {
+      hookDepth += 1
+      const written: Record<string, unknown> = {}
+      for (let index = 0; index < components.length; index++) {
+        const component = components[index]!
+        writeRecord(record, ordinalOf(component[0]), component[1])
+        written[component[0].name] = component[1]
+      }
+      hookDepth -= 1
+      hooks.spawned(record.id, written)
+      return
     }
     for (let index = 0; index < components.length; index++) {
       const component = components[index]!
@@ -384,6 +415,9 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       members[ordinal]!.add(record)
       bumpMembership(record, ordinal)
       record.marks[ordinal * MARK_STRIDE + ADDED] = tick
+      if (hooks !== undefined && hookDepth === 0) hooks.inserted(record.id, ordinal, value)
+    } else if (hooks !== undefined && hookDepth === 0) {
+      hooks.overwritten(record.id, ordinal, record.values[ordinal], value)
     }
     record.values[ordinal] = value
     markChanged(record, ordinal)
@@ -409,6 +443,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     members[ordinal]!.delete(record)
     bumpMembership(record, ordinal)
     appendLog(logFor(removedLogs, ordinal), id, tick)
+    if (hooks !== undefined) hooks.removed(id, ordinal)
   }
 
   const relatedSourceIds = (relation: Relation.Relation.Any, targetId: number): ReadonlyArray<number> =>
@@ -456,6 +491,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     targets!.delete(sourceId)
     removeRelatedSource(relation, previousTarget, sourceId)
     bumpRelation(relation.key)
+    if (hooks !== undefined && hookDepth === 0) hooks.unrelated(sourceId, relation)
   }
 
   const wouldCreateHierarchyCycle = (relation: Relation.Relation.Any, sourceId: number, targetId: number): boolean => {
@@ -499,6 +535,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     targets.set(sourceId, targetId)
     addRelatedSource(relation, targetId, sourceId)
     bumpRelation(relation.key)
+    if (hooks !== undefined) hooks.related(sourceId, relation, targetId)
     return Result.success(undefined)
   }
 
@@ -548,6 +585,10 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     if (!record) {
       return
     }
+    if (hooks !== undefined) {
+      hooks.despawned(id)
+      hookDepth += 1
+    }
     for (const relation of relationDefinitions) {
       const current = relatedSourceIds(relation, id)
       const sources = current.length === 0 ? noSources : [...current]
@@ -577,6 +618,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     record.alive = false
     records.delete(id)
     entitiesVersion += 1
+    if (hooks !== undefined) hookDepth -= 1
   }
 
   /**
@@ -663,6 +705,18 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
 
   const nextEntityValue = (): number => nextEntity
 
+  /**
+   * Visits the component writes journaled by the running system transaction,
+   * with the value before the transaction and the current one.
+   */
+  const forEachJournaled = (visit: (id: number, ordinal: number, before: unknown, after: unknown) => void): void => {
+    for (let index = 0; index < journalRecords.length; index++) {
+      const record = journalRecords[index]!
+      const ordinal = journalOrdinals[index]!
+      visit(record.id, ordinal, journalValues[index], record.values[ordinal])
+    }
+  }
+
   const setNextEntity = (value: number): void => {
     nextEntity = Math.max(nextEntity, value)
   }
@@ -696,6 +750,13 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     despawnAll,
     nextEntityValue,
     setNextEntity,
+    forEachJournaled,
+    setHooks: (next: WorldHooks | undefined): void => {
+      hooks = next
+      hookDepth = 0
+    },
+    /** Tick at or before which lifecycle log entries may have been dropped. */
+    retainedAfter: (): number => retainedAfter,
     descriptorAt: (ordinal: number): ComponentDescriptor => descriptors[ordinal]!,
     membersOf: (ordinal: number): ReadonlySet<EntityRecord> => members[ordinal]!,
     /**

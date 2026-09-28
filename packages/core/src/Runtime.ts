@@ -56,14 +56,17 @@
  * Public runtime constructors and helpers for services, machines, and bootstrap input.
  */
 import * as Command from "./Command.ts"
+import type * as Debug from "./Debug.ts"
 import * as DescriptorModule from "./Descriptor.ts"
 import type { Descriptor } from "./Descriptor.ts"
 import type * as Entity from "./Entity.ts"
 import type * as Inspector from "./Inspector.ts"
 import * as Cells from "./internal/cells.ts"
+import * as DebugInternal from "./internal/debug.ts"
 import { makeQueryEngine } from "./internal/queries.ts"
 import * as Streams from "./internal/streams.ts"
-import { makeWorld } from "./internal/world.ts"
+import { ABSENT, makeWorld } from "./internal/world.ts"
+import type { WorldHooks } from "./internal/world.ts"
 import type * as Machine from "./Machine.ts"
 import * as Query from "./Query.ts"
 import type { QueryMatch, ReadonlyValue } from "./Query.ts"
@@ -175,6 +178,12 @@ export type RuntimeConstructionError<S extends Schema.Any, Provided> = Simplify<
 }>
 
 /**
+ * A runtime plus the `debug` handle when it was made with `debug: true`.
+ */
+export type WithDebug<R, Enabled, S extends Schema.Any, Root> =
+  [Enabled] extends [Debug.Option] ? R & Debug.Member<S, Root> : R
+
+/**
  * The runtime returned by `make`, wrapped in a `Result` exactly when a
  * provided resource goes through a constructor and can therefore fail.
  */
@@ -183,10 +192,14 @@ export type MakeRuntimeResult<
   Services extends Record<string, unknown>,
   Provided,
   Root,
-  Machines extends Record<string, unknown>
+  Machines extends Record<string, unknown>,
+  Enabled = undefined
 > = [ConstructedKeys<S, Provided>] extends [never]
-  ? Runtime<S, Services, ProvidedResources<S, Provided>, Root, Machines>
-  : Result.Result<Runtime<S, Services, ProvidedResources<S, Provided>, Root, Machines>, RuntimeConstructionError<S, Provided>>
+  ? WithDebug<Runtime<S, Services, ProvidedResources<S, Provided>, Root, Machines>, Enabled, S, Root>
+  : Result.Result<
+      WithDebug<Runtime<S, Services, ProvidedResources<S, Provided>, Root, Machines>, Enabled, S, Root>,
+      RuntimeConstructionError<S, Provided>
+    >
 
 /**
  * One machine-backed runtime state provision.
@@ -654,6 +667,7 @@ const makeValidatedRuntime = <
   readonly resources: Partial<Record<string, unknown>>
   readonly machines: RuntimeMachines<any> | undefined
   readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
+  readonly debug: boolean
 }): Runtime<S, Services, Resources, Root, Machines> => {
   const world = makeWorld(options.schema)
   const queries = makeQueryEngine(world)
@@ -697,6 +711,49 @@ const makeValidatedRuntime = <
    */
   const pendingCommands: Array<Command.DeferredCommand<S>> = []
 
+  /**
+   * Debug state. With `debug: true`, `pendingOrigins` names the system that
+   * queued each pending command, in step with `pendingCommands`. Tracing is
+   * on only while `observe` listeners are registered; untraced runs pay one
+   * boolean check at each system, schedule, and marker boundary.
+   */
+  const debugEnabled = options.debug
+  const pendingOrigins: Array<string> = []
+  const traceListeners = new Set<(event: Debug.TraceEvent) => void>()
+  let tracing = false
+  let frameCount = 0
+  /** Names of the schedules being run, outermost first, while tracing. */
+  const schedulePath: Array<string> = []
+  /** Effects of the command being applied, while tracing. */
+  let commandEffects: Array<Debug.Effect> | undefined
+  const scheduleNames = new Map<object, string>()
+  const anonymousScheduleNames = new WeakMap<object, string>()
+  let anonymousScheduleCount = 0
+  const now = (): number => performance.now()
+  const emit = (event: Debug.TraceEvent): void => {
+    for (const listener of traceListeners) listener(event)
+  }
+  const currentSchedule = (): string => schedulePath.length === 0 ? "(direct)" : schedulePath.join(" > ")
+  const scheduleName = (schedule: object): string => {
+    const named = scheduleNames.get(schedule) ?? anonymousScheduleNames.get(schedule)
+    if (named !== undefined) return named
+    anonymousScheduleCount += 1
+    const name = `schedule#${anonymousScheduleCount}`
+    anonymousScheduleNames.set(schedule, name)
+    return name
+  }
+  interface DebugNames {
+    readonly resources: ReadonlyMap<symbol, string>
+    readonly events: ReadonlyMap<symbol, string>
+    readonly machines: ReadonlyMap<symbol, string>
+    readonly relations: ReadonlyMap<symbol, string>
+  }
+  /** Set once at the end of construction when `debug` is enabled. */
+  let debugNames: DebugNames | undefined
+  const recordEffect = (effect: Debug.Effect): void => {
+    if (commandEffects !== undefined) commandEffects.push(effect)
+  }
+
   const providedServices = options.services as unknown as Services
   const providedMachines = (options.machines ?? machines()) as unknown as Machines
   const machineEntries = (options.machines ?? machines())[runtimeMachinesEntries]
@@ -715,6 +772,9 @@ const makeValidatedRuntime = <
     targetId: number,
     error: Relation.Relation.MutationError
   ): void => {
+    if (tracing) {
+      recordEffect({ kind: "relationFailure", entity: sourceId, relation: relation.name, error: error._tag })
+    }
     relationFailures.append(relation.key, world.currentTick(), [
       Relation.mutationFailure(
         relation,
@@ -1153,12 +1213,126 @@ const makeValidatedRuntime = <
   }
 
   const slots = new WeakMap<SystemDefinition<any, any, any>, SystemSlot>()
+  /** Stream readers by cursor, for `debug.streams()`. */
+  const streamReaders = new Map<Streams.Cursor, { readonly system: string; readonly reader: ReaderState }>()
+
+  interface ReadStream {
+    readonly kind: "event" | "transitionEvent" | "relationFailure"
+    readonly store: Streams.Streams<unknown>
+    readonly key: symbol
+    readonly name: string
+  }
+
+  /** The streams a system reads, for tracing. */
+  const readStreamsOf = (system: SystemDefinition<any, any, any>): Array<ReadStream> => {
+    const spec = system.spec
+    const result: Array<ReadStream> = []
+    for (const access of Object.values(spec.events as Record<string, { readonly mode: string; readonly descriptor: Descriptor.Any }>)) {
+      if (access.mode === "read") result.push({ kind: "event", store: events, key: access.descriptor.key, name: access.descriptor.name })
+    }
+    for (const access of Object.values(spec.transitionEvents as Record<string, { readonly machine: Machine.StateMachine.Any }>)) {
+      result.push({ kind: "transitionEvent", store: transitionEvents, key: access.machine.key, name: access.machine.name })
+    }
+    for (const access of Object.values(spec.relationFailures as Record<string, { readonly relation: Relation.Relation.Any }>)) {
+      result.push({ kind: "relationFailure", store: relationFailures, key: access.relation.key, name: access.relation.name })
+    }
+    return result
+  }
+
+  const missedReads = (system: SystemDefinition<any, any, any>, reader: ReaderState): Array<Debug.MissedRead> => {
+    const missed: Array<Debug.MissedRead> = []
+    for (const stream of readStreamsOf(system)) {
+      if (stream.store.lagged(stream.key, reader.streamSince, reader.registeredAt)) {
+        missed.push({ kind: stream.kind, stream: stream.name })
+      }
+    }
+    // Removed/despawned records older than the two-frame window are gone.
+    if (reader.since >= reader.registeredAt && reader.since < world.retainedAfter()) {
+      for (const access of Object.values(system.spec.removed as Record<string, { readonly descriptor: Descriptor.Any }>)) {
+        missed.push({ kind: "removed", stream: access.descriptor.name })
+      }
+      if (Object.keys(system.spec.despawned).length > 0) missed.push({ kind: "despawned", stream: "despawned" })
+    }
+    return missed
+  }
+
+  const traceSystem = (
+    system: SystemDefinition<any, any, any>,
+    reader: ReaderState,
+    tick: number,
+    started: number,
+    outcome: Debug.SystemEvent["outcome"],
+    error: unknown,
+    commands: ReadonlyArray<Command.DeferredCommand<S>>
+  ): Debug.SystemEvent => {
+    const names = debugNames!
+    const writes: Array<Debug.ComponentWrite> = []
+    world.forEachJournaled((entity, ordinal, before, after) => {
+      writes.push({ entity, component: world.descriptorAt(ordinal).name, before, after })
+    })
+    const resourceWrites: Array<Debug.ResourceWrite> = []
+    for (const [key, before] of resourceOriginals) {
+      resourceWrites.push({
+        resource: names.resources.get(key) ?? "?",
+        before: before === absentValue ? undefined : before,
+        after: resources.get(key)
+      })
+    }
+    const emitted: Array<Debug.EventEmit> = []
+    for (const [key, values] of emittedEvents) {
+      emitted.push({ event: names.events.get(key) ?? "?", values })
+    }
+    const nextStates: Array<Debug.NextStateWrite> = []
+    for (const key of machineOriginals.keys()) {
+      nextStates.push({ machine: names.machines.get(key) ?? "?", value: pendingMachines.get(key)?.value as Machine.StateValue | undefined })
+    }
+    return {
+      type: "system",
+      frame: frameCount,
+      tick,
+      schedule: currentSchedule(),
+      system: system.name,
+      outcome,
+      ...(outcome === "ok" ? {} : { error }),
+      ms: now() - started,
+      writes,
+      resources: resourceWrites,
+      events: emitted,
+      nextStates,
+      commands: commands.map((command) => command.tag),
+      missed: missedReads(system, reader)
+    }
+  }
+
+  const traceSkipped = (
+    system: SystemDefinition<any, any, any>,
+    condition: Machine.Condition,
+    reader: ReaderState | undefined
+  ): void => {
+    const discarded: Array<{ readonly stream: string; readonly count: number }> = []
+    if (reader !== undefined) {
+      for (const stream of readStreamsOf(system)) {
+        const count = stream.store.since(stream.key, reader.streamLastRun).length
+        if (count > 0) discarded.push({ stream: stream.name, count })
+      }
+    }
+    emit({
+      type: "system.skipped",
+      frame: frameCount,
+      tick: world.currentTick(),
+      schedule: currentSchedule(),
+      system: system.name,
+      condition: DebugInternal.renderCondition(condition),
+      discarded
+    })
+  }
 
   /**
    * Systems hold stream entries until they have read them; inspectors are
    * evaluated on demand, so they do not (and report `lagged` instead).
    */
   const registerStreamReader = (system: SystemDefinition<any, any, any>, reader: ReaderState): void => {
+    if (debugEnabled) streamReaders.set(reader, { system: system.name, reader })
     const spec = system.spec
     for (const access of Object.values(spec.events as Record<string, { readonly mode: string; readonly descriptor: Descriptor.Any }>)) {
       if (access.mode === "read") events.register(access.descriptor.key, reader)
@@ -1197,6 +1371,7 @@ const makeValidatedRuntime = <
         // A skipped system discards the messages published meanwhile, so it
         // neither holds them nor receives a backlog when it runs again.
         const skipped = slots.get(system)
+        if (tracing) traceSkipped(system, condition, skipped?.reader)
         if (skipped) skipped.reader.streamLastRun = world.currentTick()
         return succeeded
       }
@@ -1206,6 +1381,7 @@ const makeValidatedRuntime = <
     reader.since = reader.lastRun
     reader.streamSince = reader.streamLastRun
     const thisRun = world.advanceTick()
+    const started = tracing ? now() : 0
     beginSystemTransaction()
     let outcome: Result.Result<unknown, unknown>
     try {
@@ -1214,33 +1390,92 @@ const makeValidatedRuntime = <
       const effect = system.run(context)
       outcome = effect === undefined ? succeeded : effect.run(context.services)
     } catch (defect) {
+      if (tracing) emit(traceSystem(system, reader, thisRun, started, "defect", defect, context.commands.flush()))
       rollbackSystemTransaction()
       context.commands.flush()
       throw defect
     }
     if (!outcome.ok) {
+      if (tracing) emit(traceSystem(system, reader, thisRun, started, "failed", outcome.error, context.commands.flush()))
       rollbackSystemTransaction()
       context.commands.flush()
       return Result.failure({ kind: "SystemFailure", system: system.name, error: outcome.error })
     }
+    const queued = context.commands.flush()
+    const traced = tracing ? traceSystem(system, reader, thisRun, started, "ok", undefined, queued) : undefined
     commitSystemTransaction()
     // A failed run leaves `lastRun` unchanged, so the next run sees the same changes again.
     reader.lastRun = thisRun
     reader.streamLastRun = thisRun
-    const queued = context.commands.flush()
     for (let index = 0; index < queued.length; index++) {
       pendingCommands.push(queued[index]!)
     }
+    if (debugEnabled) {
+      for (let index = 0; index < queued.length; index++) pendingOrigins.push(system.name)
+    }
+    if (traced !== undefined) emit(traced)
     return succeeded
   }
 
-  const applyDeferred = (): void => {
+  const applyDeferred = (marker: Debug.DeferredEvent["marker"] = "applyDeferred"): void => {
     // Commands applied here may not queue further commands, so one drain is enough.
     const commands = pendingCommands.splice(0, pendingCommands.length)
+    const origins = pendingOrigins.splice(0, pendingOrigins.length)
     world.advanceTick()
-    for (const command of commands) {
-      command.apply(commandWorld)
+    if (!tracing) {
+      for (const command of commands) {
+        command.apply(commandWorld)
+      }
+      return
     }
+    const applied: Array<Debug.AppliedCommand> = []
+    for (let index = 0; index < commands.length; index++) {
+      const command = commands[index]!
+      const effects: Array<Debug.Effect> = []
+      commandEffects = effects
+      try {
+        command.apply(commandWorld)
+      } finally {
+        commandEffects = undefined
+      }
+      applied.push({ tag: command.tag, system: origins[index] ?? "(unknown)", effects })
+    }
+    if (applied.length > 0) {
+      emit({ type: "deferred", frame: frameCount, tick: world.currentTick(), schedule: currentSchedule(), marker, commands: applied })
+    }
+  }
+
+  /** Runs `run` as the named schedule in traces. */
+  const traceSchedule = (name: string, run: () => Result.Result<void, SystemFailure>): Result.Result<void, SystemFailure> => {
+    schedulePath.push(name)
+    const scheduleLabel = currentSchedule()
+    emit({ type: "schedule.start", frame: frameCount, schedule: scheduleLabel })
+    const started = now()
+    let result: Result.Result<void, SystemFailure>
+    try {
+      result = run()
+    } finally {
+      schedulePath.pop()
+    }
+    emit({ type: "schedule.end", frame: frameCount, schedule: scheduleLabel, ok: result.ok, ms: now() - started })
+    return result
+  }
+
+  const traceTransition = (
+    machineKey: symbol,
+    snapshot: Machine.TransitionSnapshot,
+    outcome: Debug.TransitionEvent["outcome"]
+  ): void => {
+    emit({
+      type: "transition",
+      frame: frameCount,
+      tick: world.currentTick(),
+      schedule: currentSchedule(),
+      machine: debugNames!.machines.get(machineKey) ?? "?",
+      from: snapshot.from,
+      to: snapshot.to,
+      outcome
+    })
   }
 
   const runTransitionSchedule = (
@@ -1252,7 +1487,9 @@ const makeValidatedRuntime = <
     }
     activeTransitions.set(schedule.transition.machine.key, snapshot)
     try {
-      return runSteps(schedule.steps)
+      return tracing
+        ? traceSchedule(DebugInternal.transitionScheduleName(schedule), () => runSteps(schedule.steps))
+        : runSteps(schedule.steps)
     } finally {
       activeTransitions.delete(schedule.transition.machine.key)
     }
@@ -1265,7 +1502,7 @@ const makeValidatedRuntime = <
   const applyStateTransitions = (
     bundle?: Schedule.TransitionBundleDefinition<S, ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>, any, Root, any, any>
   ): Result.Result<void, SystemFailure> => {
-    applyDeferred()
+    applyDeferred("applyStateTransitions")
     changedMachines = new Set()
     const scheduledTransitions = Array.from(pendingMachines.entries())
       .sort(([leftKey], [rightKey]) =>
@@ -1281,6 +1518,7 @@ const makeValidatedRuntime = <
         continue
       }
       if (pending.skipIfSame && current === pending.value) {
+        if (tracing) traceTransition(machineKey, { from: current as Machine.StateValue, to: current as Machine.StateValue }, "unchanged")
         continue
       }
 
@@ -1297,6 +1535,7 @@ const makeValidatedRuntime = <
           if (!result.ok) {
             // The transition did not happen; keep it queued for a later attempt.
             pendingMachines.set(machineKey, pending)
+            if (tracing) traceTransition(machineKey, snapshot, "failed")
             return result
           }
         }
@@ -1312,6 +1551,7 @@ const makeValidatedRuntime = <
           const result = runTransitionSchedule(schedule, snapshot)
           if (!result.ok) {
             pendingMachines.set(machineKey, pending)
+            if (tracing) traceTransition(machineKey, snapshot, "failed")
             return result
           }
         }
@@ -1320,12 +1560,14 @@ const makeValidatedRuntime = <
       currentMachines.set(machineKey, pending.value)
       changedMachines.add(machineKey)
       transitionEvents.append(machineKey, world.advanceTick(), [snapshot])
+      if (tracing) traceTransition(machineKey, snapshot, "applied")
 
       for (const schedule of schedules) {
         const transition = schedule.transition
         if (transition.phase === "enter" && transition.machine.key === machineKey && transition.state === snapshot.to) {
           const result = runTransitionSchedule(schedule, snapshot)
           if (!result.ok) {
+            if (tracing) traceTransition(machineKey, snapshot, "enterFailed")
             return result
           }
         }
@@ -1372,11 +1614,15 @@ const makeValidatedRuntime = <
    */
   const runScheduleUnsafe = (schedule: ExecutableScheduleDefinition<S, any, any, any, any>): Result.Result<void, SystemFailure> => {
     changedMachines = new Set()
-    return runSteps(schedule.steps)
+    return tracing
+      ? traceSchedule(scheduleName(schedule), () => runSteps(schedule.steps))
+      : runSteps(schedule.steps)
   }
 
   const advanceFrame = (): void => {
+    frameCount += 1
     const boundary = world.advanceFrame()
+    if (tracing) emit({ type: "frame", frame: frameCount, tick: world.currentTick() })
     events.trim(boundary)
     transitionEvents.trim(boundary)
     relationFailures.trim(boundary)
@@ -1551,6 +1797,7 @@ const makeValidatedRuntime = <
     // Apply: the old world is despawned and the saved one spawned, so change
     // detection and renderer sync observe the restore like any other change.
     pendingCommands.length = 0
+    pendingOrigins.length = 0
     pendingMachines.clear()
     events.clear()
     transitionEvents.clear()
@@ -1569,7 +1816,13 @@ const makeValidatedRuntime = <
     return succeeded
   }
 
-  return {
+  const tracedRestore = (data: unknown): Result.Result<void, Snapshot.RestoreError> => {
+    const result = restore(data)
+    if (tracing) emit({ type: "restore", frame: frameCount, tick: world.currentTick(), ok: result.ok })
+    return result
+  }
+
+  const runtime: Runtime<S, Services, Resources, Root, Machines> = {
     schema: options.schema,
     services: providedServices,
     resourceValues: options.resources as Resources,
@@ -1580,9 +1833,150 @@ const makeValidatedRuntime = <
     tryTick: tryRunSchedule,
     // The gate is type-only: the functions exist on every runtime.
     snapshot: snapshot as unknown as Snapshot.Gate<S, typeof snapshot>,
-    restore: restore as unknown as Snapshot.Gate<S, typeof restore>,
+    restore: tracedRestore as unknown as Snapshot.Gate<S, typeof restore>,
     inspect
   }
+  if (!debugEnabled) {
+    return runtime
+  }
+
+  const keyedNames = <A extends { readonly key: symbol }>(entries: Iterable<readonly [string, A]>): Map<symbol, string> =>
+    new Map([...entries].map(([name, value]) => [value.key, name] as const))
+  debugNames = {
+    resources: keyedNames(resourcesByName),
+    events: keyedNames((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => [descriptor.name, descriptor] as const)),
+    machines: keyedNames(machinesByName),
+    relations: keyedNames(relationsByName)
+  }
+
+  const worldHooks: WorldHooks = {
+    spawned: (entity, components) => recordEffect({ kind: "spawn", entity, components }),
+    despawned: (entity) => recordEffect({ kind: "despawn", entity }),
+    inserted: (entity, ordinal, value) =>
+      recordEffect({ kind: "insert", entity, component: world.descriptorAt(ordinal).name, value }),
+    overwritten: (entity, ordinal, before, after) =>
+      recordEffect({ kind: "overwrite", entity, component: world.descriptorAt(ordinal).name, before, after }),
+    removed: (entity, ordinal) => recordEffect({ kind: "remove", entity, component: world.descriptorAt(ordinal).name }),
+    related: (entity, relation, target) => recordEffect({ kind: "relate", entity, relation: relation.name, target }),
+    unrelated: (entity, relation) => recordEffect({ kind: "unrelate", entity, relation: relation.name })
+  }
+
+  const dump = (filter?: Debug.DumpFilter<S>): Debug.WorldDump => {
+    const required = (filter?.with ?? []).map((descriptor) => world.ordinalOf(descriptor))
+    const only = filter?.entities === undefined ? undefined : new Set(filter.entities)
+    const limit = filter?.limit ?? Number.POSITIVE_INFINITY
+    const entities: Array<Debug.EntityDump> = []
+    for (const record of [...world.records.values()].sort((left, right) => left.id - right.id)) {
+      if (entities.length >= limit) break
+      if (only !== undefined && !only.has(record.id)) continue
+      if (!required.every((ordinal) => world.has(record, ordinal))) continue
+      const components: Record<string, unknown> = {}
+      record.values.forEach((value, ordinal) => {
+        if (value !== ABSENT) components[world.descriptorAt(ordinal).name] = value
+      })
+      const relations: Record<string, number> = {}
+      for (const relation of world.relationDefinitions) {
+        const target = world.relationTarget(relation, record.id)
+        if (target !== undefined) relations[relation.name] = target
+      }
+      entities.push({ id: record.id, components, relations })
+    }
+    const dumpedResources: Record<string, unknown> = {}
+    for (const [name, descriptor] of resourcesByName) {
+      if (resources.has(descriptor.key)) dumpedResources[name] = resources.get(descriptor.key)
+    }
+    const dumpedMachines: Record<string, Debug.MachineDump> = {}
+    for (const [name, machine] of machinesByName) {
+      const current = currentMachines.get(machine.key)
+      if (current === undefined) continue
+      const pending = pendingMachines.get(machine.key)
+      const previous = previousMachines.get(machine.key)
+      dumpedMachines[name] = {
+        current: current as Machine.StateValue,
+        ...(pending === undefined ? {} : { pending: pending.value as Machine.StateValue }),
+        ...(previous === undefined ? {} : { previous: previous as Machine.StateValue })
+      }
+    }
+    return {
+      version: 1,
+      frame: frameCount,
+      tick: world.currentTick(),
+      entityCount: world.records.size,
+      entities,
+      resources: dumpedResources,
+      machines: dumpedMachines,
+      pendingCommands: pendingCommands.map((command, index) => ({ tag: command.tag, system: pendingOrigins[index] ?? "(unknown)" }))
+    }
+  }
+
+  const streams = (): ReadonlyArray<Debug.StreamStatus> => {
+    const result: Array<Debug.StreamStatus> = []
+    const windowBoundary = world.retainedAfter()
+    const inspectStore = (
+      kind: Debug.StreamStatus["kind"],
+      store: Streams.Streams<unknown>,
+      names: ReadonlyMap<symbol, string>
+    ): void => {
+      for (const entry of store.inspect()) {
+        let holder: { readonly system: string; readonly lastRun: number } | undefined
+        const readers = entry.readers.map((cursor): Debug.StreamReaderStatus => {
+          const known = streamReaders.get(cursor)
+          const system = known?.system ?? "(unknown)"
+          if (holder === undefined || cursor.streamLastRun < holder.lastRun) holder = { system, lastRun: cursor.streamLastRun }
+          return {
+            system,
+            unread: store.since(entry.key, cursor.streamLastRun).length,
+            lagged: known !== undefined && store.lagged(entry.key, known.reader.streamLastRun, known.reader.registeredAt)
+          }
+        })
+        const heldByReader = entry.oldestTick !== undefined && entry.oldestTick <= windowBoundary
+          && holder !== undefined && holder.lastRun < entry.oldestTick
+        result.push({
+          kind,
+          stream: names.get(entry.key) ?? "(unknown)",
+          size: entry.size,
+          capacity: store.capacity,
+          readers,
+          heldBy: heldByReader ? holder!.system : undefined
+        })
+      }
+    }
+    inspectStore("event", events, debugNames!.events)
+    inspectStore("transitionEvent", transitionEvents as Streams.Streams<unknown>, debugNames!.machines)
+    inspectStore("relationFailure", relationFailures as Streams.Streams<unknown>, debugNames!.relations)
+    return result
+  }
+
+  const handle: Debug.Handle<S, Root> = {
+    nameSchedules(named) {
+      scheduleNames.clear()
+      for (const [name, schedule] of Object.entries(named)) scheduleNames.set(schedule, name)
+    },
+    describe: () => DebugInternal.describe({
+      schema: options.schema,
+      machines: [...new Set(machinesByName.values())],
+      currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
+      providedServices: Object.keys(providedServices),
+      hasResource: (descriptor) => resources.has(descriptor.key),
+      schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)
+    }),
+    dump,
+    observe(listener) {
+      traceListeners.add(listener)
+      tracing = true
+      world.setHooks(worldHooks)
+      return () => {
+        traceListeners.delete(listener)
+        if (traceListeners.size === 0) {
+          tracing = false
+          world.setHooks(undefined)
+        }
+      }
+    },
+    streams,
+    frame: () => frameCount
+  }
+  return Object.assign(runtime, { debug: handle })
 }
 
 /**
@@ -1611,14 +2005,17 @@ export const make = <
   const ProvidedServices extends RuntimeServices<any>,
   const Resources extends RuntimeResources<S> = {},
   Root = unknown,
-  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>
+  const ProvidedMachines extends RuntimeMachines<any> = RuntimeMachines<{}>,
+  const Enabled extends Debug.Option | undefined = undefined
 >(options: {
   readonly schema: S
   readonly services: ProvidedServices
   readonly resources?: Resources
   readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-}): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>> => {
+  /** Attaches a `debug` handle to the runtime; see the `Debug` module. */
+  readonly debug?: Enabled
+}): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>, Enabled> => {
   const fallible = Object.entries(options.schema.resources).some(([key, descriptor]) =>
     options.resources !== undefined
     && (options.resources as Record<string, unknown>)[key] !== undefined
@@ -1633,7 +2030,8 @@ export const make = <
     services: options.services,
     resources: validated.value,
     machines: options.machines,
-    machineDefinitions: options.machineDefinitions ?? []
+    machineDefinitions: options.machineDefinitions ?? [],
+    debug: options.debug === true
   })
   return (fallible ? Result.success(runtime) : runtime) as never
 }
