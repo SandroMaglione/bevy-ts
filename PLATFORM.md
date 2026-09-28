@@ -6,7 +6,7 @@ Extra packages are allowed when they stay platform-specific and encapsulate a st
 
 ## Good Packages
 
-### `@bevy-ts/browser`
+### `@typeonce/bevy-ts-browser`
 
 Own browser-specific infrastructure:
 
@@ -17,7 +17,7 @@ Own browser-specific infrastructure:
 
 This package must not own gameplay resources or feature flow.
 
-### `@bevy-ts/pixi`
+### `@typeonce/bevy-ts-pixi`
 
 Own Pixi-specific infrastructure:
 
@@ -29,7 +29,7 @@ Own Pixi-specific infrastructure:
 
 This package must not own sprite conventions, HUD semantics, actor kinds, or camera policy.
 
-### `@bevy-ts/devtools`
+### `@typeonce/bevy-ts-devtools`
 
 Own debugging infrastructure over the core `Debug` handle:
 
@@ -43,10 +43,10 @@ This package reads the world; it must not mutate it or require games to change t
 
 These do not belong as public platform packages:
 
-- `@bevy-ts/platformer-hud`
-- `@bevy-ts/browser-runtime`
-- `@bevy-ts/browser-rendered`
-- `@bevy-ts/pixi-top-down-player`
+- `@typeonce/bevy-ts-platformer-hud`
+- `@typeonce/bevy-ts-browser-runtime`
+- `@typeonce/bevy-ts-browser-rendered`
+- `@typeonce/bevy-ts-pixi-top-down-player`
 - any package that bundles input, rendering, state, and gameplay into one opinionated runtime
 
 Those abstractions are feature-specific, not platform-specific. They stop being composable as soon as a game has slightly different behavior.

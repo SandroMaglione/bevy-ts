@@ -1,4 +1,4 @@
-import * as Result from "@bevy-ts/core/Result"
+import * as Result from "@typeonce/bevy-ts/Result"
 import * as Scalar from "../Scalar.ts"
 import type * as Vector2 from "../Vector2.ts"
 

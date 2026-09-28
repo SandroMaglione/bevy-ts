@@ -1,5 +1,5 @@
-import { Descriptor, Result, Schema } from "@bevy-ts/core"
-import { NodeRegistry, RenderSync, packageTag } from "@bevy-ts/pixi"
+import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
+import { NodeRegistry, RenderSync, packageTag } from "@typeonce/bevy-ts-pixi"
 import { describe, expect, it } from "tstyche"
 
 interface Node {
@@ -13,7 +13,7 @@ const Health = Descriptor.Component<number>()("PixiTypes/Health")
 const Nodes = Descriptor.Service<NodeRegistry.NodeRegistry<Node>>()("PixiTypes/Nodes")
 const Game = Schema.bind(Schema.fragment({ components: { Position, Sprite } }))
 
-describe("@bevy-ts/pixi", () => {
+describe("@typeonce/bevy-ts-pixi", () => {
   it("exposes the package entrypoint type through the workspace", () => {
     expect(packageTag).type.toBe<"pixi">()
   })

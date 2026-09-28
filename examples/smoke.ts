@@ -5,7 +5,7 @@
  * schema binding, machine-gated systems, deferred commands, explicit event
  * visibility, runtime provisioning, and runtime ticks.
  */
-import { Descriptor, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Smoke/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Smoke/Velocity")

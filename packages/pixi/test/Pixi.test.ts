@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { Descriptor, Schema } from "@bevy-ts/core"
-import type * as Entity from "@bevy-ts/core/Entity"
-import { NodeRegistry, RenderSync, packageTag } from "@bevy-ts/pixi"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import type * as Entity from "@typeonce/bevy-ts/Entity"
+import { NodeRegistry, RenderSync, packageTag } from "@typeonce/bevy-ts-pixi"
 
 class FakeNode {
   readonly label: string
@@ -34,7 +34,7 @@ const Nodes = Descriptor.Service<NodeRegistry.NodeRegistry<FakeNode>>()("PixiTes
 const Game = Schema.bind(Schema.fragment({ components: { Position, Sprite } }))
 type Id = Entity.EntityId<typeof Game.schema, typeof Game.schema>
 
-describe("@bevy-ts/pixi", () => {
+describe("@typeonce/bevy-ts-pixi", () => {
   it("resolves through the workspace package entrypoint", () => {
     expect(packageTag).toBe("pixi")
   })

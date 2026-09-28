@@ -1,8 +1,8 @@
-import { FixedLoop, packageTag } from "@bevy-ts/browser"
-import { Result } from "@bevy-ts/core"
+import { FixedLoop, packageTag } from "@typeonce/bevy-ts-browser"
+import { Result } from "@typeonce/bevy-ts"
 import { describe, expect, it } from "tstyche"
 
-describe("@bevy-ts/browser", () => {
+describe("@typeonce/bevy-ts-browser", () => {
   it("exposes the package entrypoint type through the workspace", () => {
     expect(packageTag).type.toBe<"browser">()
   })

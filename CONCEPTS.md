@@ -14,7 +14,7 @@ const { relation: ChildOf } = Descriptor.Hierarchy("Concepts/ChildOf", "Concepts
 
 - **Components** are per-entity data. **Resources** are world singletons. **Events** are messages between systems. **Services** are host capabilities (clock, audio, renderer) that live outside the world. **Relations** link entities.
 - Identity is `(kind, name)`. A schema rejects two descriptors of one kind with the same name, so prefix names per game or package.
-- `Descriptor.Component<T>()` declares a plain component. `Descriptor.ConstructedComponent(validator)` attaches a validating constructor (`{ result: (raw) => Result }`), used for raw input and when loading saves. `@bevy-ts/math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`. `Decode` has ready-made validators (`number`, `integer`, `string`, `boolean`, `literal`, `nullable`, `array`, `struct`, `handle`), `Descriptor.Tag("Player")` declares a marker component, and `Descriptor.fromStandardSchema(schema)` adapts any Standard Schema validator (ArkType, Effect Schema, Zod, Valibot).
+- `Descriptor.Component<T>()` declares a plain component. `Descriptor.ConstructedComponent(validator)` attaches a validating constructor (`{ result: (raw) => Result }`), used for raw input and when loading saves. `@typeonce/bevy-ts-math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`. `Decode` has ready-made validators (`number`, `integer`, `string`, `boolean`, `literal`, `nullable`, `array`, `struct`, `handle`), `Descriptor.Tag("Player")` declares a marker component, and `Descriptor.fromStandardSchema(schema)` adapts any Standard Schema validator (ArkType, Effect Schema, Zod, Valibot).
 - `Descriptor.TransientComponent<T>()` / `TransientResource<T>()` mark runtime-only state that saves skip.
 
 ## 2. A schema closes the world
@@ -149,9 +149,9 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 
 | Package | What it owns |
 |---|---|
-| `@bevy-ts/core` | Schema, systems, schedules, runtime, snapshots |
-| `@bevy-ts/math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis` |
-| `@bevy-ts/browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
-| `@bevy-ts/pixi` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into Pixi |
+| `@typeonce/bevy-ts` | Schema, systems, schedules, runtime, snapshots |
+| `@typeonce/bevy-ts-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis` |
+| `@typeonce/bevy-ts-browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
+| `@typeonce/bevy-ts-pixi` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into Pixi |
 
 Next: [GAME_API.md](./GAME_API.md) for a larger walkthrough, [ARCHITECTURE.md](./ARCHITECTURE.md) for how the types and storage work.

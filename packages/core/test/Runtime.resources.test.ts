@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/math/Size2"
-import * as Vector2 from "@bevy-ts/math/Vector2"
-import * as Runtime from "@bevy-ts/core/Runtime"
-import * as Schedule from "@bevy-ts/core/Schedule"
-import * as System from "@bevy-ts/core/System"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import * as Size2 from "@typeonce/bevy-ts-math/Size2"
+import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
+import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import * as Schedule from "@typeonce/bevy-ts/Schedule"
+import * as System from "@typeonce/bevy-ts/System"
 import { readResourceValue } from "./utils/fixtures.ts"
-import * as Result from "@bevy-ts/core/Result"
+import * as Result from "@typeonce/bevy-ts/Result"
 
 const Time = Descriptor.Resource<number>()("Time")
 const Counter = Descriptor.Resource<number>()("Counter")

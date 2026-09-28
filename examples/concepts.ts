@@ -3,7 +3,7 @@
  * run by `packages/core/test/Concepts.test.ts`, so the guide cannot drift from
  * the API.
  */
-import { Decode, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Decode, Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
 
 // 1. Descriptors name the data a world can hold. Constructed descriptors carry
 //    a validator, so values loaded from a save are checked; transient ones are

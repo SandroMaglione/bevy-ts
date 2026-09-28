@@ -1,6 +1,6 @@
-import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/math/Size2"
-import * as Vector2 from "@bevy-ts/math/Vector2"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import * as Size2 from "@typeonce/bevy-ts-math/Size2"
+import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
 import type {
   ActorKind,
   ActorNodes as ActorNodesValue,

@@ -1,8 +1,8 @@
 import { Application, Container, Graphics } from "pixi.js"
 
-import { Keyboard } from "@bevy-ts/browser"
-import { Descriptor, Entity, Schema } from "@bevy-ts/core"
-import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
+import { Keyboard } from "@typeonce/bevy-ts-browser"
+import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>

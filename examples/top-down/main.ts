@@ -1,4 +1,4 @@
-import { FixedLoop } from "@bevy-ts/browser"
+import { FixedLoop } from "@typeonce/bevy-ts-browser"
 
 import { FIXED_STEP_SECONDS, MAX_FRAME_SECONDS, MAX_STEPS_PER_FRAME } from "./constants.ts"
 import { createTopDownBrowserHost } from "./host.ts"

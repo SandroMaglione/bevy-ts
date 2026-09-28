@@ -32,11 +32,11 @@
  * console.log(session.journal({ frames: [180, 185], entity: 1 }))
  * ```
  */
-import type * as Debug from "@bevy-ts/core/Debug"
-import type * as Machine from "@bevy-ts/core/Machine"
-import type * as Result from "@bevy-ts/core/Result"
-import type { ExecutableScheduleDefinition } from "@bevy-ts/core/Schedule"
-import type { Schema } from "@bevy-ts/core/Schema"
+import type * as Debug from "@typeonce/bevy-ts/Debug"
+import type * as Machine from "@typeonce/bevy-ts/Machine"
+import type * as Result from "@typeonce/bevy-ts/Result"
+import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
+import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 import * as Format from "./Format.ts"
 import type { Invariant } from "./Invariant.ts"

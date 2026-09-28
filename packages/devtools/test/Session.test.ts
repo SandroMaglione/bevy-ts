@@ -1,7 +1,7 @@
 import { inspect } from "node:util"
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
-import { Format, Invariant, Session } from "@bevy-ts/devtools"
+import { Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Format, Invariant, Session } from "@typeonce/bevy-ts-devtools"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Dev/Position")
 const Health = Descriptor.Component<number>()("Dev/Health")

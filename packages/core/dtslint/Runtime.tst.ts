@@ -1,9 +1,9 @@
-import { Decode, Descriptor, Entity, Result, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/math/Size2"
-import * as Vector2 from "@bevy-ts/math/Vector2"
-import * as Runtime from "@bevy-ts/core/Runtime"
-import * as Schedule from "@bevy-ts/core/Schedule"
-import * as System from "@bevy-ts/core/System"
+import { Decode, Descriptor, Entity, Result, Schema } from "@typeonce/bevy-ts"
+import * as Size2 from "@typeonce/bevy-ts-math/Size2"
+import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
+import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import * as Schedule from "@typeonce/bevy-ts/Schedule"
+import * as System from "@typeonce/bevy-ts/System"
 import { describe, expect, it } from "tstyche"
 
 const Time = Descriptor.Resource<number>()("Time")
@@ -438,8 +438,8 @@ describe("Runtime snapshots", () => {
   it("exposes snapshot and restore only when every value can be validated on load", () => {
     const Valid = Schema.bind(Schema.fragment({ components: { Place, Sprite }, resources: { Frame } }), Root)
     const valid = Valid.Runtime.make({ services: Valid.Runtime.services(), resources: { Frame: 0 } })
-    expect(valid.snapshot()).type.toBe<import("@bevy-ts/core/Snapshot").WorldSnapshot>()
-    expect(valid.restore(null)).type.toBe<Result.Result<void, import("@bevy-ts/core/Snapshot").RestoreError>>()
+    expect(valid.snapshot()).type.toBe<import("@typeonce/bevy-ts/Snapshot").WorldSnapshot>()
+    expect(valid.restore(null)).type.toBe<Result.Result<void, import("@typeonce/bevy-ts/Snapshot").RestoreError>>()
 
     const Invalid = Schema.bind(Schema.fragment({ components: { Place, Label }, resources: { Score } }), Root)
     const invalid = Invalid.Runtime.make({ services: Invalid.Runtime.services(), resources: { Score: 0 } })
@@ -463,7 +463,7 @@ describe("Runtime snapshots", () => {
 
     const Loadable = Schema.bind(Schema.fragment({ components: { Unknown, Decoded, Place } }), Root)
     const loadable = Loadable.Runtime.make({ services: Loadable.Runtime.services() })
-    expect(loadable.snapshot()).type.toBe<import("@bevy-ts/core/Snapshot").WorldSnapshot>()
+    expect(loadable.snapshot()).type.toBe<import("@typeonce/bevy-ts/Snapshot").WorldSnapshot>()
 
     const Unloadable = Schema.bind(Schema.fragment({ components: { Typed } }), Root)
     const unloadable = Unloadable.Runtime.make({ services: Unloadable.Runtime.services() })
@@ -498,6 +498,6 @@ describe("Decode", () => {
     const Root = Schema.defineRoot("DecodeTypes")
     const Game = Schema.bind(Schema.fragment({ components: { Stats, Team, Player } }), Root)
     const runtime = Game.Runtime.make({ services: Game.Runtime.services() })
-    expect(runtime.snapshot()).type.toBe<import("@bevy-ts/core/Snapshot").WorldSnapshot>()
+    expect(runtime.snapshot()).type.toBe<import("@typeonce/bevy-ts/Snapshot").WorldSnapshot>()
   })
 })

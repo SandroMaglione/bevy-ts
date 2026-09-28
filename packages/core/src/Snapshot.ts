@@ -16,7 +16,7 @@
  * Both methods exist only when every component and resource in the schema is
  * either constructed with a constructor that accepts untrusted input
  * (`Descriptor.ConstructedComponent(...)` given a `decode(raw: unknown)`, as
- * `@bevy-ts/math` modules export, or a `result(raw: unknown)`) or transient
+ * `@typeonce/bevy-ts-math` modules export, or a `result(raw: unknown)`) or transient
  * (`Descriptor.TransientComponent<T>()`, which is not saved). Otherwise calling them is a compile error naming the descriptors
  * without a validator, so no unvalidated value can enter the world through a
  * save file. `Descriptor.fromStandardSchema(...)` turns any Standard Schema

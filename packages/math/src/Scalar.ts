@@ -33,9 +33,9 @@
  * @categoryDescription Operations
  * Pure scalar combinators that preserve branding after validation.
  */
-import type * as Brand from "@bevy-ts/core/Brand"
+import type * as Brand from "@typeonce/bevy-ts/Brand"
 import * as internal from "./internal/scalar.ts"
-import type * as Result from "@bevy-ts/core/Result"
+import type * as Result from "@typeonce/bevy-ts/Result"
 
 /**
  * Finite number brand.

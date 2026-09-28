@@ -1,5 +1,5 @@
 
-import { RenderSync } from "@bevy-ts/pixi"
+import { RenderSync } from "@typeonce/bevy-ts-pixi"
 
 import { PickupRenderQuery, PlayerRenderQuery } from "../queries.ts"
 import {

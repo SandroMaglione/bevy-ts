@@ -1,4 +1,4 @@
-import { Debug, Descriptor, Schema } from "@bevy-ts/core"
+import { Debug, Descriptor, Schema } from "@typeonce/bevy-ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DebugTypes/Position")

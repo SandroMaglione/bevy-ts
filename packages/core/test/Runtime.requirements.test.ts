@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/Runtime"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import * as Runtime from "@typeonce/bevy-ts/Runtime"
 
 describe("Runtime dynamic requirements", () => {
   it("reports missing nominal requirements before executing an erased schedule", () => {

@@ -31,8 +31,8 @@
  * })
  * ```
  */
-import type { Descriptor } from "@bevy-ts/core/Descriptor"
-import type { Schema } from "@bevy-ts/core/Schema"
+import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
+import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 /**
  * Anything that produces one input snapshot per call.

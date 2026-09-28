@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Entity, Schema } from "@bevy-ts/core"
-import * as Command from "@bevy-ts/core/Command"
-import type { EntityId } from "@bevy-ts/core/Entity"
-import * as Query from "@bevy-ts/core/Query"
-import * as Runtime from "@bevy-ts/core/Runtime"
-import * as Schedule from "@bevy-ts/core/Schedule"
-import * as System from "@bevy-ts/core/System"
+import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
+import * as Command from "@typeonce/bevy-ts/Command"
+import type { EntityId } from "@typeonce/bevy-ts/Entity"
+import * as Query from "@typeonce/bevy-ts/Query"
+import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import * as Schedule from "@typeonce/bevy-ts/Schedule"
+import * as System from "@typeonce/bevy-ts/System"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

@@ -7,7 +7,7 @@ runtime. Browser timing and rendering stay outside the ECS.
 ## 1. Define the world
 
 ```ts
-import { Descriptor, Fx, Result, Schema } from "@bevy-ts/core"
+import { Descriptor, Fx, Result, Schema } from "@typeonce/bevy-ts"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Game/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Game/Velocity")
@@ -187,7 +187,7 @@ world untouched on failure.
 Both methods only exist when every component and resource is either
 transient (never saved) or constructed with a validator that accepts
 untrusted input: a `result(raw: unknown)`, or a `decode(raw: unknown)` next to
-a typed `result` (every `@bevy-ts/math` module exports one). Otherwise calling
+a typed `result` (every `@typeonce/bevy-ts-math` module exports one). Otherwise calling
 them fails to compile, and the error lists each descriptor to fix:
 
 ```ts
@@ -211,7 +211,7 @@ world, `observe(listener)` for a trace of every system run, applied command,
 and transition, and `streams()` for event retention. Runtimes made without it
 have no handle.
 
-`@bevy-ts/devtools` wraps the handle in a session that runs schedules headless
+`@typeonce/bevy-ts-devtools` wraps the handle in a session that runs schedules headless
 and answers questions as text:
 
 ```ts
@@ -230,10 +230,10 @@ and feed input through `Keyboard.scripted(...)`. See
 
 ## 6. Drive fixed updates from any renderer
 
-`@bevy-ts/browser` supplies timing policy without owning the ECS or renderer.
+`@typeonce/bevy-ts-browser` supplies timing policy without owning the ECS or renderer.
 
 ```ts
-import { FixedLoop } from "@bevy-ts/browser"
+import { FixedLoop } from "@typeonce/bevy-ts-browser"
 
 const source = FixedLoop.animationFrames(window)
 const loop = FixedLoop.start({
@@ -275,7 +275,7 @@ Keyboard input is exposed the same way: bind named actions once, and let
 systems read like any other world data.
 
 ```ts
-import { InputCapture, Keyboard } from "@bevy-ts/browser"
+import { InputCapture, Keyboard } from "@typeonce/bevy-ts-browser"
 
 const bindings = { left: ["ArrowLeft", "a"], right: ["ArrowRight", "d"], jump: [" ", "ArrowUp", "w"] } as const
 
@@ -306,10 +306,10 @@ The resource's value type must match the snapshot type exactly.
 
 ## 7. Mirror entities into Pixi
 
-`@bevy-ts/pixi` owns the node bookkeeping; what a node looks like stays yours.
+`@typeonce/bevy-ts-pixi` owns the node bookkeeping; what a node looks like stays yours.
 
 ```ts
-import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi"
 
 const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Container>>()("Game/RenderNodes")
 

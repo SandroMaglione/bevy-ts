@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Entity, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Name = Descriptor.Component<{ value: string }>()("Name")

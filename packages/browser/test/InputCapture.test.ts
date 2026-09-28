@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { InputCapture, Keyboard } from "@bevy-ts/browser"
-import { Descriptor, Schema } from "@bevy-ts/core"
+import { InputCapture, Keyboard } from "@typeonce/bevy-ts-browser"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
 
 const bindings = { jump: [" "], left: ["ArrowLeft"] } as const
 

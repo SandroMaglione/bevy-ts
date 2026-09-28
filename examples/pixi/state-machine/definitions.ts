@@ -1,6 +1,6 @@
-import * as Definition from "@bevy-ts/core/Definition"
-import * as Size2 from "@bevy-ts/math/Size2"
-import * as Vector2 from "@bevy-ts/math/Vector2"
+import * as Definition from "@typeonce/bevy-ts/Definition"
+import * as Size2 from "@typeonce/bevy-ts-math/Size2"
+import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
 import { STAGE_HEIGHT, STAGE_WIDTH } from "./constants.ts"
 
 export const arena = Definition.entry(Size2, {

@@ -27,7 +27,7 @@
  * copied. World values are immutable by contract, so they stay valid as a
  * history, but serialize them before sending them elsewhere.
  *
- * `@bevy-ts/devtools` builds sessions, histories, formatting, and invariants
+ * `@typeonce/bevy-ts-devtools` builds sessions, histories, formatting, and invariants
  * on top of this handle.
  *
  * @module Debug

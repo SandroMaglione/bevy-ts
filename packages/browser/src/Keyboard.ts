@@ -44,7 +44,7 @@
  * }
  * ```
  */
-import * as Result from "@bevy-ts/core/Result"
+import * as Result from "@typeonce/bevy-ts/Result"
 
 /**
  * The subset of `KeyboardEvent` the module reads.

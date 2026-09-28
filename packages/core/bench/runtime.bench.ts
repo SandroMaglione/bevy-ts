@@ -8,8 +8,8 @@
  * `calibration` case is plain JavaScript work used to normalize scores across
  * machines (see `scripts/bench.ts`).
  */
-import { Decode, Descriptor, Schema } from "@bevy-ts/core"
-import type * as Entity from "@bevy-ts/core/Entity"
+import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
+import type * as Entity from "@typeonce/bevy-ts/Entity"
 import type { BenchCase } from "./harness.ts"
 
 const N = 10_000

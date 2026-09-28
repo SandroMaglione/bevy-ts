@@ -33,9 +33,9 @@
  * @categoryDescription Operations
  * Immutable geometry helpers for translation and overlap checks.
  */
-import type * as Brand from "@bevy-ts/core/Brand"
+import type * as Brand from "@typeonce/bevy-ts/Brand"
 import * as internal from "./internal/aabb.ts"
-import type * as Result from "@bevy-ts/core/Result"
+import type * as Result from "@typeonce/bevy-ts/Result"
 import type * as Scalar from "./Scalar.ts"
 import type * as Size2 from "./Size2.ts"
 import type * as Vector2 from "./Vector2.ts"

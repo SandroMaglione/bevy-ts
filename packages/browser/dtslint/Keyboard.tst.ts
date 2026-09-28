@@ -1,4 +1,4 @@
-import { Keyboard } from "@bevy-ts/browser"
+import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { describe, expect, it } from "tstyche"
 
 declare const host: Keyboard.KeyboardHost

@@ -103,7 +103,7 @@ export interface ResultConstructor<Value, Raw, Error> {
  *
  * Constructors whose `result` takes a specific raw shape (for example
  * `Vector2.result({ x, y })`) also export `decode` so snapshots can load
- * them safely. `@bevy-ts/math` modules do.
+ * them safely. `@typeonce/bevy-ts-math` modules do.
  */
 export interface Decoder<Value> {
   readonly decode: (raw: unknown) => import("./Result.ts").Result<Value, unknown>

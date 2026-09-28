@@ -1,4 +1,4 @@
-import * as Result from "@bevy-ts/core/Result"
+import * as Result from "@typeonce/bevy-ts/Result"
 import {
   ActorNodes,
   Arena,

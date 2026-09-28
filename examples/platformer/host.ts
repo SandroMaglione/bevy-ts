@@ -1,5 +1,5 @@
-import { Keyboard } from "@bevy-ts/browser"
-import { NodeRegistry } from "@bevy-ts/pixi"
+import { Keyboard } from "@typeonce/bevy-ts-browser"
+import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
 import { Application, Container } from "pixi.js"
 
 import { createHud } from "./render/hud.ts"

@@ -18,16 +18,16 @@
     "erasableSyntaxOnly": false,
     "types": ["node"],
     "paths": {
-      "@bevy-ts/core": ["./packages/core/src/index.ts"],
-      "@bevy-ts/core/*": ["./packages/core/src/*"],
-      "@bevy-ts/browser": ["./packages/browser/src/index.ts"],
-      "@bevy-ts/browser/*": ["./packages/browser/src/*"],
-      "@bevy-ts/pixi": ["./packages/pixi/src/index.ts"],
-      "@bevy-ts/pixi/*": ["./packages/pixi/src/*"],
-      "@bevy-ts/math": ["./packages/math/src/index.ts"],
-      "@bevy-ts/math/*": ["./packages/math/src/*"],
-      "@bevy-ts/devtools": ["./packages/devtools/src/index.ts"],
-      "@bevy-ts/devtools/*": ["./packages/devtools/src/*"]
+      "@typeonce/bevy-ts": ["./packages/core/src/index.ts"],
+      "@typeonce/bevy-ts/*": ["./packages/core/src/*"],
+      "@typeonce/bevy-ts-browser": ["./packages/browser/src/index.ts"],
+      "@typeonce/bevy-ts-browser/*": ["./packages/browser/src/*"],
+      "@typeonce/bevy-ts-pixi": ["./packages/pixi/src/index.ts"],
+      "@typeonce/bevy-ts-pixi/*": ["./packages/pixi/src/*"],
+      "@typeonce/bevy-ts-math": ["./packages/math/src/index.ts"],
+      "@typeonce/bevy-ts-math/*": ["./packages/math/src/*"],
+      "@typeonce/bevy-ts-devtools": ["./packages/devtools/src/index.ts"],
+      "@typeonce/bevy-ts-devtools/*": ["./packages/devtools/src/*"]
     }
   }
 }

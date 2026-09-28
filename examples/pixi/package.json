@@ -1,11 +1,11 @@
 {
-  "name": "@bevy-ts/example-pixi",
+  "name": "@typeonce/bevy-ts-example-pixi",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@bevy-ts/core": "workspace:*",
-    "@bevy-ts/browser": "workspace:*",
-    "@bevy-ts/pixi": "workspace:*",
-    "@bevy-ts/math": "workspace:*"
+    "@typeonce/bevy-ts": "workspace:*",
+    "@typeonce/bevy-ts-browser": "workspace:*",
+    "@typeonce/bevy-ts-pixi": "workspace:*",
+    "@typeonce/bevy-ts-math": "workspace:*"
   }
 }
