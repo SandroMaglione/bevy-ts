@@ -29,6 +29,16 @@ Own Pixi-specific infrastructure:
 
 This package must not own sprite conventions, HUD semantics, actor kinds, or camera policy.
 
+### `@bevy-ts/devtools`
+
+Own debugging infrastructure over the core `Debug` handle:
+
+- headless debug sessions that drive named schedules
+- bounded trace history and text rendering for terminals and agents
+- invariants checked between frames
+
+This package reads the world; it must not mutate it or require games to change their runtime shape beyond `debug: true`.
+
 ## Bad Packages
 
 These do not belong as public platform packages:

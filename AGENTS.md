@@ -3,6 +3,7 @@
 - [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard input.
 - [`packages/pixi`](./packages/pixi/): Pixi node registry and render-sync systems.
 - [`packages/math`](./packages/math/): validated math values (Scalar, Vector2, Size2, Aabb, InputAxis).
+- [`packages/devtools`](./packages/devtools/): debug sessions, trace history, and text reports over the core `Debug` handle.
 - [`examples`](./examples/): workspace example apps that consume packages by package name.
 
 ## Core Principles
@@ -54,6 +55,11 @@ if (!target.ok) {
   return
 }
 ```
+
+## Debugging Game Behavior
+- Reproduce headless before changing code: build the game's simulation schedules on a runtime made with `debug: true` and scripted input (`Keyboard.scripted`). [`examples/top-down/simulation.ts`](./examples/top-down/simulation.ts) is the reference; copy [`examples/top-down/debug.ts`](./examples/top-down/debug.ts) and run it with `node --import tsx <script>`.
+- Use `@bevy-ts/devtools` sessions: `describe()` to orient, `run(name, { frames })` with an `Invariant` that encodes the bug, then `why(entity, Component)`, `journal({ frames, entity })`, and `report()` to explain it. See [`packages/devtools/README.md`](./packages/devtools/README.md).
+- Once the script reproduces the bug, turn it into a test next to the game.
 
 ## Design References
 - [`bevy`](./.agents/bevy/): ECS concepts, scheduling, states, and relationships. Reference for the problem space, not a mandate to copy engine-owned ergonomics.

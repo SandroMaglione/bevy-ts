@@ -203,6 +203,31 @@ Restored entities come back without transient components, and transient
 resources keep their current values. Entity ids are kept, so stored handles still resolve. A restore reads
 as despawns and spawns to change detection, so renderer sync rebuilds itself.
 
+## Debug a run
+
+A runtime made with `debug: true` carries a read-only `debug` handle:
+`describe()` for schedules and declared access, `dump()` for the current
+world, `observe(listener)` for a trace of every system run, applied command,
+and transition, and `streams()` for event retention. Runtimes made without it
+have no handle.
+
+`@bevy-ts/devtools` wraps the handle in a session that runs schedules headless
+and answers questions as text:
+
+```ts
+const runtime = Game.Runtime.make({ services, resources, debug: true })
+const session = Session.make(runtime, { schedules: { setup, update }, invariants: [HealthNeverNegative] })
+
+session.run("setup")
+console.log(session.run("update", { frames: 300 }))  // stops at the first violated invariant
+console.log(session.why(12, Health))                 // latest changes and the systems that made them
+console.log(session.journal({ frames: [180, 185], entity: 12 }))
+```
+
+Keep the simulation schedules free of renderer services so they run in Node,
+and feed input through `Keyboard.scripted(...)`. See
+[`packages/devtools/README.md`](./packages/devtools/README.md).
+
 ## 6. Drive fixed updates from any renderer
 
 `@bevy-ts/browser` supplies timing policy without owning the ECS or renderer.
