@@ -1,7 +1,4 @@
-/**
- * Browser-specific integrations live in this package.
- *
- * The workspace scaffold is in place so browser abstractions can be added as
- * platform-specific building blocks without expanding core responsibilities.
- */
+/** Browser host integrations kept outside the renderer-agnostic ECS core. */
+export * as FixedLoop from "./FixedLoop.ts"
+
 export const packageTag = "browser" as const

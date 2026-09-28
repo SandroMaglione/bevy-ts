@@ -2,8 +2,8 @@ import { Fx } from "@bevy-ts/core"
 
 import { levelBounds, levelSolids } from "../content.ts"
 import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
-import { LevelEntityQuery, PlayerReadQuery } from "../queries.ts"
-import { Game, InputState, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
+import { PlayerReadQuery } from "../queries.ts"
+import { Game, InputState, LevelScope, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
 export const QueueLossSystem = Game.System(
@@ -73,16 +73,10 @@ export const ResetWorldResourcesOnPlayingEnterSystem = Game.System(
 
 export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
   "Platformer/DespawnLevelEntitiesOnPlayingEnter",
-  {
-    queries: {
-      levelEntities: LevelEntityQuery
-    }
-  },
-  ({ queries, commands }) =>
+  {},
+  ({ commands }) =>
     Fx.sync(() => {
-      for (const match of queries.levelEntities.each()) {
-        commands.despawn(match.entity.id)
-      }
+      commands.despawnScope(LevelScope)
     })
 )
 
@@ -93,13 +87,13 @@ export const SpawnWorldOnPlayingEnterSystem = Game.System(
     Fx.sync(() => {
       const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
-        commands.spawn(playerDraft.value)
+        commands.spawnIn(LevelScope, playerDraft.value)
       }
 
       for (const solid of levelSolids) {
         const solidDraft = makeSolidDraft(solid)
         if (solidDraft.ok) {
-          commands.spawn(solidDraft.value)
+          commands.spawnIn(LevelScope, solidDraft.value)
         }
       }
     })

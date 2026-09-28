@@ -34,7 +34,7 @@ export const readResourceValue = <
     },
     ({ resources }) =>
       Fx.sync(() => {
-        captured = resources.value.get()
+        captured = resources.value.get() as Descriptor.Value<D>
       })
   )
 
@@ -72,7 +72,7 @@ export const readStateValue = <
     },
     ({ states }) =>
       Fx.sync(() => {
-        captured = states.value.get()
+        captured = states.value.get() as Descriptor.Value<D>
       })
   )
 

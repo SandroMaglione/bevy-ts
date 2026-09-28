@@ -7,6 +7,7 @@
   "moduleGroups": [
     { "id": "core", "label": "Core" },
     { "id": "runtime", "label": "Runtime" },
+    { "id": "browser", "label": "Browser" },
     { "id": "data-structures", "label": "Data Structures" },
     { "id": "helpers", "label": "Helpers" }
   ],
@@ -18,8 +19,10 @@
     "packages/core/src/Definition.ts",
     "packages/core/src/descriptor.ts",
     "packages/core/src/entity.ts",
+    "packages/core/src/entityScope.ts",
     "packages/core/src/fx.ts",
     "packages/core/src/InputAxis.ts",
+    "packages/core/src/inspector.ts",
     "packages/core/src/machine.ts",
     "packages/core/src/query.ts",
     "packages/core/src/relation.ts",
@@ -31,6 +34,7 @@
     "packages/core/src/schema.ts",
     "packages/core/src/Size2.ts",
     "packages/core/src/system.ts",
-    "packages/core/src/Vector2.ts"
+    "packages/core/src/Vector2.ts",
+    "packages/browser/src/FixedLoop.ts"
   ]
 }

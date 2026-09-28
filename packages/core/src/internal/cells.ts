@@ -121,11 +121,13 @@ class StoreReadCell {
 class StoreWriteCell extends WriteCellBase<unknown> {
   readonly store: Map<symbol, unknown>
   readonly key: symbol
+  readonly write: (key: symbol, value: unknown) => void
 
-  constructor(store: Map<symbol, unknown>, key: symbol) {
+  constructor(store: Map<symbol, unknown>, key: symbol, write: (key: symbol, value: unknown) => void) {
     super()
     this.store = store
     this.key = key
+    this.write = write
   }
 
   get(): unknown {
@@ -133,7 +135,7 @@ class StoreWriteCell extends WriteCellBase<unknown> {
   }
 
   set(value: unknown): void {
-    this.store.set(this.key, value)
+    this.write(this.key, value)
   }
 }
 
@@ -156,12 +158,17 @@ export const componentOptional = (record: EntityRecord, ordinal: number): { read
 export const storeRead = (store: Map<symbol, unknown>, key: symbol): { get(): unknown } =>
   new StoreReadCell(store, key)
 
+/**
+ * A writable cell over resource or state storage. Writes go through `write`
+ * so the runtime can journal them for rollback.
+ */
 export const storeWrite = (
   store: Map<symbol, unknown>,
   key: symbol,
+  write: (key: symbol, value: unknown) => void,
   constructor: ResultConstructor<unknown, unknown, unknown> | undefined
 ): WriteCellBase<unknown> => {
-  const cell = new StoreWriteCell(store, key)
+  const cell = new StoreWriteCell(store, key, write)
   return constructor === undefined ? cell : withConstructor(cell, constructor)
 }
 

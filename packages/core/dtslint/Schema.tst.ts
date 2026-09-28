@@ -180,14 +180,14 @@ describe("Schema", () => {
           for (const match of queries.moving.each()) {
             expect(match.data.velocity).type.toBe<QueryTypes.OptionalReadCell<{ dx: number; dy: number }>>()
             expect(match.entity.proof).type.toBe<{
-              readonly position: { x: number; y: number }
+              readonly position: QueryTypes.ReadonlyValue<{ x: number; y: number }>
             }>()
 
             // @ts-expect-error!
             match.data.velocity.get()
 
             if (match.data.velocity.present) {
-              expect(match.data.velocity.get()).type.toBe<{ dx: number; dy: number }>()
+              expect(match.data.velocity.get()).type.toBe<QueryTypes.ReadonlyValue<{ dx: number; dy: number }>>()
             }
           }
         })
@@ -235,11 +235,11 @@ describe("Schema", () => {
           }
 
           expect(result.value.entity.proof).type.toBe<{
-            readonly position: { x: number; y: number }
-            readonly velocity: { dx: number; dy: number }
+            readonly position: QueryTypes.ReadonlyValue<{ x: number; y: number }>
+            readonly velocity: QueryTypes.ReadonlyValue<{ dx: number; dy: number }>
           }>()
           result.value.data.position.set({ x: 0, y: 0 })
-          expect(result.value.data.velocity.get()).type.toBe<{ dx: number; dy: number }>()
+          expect(result.value.data.velocity.get()).type.toBe<QueryTypes.ReadonlyValue<{ dx: number; dy: number }>>()
         })
     )
 

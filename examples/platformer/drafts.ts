@@ -1,7 +1,7 @@
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from "./constants.ts"
 import { playerCollider, playerSpawn, playerZeroVelocity } from "./definitions.ts"
 import type { LevelSolidLayout } from "./content.ts"
-import { Collider, Game, LevelEntity, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
+import { Collider, Game, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
 
 const renderableForSolid = (
   layout: LevelSolidLayout
@@ -52,8 +52,7 @@ export const makePlayerDraft = () => {
       color: 0xd94841,
       accent: 0xfff2d5
     }),
-    Game.Command.entry(Player, {}),
-    Game.Command.entry(LevelEntity, {})
+    Game.Command.entry(Player, {})
   )
 }
 
@@ -62,7 +61,6 @@ export const makeSolidDraft = (layout: LevelSolidLayout) => {
     Game.Command.entryRaw(Position, { x: layout.x, y: layout.y }),
     Game.Command.entryRaw(Collider, { width: layout.width, height: layout.height }),
     Game.Command.entry(Renderable, renderableForSolid(layout)),
-    Game.Command.entry(Solid, {}),
-    Game.Command.entry(LevelEntity, {})
+    Game.Command.entry(Solid, {})
   )
 }

@@ -64,6 +64,7 @@
 import * as DescriptorModule from "./descriptor.ts"
 import type { Descriptor } from "./descriptor.ts"
 import * as Entity from "./entity.ts"
+import type * as EntityScope from "./entityScope.ts"
 import type * as Relation from "./relation.ts"
 import * as Result from "./Result.ts"
 import type { Schema } from "./schema.ts"
@@ -225,6 +226,17 @@ export interface InternalWorld<S extends Schema.Any> {
    * Removes an entity and its outgoing and incoming relations.
    */
   readonly destroyEntity: (id: Entity.EntityId<S, any>) => void
+  /**
+   * Assigns one live entity to an ownership scope.
+   */
+  readonly assignEntityScope: (
+    id: Entity.EntityId<S, any>,
+    scope: EntityScope.EntityScope.Any
+  ) => void
+  /**
+   * Removes every live entity currently owned by one scope.
+   */
+  readonly destroyEntityScope: (scope: EntityScope.EntityScope.Any) => void
   /**
    * Removes a component from a live entity.
    */
@@ -609,6 +621,15 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
    */
   readonly spawn: <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root>) => Entity.EntityId<S, Root>
   /**
+   * Queues an entity spawn owned by one lifetime scope.
+   *
+   * Scoped entities can later be removed together with `despawnScope(...)`.
+   */
+  readonly spawnIn: <P extends Entity.ComponentProof>(
+    scope: EntityScope.EntityScope<string, Root>,
+    draft: Entity.EntityDraft<S, P, Root>
+  ) => Entity.EntityId<S, Root>
+  /**
    * Queues a component insert on an existing entity.
    */
   readonly insert: <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>>(
@@ -627,6 +648,10 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
    * Queues an entity removal.
    */
   readonly despawn: (entity: Entity.EntityId<S, Root>) => void
+  /**
+   * Queues removal of every entity owned by one lifetime scope.
+   */
+  readonly despawnScope: (scope: EntityScope.EntityScope<string, Root>) => void
   /**
    * Queues a component removal on an existing entity.
    */
@@ -694,6 +719,23 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       })
       return id
     },
+    spawnIn<P extends Entity.ComponentProof>(
+      scope: EntityScope.EntityScope<string, Root>,
+      draft: Entity.EntityDraft<S, P, Root>
+    ): Entity.EntityId<S, Root> {
+      const id = allocateId()
+      queue.push({
+        tag: "spawnIn",
+        apply(world) {
+          world.spawnEntity(id, draft.components)
+          world.assignEntityScope(id, scope)
+          for (const stagedRelation of draft.relations) {
+            world.tryRelate(id, stagedRelation.relation, stagedRelation.target)
+          }
+        }
+      })
+      return id
+    },
     insert(entity, descriptor, value) {
       queue.push({
         tag: "insert",
@@ -719,6 +761,14 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
         tag: "despawn",
         apply(world) {
           world.destroyEntity(entity)
+        }
+      })
+    },
+    despawnScope(scope) {
+      queue.push({
+        tag: "despawnScope",
+        apply(world) {
+          world.destroyEntityScope(scope)
         }
       })
     },

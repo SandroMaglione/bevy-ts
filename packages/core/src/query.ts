@@ -408,7 +408,7 @@ export namespace Query {
       T["selection"][K] extends OptionalReadAccess<any> | Relation.SelectionAccess<any, any> ? never
       : T["selection"][K] extends Access<any> ? K
       : never]:
-      T["selection"][K] extends Access<infer D> ? Descriptor.Value<D> : never
+      T["selection"][K] extends Access<infer D> ? ReadonlyValue<Descriptor.Value<D>> : never
   }
 
   /**
@@ -417,7 +417,7 @@ export namespace Query {
   export type WriteProof<T extends Any> = {
     readonly [K in keyof T["selection"] as
       T["selection"][K] extends WriteAccess<any> ? K : never]:
-      T["selection"][K] extends WriteAccess<infer D> ? Descriptor.Value<D> : never
+      T["selection"][K] extends WriteAccess<infer D> ? ReadonlyValue<Descriptor.Value<D>> : never
   }
 
   /**
@@ -477,14 +477,27 @@ export namespace Query {
   export type SingleError = NoEntitiesError | MultipleEntitiesError
 }
 
+/** Deep read projection used by every ECS read capability. */
+export type ReadonlyValue<T> =
+  T extends string | number | boolean | bigint | symbol | null | undefined ? T
+  : T extends (...args: ReadonlyArray<any>) => any ? T
+  : T extends ReadonlyMap<infer Key, infer Value> ? ReadonlyMap<ReadonlyValue<Key>, ReadonlyValue<Value>>
+  : T extends ReadonlySet<infer Value> ? ReadonlySet<ReadonlyValue<Value>>
+  : T extends readonly unknown[] ? { readonly [K in keyof T]: ReadonlyValue<T[K]> }
+  : T extends object ? { readonly [K in keyof T]: ReadonlyValue<T[K]> }
+  : T
+
 /**
  * A read-only cell returned from query or resource access.
+ *
+ * Object and collection values are deeply readonly so in-place mutation cannot
+ * bypass lifecycle tracking, validation, or a system transaction.
  */
 export interface ReadCell<T> {
   /**
    * Reads the current value.
    */
-  get(): T
+  get(): ReadonlyValue<T>
 }
 
 /**
@@ -504,11 +517,11 @@ export interface WriteCell<T> extends ReadCell<T> {
   /**
    * Updates the current value based on the previous one.
    */
-  update(f: (current: T) => T): void
+  update(f: (current: ReadonlyValue<T>) => T): void
   /**
    * Updates the current value from an explicit result-producing callback.
    */
-  updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E>
+  updateResult<E>(f: (current: ReadonlyValue<T>) => Result.Result<T, E>): Result.Result<void, E>
 }
 
 /**
@@ -539,7 +552,7 @@ export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
    * }))
    * ```
    */
-  updateRaw(f: (current: T) => Raw): Result.Result<void, Error>
+  updateRaw(f: (current: ReadonlyValue<T>) => Raw): Result.Result<void, Error>
 }
 
 /**

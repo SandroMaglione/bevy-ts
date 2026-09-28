@@ -2,8 +2,8 @@
  * Small explicit effect type used for systems and runtime orchestration.
  *
  * `Fx` models delayed computation with typed success, failure, and environment
- * channels, but stays intentionally minimal instead of becoming a full effect
- * system.
+ * channels. Expected failures are returned as `Result` values; exceptions are
+ * reserved for unexpected defects in user code.
  *
  * In this library it mainly exists so systems can return executable work while
  * still carrying typed service requirements and explicit failure channels where
@@ -34,6 +34,8 @@
  * @groupDescription Functions
  * Minimal constructors and combinators for explicit delayed computations.
  */
+import * as Result from "./Result.ts"
+
 /**
  * String-literal type id used to mirror Effect's current `~effect/...` style.
  */
@@ -48,16 +50,15 @@ const fxTypeId: FxTypeId = "~bevy-ts/Fx"
  * A minimal Effect-style computation used by the runtime.
  *
  * `Fx<A, E, R>` models a computation that succeeds with `A`, may fail with `E`,
- * and requires an environment `R`. The implementation is intentionally small,
- * but the public shape gives systems typed dependency tracking.
+ * and requires an environment `R`.
  */
-export interface Fx<A, E = never, R = never> {
+export interface Fx<A, E = never, R = unknown> {
   readonly [fxTypeId]: {
     readonly _A: (_: never) => A
     readonly _E: (_: never) => E
     readonly _R: (_: R) => void
   }
-  readonly run: (environment: R) => A
+  readonly run: (environment: R) => Result.Result<A, E>
 }
 
 /**
@@ -84,7 +85,7 @@ export namespace Fx {
  * All public constructors eventually delegate here so the runtime shape stays
  * consistent.
  */
-const make = <A, E, R>(run: (environment: R) => A): Fx<A, E, R> =>
+const make = <A, E, R>(run: (environment: R) => Result.Result<A, E>): Fx<A, E, R> =>
   ({
     [fxTypeId]: {
       _A: (_: never) => undefined as A,
@@ -100,7 +101,8 @@ const make = <A, E, R>(run: (environment: R) => A): Fx<A, E, R> =>
  * Use this for pure values that should still participate in the typed effect
  * composition model.
  */
-export const succeed = <A, R = never>(value: A): Fx<A, never, R> => make(() => value)
+export const succeed = <A, R = unknown>(value: A): Fx<A, never, R> =>
+  make(() => Result.success(value))
 
 /**
  * Wraps a synchronous computation in an `Fx`.
@@ -108,15 +110,14 @@ export const succeed = <A, R = never>(value: A): Fx<A, never, R> => make(() => v
  * This is the most common constructor for system implementations in the current
  * runtime because systems are executed synchronously.
  */
-export const sync = <A, R = never>(evaluate: () => A): Fx<A, never, R> => make(() => evaluate())
+export const sync = <A, R = unknown>(evaluate: () => A): Fx<A, never, R> =>
+  make(() => Result.success(evaluate()))
 
 /**
- * Creates an effect that fails by throwing the provided error when run.
+ * Creates an effect that returns one expected failure when run.
  */
-export const fail = <E, R = never>(error: E): Fx<never, E, R> =>
-  make(() => {
-    throw error
-  })
+export const fail = <E, R = unknown>(error: E): Fx<never, E, R> =>
+  make(() => Result.failure(error))
 
 /**
  * Transforms the success value of an effect.
@@ -124,7 +125,10 @@ export const fail = <E, R = never>(error: E): Fx<never, E, R> =>
 export const map = <A, B, E, R>(
   self: Fx<A, E, R>,
   f: (value: A) => B
-): Fx<B, E, R> => make((environment) => f(self.run(environment)))
+): Fx<B, E, R> => make((environment) => {
+  const result = self.run(environment)
+  return result.ok ? Result.success(f(result.value)) : result
+})
 
 /**
  * Sequences two effects, allowing the second one to depend on the first result.
@@ -132,14 +136,18 @@ export const map = <A, B, E, R>(
 export const flatMap = <A, B, E1, E2, R1, R2>(
   self: Fx<A, E1, R1>,
   f: (value: A) => Fx<B, E2, R2>
-): Fx<B, E1 | E2, R1 & R2> => make((environment) => f(self.run(environment as R1)).run(environment as R2))
+): Fx<B, E1 | E2, R1 & R2> => make<B, E1 | E2, R1 & R2>((environment) => {
+  const first = self.run(environment as R1)
+  return first.ok ? f(first.value).run(environment as R2) : first
+})
 
 /**
  * Reads the whole effect environment.
  *
  * Use this when a system helper wants access to all declared services at once.
  */
-export const access = <R>(): Fx<R, never, R> => make((environment) => environment)
+export const access = <R>(): Fx<R, never, R> =>
+  make((environment) => Result.success(environment))
 
 /**
  * Reads a single service from the environment by key.
@@ -148,7 +156,7 @@ export const access = <R>(): Fx<R, never, R> => make((environment) => environmen
  * the entire environment type manually.
  */
 export const accessService = <R, K extends keyof R>(key: K): Fx<R[K], never, R> =>
-  make((environment) => environment[key])
+  make((environment) => Result.success(environment[key]))
 
 /**
  * Supplies the environment needed by an effect.
@@ -156,7 +164,7 @@ export const accessService = <R, K extends keyof R>(key: K): Fx<R[K], never, R> 
 export const provide = <A, E, R>(
   self: Fx<A, E, R>,
   environment: R
-): Fx<A, E> => make(() => self.run(environment))
+): Fx<A, E, unknown> => make(() => self.run(environment))
 
 /**
  * Runs an effect that no longer requires any environment.
@@ -164,4 +172,5 @@ export const provide = <A, E, R>(
  * The runtime uses this at the edge after it has provided the services declared
  * by a system spec.
  */
-export const runSync = <A, E>(self: Fx<A, E, never>): A => self.run(undefined as never)
+export const runSync = <A, E>(self: Fx<A, E, unknown>): Result.Result<A, E> =>
+  self.run(undefined)

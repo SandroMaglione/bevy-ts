@@ -53,7 +53,11 @@ export interface EntityRecord {
 const ADDED = 0
 const CHANGED = 2
 const REMOVED = 4
-const MARK_STRIDE = 6
+/**
+ * Transaction mark: the id of the system run that last journaled this slot.
+ */
+const JOURNALED = 6
+const MARK_STRIDE = 7
 const NO_MARK = -1
 
 type ComponentDescriptor = Descriptor<"component", string, any>
@@ -94,6 +98,23 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
   let readableRemoved: Array<Array<number> | undefined> = []
   let pendingDespawned: Array<number> = []
   let readableDespawned: Array<number> = []
+
+  /**
+   * Journal of in-place component writes made by the running system. Each
+   * record/ordinal pair is journaled once per transaction with its original
+   * value, so commit can record lifecycle changes and rollback can restore.
+   */
+  let transaction = 0
+  let inTransaction = false
+  const journalRecords: Array<EntityRecord> = []
+  const journalOrdinals: Array<number> = []
+  const journalValues: Array<unknown> = []
+
+  /**
+   * Entity ownership used by scene and level lifetime scopes.
+   */
+  const scopeByEntity = new Map<number, symbol>()
+  const scopeMembers = new Map<symbol, Set<number>>()
 
   const ordinalOf = (descriptor: ComponentDescriptor): number => {
     const known = ordinals.get(descriptor.key)
@@ -208,8 +229,91 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     if (!record.alive) {
       return
     }
+    if (!inTransaction) {
+      record.values[ordinal] = value
+      track(pendingChanged, CHANGED, record, ordinal)
+      return
+    }
+    const slot = ordinal * MARK_STRIDE + JOURNALED
+    if (record.marks[slot] !== transaction) {
+      record.marks[slot] = transaction
+      journalRecords.push(record)
+      journalOrdinals.push(ordinal)
+      journalValues.push(record.values[ordinal])
+    }
     record.values[ordinal] = value
-    track(pendingChanged, CHANGED, record, ordinal)
+  }
+
+  const clearJournal = (): void => {
+    journalRecords.length = 0
+    journalOrdinals.length = 0
+    journalValues.length = 0
+  }
+
+  /**
+   * Starts journaling in-place component writes for one system run.
+   */
+  const beginTransaction = (): void => {
+    transaction += 1
+    inTransaction = true
+  }
+
+  /**
+   * Keeps the journaled writes and records them as lifecycle changes.
+   */
+  const commitTransaction = (): void => {
+    inTransaction = false
+    for (let index = 0; index < journalRecords.length; index++) {
+      const record = journalRecords[index]!
+      if (record.alive) {
+        track(pendingChanged, CHANGED, record, journalOrdinals[index]!)
+      }
+    }
+    clearJournal()
+  }
+
+  /**
+   * Restores every journaled slot to its value before the transaction.
+   */
+  const rollbackTransaction = (): void => {
+    inTransaction = false
+    for (let index = 0; index < journalRecords.length; index++) {
+      journalRecords[index]!.values[journalOrdinals[index]!] = journalValues[index]
+    }
+    clearJournal()
+  }
+
+  const clearEntityScope = (id: number): void => {
+    const scopeKey = scopeByEntity.get(id)
+    if (scopeKey === undefined) {
+      return
+    }
+    scopeByEntity.delete(id)
+    const members = scopeMembers.get(scopeKey)
+    members?.delete(id)
+    if (members?.size === 0) {
+      scopeMembers.delete(scopeKey)
+    }
+  }
+
+  const assignEntityScope = (id: number, scopeKey: symbol): void => {
+    if (!records.has(id)) {
+      return
+    }
+    clearEntityScope(id)
+    let members = scopeMembers.get(scopeKey)
+    if (!members) {
+      members = new Set()
+      scopeMembers.set(scopeKey, members)
+    }
+    members.add(id)
+    scopeByEntity.set(id, scopeKey)
+  }
+
+  const destroyEntityScope = (scopeKey: symbol): void => {
+    for (const id of [...(scopeMembers.get(scopeKey) ?? [])]) {
+      destroyEntity(id)
+    }
   }
 
   const writeRecord = (record: EntityRecord, ordinal: number, value: unknown): void => {
@@ -406,6 +510,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       componentVersions[ordinal]! += 1
       track(pendingRemoved, REMOVED, record, ordinal)
     }
+    clearEntityScope(id)
     pendingDespawned.push(id)
     record.alive = false
     records.delete(id)
@@ -436,6 +541,11 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     writeComponent,
     removeComponent,
     destroyEntity,
+    assignEntityScope,
+    destroyEntityScope,
+    beginTransaction,
+    commitTransaction,
+    rollbackTransaction,
     tryRelate,
     unrelate,
     reorderChildren,

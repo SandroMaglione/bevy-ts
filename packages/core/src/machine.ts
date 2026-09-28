@@ -36,6 +36,7 @@
 import type { Schedule } from "./schedule.ts"
 import * as Requirement from "./requirement.ts"
 import type { Schema } from "./schema.ts"
+import type { SystemFailure } from "./system.ts"
 
 /**
  * Allowed literal values for the first finite-state-machine API.
@@ -197,12 +198,14 @@ export interface TransitionScheduleDefinition<
   S extends Schema.Any = Schema.Any,
   M extends StateMachineDefinition = StateMachineDefinition,
   Needs extends Requirement.Requirement = Requirement.Requirement,
-  Root = unknown
+  Root = unknown,
+  Failure extends SystemFailure = never
 > {
   readonly steps: ReadonlyArray<Schedule.Step>
   readonly systems: ReadonlyArray<unknown>
   readonly schema: S
   readonly requirements: ReadonlyArray<Needs>
+  readonly __failure?: (_: never) => Failure
   readonly __schemaRoot?: Root | undefined
   readonly transition: {
     readonly machine: M
@@ -222,7 +225,7 @@ export namespace StateMachine {
   export type Root<M extends Any> = M extends StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], infer R> ? R : never
   export type AnyCondition<Root = unknown> = Condition<Root>
   export type AnyTransitionSchedule<S extends Schema.Any = Schema.Any, Root = unknown> =
-    TransitionScheduleDefinition<S, Any, Requirement.Requirement, Root>
+    TransitionScheduleDefinition<S, Any, Requirement.Requirement, Root, SystemFailure>
 }
 
 /** Extracts the machine token from one declared machine access slot. */
