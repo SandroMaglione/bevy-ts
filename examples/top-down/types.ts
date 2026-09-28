@@ -1,3 +1,4 @@
+import type { Keyboard } from "@bevy-ts/browser"
 import type { NodeRegistry } from "@bevy-ts/pixi"
 import type { Application, Container, Sprite, Texture } from "pixi.js"
 import type * as Size2Value from "@bevy-ts/math/Size2"
@@ -16,14 +17,15 @@ export type AnimationClockValue = {
   frameIndex: AnimationFrameIndex
   elapsed: number
 }
-export type InputStateValue = {
-  up: boolean
-  down: boolean
-  left: boolean
-  right: boolean
-  interactPressed: boolean
-  interactJustPressed: boolean
-}
+export const inputBindings = {
+  up: ["ArrowUp", "w"],
+  down: ["ArrowDown", "s"],
+  left: ["ArrowLeft", "a"],
+  right: ["ArrowRight", "d"],
+  interact: ["e", " "]
+} as const
+export type InputStateValue = Keyboard.Snapshot<typeof inputBindings>
+export type KeyboardInput = Keyboard.Actions<typeof inputBindings>
 export type HudRefs = {
   prompt: HTMLElement
   stats: HTMLElement

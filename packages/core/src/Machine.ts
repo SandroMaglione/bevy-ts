@@ -100,9 +100,9 @@ export interface TransitionView<M extends StateMachineDefinition = StateMachineD
 /**
  * A typed read-only stream of committed machine transition events.
  *
- * These snapshots are emitted by `applyStateTransitions(...)` and become
- * readable only after the normal `updateEvents()` marker advances event
- * visibility for the current schedule.
+ * These snapshots are published by `applyStateTransitions(...)` when a
+ * transition commits. Like events, each reader sees the transitions published
+ * since its own previous run.
  */
 export interface TransitionEventView<M extends StateMachineDefinition = StateMachineDefinition> {
   all(): ReadonlyArray<TransitionSnapshot<M>>

@@ -1,5 +1,5 @@
 export { SetupWorldSystem } from "./setup.ts"
-export { CaptureFrameContextSystem } from "./input.ts"
+export { CaptureFrameContextSystem, CaptureInputSystem } from "./input.ts"
 export { PlanPlayerVelocitySystem, MovePlayerSystem } from "./movement.ts"
 export { UpdateFocusedCollectableSystem, CollectFocusedCollectableSystem } from "./interaction.ts"
 export {

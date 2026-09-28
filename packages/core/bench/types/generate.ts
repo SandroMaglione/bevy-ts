@@ -90,7 +90,7 @@ for (let group = 0; group < groups; group++) {
   emit(`const Group${group} = Game.Schedule(${members.join(", ")}, Game.Schedule.applyDeferred())`)
 }
 emit("const Transitions = Game.Schedule.transitions(Game.Schedule.onEnter(Flow, \"Playing\", [S01]))")
-emit(`const Update = Game.Schedule(${Array.from({ length: groups }, (_, group) => `Group${group}`).join(", ")}, Game.Schedule.updateEvents(), Game.Schedule.applyStateTransitions(Transitions))`)
+emit(`const Update = Game.Schedule(${Array.from({ length: groups }, (_, group) => `Group${group}`).join(", ")}, Game.Schedule.applyStateTransitions(Transitions))`)
 emit()
 emit("const runtime = Game.Runtime.make({")
 emit("  services: Game.Runtime.services(Game.Runtime.service(Clock, { now: () => 0 })),")

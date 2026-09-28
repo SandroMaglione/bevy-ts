@@ -47,7 +47,6 @@ export const updateSchedule = Game.Schedule(
   QueueOutcomeSystem,
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateEvents(),
   // Host sync runs after the commands above are applied, so it sees this tick's spawns.
   WriteTransitionNoticeSystem,
   FadeTransitionNoticeSystem,

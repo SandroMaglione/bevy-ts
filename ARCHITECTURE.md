@@ -42,16 +42,14 @@ phases, fragments, transition plans, and feature output arrays carry a union of
 named system failures. The runtime returns that union; it does not recalculate
 it from nested system specs.
 
-Visibility changes are explicit, and only markers advance them:
+Structural work is applied only at explicit markers:
 
 - `applyDeferred()` applies queued world commands.
-- `updateEvents()` advances event buffers.
-- `updateRelationFailures()` advances relation-failure buffers.
 - `applyStateTransitions()` applies queued commands, then commits queued machine transitions.
 
-Change detection needs no marker: `added`/`changed` filters and removed/despawned reads are relative to each system's previous run (see Storage).
+Reads need no marker. Change detection (`added`/`changed` filters, removed/despawned reads), events, transition events, and relation failures are per-reader streams: entries are stamped with the change tick at which they were published, and each system sees the entries after its previous completed run (see Storage). A system's events are published when it commits, so a failed system publishes nothing, and a failed reader sees the same entries again. Entries are kept for the current and previous `tick(...)` call.
 
-Nothing is flushed when a schedule ends. Pending work stays in the runtime, across schedule runs, until a marker advances it.
+Nothing is flushed when a schedule ends. Queued work stays in the runtime, across schedule runs, until a marker applies it.
 
 ## Runtimes
 

@@ -1,3 +1,4 @@
+import { Keyboard } from "@bevy-ts/browser"
 import * as Result from "@bevy-ts/core/Result"
 import {
   AnimationClock,
@@ -8,8 +9,8 @@ import {
   Facing,
   FocusedCollectable,
   Game,
-  InputManager,
   InputState,
+  KeyboardInput,
   Locomotion,
   TopDownHost,
   TotalCollectables,
@@ -17,20 +18,8 @@ import {
   RenderNodes
 } from "./schema.ts"
 import { pickupLayout } from "./content.ts"
-import type { InputStateValue, TopDownHostValue } from "./types.ts"
-
-export type TopDownInputManager = {
-  readonly snapshot: () => InputStateValue
-}
-
-export const makeEmptyInputState = (): InputStateValue => ({
-  up: false,
-  down: false,
-  left: false,
-  right: false,
-  interactPressed: false,
-  interactJustPressed: false
-})
+import { inputBindings } from "./types.ts"
+import type { KeyboardInput as KeyboardInputValue, TopDownHostValue } from "./types.ts"
 
 export const makeEmptyFocusedCollectable = () => ({
   current: null,
@@ -45,7 +34,7 @@ export const makeInitialAnimationClock = () => ({
 
 const makeRuntime = (
   host: TopDownHostValue,
-  inputManager: TopDownInputManager
+  keyboard: KeyboardInputValue
 ) => {
   const machines = Game.Runtime.machines(
     Game.Runtime.machine(Facing, "Down"),
@@ -54,7 +43,7 @@ const makeRuntime = (
 
   return Game.Runtime.make({
     services: Game.Runtime.services(
-      Game.Runtime.service(InputManager, inputManager),
+      Game.Runtime.service(KeyboardInput, keyboard),
       Game.Runtime.service(TopDownHost, host),
       Game.Runtime.service(RenderNodes, host.nodes)
     ),
@@ -68,7 +57,7 @@ const makeRuntime = (
         x: host.application.screen.width * 0.5,
         y: host.application.screen.height * 0.5
       },
-      InputState: makeEmptyInputState(),
+      InputState: Keyboard.idle(inputBindings),
       FocusedCollectable: makeEmptyFocusedCollectable(),
       CollectedCount: 0,
       TotalCollectables: pickupLayout.length,
@@ -84,9 +73,9 @@ const makeRuntime = (
 
 export const createTopDownRuntime = (
   host: TopDownHostValue,
-  inputManager: TopDownInputManager
+  keyboard: KeyboardInputValue
 ) =>
-  Result.match(makeRuntime(host, inputManager), {
+  Result.match(makeRuntime(host, keyboard), {
     onSuccess: Result.success,
     onFailure: (error) =>
       Result.failure({

@@ -1,26 +1,40 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Entity, Schema, Snapshot } from "@bevy-ts/core"
+import { Descriptor, Entity, Result, Schema, Snapshot } from "@bevy-ts/core"
 import * as Vector2 from "@bevy-ts/math/Vector2"
+
+const string = { result: (raw: unknown) => typeof raw === "string" ? Result.success(raw) : Result.failure("NotAString" as const) }
+const number = { result: (raw: unknown) => typeof raw === "number" ? Result.success(raw) : Result.failure("NotANumber" as const) }
 
 const Root = Schema.defineRoot("SnapshotTest")
 const Position = Descriptor.ConstructedComponent(Vector2)("Snapshot/Position")
-const Name = Descriptor.Component<string>()("Snapshot/Name")
-const Target = Descriptor.Component<{ readonly handle: Entity.Handle<typeof Root, typeof Name> }>()("Snapshot/Target")
-const Score = Descriptor.Resource<number>()("Snapshot/Score")
+const Name = Descriptor.ConstructedComponent(string)("Snapshot/Name")
+const Target = Descriptor.ConstructedComponent({
+  result: (raw: unknown) => {
+    const handle = Entity.decodeHandle(Root, typeof raw === "object" && raw !== null ? (raw as { handle?: unknown }).handle : undefined, Name)
+    return handle.ok ? Result.success({ handle: handle.value }) : handle
+  }
+})("Snapshot/Target")
+const Sprite = Descriptor.TransientComponent<{ readonly frame: number }>()("Snapshot/Sprite")
+const Score = Descriptor.ConstructedResource(number)("Snapshot/Score")
+const Frame = Descriptor.TransientResource<number>()("Snapshot/Frame")
 const { relation: ChildOf } = Descriptor.Hierarchy("Snapshot/ChildOf", "Snapshot/Children")
 
 const Game = Schema.bind(Schema.fragment({
-  components: { Position, Name, Target },
-  resources: { Score },
+  components: { Position, Name, Target, Sprite },
+  resources: { Score, Frame },
   relations: { ChildOf }
 }), Root)
 const Flow = Game.StateMachine("Snapshot/Flow", ["Menu", "Playing"])
 
-const makeRuntime = (score: number) => Game.Runtime.make({
-  services: Game.Runtime.services(),
-  resources: { Score: score },
-  machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Menu"))
-})
+const makeRuntime = (score: number, frame = 0) => {
+  const made = Game.Runtime.make({
+    services: Game.Runtime.services(),
+    resources: { Score: score, Frame: frame },
+    machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Menu"))
+  })
+  if (!made.ok) throw new Error("invalid fixture")
+  return made.value
+}
 
 const Named = Game.Query({ selection: { name: Game.Query.read(Name) } })
 
@@ -44,7 +58,7 @@ const populate = (runtime: ReturnType<typeof makeRuntime>) => {
   }, ({ commands, nextMachines, resources }) => {
     const parentDraft = Game.Command.spawn([Name, "parent"], Game.Command.entryRaw(Position, { x: 1, y: 2 }))
     if (!parentDraft.ok) throw new Error("invalid fixture")
-    const parent = commands.spawn(parentDraft.value)
+    const parent = commands.spawn(Game.Command.insert(parentDraft.value, [Sprite, { frame: 3 }]))
     const first = commands.spawn(Game.Command.relate(Game.Command.spawn([Name, "first"]), ChildOf, parent))
     commands.spawn(Game.Command.relate(Game.Command.spawn([Name, "second"]), ChildOf, parent))
     commands.spawn(Game.Command.spawn([Target, { handle: Game.Entity.handle(first, Name) }]))
@@ -111,6 +125,12 @@ describe("Runtime snapshots", () => {
       [{ ...good, version: 2 }, "UnsupportedVersion"],
       [{ ...good, entities: [{ id: firstId, components: { Missing: 1 } }] }, "UnknownComponent"],
       [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Position": { x: Number.NaN, y: 0 } } }] }, "InvalidComponent"],
+      [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Name": 12 } }] }, "InvalidComponent"],
+      [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Position": null } }] }, "InvalidComponent"],
+      [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Target": { handle: { kind: "EntityHandle", value: -1 } } } }] }, "InvalidComponent"],
+      [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Sprite": { frame: 1 } } }] }, "UnknownComponent"],
+      [{ ...good, resources: { "Snapshot/Score": "high" } }, "InvalidResource"],
+      [{ ...good, resources: { "Snapshot/Frame": 1 } }, "UnknownResource"],
       [{ ...good, resources: { "Snapshot/Other": 1 } }, "UnknownResource"],
       [{ ...good, machines: { "Snapshot/Flow": "Paused" } }, "InvalidMachineState"],
       [{ ...good, relations: { "Snapshot/ChildOf": [[firstId, [firstId]]] } }, "InvalidRelation"],
@@ -138,5 +158,52 @@ describe("Runtime snapshots", () => {
     runtime.tick(Game.Schedule(Observe))
 
     expect(seen).toEqual([{ added: 3, despawned: 0 }, { added: 3, despawned: 4 }])
+  })
+
+  it("skips transient components and resources", () => {
+    const source = makeRuntime(0, 9)
+    populate(source)
+    const saved = source.snapshot()
+    expect(saved.resources).toEqual({ "Snapshot/Score": 42 })
+    expect(saved.entities.some((entity) => "Snapshot/Sprite" in entity.components)).toBe(false)
+
+    const target = makeRuntime(0, 5)
+    expect(target.restore(JSON.parse(JSON.stringify(saved))).ok).toBe(true)
+    const Read = Game.Inspector("Snapshot/ReadTransient", {
+      queries: { sprites: Game.Query({ selection: { sprite: Game.Query.read(Sprite) } }) },
+      resources: { frame: Game.System.readResource(Frame), score: Game.System.readResource(Score) }
+    }, ({ queries, resources }) => ({
+      sprites: queries.sprites.each().length,
+      frame: resources.frame.get(),
+      score: resources.score.get()
+    }))
+    expect(target.inspect(Read)).toEqual({ sprites: 0, frame: 5, score: 42 })
+  })
+
+  it("validates through Standard Schema validators", () => {
+    const positive = Descriptor.fromStandardSchema({
+      "~standard": {
+        version: 1,
+        vendor: "test",
+        validate: (value: unknown) =>
+          typeof value === "number" && value > 0 ? { value } : { issues: [{ message: "must be positive" }] }
+      }
+    })
+    expect(positive.result(2)).toEqual(Result.success(2))
+    expect(positive.result(-1)).toEqual(Result.failure([{ message: "must be positive" }]))
+
+    const async = Descriptor.fromStandardSchema({
+      "~standard": { version: 1, vendor: "test", validate: async (value: unknown) => ({ value }) }
+    })
+    const outcome = async.result(1)
+    expect(outcome.ok).toBe(false)
+  })
+
+  it("decodes stored handles and rejects malformed ones", () => {
+    const valid = Entity.decodeHandle(Root, JSON.parse(JSON.stringify(Entity.makeHandle(4))))
+    expect(valid.ok && valid.value.value).toBe(4)
+    for (const raw of [null, 4, { kind: "EntityId", value: 4 }, { kind: "EntityHandle", value: 1.5 }]) {
+      expect(Entity.decodeHandle(Root, raw).ok).toBe(false)
+    }
   })
 })

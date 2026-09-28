@@ -114,6 +114,28 @@ describe("@bevy-ts/pixi", () => {
     })
   })
 
+  it("only accepts schema components in redrawOn", () => {
+    RenderSync.systems(Game, {
+      name: "PixiTypes/Redraw",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      redrawOn: [Sprite],
+      create: () => ({ destroy() {}, x: 0 }),
+      apply: () => {}
+    })
+    RenderSync.systems(Game, {
+      name: "PixiTypes/RedrawInvalid",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      // @ts-expect-error!
+      redrawOn: [Health],
+      create: () => ({ destroy() {}, x: 0 }),
+      apply: () => {}
+    })
+  })
+
   it("only accepts components registered in the bound schema", () => {
     RenderSync.systems(Game, {
       name: "PixiTypes/Invalid",

@@ -45,7 +45,7 @@
  * // Resources describe singleton world data shared across systems.
  * const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
  *
- * // Events describe staged cross-system messages.
+ * // Events describe messages between systems, read once per reader.
  * const DamageTaken = Descriptor.Event<{ amount: number }>()("DamageTaken")
  *
  * // Services describe host capabilities that live outside ECS storage.
@@ -54,12 +54,14 @@
  */
 export type DescriptorTypeId = "~bevy-ts/Descriptor"
 export type DescriptorConstructionTypeId = "~bevy-ts/DescriptorConstruction"
+export type DescriptorDecodeTypeId = "~bevy-ts/DescriptorDecode"
 
 /**
  * Runtime value for the descriptor type id.
  */
 const descriptorTypeId: DescriptorTypeId = "~bevy-ts/Descriptor"
 const descriptorConstructionTypeId: DescriptorConstructionTypeId = "~bevy-ts/DescriptorConstruction"
+const descriptorDecodeTypeId: DescriptorDecodeTypeId = "~bevy-ts/DescriptorDecode"
 const descriptorConstruction = Symbol("bevy-ts/DescriptorConstruction")
 
 /**
@@ -97,6 +99,17 @@ export interface ResultConstructor<Value, Raw, Error> {
 }
 
 /**
+ * Validates input of any shape, such as values read back from a save file.
+ *
+ * Constructors whose `result` takes a specific raw shape (for example
+ * `Vector2.result({ x, y })`) also export `decode` so snapshots can load
+ * them safely. `@bevy-ts/math` modules do.
+ */
+export interface Decoder<Value> {
+  readonly decode: (raw: unknown) => import("./Result.ts").Result<Value, unknown>
+}
+
+/**
  * Descriptor that also carries explicit raw-construction metadata.
  *
  * Outside raw-aware APIs this behaves like a normal descriptor. The extra
@@ -118,6 +131,41 @@ export interface ConstructedDescriptor<
 }
 
 /**
+ * Constructed descriptor whose constructor also exports `decode`, so snapshots
+ * can validate untrusted values for it.
+ */
+export interface DecodableDescriptor<
+  out Kind extends DescriptorKind,
+  out Name extends string,
+  in out Value,
+  Raw,
+  Error
+> extends ConstructedDescriptor<Kind, Name, Value, Raw, Error> {
+  readonly [descriptorDecodeTypeId]: true
+}
+
+type ConstructedFor<Kind extends DescriptorKind, Name extends string, Value, Raw, Error, Constructor> =
+  Constructor extends Decoder<any>
+    ? DecodableDescriptor<Kind, Name, Value, Raw, Error>
+    : ConstructedDescriptor<Kind, Name, Value, Raw, Error>
+
+/**
+ * Descriptor whose values are runtime-only: snapshots skip it.
+ *
+ * Use it for state that should not be saved or cannot be serialized, such as
+ * per-frame input, caches, or references to host objects. On restore,
+ * transient components are absent from restored entities and transient
+ * resources keep their current value.
+ */
+export interface TransientDescriptor<
+  out Kind extends "component" | "resource",
+  out Name extends string,
+  in out Value
+> extends Descriptor<Kind, Name, Value> {
+  readonly transient: true
+}
+
+/**
  * Type-level helpers for working with descriptors.
  */
 export namespace Descriptor {
@@ -126,6 +174,7 @@ export namespace Descriptor {
    */
   export type Any = Descriptor<DescriptorKind, string, any>
   export type AnyConstructed = ConstructedDescriptor<DescriptorKind, string, any, any, any>
+  export type AnyTransient = TransientDescriptor<"component" | "resource", string, any>
   /**
    * Extracts the runtime value associated with a descriptor.
    */
@@ -162,6 +211,17 @@ const makeDescriptor = <Kind extends DescriptorKind, Name extends string, Value>
     name,
     key: Symbol.for(`bevy-ts/${kind}/${name}`)
   }) as Descriptor<Kind, Name, Value>
+
+const makeTransientDescriptor = <Kind extends "component" | "resource", Name extends string, Value>(
+  kind: Kind,
+  name: Name
+): TransientDescriptor<Kind, Name, Value> =>
+  ({
+    kind,
+    name,
+    key: Symbol.for(`bevy-ts/${kind}/${name}`),
+    transient: true
+  }) as TransientDescriptor<Kind, Name, Value>
 
 const makeConstructedDescriptor = <
   Kind extends DescriptorKind,
@@ -212,12 +272,27 @@ export const Component = <Value>() => <const Name extends string>(
  * const Position = Descriptor.ConstructedComponent(Vector2)("Position")
  * ```
  */
-export const ConstructedComponent = <Value, Raw, Error>(
-  constructor: ResultConstructor<Value, Raw, Error>
+export const ConstructedComponent = <Value, Raw, Error, Constructor extends {} = {}>(
+  constructor: ResultConstructor<Value, Raw, Error> & Constructor
 ) => <const Name extends string>(
   name: Name
-): ConstructedDescriptor<"component", Name, Value, Raw, Error> =>
-  makeConstructedDescriptor("component", name, constructor)
+): ConstructedFor<"component", Name, Value, Raw, Error, Constructor> =>
+  makeConstructedDescriptor("component", name, constructor) as ConstructedFor<"component", Name, Value, Raw, Error, Constructor>
+
+/**
+ * Defines a component descriptor that snapshots skip.
+ *
+ * Restored entities come back without it, so systems that need it rebuild it,
+ * for example from an `added(...)` query.
+ *
+ * @example
+ * ```ts
+ * const SpriteRef = Descriptor.TransientComponent<{ frame: number }>()("SpriteRef")
+ * ```
+ */
+export const TransientComponent = <Value>() => <const Name extends string>(
+  name: Name
+): TransientDescriptor<"component", Name, Value> => makeTransientDescriptor("component", name)
 
 /**
  * Defines a resource descriptor.
@@ -242,12 +317,25 @@ export const Resource = <Value>() => <const Name extends string>(
 /**
  * Defines a resource descriptor that also knows how to validate raw values.
  */
-export const ConstructedResource = <Value, Raw, Error>(
-  constructor: ResultConstructor<Value, Raw, Error>
+export const ConstructedResource = <Value, Raw, Error, Constructor extends {} = {}>(
+  constructor: ResultConstructor<Value, Raw, Error> & Constructor
 ) => <const Name extends string>(
   name: Name
-): ConstructedDescriptor<"resource", Name, Value, Raw, Error> =>
-  makeConstructedDescriptor("resource", name, constructor)
+): ConstructedFor<"resource", Name, Value, Raw, Error, Constructor> =>
+  makeConstructedDescriptor("resource", name, constructor) as ConstructedFor<"resource", Name, Value, Raw, Error, Constructor>
+
+/**
+ * Defines a resource descriptor that snapshots skip. Restoring keeps its
+ * current value.
+ *
+ * @example
+ * ```ts
+ * const DeltaTime = Descriptor.TransientResource<number>()("DeltaTime")
+ * ```
+ */
+export const TransientResource = <Value>() => <const Name extends string>(
+  name: Name
+): TransientDescriptor<"resource", Name, Value> => makeTransientDescriptor("resource", name)
 
 /**
  * Defines an event descriptor.
@@ -255,8 +343,12 @@ export const ConstructedResource = <Value, Raw, Error>(
  * Use event descriptors to model append-only messages flowing between systems
  * without exposing untyped channels.
  *
- * Writers emit into a pending buffer. Readers observe only the committed
- * readable buffer after an explicit `Game.Schedule.updateEvents()` boundary.
+ * Events are per-reader streams, like change detection: each reading system
+ * sees the events published since its own previous run, once, in emission
+ * order. A system's events are published when it completes successfully, so
+ * later systems in the same schedule see them, and a failed system publishes
+ * nothing. Events are kept for the current and previous `runtime.tick(...)`
+ * call.
  *
  * @example
  * ```ts
@@ -287,6 +379,81 @@ export const Event = <Value>() => <const Name extends string>(
 export const Service = <Value>() => <const Name extends string>(
   name: Name
 ): Descriptor<"service", Name, Value> => makeDescriptor("service", name)
+
+/**
+ * Checks whether one descriptor is transient (skipped by snapshots).
+ */
+export const isTransient = (descriptor: Descriptor.Any): descriptor is Descriptor.AnyTransient =>
+  "transient" in descriptor && descriptor.transient === true
+
+/**
+ * The parts of the Standard Schema v1 interface (https://standardschema.dev)
+ * that `fromStandardSchema` reads. ArkType, Effect Schema, Zod, and Valibot
+ * schemas all satisfy it.
+ */
+export interface StandardSchema<Input, Output> {
+  readonly "~standard": {
+    readonly version: 1
+    readonly vendor: string
+    readonly validate: (value: unknown) => StandardSchema.Result<Output> | Promise<StandardSchema.Result<Output>>
+    readonly types?: { readonly input: Input; readonly output: Output } | undefined
+  }
+}
+
+export namespace StandardSchema {
+  export type Result<Output> =
+    | { readonly value: Output; readonly issues?: undefined }
+    | { readonly issues: ReadonlyArray<Issue> }
+  export interface Issue {
+    readonly message: string
+    readonly path?: ReadonlyArray<PropertyKey | { readonly key: PropertyKey }> | undefined
+  }
+}
+
+const asyncValidationIssue: ReadonlyArray<StandardSchema.Issue> = [
+  { message: "Asynchronous validation is not supported: descriptor constructors run synchronously" }
+]
+
+/**
+ * Adapts a Standard Schema validator into a descriptor constructor, so any
+ * compliant validation library can guard constructed components and
+ * resources. Validation must be synchronous; a schema that returns a promise
+ * fails with an issue instead.
+ *
+ * @example
+ * ```ts
+ * const Position = Descriptor.ConstructedComponent(
+ *   Descriptor.fromStandardSchema(type({ x: "number", y: "number" }))
+ * )("Position")
+ * ```
+ */
+export const fromStandardSchema = <Input, Output>(
+  schema: StandardSchema<Input, Output>
+): ResultConstructor<Output, Input, ReadonlyArray<StandardSchema.Issue>> & Decoder<Output> => {
+  const validate = (raw: unknown) => {
+    const outcome = schema["~standard"].validate(raw)
+    if (outcome instanceof Promise) {
+      // Avoid an unhandled rejection from the discarded promise.
+      outcome.catch(() => {})
+      return ResultModule.failure(asyncValidationIssue)
+    }
+    return outcome.issues === undefined
+      ? ResultModule.success(outcome.value)
+      : ResultModule.failure(outcome.issues)
+  }
+  return { result: validate, decode: validate }
+}
+
+/**
+ * Returns the function that validates untrusted values for a constructed
+ * descriptor: its constructor's `decode` when present, otherwise `result`.
+ * The snapshot types only allow the `result` fallback when it accepts
+ * `unknown`.
+ */
+export const decoderOf = (descriptor: Descriptor.AnyConstructed): (raw: unknown) => import("./Result.ts").Result<unknown, unknown> => {
+  const constructor = descriptor[descriptorConstruction] as ResultConstructor<unknown, unknown, unknown> & Partial<Decoder<unknown>>
+  return typeof constructor.decode === "function" ? constructor.decode : constructor.result
+}
 
 /**
  * Checks whether one descriptor carries raw-construction metadata.
@@ -331,3 +498,4 @@ export const Hierarchy = RelationModule.Hierarchy
  */
 export const Relation = RelationModule.Relation
 import * as RelationModule from "./Relation.ts"
+import * as ResultModule from "./Result.ts"

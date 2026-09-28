@@ -685,7 +685,7 @@ describe("Runtime state machine", () => {
     expect(readResourceValue(runtime, schema, Log)).toEqual(["Playing"])
   })
 
-  it("emits transition events that become readable after updateEvents", () => {
+  it("publishes each transition event once to every reader, without a marker", () => {
     const queuePlaying = Game.System(
       "StateMachineRuntime/QueuePlayingForTransitionEvents",
       {
@@ -740,11 +740,13 @@ describe("Runtime state machine", () => {
       queuePlaying,
       Game.Schedule.applyStateTransitions(),
       readTransitionEvents,
-      Game.Schedule.updateEvents(),
       readTransitionEventsAfterUpdate
     ))
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["event:Menu->Playing", "event:Menu->Playing"])
 
-    expect(readResourceValue(runtime, schema, Log)).toEqual(["event:Menu->Playing"])
+    // A later tick without transitions delivers nothing new.
+    runtime.tick(Game.Schedule(readTransitionEvents, readTransitionEventsAfterUpdate))
+    expect(readResourceValue(runtime, schema, Log)).toEqual(["event:Menu->Playing", "event:Menu->Playing"])
   })
 
   it("emits transition events in machine definition order", () => {
@@ -818,7 +820,6 @@ describe("Runtime state machine", () => {
     runtime.tick(LocalGame.Schedule(
       queueStates,
       LocalGame.Schedule.applyStateTransitions(),
-      LocalGame.Schedule.updateEvents(),
       readAppEvents,
       readRoundEvents
     ))
@@ -1063,7 +1064,7 @@ describe("Runtime state machine", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.tick(Game.Schedule(queueSame, Game.Schedule.applyStateTransitions(), Game.Schedule.updateEvents(), readTransitionEvents))
+    runtime.tick(Game.Schedule(queueSame, Game.Schedule.applyStateTransitions(), readTransitionEvents))
 
     expect(readResourceValue(runtime, schema, Log)).toEqual([])
   })

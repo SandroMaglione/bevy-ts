@@ -6,6 +6,7 @@ import type {
   AnimationClockValue,
   CurrentPlayerFrameValue,
   InputStateValue,
+  KeyboardInput as KeyboardInputValue,
   TopDownHostValue
 } from "./types.ts"
 
@@ -37,16 +38,15 @@ export type FocusedCollectableValue = {
 export const DeltaTime = Descriptor.Resource<number>()("TopDown/DeltaTime")
 export const Viewport = Descriptor.ConstructedResource(Size2)("TopDown/Viewport")
 export const Camera = Descriptor.ConstructedResource(Vector2)("TopDown/Camera")
-export const InputState = Descriptor.Resource<InputStateValue>()("TopDown/InputState")
+// Captured from the keyboard at the start of each update; never saved.
+export const InputState = Descriptor.TransientResource<InputStateValue>()("TopDown/InputState")
 export const FocusedCollectable = Descriptor.Resource<FocusedCollectableValue>()("TopDown/FocusedCollectable")
 export const CollectedCount = Descriptor.Resource<number>()("TopDown/CollectedCount")
 export const TotalCollectables = Descriptor.Resource<number>()("TopDown/TotalCollectables")
 export const AnimationClock = Descriptor.Resource<AnimationClockValue>()("TopDown/AnimationClock")
 export const CurrentPlayerFrame = Descriptor.Resource<CurrentPlayerFrameValue>()("TopDown/CurrentPlayerFrame")
 
-export const InputManager = Descriptor.Service<{
-  readonly snapshot: () => InputStateValue
-}>()("TopDown/InputManager")
+export const KeyboardInput = Descriptor.Service<KeyboardInputValue>()("TopDown/KeyboardInput")
 export const TopDownHost = Descriptor.Service<TopDownHostValue>()("TopDown/Host")
 export const RenderNodes = Descriptor.Service<TopDownHostValue["nodes"]>()("TopDown/RenderNodes")
 

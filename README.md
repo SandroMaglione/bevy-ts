@@ -51,8 +51,8 @@ Start with the docs homepage for the full step-by-step Pixi example:
 ## Runtime semantics
 
 - Descriptor identity is `(kind, name)`. A bound schema rejects two descriptors of one kind with the same name at compile time, and a look-alike descriptor with a different value type is not accepted in place of the registered one.
-- Nothing becomes visible implicitly. Queued commands, events, and relation failures stay pending, across schedule runs if needed, until a schedule reaches `applyDeferred()`, `updateEvents()`, `updateRelationFailures()`, or `applyStateTransitions(...)`.
-- Change detection is per system: `added(...)`/`changed(...)` filters and removed/despawned reads show each system the changes made since its own previous run, exactly once.
+- Structural changes are never applied implicitly. Queued commands and machine transitions stay pending, across schedule runs if needed, until a schedule reaches `applyDeferred()` or `applyStateTransitions(...)`.
+- Reads are per system: `added(...)`/`changed(...)` filters, removed/despawned reads, events, transition events, and relation failures show each system what was published since its own previous run, exactly once.
 - Query results come back in spawn order.
 
 ## Performance

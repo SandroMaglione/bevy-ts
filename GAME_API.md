@@ -164,8 +164,8 @@ const summary = runtime.inspect(WorldSummary)
 
 An inspector cannot declare write queries, write resources, commands, event
 writers, or state-transition writers. Runtime provisioning is checked at the
-call, and inspection does not advance events. Like a system, an inspector's
-`added`/`changed` filters report changes since its previous evaluation.
+call. Like a system, an inspector's `added`/`changed` filters and event
+reads report what was published since its previous evaluation.
 
 ## Save and load
 
@@ -180,9 +180,31 @@ if (!loaded.ok) {
 ```
 
 A snapshot is plain data keyed by descriptor, relation, and machine names.
-`restore` takes `unknown`, validates it against the schema (constructed
-descriptors run their constructors), and leaves the world untouched on
-failure. Entity ids are kept, so stored handles still resolve. A restore reads
+`restore` takes `unknown`, validates it against the schema (every component
+and resource value runs through its descriptor's constructor), and leaves the
+world untouched on failure.
+
+Both methods only exist when every component and resource is either
+transient (never saved) or constructed with a validator that accepts
+untrusted input: a `result(raw: unknown)`, or a `decode(raw: unknown)` next to
+a typed `result` (every `@bevy-ts/math` module exports one). Otherwise calling
+them fails to compile, and the error lists each descriptor to fix:
+
+```ts
+const Position = Descriptor.ConstructedComponent(Vector2)("Position")
+const Label = Descriptor.ConstructedComponent(Descriptor.fromStandardSchema(type("string")))("Label")
+const Sprite = Descriptor.TransientComponent<{ frame: number }>()("Sprite") // rebuilt after load
+const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === "object" && raw !== null
+const Target = Descriptor.ConstructedComponent({
+  result: (raw: unknown) => {
+    const enemy = Entity.decodeHandle(Root, isRecord(raw) ? raw["enemy"] : undefined, Health)
+    return enemy.ok ? Result.success({ enemy: enemy.value }) : enemy
+  }
+})("Target")
+```
+
+Restored entities come back without transient components, and transient
+resources keep their current values. Entity ids are kept, so stored handles still resolve. A restore reads
 as despawns and spawns to change detection, so renderer sync rebuilds itself.
 
 ## 6. Drive fixed updates from any renderer
@@ -227,25 +249,39 @@ loop.value.stop()
 Pixi, Three, Canvas, DOM, tests, and server simulations can provide another
 `TickSource`. The gameplay schedules do not change.
 
-Keyboard input is exposed the same way: bind named actions once, read one
-snapshot per update, and hand it to the ECS through a service.
+Keyboard input is exposed the same way: bind named actions once, and let
+`InputCapture` copy one snapshot per update into a resource that gameplay
+systems read like any other world data.
 
 ```ts
-import { Keyboard } from "@bevy-ts/browser"
+import { InputCapture, Keyboard } from "@bevy-ts/browser"
 
-const input = Keyboard.actions(window, {
-  left: ["ArrowLeft", "a"],
-  right: ["ArrowRight", "d"],
-  jump: [" ", "ArrowUp", "w"]
+const bindings = { left: ["ArrowLeft", "a"], right: ["ArrowRight", "d"], jump: [" ", "ArrowUp", "w"] } as const
+
+const KeyboardInput = Descriptor.Service<Keyboard.Actions<typeof bindings>>()("Game/Keyboard")
+const Input = Descriptor.TransientResource<Keyboard.Snapshot<typeof bindings>>()("Game/Input")
+
+const CaptureInput = InputCapture.system(Game, { name: "Game/CaptureInput", source: KeyboardInput, resource: Input })
+
+const Jump = Game.System("Game/Jump", { resources: { input: Game.System.readResource(Input) } }, ({ resources }) => {
+  const input = resources.input.get()
+  input.jump.pressed // true once per capture, even for taps shorter than a frame
+  input.left.held
 })
 
-// A capture system reads this through a service once per update.
-const snapshot = input.snapshot()
-snapshot.jump.pressed // true once per press, even for taps shorter than a frame
-snapshot.left.held
+const keyboard = Keyboard.actions(window, bindings)
+const runtime = Game.Runtime.make({
+  services: Game.Runtime.services(Game.Runtime.service(KeyboardInput, keyboard)),
+  resources: { Input: Keyboard.idle(bindings) }
+})
+const update = Game.Schedule(CaptureInput, Jump)
 
-input.dispose()
+keyboard.dispose() // on teardown
 ```
+
+The source can be any service with `snapshot()`, so a game that merges
+keyboard, pointer, and gamepad input captures its own adapter the same way.
+The resource's value type must match the snapshot type exactly.
 
 ## 7. Mirror entities into Pixi
 
@@ -261,8 +297,8 @@ const render = RenderSync.systems(Game, {
   renderable: Renderable,
   transform: Position,
   registry: RenderNodes,
-  create: (renderable) => makeNode(renderable),
-  apply: (node, position) => node.position.set(position.x, position.y)
+  create: ({ renderable }) => makeNode(renderable),
+  apply: (node, { transform }) => node.position.set(transform.x, transform.y)
 })
 
 const runtime = Game.Runtime.make({
@@ -275,7 +311,10 @@ const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.des
 ```
 
 The registry service is a normal requirement: ticking the render systems on a
-runtime that does not provide it is a compile error.
+runtime that does not provide it is a compile error. `select`, `resources`,
+and `services` pass extra read-only data to the callbacks, and `redrawOn`
+lists components whose changes re-run `apply` (animation frames, tints,
+interpolation).
 
 ## What remains adapter code
 

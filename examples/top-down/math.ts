@@ -18,7 +18,13 @@ export const clamp = (value: number, min: number, max: number): number => {
 
 export const lengthSquared = (vector: Vector2): number => Vector2Module.lengthSquared(vector)
 
-export const normalizeMovement = (input: InputStateValue): Vector2 => InputAxis.vectorFromAxes(input)
+export const normalizeMovement = (input: InputStateValue): Vector2 =>
+  InputAxis.vectorFromAxes({
+    up: input.up.held,
+    down: input.down.held,
+    left: input.left.held,
+    right: input.right.held
+  })
 
 export const advanceFrameIndex = (frameIndex: AnimationFrameIndex): AnimationFrameIndex =>
   frameIndex === 5 ? 0 : (frameIndex + 1) as AnimationFrameIndex

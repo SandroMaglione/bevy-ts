@@ -72,6 +72,16 @@ export type Error = {
 }
 
 /**
+ * Failure produced by `decode` when the input does not have the raw shape.
+ *
+ * @category Vector Types
+ */
+export type DecodeError = {
+  readonly tag: "Vector2/Malformed"
+  readonly input: unknown
+}
+
+/**
  * Explicit failure produced when a zero-length vector cannot be normalized.
  *
  * @category Vector Types
@@ -91,6 +101,14 @@ export type NormalizeError = {
  * @category Construction
  */
 export const result: (raw: Raw) => Result.Result<Vector2, Error> = internal.result
+/**
+ * Validates untrusted input of any shape, for example a value read from a
+ * save file. Descriptors built from this module use it when restoring
+ * snapshots.
+ *
+ * @category Construction
+ */
+export const decode: (raw: unknown) => Result.Result<Vector2, Error | DecodeError> = internal.decode
 /**
  * Validates one raw vector and returns `null` on failure.
  *

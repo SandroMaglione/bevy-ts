@@ -134,4 +134,45 @@ describe("@bevy-ts/pixi", () => {
     runtime.tick(Zoomed.Schedule(Spawn, Zoomed.Schedule.applyDeferred(), render.create))
     expect(layer.children.map((node) => [node.label, node.x])).toEqual([["#hero", 6], ["#none", 2]])
   })
+
+  it("re-applies nodes when a redrawOn component changes, once per entity", () => {
+    const Frame = Descriptor.Component<number>()("PixiTest/Frame")
+    const Animated = Schema.bind(Schema.fragment({ components: { Position, Sprite, Frame } }))
+    const layer = new FakeContainer()
+    const applied: Array<string> = []
+    const render = RenderSync.systems(Animated, {
+      name: "PixiTest/Animated",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      select: { frame: Animated.Query.read(Frame) },
+      redrawOn: [Frame],
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: (node, { transform, data }) => {
+        node.x = transform.x
+        node.y = data.frame.get()
+        applied.push(`${node.label}:${node.x}:${node.y}`)
+      }
+    })
+    const Spawn = Animated.System("PixiTest/SpawnAnimated", {}, ({ commands }) => {
+      commands.spawn(Animated.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "hero" }], [Frame, 0]))
+    })
+    const step = (moves: boolean) => Animated.System(`PixiTest/Step${moves}`, {
+      queries: { heroes: Animated.Query({ selection: { position: Animated.Query.write(Position), frame: Animated.Query.write(Frame) } }) }
+    }, ({ queries }) => {
+      for (const { data } of queries.heroes.each()) {
+        data.frame.update((frame) => frame + 1)
+        if (moves) data.position.update((position) => ({ x: position.x + 1, y: position.y }))
+      }
+    })
+
+    const runtime = Animated.Runtime.make({
+      services: Animated.Runtime.services(Animated.Runtime.service(Nodes, NodeRegistry.inContainer(layer)))
+    })
+    runtime.tick(Animated.Schedule(Spawn, Animated.Schedule.applyDeferred(), render.create, render.sync))
+    runtime.tick(Animated.Schedule(step(false), render.sync))
+    runtime.tick(Animated.Schedule(step(true), render.sync))
+    // Spawn tick: `create` applies, then `sync` sees the new entity as changed.
+    expect(applied).toEqual(["hero:0:0", "hero:0:0", "hero:0:1", "hero:1:2"])
+  })
 })

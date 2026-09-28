@@ -1,4 +1,4 @@
-import { Descriptor, Result, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Result, Schema } from "@bevy-ts/core"
 import * as Size2 from "@bevy-ts/math/Size2"
 import * as Vector2 from "@bevy-ts/math/Vector2"
 import * as Runtime from "@bevy-ts/core/Runtime"
@@ -424,5 +424,64 @@ describe("Runtime", () => {
     })
     // @ts-expect-error!
     runtime5.tick(...project.schedules.update)
+  })
+})
+
+describe("Runtime snapshots", () => {
+  const Root = Schema.defineRoot("SnapshotTypes")
+  const Label = Descriptor.Component<string>()("SnapshotTypes/Label")
+  const Place = Descriptor.ConstructedComponent(Vector2)("SnapshotTypes/Place")
+  const Sprite = Descriptor.TransientComponent<{ readonly frame: number }>()("SnapshotTypes/Sprite")
+  const Frame = Descriptor.TransientResource<number>()("SnapshotTypes/Frame")
+  const Score = Descriptor.Resource<number>()("SnapshotTypes/Score")
+
+  it("exposes snapshot and restore only when every value can be validated on load", () => {
+    const Valid = Schema.bind(Schema.fragment({ components: { Place, Sprite }, resources: { Frame } }), Root)
+    const valid = Valid.Runtime.make({ services: Valid.Runtime.services(), resources: { Frame: 0 } })
+    expect(valid.snapshot()).type.toBe<import("@bevy-ts/core/Snapshot").WorldSnapshot>()
+    expect(valid.restore(null)).type.toBe<Result.Result<void, import("@bevy-ts/core/Snapshot").RestoreError>>()
+
+    const Invalid = Schema.bind(Schema.fragment({ components: { Place, Label }, resources: { Score } }), Root)
+    const invalid = Invalid.Runtime.make({ services: Invalid.Runtime.services(), resources: { Score: 0 } })
+    expect(invalid.snapshot).type.toBe<{
+      readonly "SnapshotTypes/Label needs a validator": "Use a Constructed* descriptor whose constructor accepts unknown input (validated on load) or a Transient* one (not saved)"
+      readonly "SnapshotTypes/Score needs a validator": "Use a Constructed* descriptor whose constructor accepts unknown input (validated on load) or a Transient* one (not saved)"
+    }>()
+    // @ts-expect-error!
+    invalid.snapshot()
+    // @ts-expect-error!
+    invalid.restore(null)
+  })
+
+  it("requires constructors that accept untrusted input", () => {
+    const typedOnly = { result: (raw: { readonly n: number }) => Result.success(raw.n) }
+    const Typed = Descriptor.ConstructedComponent(typedOnly)("SnapshotTypes/Typed")
+    const Unknown = Descriptor.ConstructedComponent({
+      result: (raw: unknown) => typeof raw === "number" ? Result.success(raw) : Result.failure("NaN" as const)
+    })("SnapshotTypes/Unknown")
+    const Decoded = Descriptor.ConstructedComponent({ ...typedOnly, decode: (raw: unknown) => Result.failure(raw) })("SnapshotTypes/Decoded")
+
+    const Loadable = Schema.bind(Schema.fragment({ components: { Unknown, Decoded, Place } }), Root)
+    const loadable = Loadable.Runtime.make({ services: Loadable.Runtime.services() })
+    expect(loadable.snapshot()).type.toBe<import("@bevy-ts/core/Snapshot").WorldSnapshot>()
+
+    const Unloadable = Schema.bind(Schema.fragment({ components: { Typed } }), Root)
+    const unloadable = Unloadable.Runtime.make({ services: Unloadable.Runtime.services() })
+    // @ts-expect-error!
+    unloadable.snapshot()
+  })
+
+  it("infers constructed values from Standard Schema validators and stored handles", () => {
+    const Positive = Descriptor.ConstructedComponent(Descriptor.fromStandardSchema({
+      "~standard": {
+        version: 1,
+        vendor: "test",
+        validate: (value: unknown) => typeof value === "number" ? { value } : { issues: [{ message: "NaN" }] }
+      }
+    }))("SnapshotTypes/Positive")
+    expect<Descriptor.Descriptor.Value<typeof Positive>>().type.toBe<number>()
+
+    const decoded = Entity.decodeHandle(Root, null, Label)
+    expect(decoded).type.toBe<Result.Result<Entity.Handle<typeof Root, typeof Label>, Entity.InvalidHandle>>()
   })
 })

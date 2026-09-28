@@ -91,15 +91,6 @@ const SolidQuery = Game.Query({
   }
 })
 
-const PlayerRenderableQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    movement: Game.Query.read(Movement),
-    renderable: Game.Query.read(Renderable),
-    player: Game.Query.read(Player)
-  }
-})
-
 const makePokemonNode = (kind: "player" | "solid", tileSize: number): Graphics => {
   const node = new Graphics()
   if (kind === "player") {
@@ -362,70 +353,41 @@ const AdvanceMovementSystem = Game.System(
     }
 )
 
-// Solids never move, so the tile position applied on creation is final. The
-// player is positioned every frame by `SyncPlayerNodeSystem` instead.
+// Moving entities are drawn between their `from` and `to` tiles, so the
+// node is re-applied whenever `Movement` advances, not only when the tile
+// position changes.
 const render = RenderSync.systems(Game, {
   name: "Pokemon/Render",
   renderable: Renderable,
   transform: Position,
   registry: PokemonNodes,
+  select: { movement: Game.Query.optional(Movement) },
   resources: { grid: GridSize },
+  redrawOn: [Movement],
   create: ({ renderable, resources }) => makePokemonNode(renderable.kind, resources.grid.get().tileSize),
-  apply: (node, { renderable, transform, resources }) => {
+  apply: (node, { renderable, transform, data, resources }) => {
     const { tileSize } = resources.grid.get()
-    setNodeTilePosition(node, renderable.kind, tileSize, transform.col * tileSize, transform.row * tileSize)
+    if (!data.movement.present) {
+      setNodeTilePosition(node, renderable.kind, tileSize, transform.col * tileSize, transform.row * tileSize)
+      return
+    }
+    const { from, to, progress } = data.movement.get()
+    setNodeTilePosition(
+      node,
+      renderable.kind,
+      tileSize,
+      (from.col + (to.col - from.col) * progress) * tileSize,
+      (from.row + (to.row - from.row) * progress) * tileSize
+    )
   }
 })
-
-const SyncPlayerNodeSystem = Game.System(
-  "Pokemon/SyncPlayerNode",
-  {
-    queries: {
-      players: PlayerRenderableQuery
-    },
-    resources: {
-      grid: Game.System.readResource(GridSize)
-    },
-    services: {
-      nodes: Game.System.service(PokemonNodes)
-    }
-  },
-  ({ queries, resources, services }) =>
-    {
-      const { tileSize } = resources.grid.get()
-
-      for (const match of queries.players.each()) {
-        const node = services.nodes.get(match.entity.id)
-        if (!node) {
-          continue
-        }
-
-        const movement = match.data.movement.get()
-        const fromX = movement.from.col * tileSize
-        const fromY = movement.from.row * tileSize
-        const toX = movement.to.col * tileSize
-        const toY = movement.to.row * tileSize
-        const renderX = fromX + (toX - fromX) * movement.progress
-        const renderY = fromY + (toY - fromY) * movement.progress
-
-        setNodeTilePosition(
-          node,
-          match.data.renderable.get().kind,
-          tileSize,
-          renderX,
-          renderY
-        )
-      }
-    }
-)
 
 const setupSchedule = Game.Schedule(SetupSystem)
 
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
   Game.Schedule.applyDeferred(),
-  render.create,
-  SyncPlayerNodeSystem
+  render.create
 )
 
 const updateSchedule = Game.Schedule(
@@ -441,8 +403,7 @@ const browserUpdateSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   render.destroy,
   render.create,
-  render.sync,
-  SyncPlayerNodeSystem
+  render.sync
 )
 
 export const createPokemonExample = (input: {

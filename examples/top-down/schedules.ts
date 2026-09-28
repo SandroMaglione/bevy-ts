@@ -2,6 +2,7 @@ import {
   ApplyWorldCameraTransformSystem,
   AdvanceAnimationClockSystem,
   CaptureFrameContextSystem,
+  CaptureInputSystem,
   CollectFocusedCollectableSystem,
   CreateRenderNodesSystem,
   DestroyRenderNodesSystem,
@@ -43,6 +44,7 @@ const renderSyncSchedule = Game.Schedule(
 
 const gameplaySchedule = Game.Schedule(
   CaptureFrameContextSystem,
+  CaptureInputSystem,
   PlanPlayerVelocitySystem,
   MovePlayerSystem,
   UpdateFocusedCollectableSystem,

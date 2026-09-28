@@ -62,6 +62,7 @@ import type * as Entity from "./Entity.ts"
 import type * as Inspector from "./Inspector.ts"
 import * as Cells from "./internal/cells.ts"
 import { makeQueryEngine } from "./internal/queries.ts"
+import * as Streams from "./internal/streams.ts"
 import { makeWorld } from "./internal/world.ts"
 import type * as Machine from "./Machine.ts"
 import * as Query from "./Query.ts"
@@ -555,10 +556,13 @@ export interface Runtime<
    * Every resource, service, and machine the schedules need must have been
    * provided when the runtime was made; missing ones are compile errors.
    *
-   * Deferred commands, events, and relation failures advance only at explicit
-   * schedule marker steps; change detection is per system and needs none. Nothing is flushed when a
-   * schedule ends: pending work stays pending, across schedules and ticks,
-   * until a later marker advances it.
+   * Deferred commands and machine transitions are applied only at explicit
+   * `applyDeferred()` / `applyStateTransitions(...)` steps. Nothing is flushed
+   * when a schedule ends: queued work stays queued, across schedules and
+   * ticks, until a later marker applies it. Reads need no marker: change
+   * detection, events, transition events, and relation failures are per
+   * system, each run seeing what was published since its previous run. They
+   * are kept for the current and previous tick.
    *
    * The first expected system failure stops the tick and is returned; that
    * system's ECS writes are rolled back and earlier systems stay committed.
@@ -583,14 +587,18 @@ export interface Runtime<
    * relation edges, resources, and committed machine values.
    *
    * Values are shared with the world, not copied; serialize the snapshot
-   * (for example with `JSON.stringify`) to detach it.
+   * (for example with `JSON.stringify`) to detach it. Transient components and
+   * resources are skipped.
+   *
+   * Callable only when every component and resource is constructed or
+   * transient; see the `Snapshot` module.
    */
-  readonly snapshot: () => Snapshot.WorldSnapshot
+  readonly snapshot: Snapshot.Gate<S, () => Snapshot.WorldSnapshot>
   /**
    * Replaces the world with a snapshot after validating it against the
-   * schema. On failure nothing changes. See the `snapshot` module.
+   * schema. On failure nothing changes. See the `Snapshot` module.
    */
-  readonly restore: (data: unknown) => Result.Result<void, Snapshot.RestoreError>
+  readonly restore: Snapshot.Gate<S, (data: unknown) => Result.Result<void, Snapshot.RestoreError>>
   /**
    * Evaluates one read-only projection without advancing schedule visibility.
    */
@@ -663,16 +671,14 @@ const makeValidatedRuntime = <
   const activeTransitions = new Map<symbol, Machine.TransitionSnapshot>()
 
   /**
-   * Double-buffered event, transition-event, and relation-failure streams.
-   * Writes land in `pending*`; the matching schedule marker swaps them into
-   * `readable*`.
+   * Event, transition-event, and relation-failure logs. Entries are stamped
+   * with the change tick at which they were published; each reader sees the
+   * entries published after its previous completed run, like change
+   * detection. Entries older than the previous frame are dropped.
    */
-  let readableEvents = new Map<symbol, Array<unknown>>()
-  let pendingEvents = new Map<symbol, Array<unknown>>()
-  let readableTransitionEvents = new Map<symbol, Array<Machine.TransitionSnapshot>>()
-  let pendingTransitionEvents = new Map<symbol, Array<Machine.TransitionSnapshot>>()
-  let readableRelationFailures = new Map<symbol, Array<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>>()
-  let pendingRelationFailures = new Map<symbol, Array<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>>()
+  const events = Streams.make<unknown>()
+  const transitionEvents = Streams.make<Machine.TransitionSnapshot>()
+  const relationFailures = Streams.make<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>()
 
   /**
    * Commands queued by systems and not yet applied. They persist across
@@ -699,8 +705,7 @@ const makeValidatedRuntime = <
     targetId: number,
     error: Relation.Relation.MutationError
   ): void => {
-    const failures = pendingRelationFailures.get(relation.key) ?? []
-    failures.push(
+    relationFailures.append(relation.key, world.currentTick(), [
       Relation.mutationFailure(
         relation,
         operation,
@@ -708,8 +713,7 @@ const makeValidatedRuntime = <
         world.entityIdOf(targetId) as Entity.EntityId<S, Root>,
         error
       )
-    )
-    pendingRelationFailures.set(relation.key, failures)
+    ])
   }
 
   /**
@@ -914,7 +918,8 @@ const makeValidatedRuntime = <
    * Journal for the running system's resource, state, event, and queued
    * machine writes. Component writes are journaled by the world. On an
    * expected failure everything is restored and the system's commands are
-   * discarded; on success, buffered events are published.
+   * discarded; on success, buffered events are published at a fresh tick,
+   * so every reader (including the emitter's next run) sees them.
    */
   const absentValue = Symbol("bevy-ts/absent-value")
   const resourceOriginals = new Map<symbol, unknown>()
@@ -942,15 +947,13 @@ const makeValidatedRuntime = <
 
   const commitSystemTransaction = (): void => {
     world.commitTransaction()
-    for (const [key, values] of emittedEvents) {
-      const pending = pendingEvents.get(key)
-      if (pending) {
-        pending.push(...values)
-      } else {
-        pendingEvents.set(key, values)
+    if (emittedEvents.size > 0) {
+      const published = world.advanceTick()
+      for (const [key, values] of emittedEvents) {
+        events.append(key, published, values)
       }
+      emittedEvents.clear()
     }
-    emittedEvents.clear()
     resourceOriginals.clear()
     machineOriginals.clear()
   }
@@ -986,9 +989,9 @@ const makeValidatedRuntime = <
     write: (key: symbol, value: unknown) => void
   ) => Cells.storeWrite(store, descriptor.key, write, DescriptorModule.constructorOf(descriptor))
 
-  const makeEventReadView = <T>(descriptorKey: symbol): EventReadView<T> => ({
+  const makeEventReadView = <T>(descriptorKey: symbol, reader: ReaderState): EventReadView<T> => ({
     all() {
-      return (readableEvents.get(descriptorKey) ?? []) as ReadonlyArray<ReadonlyValue<T>>
+      return events.since(descriptorKey, reader.since) as ReadonlyArray<ReadonlyValue<T>>
     }
   })
 
@@ -1003,9 +1006,12 @@ const makeValidatedRuntime = <
     }
   })
 
-  const makeTransitionEventReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): TransitionEventReadView<M> => ({
+  const makeTransitionEventReadView = <M extends Machine.StateMachine.Any>(
+    stateMachine: M,
+    reader: ReaderState
+  ): TransitionEventReadView<M> => ({
     all() {
-      return (readableTransitionEvents.get(stateMachine.key) ?? []) as unknown as ReadonlyArray<Machine.TransitionSnapshot<M>>
+      return transitionEvents.since(stateMachine.key, reader.since) as unknown as ReadonlyArray<Machine.TransitionSnapshot<M>>
     }
   })
 
@@ -1025,10 +1031,11 @@ const makeValidatedRuntime = <
   })
 
   const makeRelationFailureReadView = <R extends Relation.Relation.Any>(
-    relation: R
+    relation: R,
+    reader: ReaderState
   ): RelationFailureReadView<R, S, Root> => ({
     all() {
-      return (readableRelationFailures.get(relation.key) ?? []) as unknown as ReadonlyArray<Relation.Relation.MutationFailure<R, S, Root>>
+      return relationFailures.since(relation.key, reader.since) as unknown as ReadonlyArray<Relation.Relation.MutationFailure<R, S, Root>>
     }
   })
 
@@ -1098,15 +1105,15 @@ const makeValidatedRuntime = <
           : makeResourceWriteView(access.descriptor, resources, writeResource)),
       events: mapRecord(spec.events as Record<string, any>, (access) =>
         access.mode === "read"
-          ? makeEventReadView(access.descriptor.key)
+          ? makeEventReadView(access.descriptor.key, reader)
           : makeEventWriteView(access.descriptor.key)),
       machines: mapRecord(spec.machines as Record<string, any>, (access) => makeMachineReadView(access.machine)),
       nextMachines: mapRecord(spec.nextMachines as Record<string, any>, (access) => makeNextMachineWriteView(access.machine)),
-      transitionEvents: mapRecord(spec.transitionEvents as Record<string, any>, (access) => makeTransitionEventReadView(access.machine)),
+      transitionEvents: mapRecord(spec.transitionEvents as Record<string, any>, (access) => makeTransitionEventReadView(access.machine, reader)),
       transitions: mapRecord(spec.transitions as Record<string, any>, (access) => makeTransitionReadView(access.machine)),
       removed: mapRecord(spec.removed as Record<string, any>, (access) => makeRemovedReadView(access.descriptor, reader)),
       despawned: mapRecord(spec.despawned as Record<string, any>, () => makeDespawnedReadView(reader)),
-      relationFailures: mapRecord(spec.relationFailures as Record<string, any>, (access) => makeRelationFailureReadView(access.relation)),
+      relationFailures: mapRecord(spec.relationFailures as Record<string, any>, (access) => makeRelationFailureReadView(access.relation, reader)),
       services: mapRecord(spec.services as Record<string, any>, (access) =>
         providedServices[access.descriptor.name as keyof Services]),
       commands: Command.makeCommands<S, Root>(() => world.allocateEntity() as Entity.EntityId<S, Root>)
@@ -1185,18 +1192,6 @@ const makeValidatedRuntime = <
     }
   }
 
-  const updateEvents = (): void => {
-    readableEvents = pendingEvents
-    pendingEvents = new Map()
-    readableTransitionEvents = pendingTransitionEvents
-    pendingTransitionEvents = new Map()
-  }
-
-  const updateRelationFailures = (): void => {
-    readableRelationFailures = pendingRelationFailures
-    pendingRelationFailures = new Map()
-  }
-
   const runTransitionSchedule = (
     schedule: Machine.StateMachine.AnyTransitionSchedule<S, Root>,
     snapshot: Machine.TransitionSnapshot
@@ -1273,9 +1268,7 @@ const makeValidatedRuntime = <
 
       currentMachines.set(machineKey, pending.value)
       changedMachines.add(machineKey)
-      const transitionEvents = pendingTransitionEvents.get(machineKey) ?? []
-      transitionEvents.push(snapshot)
-      pendingTransitionEvents.set(machineKey, transitionEvents)
+      transitionEvents.append(machineKey, world.advanceTick(), [snapshot])
 
       for (const schedule of schedules) {
         const transition = schedule.transition
@@ -1317,12 +1310,6 @@ const makeValidatedRuntime = <
           }
           break
         }
-        case "eventUpdate":
-          updateEvents()
-          break
-        case "relationFailureUpdate":
-          updateRelationFailures()
-          break
       }
     }
     return succeeded
@@ -1337,8 +1324,15 @@ const makeValidatedRuntime = <
     return runSteps(schedule.steps)
   }
 
+  const advanceFrame = (): void => {
+    const boundary = world.advanceFrame()
+    events.trim(boundary)
+    transitionEvents.trim(boundary)
+    relationFailures.trim(boundary)
+  }
+
   const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any>>): Result.Result<void, SystemFailure> => {
-    world.advanceFrame()
+    advanceFrame()
     for (const schedule of schedules) {
       const result = runScheduleUnsafe(schedule)
       if (!result.ok) {
@@ -1373,7 +1367,7 @@ const makeValidatedRuntime = <
       })
     }
 
-    world.advanceFrame()
+    advanceFrame()
     return runScheduleUnsafe(schedule) as Result.Result<void, Schedule.FailureOf<Selected>>
   }
 
@@ -1411,7 +1405,9 @@ const makeValidatedRuntime = <
   const snapshot = (): Snapshot.WorldSnapshot => {
     const savedResources: Record<string, unknown> = {}
     for (const [name, descriptor] of resourcesByName) {
-      if (resources.has(descriptor.key)) savedResources[name] = resources.get(descriptor.key)
+      if (!DescriptorModule.isTransient(descriptor) && resources.has(descriptor.key)) {
+        savedResources[name] = resources.get(descriptor.key)
+      }
     }
     const savedMachines: Record<string, Machine.StateValue> = {}
     for (const [name, machine] of machinesByName) {
@@ -1421,17 +1417,17 @@ const makeValidatedRuntime = <
     return {
       version: 1,
       nextEntity: world.nextEntityValue(),
-      entities: world.exportEntities(),
+      entities: world.exportEntities(DescriptorModule.isTransient),
       relations: world.exportRelations(),
       resources: savedResources,
       machines: savedMachines
     }
   }
 
-  const validate = (value: unknown, descriptor: Descriptor.Any): Result.Result<unknown, unknown> => {
-    const constructor = DescriptorModule.constructorOf(descriptor) as DescriptorModule.ResultConstructor<unknown, unknown, unknown> | undefined
-    return constructor === undefined ? Result.success(value) : constructor.result(value)
-  }
+  // The public type only exposes `restore` when every saved descriptor has a
+  // constructor; a descriptor without one still fails closed here.
+  const validate = (value: unknown, descriptor: Descriptor.Any): Result.Result<unknown, unknown> | undefined =>
+    DescriptorModule.hasConstructor(descriptor) ? DescriptorModule.decoderOf(descriptor)(value) : undefined
 
   const restore = (data: unknown): Result.Result<void, Snapshot.RestoreError> => {
     const parsed = Snapshot.parse(data)
@@ -1447,8 +1443,11 @@ const makeValidatedRuntime = <
       const components: Array<Entity.StagedComponent> = []
       for (const [name, raw] of Object.entries(entity.components)) {
         const descriptor = componentsByName.get(name)
-        if (!descriptor) return Result.failure({ _tag: "UnknownComponent", entityId: entity.id, name })
+        if (!descriptor || DescriptorModule.isTransient(descriptor)) {
+          return Result.failure({ _tag: "UnknownComponent", entityId: entity.id, name })
+        }
         const value = validate(raw, descriptor)
+        if (value === undefined) return Result.failure({ _tag: "UnvalidatedDescriptor", name })
         if (!value.ok) return Result.failure({ _tag: "InvalidComponent", entityId: entity.id, name, error: value.error })
         components.push([descriptor, value.value])
       }
@@ -1457,8 +1456,9 @@ const makeValidatedRuntime = <
     const validatedResources: Array<readonly [symbol, unknown]> = []
     for (const [name, raw] of Object.entries(saved.resources)) {
       const descriptor = resourcesByName.get(name)
-      if (!descriptor) return Result.failure({ _tag: "UnknownResource", name })
+      if (!descriptor || DescriptorModule.isTransient(descriptor)) return Result.failure({ _tag: "UnknownResource", name })
       const value = validate(raw, descriptor)
+      if (value === undefined) return Result.failure({ _tag: "UnvalidatedDescriptor", name })
       if (!value.ok) return Result.failure({ _tag: "InvalidResource", name, error: value.error })
       validatedResources.push([descriptor.key, value.value])
     }
@@ -1499,12 +1499,9 @@ const makeValidatedRuntime = <
     // detection and renderer sync observe the restore like any other change.
     pendingCommands.length = 0
     pendingMachines.clear()
-    pendingEvents = new Map()
-    readableEvents = new Map()
-    pendingTransitionEvents = new Map()
-    readableTransitionEvents = new Map()
-    pendingRelationFailures = new Map()
-    readableRelationFailures = new Map()
+    events.clear()
+    transitionEvents.clear()
+    relationFailures.clear()
     world.advanceTick()
     world.despawnAll()
     world.setNextEntity(Math.max(saved.nextEntity, ...entities.map((entity) => entity.id + 1)))
@@ -1528,8 +1525,9 @@ const makeValidatedRuntime = <
       return tickUnsafe(schedules) as never
     },
     tryTick: tryRunSchedule,
-    snapshot,
-    restore,
+    // The gate is type-only: the functions exist on every runtime.
+    snapshot: snapshot as unknown as Snapshot.Gate<S, typeof snapshot>,
+    restore: restore as unknown as Snapshot.Gate<S, typeof restore>,
     inspect
   }
 }

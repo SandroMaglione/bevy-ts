@@ -537,8 +537,8 @@ const DetectFoodCollisionSystem = Game.System(
       const headPosition = head.value.data.position.get()
       for (const match of queries.food.each()) {
         if (sameCell(headPosition, match.data.position.get())) {
-          // The event crosses updateEvents(), so store a durable handle now and
-          // re-resolve it later in ResolveFoodEatenSystem.
+          // The event outlives this system's view of the entity, so store a
+          // durable handle now and re-resolve it in ResolveFoodEatenSystem.
           events.foodEaten.emit({
             entity: Game.Entity.handle(match.entity.id, Food)
           })
@@ -807,7 +807,6 @@ const updateSchedule = Game.Schedule(
   MoveHeadSystem,
   MoveBodySystem,
   DetectFoodCollisionSystem,
-  Game.Schedule.updateEvents(),
   ResolveFoodEatenSystem,
   Game.Schedule.applyDeferred(),
   GrowSnakeSystem,

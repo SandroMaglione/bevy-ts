@@ -128,7 +128,6 @@ const bootstrap = Game.Schedule(SetupSystem, Game.Schedule.applyDeferred())
 const update = Game.Schedule(
   MoveSystem,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateEvents(),
   ObserveTickSystem
 )
 

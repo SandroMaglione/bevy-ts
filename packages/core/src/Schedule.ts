@@ -4,17 +4,20 @@
  * Authoring-time structure is validated once, then schedules carry only their
  * normalized steps, systems, and nominal requirement union.
  *
- * Steps run in authored order. Marker steps are the only way queued work
- * becomes visible, and nothing is flushed implicitly when a schedule ends.
- * Change detection (`added`, `changed`, removed and despawned reads) needs no
- * marker: each system sees the changes made since its own previous run.
- *
+ * Steps run in authored order. Marker steps are the only way queued
+ * structural work is applied, and nothing is flushed implicitly when a
+ * schedule ends:
  *
  * - `applyDeferred()` applies queued commands
- * - `updateEvents()` makes emitted events (and transition events) readable
- * - `updateRelationFailures()` makes relation mutation failures readable
  * - `applyStateTransitions(...)` applies queued commands, then queued machine
  *   transitions
+ *
+ * Reads need no marker. Change detection (`added`, `changed`, removed and
+ * despawned reads), events, transition events, and relation failures are
+ * per-reader streams: each system sees what was published since its own
+ * previous run, once, in order. Entries are kept for the current and previous
+ * `runtime.tick(...)` call, so a system that does not run for longer misses
+ * older ones.
  *
  * @module Schedule
  * @docGroup runtime
@@ -28,14 +31,6 @@ export interface ApplyDeferredStep {
   readonly kind: "applyDeferred"
 }
 
-export interface EventUpdateStep {
-  readonly kind: "eventUpdate"
-}
-
-export interface RelationFailureUpdateStep {
-  readonly kind: "relationFailureUpdate"
-}
-
 export interface ApplyStateTransitionsStep<
   out Bundle extends TransitionBundleDefinition<any, any, any, any, any, any> | undefined = undefined,
   out Root = unknown
@@ -47,8 +42,6 @@ export interface ApplyStateTransitionsStep<
 
 export type ScheduleMarkerStep =
   | ApplyDeferredStep
-  | EventUpdateStep
-  | RelationFailureUpdateStep
   | ApplyStateTransitionsStep<any, any>
 
 type AnySystem = SystemDefinition<any, any, any, any, any, any>
@@ -199,18 +192,6 @@ export type TransitionBundleFailure<
  * schedule runs.
  */
 export const applyDeferred = (): ApplyDeferredStep => ({ kind: "applyDeferred" })
-
-/**
- * Makes events emitted since the previous `updateEvents()` readable and drops
- * the previously readable ones.
- */
-export const updateEvents = (): EventUpdateStep => ({ kind: "eventUpdate" })
-
-/**
- * Makes relation mutation failures collected since the previous
- * `updateRelationFailures()` readable.
- */
-export const updateRelationFailures = (): RelationFailureUpdateStep => ({ kind: "relationFailureUpdate" })
 
 export const transitions = <
   S extends Schema.Any,

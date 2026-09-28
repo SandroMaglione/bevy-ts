@@ -80,14 +80,13 @@ import type { CommandsApi } from "./Command.ts"
  * - derive a typed context from the declaration
  * - run the implementation with no hidden world access
  *
- * Runtime visibility boundaries stay explicit:
+ * Runtime visibility:
  *
  * - deferred commands become visible after `Game.Schedule.applyDeferred()`
- * - event reads become visible after `Game.Schedule.updateEvents()`
- * - `added`/`changed` filters and removed/despawned reads cover the changes
- *   made since the system's own previous run
- * - relation-failure reads become visible after
- *   `Game.Schedule.updateRelationFailures()`
+ *   (or `applyStateTransitions(...)`), the only explicit boundaries
+ * - `added`/`changed` filters, removed/despawned reads, events, transition
+ *   events, and relation failures are per-reader streams: each run sees what
+ *   was published since the system's own previous run
  *
  * @example
  * ```ts
@@ -214,12 +213,14 @@ export type EventWrite<D extends Descriptor<"event", string, any>> = {
 /**
  * Creates an event-read declaration for a system spec.
  *
- * Event reads observe the committed readable event buffer. New writes become
- * visible only after an explicit `Game.Schedule.updateEvents()` boundary.
+ * Each run of the reading system sees the events published since its own
+ * previous completed run, once, in emission order: events from earlier
+ * systems in the same schedule, and events emitted after it ran last time.
+ * Events are kept for the current and previous `runtime.tick(...)` call.
  *
- * This is the usual second half of a deferred cross-system flow: one earlier
- * system emits an event, `updateEvents()` commits the buffer, and a later
- * system reads those events and re-validates any handles or lookups it needs.
+ * This is the usual second half of a cross-system flow: one system emits an
+ * event, and a later system reads it and re-validates any handles or lookups
+ * it needs.
  */
 export const readEvent = <D extends Descriptor<"event", string, any>>(
   descriptor: D
@@ -231,13 +232,13 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
 /**
  * Creates an event-write declaration for a system spec.
  *
- * Event writes append to the pending event buffer. They are not visible to
- * readers in the same schedule phase until `Game.Schedule.updateEvents()`.
+ * Emitted events are published when the system completes successfully; a
+ * failed run publishes nothing. Readers later in the same schedule see them,
+ * and so do readers that run in a later tick.
  *
  * If the payload needs to name an entity for later work, emit a durable
  * `Game.Entity.handle(...)` (optionally with an intent component) and let the later
- * reader re-resolve it through `lookup.getHandle(...)` after the event buffer
- * is committed.
+ * reader re-resolve it through `lookup.getHandle(...)`.
  *
  * @example
  * ```ts
@@ -294,8 +295,8 @@ export const transition = <M extends Machine.StateMachine.Any>(
 /**
  * Declares read access to committed transition events for one machine.
  *
- * Transition events are committed together with normal events and become
- * readable only after `Game.Schedule.updateEvents()`.
+ * Transition events are published when a transition commits and read like
+ * normal events: each run sees those published since its previous run.
  *
  * This is one of the clearest signs that the modeled value should be a machine
  * rather than a plain state descriptor.
@@ -389,8 +390,8 @@ export interface DespawnedRead {
 /**
  * Declares read access to relation-mutation failure records.
  *
- * These failures are deferred. Systems can read them only after an explicit
- * `Game.Schedule.updateRelationFailures()` boundary.
+ * Failures are recorded when deferred relation commands are applied; each run
+ * sees the failures recorded since the system's previous run.
  */
 export interface RelationFailureRead<R extends Relation.Relation.Any> {
   readonly relation: R
@@ -540,8 +541,7 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
   /**
    * Resolves a stored durable handle back into current-world query access.
    *
-   * Use this after crossing deferred boundaries such as `updateEvents()` or
-   * when reading handles back out of resources or components. A handle is
+   * Use this for handles carried in events, resources, or components. A handle is
    * storage-safe, not proof of liveness, so stale or mismatched handles remain
    * explicit typed failures.
    */

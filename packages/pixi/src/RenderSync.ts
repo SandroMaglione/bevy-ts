@@ -9,7 +9,9 @@
  * transform is applied stay caller-defined.
  *
  * Change detection is per system, so the systems see every addition, change,
- * and removal exactly once, wherever they sit in the schedule. Place them
+ * and removal exactly once, wherever they sit in the schedule. `redrawOn`
+ * lists more components whose changes re-run `apply`, for node state beyond
+ * the transform (animation frames, tints, interpolation). Place them
  * after the `applyDeferred()` that commits spawns to render new entities in
  * the same tick.
  *
@@ -122,9 +124,19 @@ export interface Options<
   readonly services?: Services
   /** Resources passed to the callbacks as read-only cells in `resources`. */
   readonly resources?: Resources
+  /**
+   * More components whose changes re-run `apply`, for node state other than
+   * the transform: animation frames, tints, interpolation. `apply` then runs
+   * once per changed entity per sync, however many of these changed, so it
+   * should set the node's state rather than increment it.
+   */
+  readonly redrawOn?: ReadonlyArray<Schema.ComponentDescriptor<S>>
   /** Builds the node for a new renderable entity. */
   readonly create: (context: NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>) => NodeOf<Registry>
-  /** Applies the current state to the node, on creation and on every transform change. */
+  /**
+   * Applies the current state to the node: on creation, and whenever the
+   * transform or a `redrawOn` component changes.
+   */
   readonly apply: (node: NodeOf<Registry>, context: NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>) => void
 }
 
@@ -139,7 +151,7 @@ export interface RenderSystems<S extends Schema.Any, Root, Needs extends Service
   readonly destroy: RenderSystem<S, Root, Needs>
   /** Creates nodes for entities that gained the renderable, and applies their state. */
   readonly create: RenderSystem<S, Root, Needs>
-  /** Applies changed transforms to existing nodes. */
+  /** Re-applies nodes whose transform or `redrawOn` components changed. */
   readonly sync: RenderSystem<S, Root, Needs>
 }
 
@@ -216,15 +228,29 @@ export const systems = <
     }
   })
 
+  // One `changed` query per trigger; filters within one query must all match.
+  const triggers = [options.transform, ...(options.redrawOn ?? [])]
+  const changedQueries: Record<string, object> = {}
+  triggers.forEach((trigger, index) => {
+    changedQueries[`changed${index}`] = Query({ selection, filters: [Game.Query.changed(trigger)] })
+  })
+
   const sync = System(`${options.name}/Sync`, {
-    queries: { changed: Query({ selection, filters: [Game.Query.changed(options.transform)] }) },
+    queries: changedQueries,
     resources,
     services
   }, ({ queries, resources, services }) => {
     const registry = services.__registry as NodeRegistry<Node>
-    for (const { entity, data } of queries.changed.each()) {
-      const node = registry.get(entity.id)
-      if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
+    const applied = triggers.length > 1 ? new Set<number>() : undefined
+    for (const key in queries) {
+      for (const { entity, data } of queries[key].each()) {
+        if (applied !== undefined) {
+          if (applied.has(entity.id.value)) continue
+          applied.add(entity.id.value)
+        }
+        const node = registry.get(entity.id)
+        if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
+      }
     }
   })
 

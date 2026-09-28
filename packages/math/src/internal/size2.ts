@@ -37,3 +37,12 @@ export const toRaw = (size: Size2.Size2): Size2.Raw => ({
 
 export const width = (size: Size2.Size2): Scalar.NonNegative => size.width
 export const height = (size: Size2.Size2): Scalar.NonNegative => size.height
+
+/**
+ * Shape check for untrusted input; values are validated by `result`.
+ */
+export const isRawShape = (raw: unknown): raw is Size2.Raw =>
+  typeof raw === "object" && raw !== null && typeof (raw as Record<string, unknown>)["width"] === "number" && typeof (raw as Record<string, unknown>)["height"] === "number"
+
+export const decode = (raw: unknown): Result.Result<Size2.Size2, Size2.Error | Size2.DecodeError> =>
+  isRawShape(raw) ? result(raw) : Result.failure({ tag: "Size2/Malformed", input: raw })
