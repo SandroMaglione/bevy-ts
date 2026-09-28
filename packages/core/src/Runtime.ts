@@ -1164,6 +1164,13 @@ const makeValidatedRuntime = <
         return condition.conditions.every(evaluateCondition)
       case "or":
         return condition.conditions.some(evaluateCondition)
+      case "check": {
+        // Read-only and cursor-free by construction: evaluating it never
+        // advances the world tick or any reader position.
+        const projection = condition.projection as Inspector.InspectorDefinition<any, boolean>
+        const { context } = slotOf(projection.system, false)
+        return projection.read(context as never) === true
+      }
     }
   }
 

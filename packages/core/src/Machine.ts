@@ -142,53 +142,89 @@ export interface TransitionEventRead<M extends StateMachineDefinition = StateMac
 export type Condition<Root = unknown> =
   | InStateCondition<StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], Root>>
   | StateChangedCondition<StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], Root>>
-  | NotCondition<Condition<Root>>
-  | AndCondition<ReadonlyArray<Condition<Root>>>
-  | OrCondition<ReadonlyArray<Condition<Root>>>
+  | NotCondition<Condition<Root>, Requirement.Requirement>
+  | AndCondition<ReadonlyArray<Condition<Root>>, Requirement.Requirement>
+  | OrCondition<ReadonlyArray<Condition<Root>>, Requirement.Requirement>
+  | CheckCondition<Root>
 
 export interface InStateCondition<M extends StateMachineDefinition = StateMachineDefinition> {
   readonly kind: "inState"
   readonly machine: M
   readonly value: StateMachine.Value<M>
-  readonly requirements: ReadonlyArray<StateMachine.Any>
-  readonly __machineNeeds?: M | undefined
+  readonly requirements: ReadonlyArray<Requirement.RequirementValue>
+  readonly __conditionNeeds?: M | undefined
 }
 
 export interface StateChangedCondition<M extends StateMachineDefinition = StateMachineDefinition> {
   readonly kind: "stateChanged"
   readonly machine: M
-  readonly requirements: ReadonlyArray<StateMachine.Any>
-  readonly __machineNeeds?: M | undefined
+  readonly requirements: ReadonlyArray<Requirement.RequirementValue>
+  readonly __conditionNeeds?: M | undefined
 }
 
 export interface NotCondition<
   C extends Condition = Condition,
-  Needs extends StateMachine.Any = StateMachine.Any
+  Needs extends Requirement.Requirement = Requirement.Requirement
 > {
   readonly kind: "not"
   readonly condition: C
-  readonly requirements: ReadonlyArray<StateMachine.Any>
-  readonly __machineNeeds?: Needs | undefined
+  readonly requirements: ReadonlyArray<Requirement.RequirementValue>
+  readonly __conditionNeeds?: Needs | undefined
 }
 
 export interface AndCondition<
   C extends ReadonlyArray<Condition> = ReadonlyArray<Condition>,
-  Needs extends StateMachine.Any = StateMachine.Any
+  Needs extends Requirement.Requirement = Requirement.Requirement
 > {
   readonly kind: "and"
   readonly conditions: C
-  readonly requirements: ReadonlyArray<StateMachine.Any>
-  readonly __machineNeeds?: Needs | undefined
+  readonly requirements: ReadonlyArray<Requirement.RequirementValue>
+  readonly __conditionNeeds?: Needs | undefined
 }
 
 export interface OrCondition<
   C extends ReadonlyArray<Condition> = ReadonlyArray<Condition>,
-  Needs extends StateMachine.Any = StateMachine.Any
+  Needs extends Requirement.Requirement = Requirement.Requirement
 > {
   readonly kind: "or"
   readonly conditions: C
-  readonly requirements: ReadonlyArray<StateMachine.Any>
-  readonly __machineNeeds?: Needs | undefined
+  readonly requirements: ReadonlyArray<Requirement.RequirementValue>
+  readonly __conditionNeeds?: Needs | undefined
+}
+
+/**
+ * A run condition computed by a read-only predicate over declared resources,
+ * machines, and plain queries (see `Condition.check` / `Game.Condition.check`).
+ *
+ * The predicate is evaluated just before each gated system runs, against
+ * committed values: writes by earlier systems in the same run are visible.
+ * Its access excludes every read that consumes or advances a per-reader
+ * cursor (events, `added`/`changed` filters, removed/despawned records), so
+ * evaluating it any number of times gives the same answer until something it
+ * reads is written.
+ */
+export interface CheckCondition<
+  Root = unknown,
+  Needs extends Requirement.Requirement = Requirement.Requirement
+> {
+  readonly kind: "check"
+  /** Shown by devtools in place of the predicate. */
+  readonly name: string
+  /**
+   * The read-only projection evaluated for the check. Opaque on purpose: the
+   * runtime and devtools read it; keeping its type out of the `Condition`
+   * union keeps every system's `when` cheap to check.
+   */
+  readonly projection: CheckProjection
+  readonly requirements: ReadonlyArray<Requirement.RequirementValue>
+  readonly __conditionNeeds?: Needs | undefined
+  readonly __schemaRoot?: Root | undefined
+}
+
+/** The opaque read-only projection behind a `CheckCondition`. */
+export interface CheckProjection {
+  readonly kind: "inspector"
+  readonly name: string
 }
 
 /**
@@ -232,11 +268,21 @@ export namespace StateMachine {
 type MachineFromAccess<Access> =
   Access extends { readonly machine: infer M extends StateMachine.Any } ? M : never
 
-/** Extracts every machine token mentioned by one run condition. */
-export type MachineNeedsFromCondition<C> =
-  C extends { readonly __machineNeeds?: infer M extends StateMachine.Any | undefined }
-    ? NonNullable<M>
+/**
+ * Extracts every requirement (machines, and the resources a `check` reads)
+ * mentioned by one run condition, through `not`/`and`/`or`.
+ */
+export type ConditionNeeds<C> =
+  C extends { readonly __conditionNeeds?: infer N extends Requirement.Requirement | undefined }
+    ? NonNullable<N>
     : never
+
+/** Extracts the requirement union carried by a condition list. */
+export type ConditionNeedsFromConditions<C extends ReadonlyArray<Condition>> =
+  ConditionNeeds<C[number]>
+
+/** Extracts only the machine tokens mentioned by one run condition. */
+export type MachineNeedsFromCondition<C> = Extract<ConditionNeeds<C>, StateMachine.Any>
 
 /** Extracts the machine-token union carried by a named access record. */
 export type MachineNeedsFromRecord<R extends Record<string, unknown>> =
@@ -341,7 +387,7 @@ export const stateChanged = <M extends StateMachine.Any>(
 /**
  * Negates another condition.
  */
-export const not = <C extends Condition>(condition: C): NotCondition<C, MachineNeedsFromCondition<C>> => ({
+export const not = <C extends Condition>(condition: C): NotCondition<C, ConditionNeeds<C>> => ({
   kind: "not",
   condition,
   requirements: condition.requirements
@@ -350,17 +396,17 @@ export const not = <C extends Condition>(condition: C): NotCondition<C, MachineN
 /**
  * Requires every child condition to pass.
  */
-export const and = <const C extends ReadonlyArray<Condition>>(...conditions: C): AndCondition<C, MachineNeedsFromCondition<C[number]>> => ({
+export const and = <const C extends ReadonlyArray<Condition>>(...conditions: C): AndCondition<C, ConditionNeeds<C[number]>> => ({
   kind: "and",
   conditions,
-  requirements: Requirement.collect(conditions.flatMap((condition) => condition.requirements)) as ReadonlyArray<StateMachine.Any>
+  requirements: Requirement.collect(conditions.flatMap((condition) => condition.requirements))
 })
 
 /**
  * Requires at least one child condition to pass.
  */
-export const or = <const C extends ReadonlyArray<Condition>>(...conditions: C): OrCondition<C, MachineNeedsFromCondition<C[number]>> => ({
+export const or = <const C extends ReadonlyArray<Condition>>(...conditions: C): OrCondition<C, ConditionNeeds<C[number]>> => ({
   kind: "or",
   conditions,
-  requirements: Requirement.collect(conditions.flatMap((condition) => condition.requirements)) as ReadonlyArray<StateMachine.Any>
+  requirements: Requirement.collect(conditions.flatMap((condition) => condition.requirements))
 })

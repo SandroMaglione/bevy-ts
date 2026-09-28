@@ -23,7 +23,7 @@
  * @module Schedule
  * @docGroup runtime
  */
-import type { Condition, MachineNeedsFromConditions, StateMachine } from "./Machine.ts"
+import type { Condition, ConditionNeedsFromConditions, StateMachine } from "./Machine.ts"
 import * as Requirement from "./Requirement.ts"
 import type { Schema } from "./Schema.ts"
 import type { FailureOf as SystemFailureOf, SystemDefinition, SystemFailure } from "./System.ts"
@@ -177,9 +177,9 @@ export type ConditionalScheduleBuildFor<
   Root = unknown
 > = ScheduleDefinition<
   S,
-  CompositionExactRequirements<Entries> | MachineNeedsFromConditions<Conditions>,
+  CompositionExactRequirements<Entries> | ConditionNeedsFromConditions<Conditions>,
   Root,
-  CompositionExactRequirements<Entries> | MachineNeedsFromConditions<Conditions>,
+  CompositionExactRequirements<Entries> | ConditionNeedsFromConditions<Conditions>,
   CompositionFailure<Entries>
 >
 

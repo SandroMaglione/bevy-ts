@@ -32,7 +32,7 @@
  * ```
  */
 import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
-import type { Condition, MachineNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
+import type { Condition, ConditionNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 /**
@@ -75,7 +75,7 @@ export interface Options<
 /**
  * The generated system. It requires the source service and the resource.
  */
-export type CaptureSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | MachineNeedsFromConditions<ReadonlyArray<Condition>>> =
+export type CaptureSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | ConditionNeedsFromConditions<ReadonlyArray<Condition>>> =
   Schema.BoundSystem<S, Root, any, void, never, string, Needs>
 
 /**
@@ -90,11 +90,11 @@ export const system = <
 >(
   Game: Schema.Game<S, Root>,
   options: Options<S, Service, Resource, When>
-): CaptureSystem<S, Root, Service | Resource | MachineNeedsFromConditions<When>> =>
+): CaptureSystem<S, Root, Service | Resource | ConditionNeedsFromConditions<When>> =>
   Game.System(options.name, {
     resources: { input: Game.System.writeResource(options.resource) },
     services: { source: Game.System.service(options.source as Service) },
     when: (options.when ?? []) as ReadonlyArray<Condition<Root>>
   }, ({ resources, services }) => {
     resources.input.set(services.source.snapshot() as never)
-  }) as unknown as CaptureSystem<S, Root, Service | Resource | MachineNeedsFromConditions<When>>
+  }) as unknown as CaptureSystem<S, Root, Service | Resource | ConditionNeedsFromConditions<When>>
