@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Keyboard } from "@bevy-ts/browser"
+import { Keyboard } from "@typeonce/bevy-ts-browser"
 
 const makeHost = () => {
   const listeners = new Map<string, Set<(event?: any) => void>>()

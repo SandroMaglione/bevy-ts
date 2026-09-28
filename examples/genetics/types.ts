@@ -1,4 +1,4 @@
-import type { NodeRegistry } from "@bevy-ts/pixi"
+import type { NodeRegistry } from "@typeonce/bevy-ts-pixi"
 import type { Application, Container, Graphics } from "pixi.js"
 
 export type GeneValue = number

@@ -9,7 +9,7 @@
  * @module Format
  * @docGroup devtools
  */
-import type * as Debug from "@bevy-ts/core/Debug"
+import type * as Debug from "@typeonce/bevy-ts/Debug"
 
 export interface ValueOptions {
   /** Nesting depth printed before `…`. Defaults to 3. */

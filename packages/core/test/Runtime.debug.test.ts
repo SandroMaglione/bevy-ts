@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Debug, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Debug, Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Debug/Position")
 const Tagged = Descriptor.Component<{}>()("Debug/Tagged")

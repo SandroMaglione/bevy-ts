@@ -10,8 +10,8 @@
  * changes to the player's position, and the world dump. Copy it and change
  * the timeline, the invariants, and the questions.
  */
-import { Keyboard } from "@bevy-ts/browser"
-import { Invariant, Session } from "@bevy-ts/devtools"
+import { Keyboard } from "@typeonce/bevy-ts-browser"
+import { Invariant, Session } from "@typeonce/bevy-ts-devtools"
 
 import { WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 import { PlayerCameraQuery } from "./queries.ts"

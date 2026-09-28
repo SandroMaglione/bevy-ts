@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, Entity, Result, Schema } from "@bevy-ts/core"
+import { Decode, Descriptor, Entity, Result, Schema } from "@typeonce/bevy-ts"
 
 const Root = Schema.defineRoot("DecodeTest")
 

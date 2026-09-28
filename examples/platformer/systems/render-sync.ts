@@ -1,4 +1,4 @@
-import { RenderSync } from "@bevy-ts/pixi"
+import { RenderSync } from "@typeonce/bevy-ts-pixi"
 
 import { createRenderNode } from "../render/nodes.ts"
 import { Game, Position, RenderNodes, Renderable } from "../schema.ts"

@@ -1,5 +1,5 @@
-import { Definition, Result } from "@bevy-ts/core"
-import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@bevy-ts/math"
+import { Definition, Result } from "@typeonce/bevy-ts"
+import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@typeonce/bevy-ts-math"
 import { describe, expect, it } from "tstyche"
 
 describe("helpers", () => {

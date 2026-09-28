@@ -1,7 +1,7 @@
-import { Keyboard } from "@bevy-ts/browser"
-import { NodeRegistry } from "@bevy-ts/pixi"
+import { Keyboard } from "@typeonce/bevy-ts-browser"
+import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
 import { Application, Container, Graphics } from "pixi.js"
-import * as InputAxis from "@bevy-ts/math/InputAxis"
+import * as InputAxis from "@typeonce/bevy-ts-math/InputAxis"
 
 import {
   PICKUP_RADIUS,

@@ -1,8 +1,8 @@
-import * as Runtime from "@bevy-ts/core/Runtime"
-import * as Schedule from "@bevy-ts/core/Schedule"
-import * as System from "@bevy-ts/core/System"
-import type { Descriptor } from "@bevy-ts/core/Descriptor"
-import type { Schema } from "@bevy-ts/core/Schema"
+import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import * as Schedule from "@typeonce/bevy-ts/Schedule"
+import * as System from "@typeonce/bevy-ts/System"
+import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
+import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 /**
  * Reads one resource value from a runtime through the public scheduling API.

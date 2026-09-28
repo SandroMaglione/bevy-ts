@@ -1,4 +1,4 @@
-import { Descriptor, Entity, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
 import type {
   ArenaValue,
   BrowserHostValue,

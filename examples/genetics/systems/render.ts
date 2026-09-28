@@ -1,5 +1,5 @@
 
-import { RenderSync } from "@bevy-ts/pixi"
+import { RenderSync } from "@typeonce/bevy-ts-pixi"
 import { clamp } from "../math.ts"
 import { Agent, AgentSnapshotQuery, BrowserHost, ChangedAgentVitalsQuery, Game, GenerationClock, GenerationIndex, PopulationStats, Position, RenderNodes, Renderable, SimulationPhase, Summary } from "../schema.ts"
 import { collectAgentSnapshots } from "../logic.ts"

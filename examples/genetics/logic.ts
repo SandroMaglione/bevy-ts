@@ -1,4 +1,4 @@
-import { Entity } from "@bevy-ts/core"
+import { Entity } from "@typeonce/bevy-ts"
 import { FOOD_ENERGY } from "./constants.ts"
 import { clamp, lerp, normalizeXYOrZero } from "./math.ts"
 import { Agent, Game, Genes, Position, Renderable, Root, Velocity, Vitals, Behavior, Intent, Food, schema } from "./schema.ts"

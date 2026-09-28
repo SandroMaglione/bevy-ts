@@ -1,4 +1,4 @@
-import { Descriptor, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@typeonce/bevy-ts"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Identity/Position")

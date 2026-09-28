@@ -30,9 +30,9 @@
  * @categoryDescription Accessors
  * Pure readers and raw views over already-validated size values.
  */
-import type * as Brand from "@bevy-ts/core/Brand"
+import type * as Brand from "@typeonce/bevy-ts/Brand"
 import * as internal from "./internal/size2.ts"
-import type * as Result from "@bevy-ts/core/Result"
+import type * as Result from "@typeonce/bevy-ts/Result"
 import type * as Scalar from "./Scalar.ts"
 
 /**

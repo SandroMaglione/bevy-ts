@@ -1,4 +1,4 @@
-import { NodeRegistry } from "@bevy-ts/pixi"
+import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
 import { Application, Container, Graphics } from "pixi.js"
 
 import { drawBoard } from "./render/board.ts"

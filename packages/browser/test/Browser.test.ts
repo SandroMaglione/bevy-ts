@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { FixedLoop, packageTag } from "@bevy-ts/browser"
-import { Result } from "@bevy-ts/core"
+import { FixedLoop, packageTag } from "@typeonce/bevy-ts-browser"
+import { Result } from "@typeonce/bevy-ts"
 
-describe("@bevy-ts/browser", () => {
+describe("@typeonce/bevy-ts-browser", () => {
   it("resolves through the workspace package entrypoint", () => {
     expect(packageTag).toBe("browser")
   })

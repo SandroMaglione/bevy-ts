@@ -1,5 +1,5 @@
-import { Descriptor, EntityScope, Fx, Result, Schema } from "@bevy-ts/core"
-import type * as System from "@bevy-ts/core/System"
+import { Descriptor, EntityScope, Fx, Result, Schema } from "@typeonce/bevy-ts"
+import type * as System from "@typeonce/bevy-ts/System"
 import { describe, expect, it } from "tstyche"
 
 const Value = Descriptor.Resource<number>()("StabilityTypes/Value")

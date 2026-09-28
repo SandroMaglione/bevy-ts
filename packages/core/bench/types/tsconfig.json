@@ -11,8 +11,8 @@
     "declarationMap": false,
     "sourceMap": false,
     "paths": {
-      "@bevy-ts/core": ["../../src/index.ts"],
-      "@bevy-ts/core/*": ["../../src/*"]
+      "@typeonce/bevy-ts": ["../../src/index.ts"],
+      "@typeonce/bevy-ts/*": ["../../src/*"]
     }
   }
 }

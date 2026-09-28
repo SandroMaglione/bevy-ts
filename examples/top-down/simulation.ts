@@ -14,7 +14,7 @@
  * }
  * ```
  */
-import * as Result from "@bevy-ts/core/Result"
+import * as Result from "@typeonce/bevy-ts/Result"
 
 import { FIXED_STEP_SECONDS } from "./constants.ts"
 import { describeRuntimeError, initialMachines, initialResources } from "./runtime.ts"
