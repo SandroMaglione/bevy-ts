@@ -9,6 +9,10 @@
  */
 export * as Brand from "./Brand.ts"
 /**
+ * Ready-made validators for descriptor values.
+ */
+export * as Decode from "./Decode.ts"
+/**
  * Descriptor authoring helpers.
  */
 export * as Descriptor from "./Descriptor.ts"

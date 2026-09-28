@@ -192,15 +192,11 @@ them fails to compile, and the error lists each descriptor to fix:
 
 ```ts
 const Position = Descriptor.ConstructedComponent(Vector2)("Position")
+const Stats = Descriptor.ConstructedComponent(Decode.struct({ level: Decode.integer, name: Decode.string }))("Stats")
+const Target = Descriptor.ConstructedComponent(Decode.struct({ enemy: Decode.handle(Root, Health) }))("Target")
+const Player = Descriptor.Tag("Player")
 const Label = Descriptor.ConstructedComponent(Descriptor.fromStandardSchema(type("string")))("Label")
 const Sprite = Descriptor.TransientComponent<{ frame: number }>()("Sprite") // rebuilt after load
-const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === "object" && raw !== null
-const Target = Descriptor.ConstructedComponent({
-  result: (raw: unknown) => {
-    const enemy = Entity.decodeHandle(Root, isRecord(raw) ? raw["enemy"] : undefined, Health)
-    return enemy.ok ? Result.success({ enemy: enemy.value }) : enemy
-  }
-})("Target")
 ```
 
 Restored entities come back without transient components, and transient

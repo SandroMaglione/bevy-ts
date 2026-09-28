@@ -295,6 +295,23 @@ export const TransientComponent = <Value>() => <const Name extends string>(
 ): TransientDescriptor<"component", Name, Value> => makeTransientDescriptor("component", name)
 
 /**
+ * Defines a marker component: no data, only presence (`[Player, {}]`).
+ *
+ * Tags validate on load like any constructed component, so they never block
+ * snapshots.
+ *
+ * @example
+ * ```ts
+ * const Player = Descriptor.Tag("Player")
+ * const Enemy = Descriptor.Tag("Enemy")
+ * ```
+ */
+export const Tag = <const Name extends string>(
+  name: Name
+): DecodableDescriptor<"component", Name, {}, {}, DecodeModule.DecodeError> =>
+  ConstructedComponent(DecodeModule.struct({}))(name)
+
+/**
  * Defines a resource descriptor.
  *
  * Resources represent unique world-level values accessed through explicit
@@ -497,5 +514,6 @@ export const Hierarchy = RelationModule.Hierarchy
  * child reordering.
  */
 export const Relation = RelationModule.Relation
+import * as DecodeModule from "./Decode.ts"
 import * as RelationModule from "./Relation.ts"
 import * as ResultModule from "./Result.ts"
