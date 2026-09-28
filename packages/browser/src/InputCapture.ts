@@ -32,6 +32,7 @@
  * ```
  */
 import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
+import type { Condition, MachineNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 /**
@@ -51,19 +52,30 @@ type ResourceDescriptor = Descriptor<"resource", string, any>
 export type SnapshotOf<Service extends ServiceDescriptor> =
   Descriptor.Value<Service> extends Source<infer Value> ? Value : never
 
-export interface Options<S extends Schema.Any, Service extends ServiceDescriptor, Resource extends Schema.ResourceDescriptor<S>> {
+export interface Options<
+  S extends Schema.Any,
+  Service extends ServiceDescriptor,
+  Resource extends Schema.ResourceDescriptor<S>,
+  When extends ReadonlyArray<Condition> = readonly []
+> {
   /** The system name. */
   readonly name: string
   /** The service to read snapshots from; its value must have `snapshot()`. */
   readonly source: Descriptor.Value<Service> extends Source<any> ? Service : "The source service must provide snapshot()"
   /** The resource to write each snapshot into; its value type must be exactly the snapshot type. */
   readonly resource: Resource & Descriptor<"resource", string, SnapshotOf<Service>>
+  /**
+   * Run conditions, like a system's `when`. While they fail, snapshots are
+   * not taken, so presses stay in the device until capture resumes (for
+   * example during a pause or hit-stop).
+   */
+  readonly when?: When
 }
 
 /**
  * The generated system. It requires the source service and the resource.
  */
-export type CaptureSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor> =
+export type CaptureSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | MachineNeedsFromConditions<ReadonlyArray<Condition>>> =
   Schema.BoundSystem<S, Root, any, void, never, string, Needs>
 
 /**
@@ -73,14 +85,16 @@ export const system = <
   S extends Schema.Any,
   Root,
   const Service extends ServiceDescriptor,
-  const Resource extends Schema.ResourceDescriptor<S>
+  const Resource extends Schema.ResourceDescriptor<S>,
+  const When extends ReadonlyArray<Condition<Root>> = readonly []
 >(
   Game: Schema.Game<S, Root>,
-  options: Options<S, Service, Resource>
-): CaptureSystem<S, Root, Service | Resource> =>
+  options: Options<S, Service, Resource, When>
+): CaptureSystem<S, Root, Service | Resource | MachineNeedsFromConditions<When>> =>
   Game.System(options.name, {
     resources: { input: Game.System.writeResource(options.resource) },
-    services: { source: Game.System.service(options.source as Service) }
+    services: { source: Game.System.service(options.source as Service) },
+    when: (options.when ?? []) as ReadonlyArray<Condition<Root>>
   }, ({ resources, services }) => {
     resources.input.set(services.source.snapshot() as never)
-  }) as unknown as CaptureSystem<S, Root, Service | Resource>
+  }) as unknown as CaptureSystem<S, Root, Service | Resource | MachineNeedsFromConditions<When>>

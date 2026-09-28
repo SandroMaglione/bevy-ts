@@ -46,6 +46,7 @@ const Move = Game.System("Concepts/Move", {
 
 - The callback receives only what the spec declares.
 - `read` slots are deeply readonly. `write` slots expose `set` / `update`.
+- Values from `get()` are `ReadonlyValue<T>`. Type helpers that receive them as `ReadonlyValue<T>` (from `@typeonce/bevy-ts/Query`), not `T`, so a config resource or component value passes straight in without a cast: `const spawnRate = (tuning: ReadonlyValue<Tuning>) => ...`.
 - Queries also take `with`, `without`, `optional(...)`, relation selections, and the change filters described in section 8.
 - Query results come back in spawn order.
 
@@ -103,7 +104,7 @@ filters: [Game.Query.changed(Position)]
 - `added(...)` and `changed(...)` match what happened since this system's previous run. Every system sees each change exactly once, independently of other systems.
 - A system's first run sees everything that already exists as added.
 - `readRemoved(...)` and `readDespawned()` work the same way.
-- Nothing needs a marker; these records are kept for two frames.
+- Nothing needs a marker. Removal records are kept until every system that reads them has run, so a render schedule ticked after several fixed updates still sees every despawn.
 
 ## 9. State machines model modes
 
@@ -111,9 +112,11 @@ filters: [Game.Query.changed(Position)]
 const Flow = Game.StateMachine("Concepts/Flow", ["Playing", "Won"])
 // nextMachines: { flow: Game.System.nextState(Flow) } → nextMachines.flow.set("Won")
 // when: [Game.Condition.inState(Flow, "Playing")]      → gate a system
+// Game.Schedule.when([Game.Condition.inState(Flow, "Playing")], Move, Attack) → gate a group
 ```
 
 - Transitions are queued and committed at `applyStateTransitions(bundle)`. That step runs the bundle's `onExit` / `onTransition` / `onEnter` schedules.
+- `Game.Schedule.when(conditions, ...entries)` gates every system in a group (nested schedules included) without repeating `when` on each. Marker steps in the group still run, and the machines the conditions read are requirements of the schedule.
 
 ## 10. Schedules make every boundary visible
 

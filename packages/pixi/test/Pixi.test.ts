@@ -205,4 +205,104 @@ describe("@typeonce/bevy-ts-pixi", () => {
     expect(old.destroyed).toBe(true)
     expect(layer.children.map((node) => node.label)).toEqual(["new"])
   })
+
+  it("creates, updates, and destroys nothing while its run conditions fail, and catches up after", () => {
+    const Mode = Game.StateMachine("PixiTest/Mode", ["Visible", "Hidden"] as const)
+    const layer = new FakeContainer()
+    const render = RenderSync.system(Game, {
+      name: "PixiTest/Gated",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      when: [Game.Condition.inState(Mode, "Visible")],
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: (node, { transform }) => {
+        node.x = transform.x
+      }
+    })
+    const Spawn = Game.System("PixiTest/SpawnGated", {}, ({ commands }) => {
+      commands.spawn(Game.Command.spawn([Position, { x: 4, y: 0 }], [Sprite, { label: "late" }]))
+    })
+    const Show = Game.System("PixiTest/Show", { nextMachines: { mode: Game.System.nextState(Mode) } }, ({ nextMachines }) => {
+      nextMachines.mode.set("Visible")
+    })
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.inContainer(layer))),
+      machines: Game.Runtime.machines(Game.Runtime.machine(Mode, "Hidden"))
+    })
+    runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred(), render))
+    expect(layer.children).toEqual([])
+    runtime.tick(Game.Schedule(Show, Game.Schedule.applyStateTransitions(), render))
+    expect(layer.children.map((node) => [node.label, node.x])).toEqual([["late", 4]])
+  })
+
+  it("without a transform, applies on creation and redrawOn changes only", () => {
+    const layer = new FakeContainer()
+    const applied: Array<string> = []
+    const render = RenderSync.system(Game, {
+      name: "PixiTest/NoTransform",
+      renderable: Sprite,
+      registry: Nodes,
+      redrawOn: [Sprite],
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: (_node, { renderable }) => {
+        applied.push(renderable.label)
+      }
+    })
+    const ids: Array<Id> = []
+    const Spawn = Game.System("PixiTest/SpawnNoTransform", {}, ({ commands }) => {
+      ids.push(commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "a" }])))
+    })
+    const Move = Game.System("PixiTest/MoveNoTransform", { queries: { all: Game.Query({ selection: { position: Game.Query.write(Position) } }) } }, ({ queries }) => {
+      for (const { data } of queries.all.each()) data.position.update((position) => ({ x: position.x + 1, y: position.y }))
+    })
+    const Relabel = Game.System("PixiTest/Relabel", { queries: { all: Game.Query({ selection: { sprite: Game.Query.write(Sprite) } }) } }, ({ queries }) => {
+      for (const { data } of queries.all.each()) data.sprite.set({ label: "b" })
+    })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.inContainer(layer))) })
+    runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred(), render))
+    runtime.tick(Game.Schedule(Move, render))
+    runtime.tick(Game.Schedule(Relabel, render))
+    expect(applied).toEqual(["a", "b"])
+  })
+
+  it("interpolates nodes between the previous and current positions at the clock's alpha", () => {
+    const Previous = Descriptor.Component<{ x: number; y: number }>()("PixiTest/Previous")
+    const Clock = Descriptor.Service<{ alpha: number }>()("PixiTest/Clock")
+    const Moving = Schema.bind(Schema.fragment({ components: { Position, Previous, Sprite } }))
+    const layer = new FakeContainer()
+    const clock = { alpha: 0.25 }
+    const sync = RenderSync.system(Moving, {
+      name: "PixiTest/SyncMoving",
+      renderable: Sprite,
+      registry: Nodes,
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: () => {}
+    })
+    const interpolate = RenderSync.interpolate(Moving, {
+      name: "PixiTest/Interpolate",
+      registry: Nodes,
+      previous: Previous,
+      current: Position,
+      clock: Clock,
+      place: (node, { x, y }) => {
+        node.x = x
+        node.y = y
+      }
+    })
+    const Spawn = Moving.System("PixiTest/SpawnMoving", {}, ({ commands }) => {
+      commands.spawn(Moving.Command.spawn([Position, { x: 10, y: 20 }], [Previous, { x: 0, y: 0 }], [Sprite, { label: "moving" }]))
+      // No node: has both positions but no renderable.
+      commands.spawn(Moving.Command.spawn([Position, { x: 1, y: 1 }], [Previous, { x: 0, y: 0 }]))
+    })
+    const runtime = Moving.Runtime.make({
+      services: Moving.Runtime.services(Moving.Runtime.service(Nodes, NodeRegistry.inContainer(layer)), Moving.Runtime.service(Clock, clock))
+    })
+    runtime.tick(Moving.Schedule(Spawn, Moving.Schedule.applyDeferred(), sync, interpolate))
+    expect(layer.children.map((node) => [node.x, node.y])).toEqual([[2.5, 5]])
+    clock.alpha = 0.5
+    runtime.tick(Moving.Schedule(interpolate))
+    expect(layer.children.map((node) => [node.x, node.y])).toEqual([[5, 10]])
+  })
 })
+

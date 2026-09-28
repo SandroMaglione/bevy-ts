@@ -308,8 +308,8 @@ export interface NextStateWrite {
 }
 
 /**
- * A read the system could not fully see: stream entries dropped at capacity,
- * or removed/despawned records older than the two-frame window.
+ * A read the system could not fully see: stream, removed, or despawned
+ * entries dropped at capacity before the system read them.
  */
 export interface MissedRead {
   readonly kind: "event" | "transitionEvent" | "relationFailure" | "removed" | "despawned"

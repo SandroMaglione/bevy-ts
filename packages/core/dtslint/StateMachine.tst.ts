@@ -334,4 +334,37 @@ describe("StateMachine", () => {
       Game.Schedule.applyStateTransitions()
     ])
   })
+
+  it("gates a group of systems with Schedule.when, requiring the machines its conditions read", () => {
+    const Increment = Game.System("StateMachine/WhenIncrement", { resources: { counter: System.writeResource(Counter) } }, ({ resources }) => {
+      resources.counter.update((value) => value + 1)
+    })
+    const gated = Game.Schedule.when([Game.Condition.inState(AppState, "Playing")], Increment, Game.Schedule.applyDeferred())
+
+    const withMachine = Game.Runtime.make({
+      services: Runtime.services(),
+      resources: { Counter: 0 },
+      machines: Runtime.machines(Runtime.machine(AppState, "Menu"))
+    })
+    withMachine.tick(gated)
+
+    const withoutMachine = Game.Runtime.make({ services: Runtime.services(), resources: { Counter: 0 } })
+    // @ts-expect-error!
+    withoutMachine.tick(gated)
+
+    // Conditions from another game do not fit.
+    Game.Schedule.when(
+      [
+        // @ts-expect-error!
+        OtherGame.Condition.inState(OtherState, "Idle")
+      ],
+      Increment
+    )
+
+    // A group needs at least one condition.
+    // @ts-expect-error!
+    Game.Schedule.when([], Increment)
+
+    expect(gated).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
+  })
 })

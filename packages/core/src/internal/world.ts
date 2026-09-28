@@ -64,9 +64,11 @@ const NO_MARK = -1
 interface TickLog {
   readonly ids: Array<number>
   readonly ticks: Array<number>
+  /** Newest tick of any dropped entry. */
+  droppedThrough: number
 }
 
-const makeLog = (): TickLog => ({ ids: [], ticks: [] })
+const makeLog = (): TickLog => ({ ids: [], ticks: [], droppedThrough: 0 })
 
 const appendLog = (log: TickLog, id: number, tick: number): void => {
   log.ids.push(id)
@@ -87,15 +89,45 @@ const firstAfter = (log: TickLog, since: number): number => {
   return low
 }
 
+const dropFront = (log: TickLog, count: number): void => {
+  if (count > 0) {
+    log.droppedThrough = Math.max(log.droppedThrough, log.ticks[count - 1]!)
+    log.ids.splice(0, count)
+    log.ticks.splice(0, count)
+  }
+}
+
 /**
  * Drops entries recorded at or before `boundary`.
  */
 const trimLog = (log: TickLog, boundary: number): void => {
-  const count = firstAfter(log, boundary)
-  if (count > 0) {
-    log.ids.splice(0, count)
-    log.ticks.splice(0, count)
+  dropFront(log, firstAfter(log, boundary))
+}
+
+/**
+ * A registered lifecycle reader's position: the tick of its previous
+ * completed run, the same cursor its `added`/`changed` filters use.
+ */
+export interface LifecycleCursor {
+  readonly lastRun: number
+}
+
+/**
+ * Drops entries at or before `windowBoundary` that every registered reader
+ * has read, then drops the oldest entries past `capacity`.
+ */
+const trimHeldLog = (
+  log: TickLog,
+  windowBoundary: number,
+  readers: ReadonlySet<LifecycleCursor> | undefined,
+  capacity: number
+): void => {
+  let boundary = windowBoundary
+  if (readers !== undefined) {
+    for (const reader of readers) boundary = Math.min(boundary, reader.lastRun)
   }
+  trimLog(log, boundary)
+  if (log.ids.length > capacity) dropFront(log, log.ids.length - capacity)
 }
 
 type ComponentDescriptor = Descriptor<"component", string, any>
@@ -119,7 +151,11 @@ export interface WorldHooks {
   unrelated(sourceId: number, relation: Relation.Relation.Any): void
 }
 
-export const makeWorld = <S extends Schema.Any>(schema: S) => {
+/**
+ * `lifecycleCapacity` caps each removed/despawned log, like
+ * `Runtime.streamCapacity` caps event streams.
+ */
+export const makeWorld = <S extends Schema.Any>(schema: S, lifecycleCapacity: number) => {
   let nextEntity = 1
   const records = new Map<number, EntityRecord>()
 
@@ -143,11 +179,11 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
    */
   let tick = 0
   /**
-   * Logs of changed and removed components per ordinal, and of despawned
-   * entities. They back sparse `changed` iteration and removed/despawned
-   * reads, and keep entries from the current and previous frame only (see
-   * `advanceFrame`). `retainedAfter` is the tick up to which entries may
-   * already have been dropped.
+   * Logs of changed components per ordinal. They back sparse `changed`
+   * iteration and keep entries from the current and previous frame only (see
+   * `advanceFrame`); older changes are found by scanning slot ticks instead.
+   * `retainedAfter` is the tick up to which entries may already have been
+   * dropped.
    */
   const changedLogs: Array<TickLog | undefined> = []
   /**
@@ -166,8 +202,18 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
    * log entirely).
    */
   const changedLogFrom: Array<number | undefined> = []
+  /**
+   * Logs of removed components per ordinal, and of despawned entities. They
+   * back removed/despawned reads, which have no slot to scan, so an entry is
+   * kept for the current and previous frame and beyond that until every
+   * registered reader has read it (up to `lifecycleCapacity` entries per log).
+   * Schedules ticked at a lower rate than the ones that despawn (rendering
+   * after several fixed updates) therefore see every removal.
+   */
   const removedLogs: Array<TickLog | undefined> = []
   const despawnedLog = makeLog()
+  const removedReaders: Array<Set<LifecycleCursor> | undefined> = []
+  const despawnedReaders = new Set<LifecycleCursor>()
   let retainedAfter = 0
   let frameStart = 0
 
@@ -650,8 +696,10 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     }
     if (frameStart > 0) {
       for (const log of changedLogs) if (log) trimLog(log, frameStart)
-      for (const log of removedLogs) if (log) trimLog(log, frameStart)
-      trimLog(despawnedLog, frameStart)
+      removedLogs.forEach((log, ordinal) => {
+        if (log) trimHeldLog(log, frameStart, removedReaders[ordinal], lifecycleCapacity)
+      })
+      trimHeldLog(despawnedLog, frameStart, despawnedReaders, lifecycleCapacity)
       retainedAfter = frameStart
     }
     frameStart = tick
@@ -755,7 +803,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       hooks = next
       hookDepth = 0
     },
-    /** Tick at or before which lifecycle log entries may have been dropped. */
+    /** Tick at or before which changed-log entries may have been dropped. */
     retainedAfter: (): number => retainedAfter,
     descriptorAt: (ordinal: number): ComponentDescriptor => descriptors[ordinal]!,
     membersOf: (ordinal: number): ReadonlySet<EntityRecord> => members[ordinal]!,
@@ -809,6 +857,30 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       }
     },
     removedSince: (ordinal: number, since: number): ReadonlyArray<number> => entriesSince(removedLogs[ordinal], since),
-    despawnedSince: (since: number): ReadonlyArray<number> => entriesSince(despawnedLog, since)
+    despawnedSince: (since: number): ReadonlyArray<number> => entriesSince(despawnedLog, since),
+    /** Makes `reader` hold removal records of `ordinal` until it has read them. */
+    registerRemovedReader: (ordinal: number, reader: LifecycleCursor): void => {
+      let readers = removedReaders[ordinal]
+      if (readers === undefined) {
+        readers = new Set()
+        removedReaders[ordinal] = readers
+      }
+      readers.add(reader)
+    },
+    /** Makes `reader` hold despawn records until it has read them. */
+    registerDespawnedReader: (reader: LifecycleCursor): void => {
+      despawnedReaders.add(reader)
+    },
+    /**
+     * Whether removal records of `ordinal` after `since` (and after
+     * `registeredAt`, when the reader started) were dropped before being read.
+     */
+    removedLagged: (ordinal: number, since: number, registeredAt: number): boolean => {
+      const log = removedLogs[ordinal]
+      return log !== undefined && log.droppedThrough > Math.max(since, registeredAt)
+    },
+    /** Like `removedLagged`, for despawn records. */
+    despawnedLagged: (since: number, registeredAt: number): boolean =>
+      despawnedLog.droppedThrough > Math.max(since, registeredAt)
   }
 }

@@ -66,6 +66,7 @@ const HealthNeverNegative = Invariant.make("health >= 0", () => {
 
 const session = Session.make(runtime, {
   schedules: { setup, update },           // names used by run() and in traces
+  describe: { render },                   // described and linted, never run (needs a renderer)
   invariants: [HealthNeverNegative],      // checked after every frame of every run
   history: 600                            // frames kept for journal/why
 })
@@ -124,7 +125,7 @@ f186 update  -                   transition Game/Flow Playing -> Paused applied
 |---|---|
 | `pending-commands` | A system queued commands and the frame ended before a marker applied them. Usually a missing `applyDeferred()`. |
 | `pending-next-state` | A system queued a next state and the frame ended before an `applyStateTransitions()` marker applied it. |
-| `missed-read` | A system lost stream entries at capacity, or removed/despawned records older than the two-frame window. |
+| `missed-read` | A system lost stream, removed, or despawned entries at capacity. |
 | `discarded-messages` | A skipped system discarded messages published while it was skipped. |
 | `transition-failed` | An exit or transition schedule failed (queued again), or an enter schedule failed. |
 | `system-failed` | A system returned an expected failure or threw. |

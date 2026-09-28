@@ -271,4 +271,16 @@ describe("Runtime scheduling", () => {
       Schedule.Schedule(duplicate, phase)
     ).toThrow("Duplicate system step in schedule")
   })
+
+  it("rejects entries that are not systems, schedules, or markers with a message naming them", () => {
+    // Types prevent this; the cast stands for a stale import that is undefined at runtime.
+    const missing = undefined as unknown as ReturnType<typeof Game.Schedule.applyDeferred>
+    const Flow = Game.StateMachine("RuntimeScheduling/Flow", ["A", "B"] as const)
+    expect(() => Game.Schedule(Game.Schedule.applyDeferred(), missing)).toThrow("Schedule entry 1 is not a system, a schedule, or a marker step: got undefined undefined. Is an import undefined?")
+    expect(() => Schedule.Schedule(missing)).toThrow(/Schedule entry 0 is not a system/)
+    expect(() => Game.Schedule.when([Game.Condition.inState(Flow, "A")], missing)).toThrow(/Schedule entry 0/)
+    expect(() => Game.Schedule.onEnter(Flow, "A", [missing])).toThrow(/Schedule entry 0/)
+    expect(() => Game.Schedule({ steps: [] } as unknown as ReturnType<typeof Game.Schedule.applyDeferred>)).toThrow(/got an object with keys steps/)
+  })
 })
+

@@ -15,9 +15,9 @@ const makeHost = () => {
       listeners.get(type)?.delete(listener)
     }
   }
-  const dispatch = (type: "keydown" | "keyup", key: string, repeat = false) => {
+  const dispatch = (type: "keydown" | "keyup", key: string, repeat = false, code?: string) => {
     for (const listener of listeners.get(type) ?? []) {
-      listener({ key, repeat, preventDefault: () => prevented.push(key) })
+      listener({ key, repeat, ...(code === undefined ? {} : { code }), preventDefault: () => prevented.push(key) })
     }
   }
   return {
@@ -25,6 +25,9 @@ const makeHost = () => {
     prevented,
     down: (key: string, repeat = false) => dispatch("keydown", key, repeat),
     up: (key: string) => dispatch("keyup", key),
+    /** A key event with its physical `code`, as browsers send it. */
+    downCode: (key: string, code: string) => dispatch("keydown", key, false, code),
+    upCode: (key: string, code: string) => dispatch("keyup", key, false, code),
     blur: () => {
       for (const listener of listeners.get("blur") ?? []) listener()
     },
@@ -141,5 +144,48 @@ describe("Keyboard timelines", () => {
       ok: false,
       error: { path: "[0].press[0]" }
     })
+  })
+})
+
+describe("Keyboard physical keys", () => {
+  it("matches a physical binding whatever character the key types", () => {
+    const fake = makeHost()
+    const input = Keyboard.actions(fake.host, { up: [Keyboard.code("KeyW")] })
+    // On AZERTY the key in W's position types "z".
+    fake.downCode("z", "KeyW")
+    expect(input.snapshot().up).toEqual({ held: true, pressed: true, released: false })
+    fake.upCode("z", "KeyW")
+    expect(input.snapshot().up).toEqual({ held: false, pressed: false, released: true })
+  })
+
+  it("is not fooled by modifiers that change the character", () => {
+    const fake = makeHost()
+    const input = Keyboard.actions(fake.host, { up: [Keyboard.code("KeyW")], one: [Keyboard.code("Digit1")] })
+    fake.downCode("∑", "KeyW") // Option+W on macOS
+    fake.downCode("!", "Digit1") // Shift+1
+    const snapshot = input.snapshot()
+    expect(snapshot.up.held).toBe(true)
+    expect(snapshot.one.held).toBe(true)
+  })
+
+  it("releases a character binding even when a modifier changed its character meanwhile", () => {
+    const fake = makeHost()
+    const input = Keyboard.actions(fake.host, { up: ["w"] })
+    fake.downCode("w", "KeyW")
+    input.snapshot()
+    // Option pressed while W is down: W's release arrives as "∑".
+    fake.upCode("∑", "KeyW")
+    expect(input.snapshot().up).toEqual({ held: false, pressed: false, released: true })
+  })
+
+  it("mixes character and physical bindings on one action, and prevents defaults for both", () => {
+    const fake = makeHost()
+    const input = Keyboard.actions(fake.host, { jump: [" ", Keyboard.code("KeyK")] })
+    fake.downCode("k", "KeyK")
+    expect(input.snapshot().jump.pressed).toBe(true)
+    fake.upCode("k", "KeyK")
+    fake.downCode(" ", "Space")
+    expect(input.snapshot().jump.held).toBe(true)
+    expect(fake.prevented).toEqual(["k", " "])
   })
 })

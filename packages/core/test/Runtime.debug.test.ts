@@ -273,7 +273,7 @@ describe("Runtime debug handle", () => {
     expect(run.missed).toEqual([{ kind: "event", stream: "Debug/Ping" }])
   })
 
-  it("reports removed reads older than the two-frame window as missed", () => {
+  it("does not report removed reads held for a slow reader as missed", () => {
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
     const ReadRemoved = Game.System("Debug/ReadRemoved", { removed: { tagged: Game.System.readRemoved(Tagged) } }, () => {})
@@ -290,7 +290,31 @@ describe("Runtime debug handle", () => {
     const { events } = collect(runtime)
     runtime.tick(read)
     const run = events.find((event): event is Debug.SystemEvent => event.type === "system")!
-    expect(run.missed).toEqual([{ kind: "removed", stream: "Debug/Tagged" }])
+    expect(run.missed).toEqual([])
+  })
+
+  it("reports despawned reads dropped at capacity as missed", () => {
+    const runtime = makeRuntime()
+    const ReadDespawned = Game.System("Debug/ReadDespawned", { despawned: { entities: Game.System.readDespawned() } }, () => {})
+    const SpawnMany = Game.System("Debug/SpawnMany", {}, ({ commands }) => {
+      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn())
+    })
+    const DespawnAll = Game.System("Debug/DespawnAll", {
+      queries: { all: Game.Query({ selection: {} }) }
+    }, ({ queries, commands }) => {
+      for (const match of queries.all.each()) commands.despawn(match.entity.id)
+    })
+    const read = Game.Schedule(ReadDespawned)
+    runtime.tick(read)
+    const churn = Game.Schedule(SpawnMany, Game.Schedule.applyDeferred(), DespawnAll, Game.Schedule.applyDeferred())
+    runtime.tick(churn)
+    runtime.tick(churn)
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule())
+    const { events } = collect(runtime)
+    runtime.tick(read)
+    const run = events.find((event): event is Debug.SystemEvent => event.type === "system")!
+    expect(run.missed).toEqual([{ kind: "despawned", stream: "despawned" }])
   })
 
   it("stops tracing when the last listener unsubscribes", () => {

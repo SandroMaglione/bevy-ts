@@ -12,6 +12,17 @@ describe("Keyboard", () => {
     input.snapshot().crouch
   })
 
+  it("accepts physical-key bindings alongside characters", () => {
+    const input = Keyboard.actions(host, { up: [Keyboard.code("KeyW"), "ArrowUp"] })
+    expect(input.snapshot().up.held).type.toBe<boolean>()
+    // @ts-expect-error!
+    Keyboard.actions(host, { up: [{ key: "w" }] })
+  })
+
+  it("accepts real KeyboardEvent hosts, which carry `code`", () => {
+    expect<Window>().type.toBeAssignableTo<Keyboard.KeyboardHost>()
+  })
+
   it("requires at least one key per action", () => {
     // @ts-expect-error!
     Keyboard.actions(host, { jump: [] })

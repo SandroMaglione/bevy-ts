@@ -426,8 +426,12 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  *
  * Each run returns the entities whose component was removed since the
  * system's previous run (removals are applied when commands are). Records are
- * kept for the current and previous `runtime.tick(...)`, so a reader that
- * skips more than one tick misses older removals. Systems usually pair this
+ * kept until every system that reads them has run, so a reader in a schedule
+ * ticked less often than the one that removes (rendering after several fixed
+ * updates) still sees every removal. A system skipped by its run conditions
+ * keeps its position, like `added`/`changed`, and sees the removals when it
+ * runs again. Each log is capped at `Runtime.streamCapacity` entries; drops
+ * show up as `missed` reads in the debug trace. Systems usually pair this
  * with host cleanup such as removing renderer-owned nodes. {@link readDespawned}
  * complements this for whole-entity teardown.
  *
@@ -463,7 +467,7 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
  * Declares read access to despawned-entity lifecycle records.
  *
  * Each run returns the entities despawned since the system's previous run.
- * Use it when host-owned state must be destroyed even if no single removed
+ * Records are retained like {@link readRemoved} records. Use it when host-owned state must be destroyed even if no single removed
  * component is the canonical trigger. {@link readRemoved} is often used
  * alongside this in authoritative host mirrors.
  *
@@ -945,6 +949,13 @@ export interface SystemDefinition<
    * The executable implementation of the system.
    */
   readonly run: SystemRun<Spec, A, E>
+  /**
+   * The system this one is a gated copy of, made by `Schedule.when(...)`:
+   * the same system with extra run conditions. The runtime keys per-system
+   * state (change detection, event cursors) by the original, so a system and
+   * its gated copies are one reader.
+   */
+  readonly base?: SystemDefinition<any, any, any, any, any, any> | undefined
 }
 
 /**

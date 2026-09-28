@@ -57,7 +57,9 @@ const Move = Game.System(
 
 The callback cannot access undeclared world data. A write query exposes writable
 cells; a read query does not. Values returned by `get()` are deeply readonly;
-changes go through `set`, `update`, or a validated write helper.
+changes go through `set`, `update`, or a validated write helper. Type helper
+functions that take such values as `ReadonlyValue<T>` (from
+`@typeonce/bevy-ts/Query`) so they accept `get()` results without casts.
 
 ## 3. Keep expected failures in the type
 
@@ -336,6 +338,12 @@ runtime that does not provide it is a compile error. `select`, `resources`,
 and `services` pass extra read-only data to the callbacks, and `redrawOn`
 lists components whose changes re-run `apply` (animation frames, tints,
 interpolation).
+
+With a fixed-step loop, draw movement between steps: copy `Position` into a
+`PrevPosition` component at the start of each step, leave out `transform`
+above, and add `RenderSync.interpolate(Game, { name, registry: RenderNodes,
+previous: PrevPosition, current: Position, clock: RenderClock, place })`,
+where `RenderClock` is a service holding `FixedLoop`'s render `alpha`.
 
 ## What remains adapter code
 

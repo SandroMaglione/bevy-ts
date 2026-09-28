@@ -4,7 +4,8 @@
  * Authoring-time structure is validated once, then schedules carry only their
  * normalized steps, systems, and nominal requirement union.
  *
- * Steps run in authored order. Marker steps are the only way queued
+ * Steps run in authored order. `when(conditions, ...entries)` gates a whole
+ * group of systems on run conditions at once. Marker steps are the only way queued
  * structural work is applied, and nothing is flushed implicitly when a
  * schedule ends:
  *
@@ -15,14 +16,14 @@
  * Reads need no marker. Change detection (`added`, `changed`, removed and
  * despawned reads), events, transition events, and relation failures are
  * per-reader streams: each system sees what was published since its own
- * previous run, once, in order. Change-detection records are kept for the
- * current and previous `runtime.tick(...)` call; events, transition events,
- * and relation failures until every system that reads them has run.
+ * previous run, once, in order. Removed/despawned records, events,
+ * transition events, and relation failures are kept until every system that
+ * reads them has run, so schedules may be ticked at different rates.
  *
  * @module Schedule
  * @docGroup runtime
  */
-import type { StateMachine } from "./Machine.ts"
+import type { Condition, MachineNeedsFromConditions, StateMachine } from "./Machine.ts"
 import * as Requirement from "./Requirement.ts"
 import type { Schema } from "./Schema.ts"
 import type { FailureOf as SystemFailureOf, SystemDefinition, SystemFailure } from "./System.ts"
@@ -165,6 +166,23 @@ export type AnonymousScheduleBuildFor<
   CompositionFailure<Entries>
 >
 
+/**
+ * The schedule built by `when(conditions, ...entries)`: the entries' needs
+ * plus the machines the conditions read.
+ */
+export type ConditionalScheduleBuildFor<
+  S extends Schema.Any,
+  Conditions extends ReadonlyArray<Condition>,
+  Entries extends ReadonlyArray<ScheduleEntry>,
+  Root = unknown
+> = ScheduleDefinition<
+  S,
+  CompositionExactRequirements<Entries> | MachineNeedsFromConditions<Conditions>,
+  Root,
+  CompositionExactRequirements<Entries> | MachineNeedsFromConditions<Conditions>,
+  CompositionFailure<Entries>
+>
+
 export type TransitionBundleInput<S extends Schema.Any = Schema.Any, Root = unknown> =
   | StateMachine.AnyTransitionSchedule<S, Root>
   | TransitionBundleDefinition<S, ReadonlyArray<StateMachine.AnyTransitionSchedule<S, Root>>, any, Root, any, any>
@@ -240,6 +258,7 @@ export const applyStateTransitions = <
 export function Schedule<const Entries extends ReadonlyArray<ScheduleEntry>>(
   ...entries: Entries
 ): AnonymousScheduleBuildFor<EntrySchema<Entries[number]>, Entries> {
+  validateEntries(entries)
   return make(findPlanSchema(entries), entries)
 }
 
@@ -261,18 +280,85 @@ export const make = <S extends Schema.Any, const Entries extends ReadonlyArray<S
   } as AnonymousScheduleBuildFor<S, Entries>
 }
 
+/**
+ * Builds one schedule whose systems run only while every condition passes,
+ * in addition to their own `when` conditions: the group equivalent of a
+ * system's `when`, for gating many systems on one mode (playing, paused,
+ * a hit-stop) without repeating it on each.
+ *
+ * Conditions gate every system in `entries`, nested schedules included.
+ * Marker steps (`applyDeferred`, `applyStateTransitions`) in the group still
+ * run. A gated system is the same system as far as the runtime is concerned:
+ * it shares change detection and event cursors with the original and with
+ * any other gated copy, so using one system in two groups of one schedule is
+ * a duplicate like any other.
+ */
+export const when = <
+  S extends Schema.Any,
+  const Conditions extends ReadonlyArray<Condition>,
+  const Entries extends ReadonlyArray<ScheduleEntry>
+>(
+  schema: S,
+  conditions: Conditions,
+  entries: Entries
+): ConditionalScheduleBuildFor<S, Conditions, Entries> => {
+  const steps = normalizeEntries(entries).map((step) => isSystemStep(step) ? gate(step, conditions) : step)
+  validateUniqueSystemSteps(steps, "schedule")
+  return {
+    kind: "schedule",
+    schema,
+    steps,
+    systems: collectUniqueSystems(steps),
+    requirements: collectStepRequirements(steps)
+  } as unknown as ConditionalScheduleBuildFor<S, Conditions, Entries>
+}
+
+/** A copy of `system` that also requires `conditions`, sharing runtime state with the original. */
+const gate = (system: AnySystem, conditions: ReadonlyArray<Condition>): AnySystem => ({
+  ...system,
+  spec: { ...system.spec, when: [...conditions, ...system.spec.when] },
+  requirements: Requirement.collect([...system.requirements, ...conditions.flatMap((condition) => condition.requirements)]),
+  base: system.base ?? system
+})
+
 export const isSystemStep = (step: ScheduleStep | ScheduleEntry): step is AnySystem =>
   typeof step === "object" && step !== null && "spec" in step
 
 const isScheduleEntry = (entry: ScheduleEntry): entry is ScheduleDefinition<any, any, any, any, any> =>
   typeof entry === "object" && entry !== null && "kind" in entry && entry.kind === "schedule"
 
-const normalizeEntries = (entries: ReadonlyArray<ScheduleEntry>): ReadonlyArray<ScheduleStep> =>
-  entries.flatMap((entry) =>
+const describeValue = (value: unknown): string =>
+  value === null ? "null"
+  : typeof value !== "object" ? `${typeof value} ${String(value)}`
+  : `an object with keys ${Object.keys(value).join(", ") || "(none)"}`
+
+/**
+ * Rejects entries that are not systems, schedules, or marker steps, with a
+ * message naming the entry. The types already prevent this; it catches
+ * values that bypassed them (a stale import that is `undefined`, a
+ * dynamically built list), which otherwise fail deep inside with an
+ * unhelpful error.
+ */
+const validateEntries = (entries: ReadonlyArray<unknown>): void => {
+  entries.forEach((entry, index) => {
+    const valid = typeof entry === "object" && entry !== null && (
+      "spec" in entry ||
+      ("kind" in entry && (entry.kind === "schedule" || entry.kind === "applyDeferred" || entry.kind === "applyStateTransitions"))
+    )
+    if (!valid) {
+      throw new Error(`Schedule entry ${index} is not a system, a schedule, or a marker step: got ${describeValue(entry)}. Is an import undefined?`)
+    }
+  })
+}
+
+const normalizeEntries = (entries: ReadonlyArray<ScheduleEntry>): ReadonlyArray<ScheduleStep> => {
+  validateEntries(entries)
+  return entries.flatMap((entry) =>
     isScheduleEntry(entry)
       ? [...entry.steps]
       : [entry]
   )
+}
 
 const findPlanSchema = <Entries extends ReadonlyArray<ScheduleEntry>>(
   entries: Entries
