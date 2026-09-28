@@ -347,8 +347,8 @@ export const TransientResource = <Value>() => <const Name extends string>(
  * sees the events published since its own previous run, once, in emission
  * order. A system's events are published when it completes successfully, so
  * later systems in the same schedule see them, and a failed system publishes
- * nothing. Events are kept for the current and previous `runtime.tick(...)`
- * call.
+ * nothing. Events are kept until every system that reads them has run (see
+ * `Game.System.readEvent`).
  *
  * @example
  * ```ts

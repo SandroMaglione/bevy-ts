@@ -79,7 +79,7 @@ if (enemy.ok) { /* the entity still exists and has Health */ }
 
 - A system's events are published when it completes; a failed system publishes nothing.
 - Each reader sees the events published since its own previous run, once, in order: from earlier systems in this schedule, and from anything that ran after it last time.
-- Events are kept for the current and previous tick, like the removed and despawned logs, so a reader that skips longer misses them.
+- Events wait for every system that reads them, so a fixed-rate schedule ticked less often than rendering still sees everything. A system skipped by its run conditions discards the events published meanwhile. If a reader stops running long enough to overflow the stream's capacity, it sees `lagged() === true`.
 
 ## 7. Expected failures are typed and roll back
 

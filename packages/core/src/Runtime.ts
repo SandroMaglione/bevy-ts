@@ -561,8 +561,10 @@ export interface Runtime<
    * when a schedule ends: queued work stays queued, across schedules and
    * ticks, until a later marker applies it. Reads need no marker: change
    * detection, events, transition events, and relation failures are per
-   * system, each run seeing what was published since its previous run. They
-   * are kept for the current and previous tick.
+   * system, each run seeing what was published since its previous run.
+   * Change-detection records are kept for the current and previous tick;
+   * events, transition events, and relation failures until every system that
+   * reads them has run.
    *
    * The first expected system failure stops the tick and is returned; that
    * system's ECS writes are rolled back and earlier systems stay committed.
@@ -633,6 +635,13 @@ export interface Runtime<
  * })
  * ```
  */
+/**
+ * Most entries one event, transition-event, or relation-failure stream keeps
+ * for readers that have not run yet. Past it the oldest entries are dropped,
+ * and readers that missed them see `lagged() === true`.
+ */
+export const streamCapacity = 65_536
+
 const makeValidatedRuntime = <
   S extends Schema.Any,
   Services extends Record<string, unknown>,
@@ -673,12 +682,13 @@ const makeValidatedRuntime = <
   /**
    * Event, transition-event, and relation-failure logs. Entries are stamped
    * with the change tick at which they were published; each reader sees the
-   * entries published after its previous completed run, like change
-   * detection. Entries older than the previous frame are dropped.
+   * entries published after its previous completed run. Entries are kept for
+   * the current and previous frame, and beyond that until every system that
+   * reads them has run, up to `streamCapacity` entries per stream.
    */
-  const events = Streams.make<unknown>()
-  const transitionEvents = Streams.make<Machine.TransitionSnapshot>()
-  const relationFailures = Streams.make<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>()
+  const events = Streams.make<unknown>(streamCapacity)
+  const transitionEvents = Streams.make<Machine.TransitionSnapshot>(streamCapacity)
+  const relationFailures = Streams.make<Relation.Relation.MutationFailure<Relation.Relation.Any, S, Root>>(streamCapacity)
 
   /**
    * Commands queued by systems and not yet applied. They persist across
@@ -768,10 +778,18 @@ const makeValidatedRuntime = <
    * Change-detection state of one system (or inspector): `since` is the tick
    * of its previous completed run, which `added`/`changed` filters and
    * removed/despawned reads compare against.
+   *
+   * Stream reads (events, transition events, relation failures) use their own
+   * cursor, because a system skipped by its run conditions discards the
+   * messages published meanwhile but keeps its change-detection position.
    */
-  interface ReaderState {
+  interface ReaderState extends Streams.Cursor {
     since: number
     lastRun: number
+    streamSince: number
+    streamLastRun: number
+    /** Tick at which the reader first ran; drops before it are not losses. */
+    readonly registeredAt: number
   }
 
   const resolve = <Q extends Query.Query.Any<Root>>(id: number, query: Q, reader: ReaderState) =>
@@ -991,7 +1009,10 @@ const makeValidatedRuntime = <
 
   const makeEventReadView = <T>(descriptorKey: symbol, reader: ReaderState): EventReadView<T> => ({
     all() {
-      return events.since(descriptorKey, reader.since) as ReadonlyArray<ReadonlyValue<T>>
+      return events.since(descriptorKey, reader.streamSince) as ReadonlyArray<ReadonlyValue<T>>
+    },
+    lagged() {
+      return events.lagged(descriptorKey, reader.streamSince, reader.registeredAt)
     }
   })
 
@@ -1011,7 +1032,10 @@ const makeValidatedRuntime = <
     reader: ReaderState
   ): TransitionEventReadView<M> => ({
     all() {
-      return transitionEvents.since(stateMachine.key, reader.since) as unknown as ReadonlyArray<Machine.TransitionSnapshot<M>>
+      return transitionEvents.since(stateMachine.key, reader.streamSince) as unknown as ReadonlyArray<Machine.TransitionSnapshot<M>>
+    },
+    lagged() {
+      return transitionEvents.lagged(stateMachine.key, reader.streamSince, reader.registeredAt)
     }
   })
 
@@ -1035,7 +1059,10 @@ const makeValidatedRuntime = <
     reader: ReaderState
   ): RelationFailureReadView<R, S, Root> => ({
     all() {
-      return relationFailures.since(relation.key, reader.since) as unknown as ReadonlyArray<Relation.Relation.MutationFailure<R, S, Root>>
+      return relationFailures.since(relation.key, reader.streamSince) as unknown as ReadonlyArray<Relation.Relation.MutationFailure<R, S, Root>>
+    },
+    lagged() {
+      return relationFailures.lagged(relation.key, reader.streamSince, reader.registeredAt)
     }
   })
 
@@ -1127,12 +1154,30 @@ const makeValidatedRuntime = <
 
   const slots = new WeakMap<SystemDefinition<any, any, any>, SystemSlot>()
 
-  const slotOf = (system: SystemDefinition<any, any, any>): SystemSlot => {
+  /**
+   * Systems hold stream entries until they have read them; inspectors are
+   * evaluated on demand, so they do not (and report `lagged` instead).
+   */
+  const registerStreamReader = (system: SystemDefinition<any, any, any>, reader: ReaderState): void => {
+    const spec = system.spec
+    for (const access of Object.values(spec.events as Record<string, { readonly mode: string; readonly descriptor: Descriptor.Any }>)) {
+      if (access.mode === "read") events.register(access.descriptor.key, reader)
+    }
+    for (const access of Object.values(spec.transitionEvents as Record<string, { readonly machine: Machine.StateMachine.Any }>)) {
+      transitionEvents.register(access.machine.key, reader)
+    }
+    for (const access of Object.values(spec.relationFailures as Record<string, { readonly relation: Relation.Relation.Any }>)) {
+      relationFailures.register(access.relation.key, reader)
+    }
+  }
+
+  const slotOf = (system: SystemDefinition<any, any, any>, holdsStreams: boolean): SystemSlot => {
     let slot = slots.get(system)
     if (!slot) {
-      const reader: ReaderState = { since: 0, lastRun: 0 }
+      const reader: ReaderState = { since: 0, lastRun: 0, streamSince: 0, streamLastRun: 0, registeredAt: world.currentTick() }
       slot = { context: makeContext(system, reader), reader }
       slots.set(system, slot)
+      if (holdsStreams) registerStreamReader(system, slot.reader)
     }
     return slot
   }
@@ -1149,12 +1194,17 @@ const makeValidatedRuntime = <
   const runSystem = (system: SystemDefinition<any, any, any>): Result.Result<void, SystemFailure> => {
     for (const condition of system.spec.when as ReadonlyArray<Machine.Condition>) {
       if (!evaluateCondition(condition)) {
+        // A skipped system discards the messages published meanwhile, so it
+        // neither holds them nor receives a backlog when it runs again.
+        const skipped = slots.get(system)
+        if (skipped) skipped.reader.streamLastRun = world.currentTick()
         return succeeded
       }
     }
-    const { context, reader } = slotOf(system)
+    const { context, reader } = slotOf(system, true)
     // Changes stamped after the previous completed run are visible to this run.
     reader.since = reader.lastRun
+    reader.streamSince = reader.streamLastRun
     const thisRun = world.advanceTick()
     beginSystemTransaction()
     let outcome: Result.Result<unknown, unknown>
@@ -1176,6 +1226,7 @@ const makeValidatedRuntime = <
     commitSystemTransaction()
     // A failed run leaves `lastRun` unchanged, so the next run sees the same changes again.
     reader.lastRun = thisRun
+    reader.streamLastRun = thisRun
     const queued = context.commands.flush()
     for (let index = 0; index < queued.length; index++) {
       pendingCommands.push(queued[index]!)
@@ -1379,10 +1430,12 @@ const makeValidatedRuntime = <
   const inspect = <const Selected extends Inspector.InspectorDefinition<any, any, Root, any, any>>(
     inspector: Selected
   ): Inspector.Inspector.Value<Selected> => {
-    const { context, reader } = slotOf(inspector.system)
+    const { context, reader } = slotOf(inspector.system, false)
     reader.since = reader.lastRun
+    reader.streamSince = reader.streamLastRun
     const value = inspector.read(context) as Inspector.Inspector.Value<Selected>
     reader.lastRun = world.advanceTick()
+    reader.streamLastRun = reader.lastRun
     return value
   }
 
