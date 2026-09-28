@@ -167,6 +167,24 @@ writers, or state-transition writers. Runtime provisioning is checked at the
 call, and inspection does not advance events. Like a system, an inspector's
 `added`/`changed` filters report changes since its previous evaluation.
 
+## Save and load
+
+```ts
+localStorage.setItem("save", JSON.stringify(runtime.snapshot()))
+
+const loaded = runtime.restore(JSON.parse(localStorage.getItem("save") ?? "null"))
+if (!loaded.ok) {
+  // loaded.error: InvalidSnapshot | UnknownComponent | InvalidComponent | ...
+  console.error(loaded.error)
+}
+```
+
+A snapshot is plain data keyed by descriptor, relation, and machine names.
+`restore` takes `unknown`, validates it against the schema (constructed
+descriptors run their constructors), and leaves the world untouched on
+failure. Entity ids are kept, so stored handles still resolve. A restore reads
+as despawns and spawns to change detection, so renderer sync rebuilds itself.
+
 ## 6. Drive fixed updates from any renderer
 
 `@bevy-ts/browser` supplies timing policy without owning the ECS or renderer.

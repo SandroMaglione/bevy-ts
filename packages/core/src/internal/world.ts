@@ -583,6 +583,48 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     return start === log.ids.length ? noSources : log.ids.slice(start)
   }
 
+  /**
+   * Plain export of every live entity: id and component values by
+   * descriptor name, in spawn order.
+   */
+  const exportEntities = (): Array<{ readonly id: number; readonly components: Record<string, unknown> }> =>
+    [...records.values()]
+      .sort((left, right) => left.id - right.id)
+      .map((record) => {
+        const components: Record<string, unknown> = {}
+        record.values.forEach((value, ordinal) => {
+          if (value !== ABSENT) components[descriptors[ordinal]!.name] = value
+        })
+        return { id: record.id, components }
+      })
+
+  /**
+   * Relation edges grouped by target, preserving the stored source order.
+   */
+  const exportRelations = (): Record<string, Array<readonly [number, ReadonlyArray<number>]>> => {
+    const exported: Record<string, Array<readonly [number, ReadonlyArray<number>]>> = {}
+    for (const relation of relationDefinitions) {
+      exported[relation.name] = [...(relatedSources.get(relation.key)?.entries() ?? [])]
+        .map(([target, sources]) => [target, [...sources]] as const)
+    }
+    return exported
+  }
+
+  /**
+   * Despawns every live entity (recorded like normal despawns).
+   */
+  const despawnAll = (): void => {
+    for (const id of [...records.keys()]) {
+      destroyEntity(id)
+    }
+  }
+
+  const nextEntityValue = (): number => nextEntity
+
+  const setNextEntity = (value: number): void => {
+    nextEntity = Math.max(nextEntity, value)
+  }
+
   return {
     records,
     relationDefinitions,
@@ -607,6 +649,11 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     relatedSourceIds,
     advanceTick,
     advanceFrame,
+    exportEntities,
+    exportRelations,
+    despawnAll,
+    nextEntityValue,
+    setNextEntity,
     descriptorAt: (ordinal: number): ComponentDescriptor => descriptors[ordinal]!,
     membersOf: (ordinal: number): ReadonlySet<EntityRecord> => members[ordinal]!,
     componentVersion: (ordinal: number): number => componentVersions[ordinal]!,

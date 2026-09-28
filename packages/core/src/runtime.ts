@@ -70,6 +70,7 @@ import * as Relation from "./relation.ts"
 import type * as Requirement from "./requirement.ts"
 import * as Result from "./Result.ts"
 import * as Schedule from "./schedule.ts"
+import * as Snapshot from "./snapshot.ts"
 import type { ExecutableScheduleDefinition } from "./schedule.ts"
 import type { Registry, Schema } from "./schema.ts"
 import type {
@@ -577,6 +578,19 @@ export interface Runtime<
   readonly tryTick: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
     schedule: Selected
   ) => Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>>
+  /**
+   * Captures the world as plain data: entities with their ids, components,
+   * relation edges, resources, and committed machine values.
+   *
+   * Values are shared with the world, not copied; serialize the snapshot
+   * (for example with `JSON.stringify`) to detach it.
+   */
+  readonly snapshot: () => Snapshot.WorldSnapshot
+  /**
+   * Replaces the world with a snapshot after validating it against the
+   * schema. On failure nothing changes. See the `snapshot` module.
+   */
+  readonly restore: (data: unknown) => Result.Result<void, Snapshot.RestoreError>
   /**
    * Evaluates one read-only projection without advancing schedule visibility.
    */
@@ -1378,6 +1392,133 @@ const makeValidatedRuntime = <
     return value
   }
 
+  const componentsByName = new Map(
+    (Object.values(options.schema.components) as ReadonlyArray<Descriptor<"component", string, any>>)
+      .map((descriptor) => [descriptor.name, descriptor] as const)
+  )
+  const resourcesByName = new Map(
+    (Object.values(options.schema.resources) as ReadonlyArray<Descriptor<"resource", string, any>>)
+      .map((descriptor) => [descriptor.name, descriptor] as const)
+  )
+  const relationsByName = new Map(
+    (Object.values(options.schema.relations) as ReadonlyArray<Relation.Relation.Any>)
+      .map((relation) => [relation.name, relation] as const)
+  )
+  const machinesByName = new Map<string, Machine.StateMachine.Any>()
+  for (const machine of options.machineDefinitions) machinesByName.set(machine.name, machine)
+  for (const provision of machineEntries) machinesByName.set(provision.machine.name, provision.machine)
+
+  const snapshot = (): Snapshot.WorldSnapshot => {
+    const savedResources: Record<string, unknown> = {}
+    for (const [name, descriptor] of resourcesByName) {
+      if (resources.has(descriptor.key)) savedResources[name] = resources.get(descriptor.key)
+    }
+    const savedMachines: Record<string, Machine.StateValue> = {}
+    for (const [name, machine] of machinesByName) {
+      const value = currentMachines.get(machine.key)
+      if (value !== undefined) savedMachines[name] = value as Machine.StateValue
+    }
+    return {
+      version: 1,
+      nextEntity: world.nextEntityValue(),
+      entities: world.exportEntities(),
+      relations: world.exportRelations(),
+      resources: savedResources,
+      machines: savedMachines
+    }
+  }
+
+  const validate = (value: unknown, descriptor: Descriptor.Any): Result.Result<unknown, unknown> => {
+    const constructor = DescriptorModule.constructorOf(descriptor) as DescriptorModule.ResultConstructor<unknown, unknown, unknown> | undefined
+    return constructor === undefined ? Result.success(value) : constructor.result(value)
+  }
+
+  const restore = (data: unknown): Result.Result<void, Snapshot.RestoreError> => {
+    const parsed = Snapshot.parse(data)
+    if (!parsed.ok) return parsed
+    const saved = parsed.value
+
+    // Validate everything before touching the world.
+    const ids = new Set<number>()
+    const entities: Array<{ readonly id: number; readonly components: Array<Entity.StagedComponent> }> = []
+    for (const entity of saved.entities) {
+      if (ids.has(entity.id)) return Result.failure({ _tag: "DuplicateEntity", entityId: entity.id })
+      ids.add(entity.id)
+      const components: Array<Entity.StagedComponent> = []
+      for (const [name, raw] of Object.entries(entity.components)) {
+        const descriptor = componentsByName.get(name)
+        if (!descriptor) return Result.failure({ _tag: "UnknownComponent", entityId: entity.id, name })
+        const value = validate(raw, descriptor)
+        if (!value.ok) return Result.failure({ _tag: "InvalidComponent", entityId: entity.id, name, error: value.error })
+        components.push([descriptor, value.value])
+      }
+      entities.push({ id: entity.id, components })
+    }
+    const validatedResources: Array<readonly [symbol, unknown]> = []
+    for (const [name, raw] of Object.entries(saved.resources)) {
+      const descriptor = resourcesByName.get(name)
+      if (!descriptor) return Result.failure({ _tag: "UnknownResource", name })
+      const value = validate(raw, descriptor)
+      if (!value.ok) return Result.failure({ _tag: "InvalidResource", name, error: value.error })
+      validatedResources.push([descriptor.key, value.value])
+    }
+    const edges: Array<readonly [Relation.Relation.Any, number, number]> = []
+    for (const [name, groups] of Object.entries(saved.relations)) {
+      const relation = relationsByName.get(name)
+      if (!relation) return Result.failure({ _tag: "UnknownRelation", name })
+      const parents = new Map<number, number>()
+      for (const [target, sources] of groups) {
+        for (const source of sources) {
+          const valid = ids.has(source) && ids.has(target) && (relation.allowSelf || source !== target) && !parents.has(source)
+          if (!valid) return Result.failure({ _tag: "InvalidRelation", name, sourceId: source, targetId: target })
+          parents.set(source, target)
+          edges.push([relation, source, target])
+        }
+      }
+      if (relation.relationKind === "hierarchy") {
+        for (const [source] of parents) {
+          const seen = new Set<number>([source])
+          for (let current = parents.get(source); current !== undefined; current = parents.get(current)) {
+            if (seen.has(current)) {
+              return Result.failure({ _tag: "InvalidRelation", name, sourceId: source, targetId: parents.get(source)! })
+            }
+            seen.add(current)
+          }
+        }
+      }
+    }
+    const machineValues: Array<readonly [symbol, Machine.StateValue]> = []
+    for (const [name, value] of Object.entries(saved.machines)) {
+      const machine = machinesByName.get(name)
+      if (!machine) return Result.failure({ _tag: "UnknownMachine", name })
+      if (!machine.values.includes(value)) return Result.failure({ _tag: "InvalidMachineState", name, value })
+      machineValues.push([machine.key, value])
+    }
+
+    // Apply: the old world is despawned and the saved one spawned, so change
+    // detection and renderer sync observe the restore like any other change.
+    pendingCommands.length = 0
+    pendingMachines.clear()
+    pendingEvents = new Map()
+    readableEvents = new Map()
+    pendingTransitionEvents = new Map()
+    readableTransitionEvents = new Map()
+    pendingRelationFailures = new Map()
+    readableRelationFailures = new Map()
+    world.advanceTick()
+    world.despawnAll()
+    world.setNextEntity(Math.max(saved.nextEntity, ...entities.map((entity) => entity.id + 1)))
+    for (const entity of entities) {
+      world.spawnEntity(world.entityIdOf(entity.id), entity.components)
+    }
+    for (const [relation, source, target] of edges) {
+      world.tryRelate(source, relation, target)
+    }
+    for (const [key, value] of validatedResources) resources.set(key, value)
+    for (const [key, value] of machineValues) currentMachines.set(key, value)
+    return succeeded
+  }
+
   return {
     schema: options.schema,
     services: providedServices,
@@ -1387,6 +1528,8 @@ const makeValidatedRuntime = <
       return tickUnsafe(schedules) as never
     },
     tryTick: tryRunSchedule,
+    snapshot,
+    restore,
     inspect
   }
 }

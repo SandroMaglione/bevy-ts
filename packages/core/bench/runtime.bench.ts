@@ -399,6 +399,21 @@ const hierarchy: BenchCase = {
   }
 }
 
+const snapshotRoundTrip: BenchCase = {
+  name: "snapshot/json-roundtrip-10k",
+  description: "Snapshot 10k entities, JSON stringify/parse, and restore",
+  setup: () => {
+    const runtime = makeRuntime()
+    populate(runtime, N, 0)
+    return {
+      run: () => {
+        const restored = runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
+        if (!restored.ok) throw new Error("snapshot round-trip failed")
+      }
+    }
+  }
+}
+
 export const cases: ReadonlyArray<BenchCase> = [
   calibration,
   spawn,
@@ -411,5 +426,6 @@ export const cases: ReadonlyArray<BenchCase> = [
   scheduleOverhead,
   lookupGet,
   events,
-  hierarchy
+  hierarchy,
+  snapshotRoundTrip
 ]

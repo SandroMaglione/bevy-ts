@@ -1,63 +1,68 @@
 {
   "runtime": {
     "tolerance": 0.35,
-    "calibrationMs": 3.257,
+    "calibrationMs": 2.9054,
     "environment": "Apple M1 / node v24.16.0 / darwin",
     "cases": {
       "spawn/10k-3c": {
-        "minMs": 5.4537,
-        "medianMs": 11.6318,
-        "score": 1.5954
+        "minMs": 4.6224,
+        "medianMs": 4.7397,
+        "score": 1.5668
       },
       "despawn/10k": {
-        "minMs": 6.0717,
-        "medianMs": 10.9458,
-        "score": 1.7762
+        "minMs": 4.5447,
+        "medianMs": 4.9468,
+        "score": 1.5405
       },
       "query/iterate-read-10k-of-20k": {
-        "minMs": 0.1169,
-        "medianMs": 0.1628,
-        "score": 0.0344
+        "minMs": 0.0993,
+        "medianMs": 0.2371,
+        "score": 0.0342
       },
       "query/iterate-write-10k": {
-        "minMs": 0.4413,
-        "medianMs": 1.3337,
-        "score": 0.1355
+        "minMs": 0.4388,
+        "medianMs": 0.6299,
+        "score": 0.1489
       },
       "query/single-in-20k-x1000": {
-        "minMs": 0.3005,
-        "medianMs": 0.4411,
-        "score": 0.0879
+        "minMs": 0.2723,
+        "medianMs": 0.276,
+        "score": 0.0923
       },
       "query/changed-100-of-10k-x20": {
-        "minMs": 0.3321,
-        "medianMs": 0.3752,
-        "score": 0.0977
+        "minMs": 0.3101,
+        "medianMs": 0.3282,
+        "score": 0.1067
       },
       "structural/insert-remove-1k": {
-        "minMs": 0.1729,
-        "medianMs": 0.2301,
-        "score": 0.0506
+        "minMs": 0.1562,
+        "medianMs": 0.1631,
+        "score": 0.0529
       },
       "schedule/100-systems-x10": {
-        "minMs": 0.2061,
-        "medianMs": 0.3018,
-        "score": 0.0606
+        "minMs": 0.2048,
+        "medianMs": 0.2127,
+        "score": 0.0694
       },
       "lookup/get-10k": {
-        "minMs": 0.8662,
-        "medianMs": 1.8072,
-        "score": 0.2534
+        "minMs": 0.6497,
+        "medianMs": 0.6708,
+        "score": 0.2204
       },
       "events/emit-read-10k": {
-        "minMs": 0.1009,
-        "medianMs": 0.1038,
-        "score": 0.031
+        "minMs": 0.0953,
+        "medianMs": 0.0972,
+        "score": 0.0328
       },
       "relations/descendants-100x100": {
-        "minMs": 0.5114,
-        "medianMs": 0.5991,
-        "score": 0.1496
+        "minMs": 0.4593,
+        "medianMs": 0.4753,
+        "score": 0.1581
+      },
+      "snapshot/json-roundtrip-10k": {
+        "minMs": 16.5317,
+        "medianMs": 18.4042,
+        "score": 5.6084
       }
     }
   },
@@ -65,8 +70,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 35556,
-      "instantiations": 221630
+      "types": 35099,
+      "instantiations": 219826
     }
   }
 }

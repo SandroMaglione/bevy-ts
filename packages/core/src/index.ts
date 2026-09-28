@@ -49,6 +49,10 @@ export * as Result from "./Result.ts"
  */
 export * as Requirement from "./requirement.ts"
 /**
+ * Save and load the world as plain data.
+ */
+export * as Snapshot from "./snapshot.ts"
+/**
  * Validated scalar brands and scalar combinators.
  */
 export * as Scalar from "./Scalar.ts"
