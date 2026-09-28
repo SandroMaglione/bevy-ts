@@ -300,8 +300,83 @@ export const makeQueryEngine = (world: World) => {
 
   const byId = (left: EntityRecord, right: EntityRecord): number => left.id - right.id
 
+  const markSeen = (state: QueryState): void => {
+    state.entitiesSeen = world.entitiesVersion()
+    state.componentDeps.forEach((ordinal, index) => {
+      state.componentSeen[index] = world.componentVersion(ordinal)
+    })
+    state.relationDeps.forEach((key, index) => {
+      state.relationSeen[index] = world.relationVersion(key)
+    })
+  }
+
+  const indexOf = (records: ReadonlyArray<EntityRecord>, id: number): number => {
+    let low = 0
+    let high = records.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (records[middle]!.id < id) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+
+  /**
+   * Records whose membership in one of the query's components changed since
+   * the cache was built, or `undefined` when an incremental update is not
+   * possible or not worth it.
+   */
+  const affectedRecords = (state: QueryState): ReadonlyArray<EntityRecord> | undefined => {
+    if (state.matches === undefined || state.required.length === 0) return undefined
+    for (let index = 0; index < state.relationDeps.length; index++) {
+      if (state.relationSeen[index] !== world.relationVersion(state.relationDeps[index]!)) return undefined
+    }
+    const affected: Array<EntityRecord> = []
+    const limit = state.records.length / 2
+    for (let index = 0; index < state.componentDeps.length; index++) {
+      const changes = world.membershipChangesSince(state.componentDeps[index]!, state.componentSeen[index]!)
+      if (changes === undefined) return undefined
+      for (const record of changes) affected.push(record)
+      if (affected.length > limit) return undefined
+    }
+    return affected
+  }
+
+  /**
+   * Applies membership changes to the cached, id-ordered match set. New
+   * arrays are built so arrays handed out earlier never change.
+   */
+  const refreshIncrementally = (state: QueryState, affected: ReadonlyArray<EntityRecord>): void => {
+    const records = state.records.slice()
+    const matches = state.matches!.slice()
+    const visited = new Set<EntityRecord>()
+    for (const record of affected) {
+      if (visited.has(record)) continue
+      visited.add(record)
+      const index = indexOf(records, record.id)
+      const present = records[index] === record
+      const belongs = record.alive && matchesStructure(state, record)
+      if (belongs && !present) {
+        records.splice(index, 0, record)
+        matches.splice(index, 0, matchFor(state, record))
+      } else if (!belongs && present) {
+        records.splice(index, 1)
+        matches.splice(index, 1)
+      }
+    }
+    state.records = records
+    state.matches = matches
+  }
+
   const refresh = (state: QueryState): void => {
     if (!isStale(state)) return
+
+    const affected = affectedRecords(state)
+    if (affected !== undefined) {
+      refreshIncrementally(state, affected)
+      markSeen(state)
+      return
+    }
 
     let candidates: Iterable<EntityRecord> = world.records.values()
     let candidateCount = Infinity
@@ -326,13 +401,7 @@ export const makeQueryEngine = (world: World) => {
 
     state.records = records
     state.matches = records.map((record) => matchFor(state, record))
-    state.entitiesSeen = world.entitiesVersion()
-    state.componentDeps.forEach((ordinal, index) => {
-      state.componentSeen[index] = world.componentVersion(ordinal)
-    })
-    state.relationDeps.forEach((key, index) => {
-      state.relationSeen[index] = world.relationVersion(key)
-    })
+    markSeen(state)
   }
 
   /**
@@ -356,7 +425,9 @@ export const makeQueryEngine = (world: World) => {
       if (candidates === undefined || logged.length < candidates.length) candidates = logged
     }
 
-    if (candidates === undefined || candidates.length >= state.records.length) {
+    // When changes cover a large share of the matches, an in-order scan of the
+    // cached set is cheaper than deduplicating and sorting the candidates.
+    if (candidates === undefined || candidates.length * 4 >= state.records.length) {
       const result: Array<AnyMatch> = []
       for (const record of state.records) {
         if (matchesFilters(state, record, since)) result.push(matchFor(state, record))

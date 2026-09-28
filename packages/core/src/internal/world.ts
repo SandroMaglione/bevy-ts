@@ -136,6 +136,16 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
    */
   const changedLogs: Array<TickLog | undefined> = []
   /**
+   * Per ordinal, the records whose membership changed, with the component
+   * version after the change. Queries replay it to update their cached match
+   * set incrementally. `membershipFrom[ordinal]` is the version after which
+   * the log is complete.
+   */
+  const membershipRecords: Array<Array<EntityRecord>> = []
+  const membershipVersions: Array<Array<number>> = []
+  const membershipFrom: Array<number> = []
+  const frameVersions: Array<number> = []
+  /**
    * Per ordinal, the tick from which the changed log is complete, or
    * `undefined` while no query filters on the component (writes then skip the
    * log entirely).
@@ -173,6 +183,10 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     descriptors.push(descriptor)
     members.push(new Set())
     componentVersions.push(0)
+    membershipRecords.push([])
+    membershipVersions.push([])
+    membershipFrom.push(0)
+    frameVersions.push(0)
     return ordinal
   }
 
@@ -182,6 +196,16 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
 
   const has = (record: EntityRecord, ordinal: number): boolean =>
     ordinal < record.values.length && record.values[ordinal] !== ABSENT
+
+  /**
+   * Records a membership change of `record` for one component.
+   */
+  const bumpMembership = (record: EntityRecord, ordinal: number): void => {
+    const version = componentVersions[ordinal]! + 1
+    componentVersions[ordinal] = version
+    membershipRecords[ordinal]!.push(record)
+    membershipVersions[ordinal]!.push(version)
+  }
 
   const logFor = (logs: Array<TickLog | undefined>, ordinal: number): TickLog => {
     let log = logs[ordinal]
@@ -358,7 +382,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     if (!has(record, ordinal)) {
       ensureSlots(record, ordinal)
       members[ordinal]!.add(record)
-      componentVersions[ordinal]! += 1
+      bumpMembership(record, ordinal)
       record.marks[ordinal * MARK_STRIDE + ADDED] = tick
     }
     record.values[ordinal] = value
@@ -383,7 +407,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     }
     record.values[ordinal] = ABSENT
     members[ordinal]!.delete(record)
-    componentVersions[ordinal]! += 1
+    bumpMembership(record, ordinal)
     appendLog(logFor(removedLogs, ordinal), id, tick)
   }
 
@@ -545,7 +569,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       }
       values[ordinal] = ABSENT
       members[ordinal]!.delete(record)
-      componentVersions[ordinal]! += 1
+      bumpMembership(record, ordinal)
       appendLog(logFor(removedLogs, ordinal), id, tick)
     }
     clearEntityScope(id)
@@ -568,6 +592,19 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
    * the previous frame are dropped.
    */
   const advanceFrame = (): void => {
+    for (let ordinal = 0; ordinal < descriptors.length; ordinal++) {
+      // Keep membership changes from the current and previous frame.
+      const boundary = frameVersions[ordinal]!
+      const versions = membershipVersions[ordinal]!
+      let count = 0
+      while (count < versions.length && versions[count]! <= boundary) count++
+      if (count > 0) {
+        versions.splice(0, count)
+        membershipRecords[ordinal]!.splice(0, count)
+        membershipFrom[ordinal] = boundary
+      }
+      frameVersions[ordinal] = componentVersions[ordinal]!
+    }
     if (frameStart > 0) {
       for (const log of changedLogs) if (log) trimLog(log, frameStart)
       for (const log of removedLogs) if (log) trimLog(log, frameStart)
@@ -656,6 +693,22 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     setNextEntity,
     descriptorAt: (ordinal: number): ComponentDescriptor => descriptors[ordinal]!,
     membersOf: (ordinal: number): ReadonlySet<EntityRecord> => members[ordinal]!,
+    /**
+     * Records whose membership of `ordinal` changed after `version`, or
+     * `undefined` when the log no longer covers that range. May repeat.
+     */
+    membershipChangesSince: (ordinal: number, version: number): ReadonlyArray<EntityRecord> | undefined => {
+      if (version < membershipFrom[ordinal]!) return undefined
+      const versions = membershipVersions[ordinal]!
+      let low = 0
+      let high = versions.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (versions[middle]! > version) high = middle
+        else low = middle + 1
+      }
+      return membershipRecords[ordinal]!.slice(low)
+    },
     componentVersion: (ordinal: number): number => componentVersions[ordinal]!,
     relationVersion: (key: symbol): number => relationVersions.get(key) ?? 0,
     entitiesVersion: (): number => entitiesVersion,

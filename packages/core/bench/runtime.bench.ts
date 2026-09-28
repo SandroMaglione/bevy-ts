@@ -414,6 +414,86 @@ const snapshotRoundTrip: BenchCase = {
   }
 }
 
+/**
+ * One game-like frame: 50 systems over 5k entities of mixed shapes, with
+ * per-frame spawns and despawns, events, change filters, and resource writes.
+ */
+const frame: BenchCase = {
+  name: "frame/50-systems-5k",
+  description: "A game-like frame: 50 systems, 5k entities, 100 spawns and despawns per frame",
+  setup: () => {
+    const runtime = makeRuntime()
+    populate(runtime, 2_500, 2_500)
+    const Movers2 = Movers
+    const movement = Array.from({ length: 15 }, (_, index) =>
+      Game.System(`Frame/Move${index}`, { queries: { movers: Movers2 } }, ({ queries }) => {
+        for (const { data } of queries.movers.each()) {
+          if ((data.position.get().x + index) % 15 === 0) {
+            data.position.update((position) => ({ x: position.x + 1, y: position.y }))
+          }
+        }
+      }))
+    const readers = Array.from({ length: 15 }, (_, index) =>
+      Game.System(`Frame/Read${index}`, {
+        queries: {
+          statics: Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Static] }),
+          changed: Game.Query({ selection: { position: Game.Query.read(Position) }, filters: [Game.Query.changed(Position)] })
+        },
+        resources: { sum: Game.System.writeResource(Sum) }
+      }, ({ queries, resources }) => {
+        let total = queries.changed.each().length
+        if (index % 5 === 0) {
+          for (const { data } of queries.statics.each()) total += data.position.get().x
+        }
+        resources.sum.set(total)
+      }))
+    const eventWriters = Array.from({ length: 5 }, (_, index) =>
+      Game.System(`Frame/Emit${index}`, { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
+        for (let count = 0; count < 20; count++) events.ping.emit(count + index)
+      }))
+    const eventReaders = Array.from({ length: 5 }, (_, index) =>
+      Game.System(`Frame/Listen${index}`, {
+        events: { ping: Game.System.readEvent(Ping) },
+        resources: { sum: Game.System.writeResource(Sum) }
+      }, ({ events, resources }) => {
+        let total = index
+        for (const value of events.ping.all()) total += value
+        resources.sum.set(total)
+      }))
+    const Bullets = Game.Query({ selection: { health: Game.Query.read(Health) }, without: [Velocity] })
+    const SpawnBullets = Game.System("Frame/SpawnBullets", {}, ({ commands }) => {
+      for (let count = 0; count < 100; count++) {
+        commands.spawn(Game.Command.spawn([Position, { x: count, y: 0 }], [Health, 1]))
+      }
+    })
+    const DespawnBullets = Game.System("Frame/DespawnBullets", { queries: { bullets: Bullets } }, ({ queries, commands }) => {
+      for (const match of queries.bullets.each()) commands.despawn(match.entity.id)
+    })
+    const Cleanup = Game.System("Frame/Cleanup", {
+      despawned: { entities: Game.System.readDespawned() },
+      resources: { sum: Game.System.writeResource(Sum) }
+    }, ({ despawned, resources }) => {
+      resources.sum.set(despawned.entities.all().length)
+    })
+    const Hud = Game.System("Frame/Hud", { resources: { sum: Game.System.readResource(Sum) } }, ({ resources }) => {
+      if (resources.sum.get() < -1) throw new Error("unreachable")
+    })
+    const schedule = Game.Schedule(
+      DespawnBullets,
+      SpawnBullets,
+      ...movement,
+      ...eventWriters,
+      Game.Schedule.applyDeferred(),
+      Game.Schedule.updateEvents(),
+      ...eventReaders,
+      ...readers,
+      Cleanup,
+      Hud
+    )
+    return { run: () => runtime.tick(schedule) }
+  }
+}
+
 export const cases: ReadonlyArray<BenchCase> = [
   calibration,
   spawn,
@@ -427,5 +507,6 @@ export const cases: ReadonlyArray<BenchCase> = [
   lookupGet,
   events,
   hierarchy,
-  snapshotRoundTrip
+  snapshotRoundTrip,
+  frame
 ]
