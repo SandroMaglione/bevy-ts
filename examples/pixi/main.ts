@@ -1,6 +1,7 @@
 import { Application, Container, Sprite, Texture } from "pixi.js";
 
 import { Descriptor, Schema } from "@bevy-ts/core";
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi";
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -26,11 +27,11 @@ const Viewport = Descriptor.Resource<{ width: number; height: number }>()(
 const PixiHost = Descriptor.Service<{
   readonly application: Application;
   readonly scene: Container;
-  readonly sprites: Map<number, Sprite>;
   readonly clock: {
     deltaSeconds: number;
   };
 }>()("PixiHost");
+const Sprites = Descriptor.Service<NodeRegistry.NodeRegistry<Sprite>>()("Sprites");
 
 const pixiSchema = Schema.fragment({
   components: {
@@ -47,22 +48,6 @@ const pixiSchema = Schema.fragment({
 
 const Game = Schema.bind(pixiSchema);
 const schema = Game.schema;
-
-const AddedRenderableQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable),
-    tint: Game.Query.read(Tint),
-  },
-  filters: [Game.Query.added(Renderable)],
-});
-
-const ChangedPositionQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-  },
-  filters: [Game.Query.changed(Position)],
-});
 
 const SetupSceneSystem = Game.System(
   "SetupSceneSystem",
@@ -241,75 +226,39 @@ const BounceWithinViewportSystem = Game.System(
     },
 );
 
-const CreatePixiSpritesSystem = Game.System(
-  "CreatePixiSpritesSystem",
-  {
-    queries: {
-      renderables: AddedRenderableQuery,
-    },
-    services: {
-      pixi: Game.System.service(PixiHost),
-    },
+// Pixi owns the sprites; RenderSync keeps one per Renderable entity in sync.
+const render = RenderSync.systems(Game, {
+  name: "Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: Sprites,
+  select: { tint: Game.Query.read(Tint) },
+  create: ({ renderable, data }) => {
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.anchor.set(0.5);
+    sprite.width = renderable.size;
+    sprite.height = renderable.size;
+    sprite.tint = data.tint.get().value;
+    return sprite;
   },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.renderables.each()) {
-        const entityId = match.entity.id.value;
-        const position = match.data.position.get();
-        const renderable = match.data.renderable.get();
-        const tint = match.data.tint.get();
-
-        let sprite = services.pixi.sprites.get(entityId);
-        if (!sprite) {
-          sprite = new Sprite(Texture.WHITE);
-          sprite.anchor.set(0.5);
-          services.pixi.scene.addChild(sprite);
-          services.pixi.sprites.set(entityId, sprite);
-        }
-
-        sprite.width = renderable.size;
-        sprite.height = renderable.size;
-        sprite.tint = tint.value;
-        sprite.position.set(position.x, position.y);
-      }
-    },
-);
-
-const SyncPixiTransformsSystem = Game.System(
-  "SyncPixiTransformsSystem",
-  {
-    queries: {
-      moved: ChangedPositionQuery,
-    },
-    services: {
-      pixi: Game.System.service(PixiHost),
-    },
+  apply: (sprite, { transform }) => {
+    sprite.position.set(transform.x, transform.y);
   },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.moved.each()) {
-        const sprite = services.pixi.sprites.get(match.entity.id.value);
-        if (!sprite) {
-          continue;
-        }
-
-        const position = match.data.position.get();
-        sprite.position.set(position.x, position.y);
-      }
-    },
-);
+});
 
 const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
-  CreatePixiSpritesSystem,
+  render.create,
 );
 
 const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,
-  SyncPixiTransformsSystem,
+  render.destroy,
+  render.create,
+  render.sync,
 );
 
 /**
@@ -333,17 +282,20 @@ export const startPixiExample = async (
   const scene = new Container();
   application.stage.addChild(scene);
 
+  const sprites = NodeRegistry.inContainer<Sprite>(scene);
   const host = {
     application,
     scene,
-    sprites: new Map<number, Sprite>(),
     clock: {
       deltaSeconds: 1 / 60,
     },
   };
 
   const runtime = Game.Runtime.make({
-    services: Game.Runtime.services(Game.Runtime.service(PixiHost, host)),
+    services: Game.Runtime.services(
+      Game.Runtime.service(PixiHost, host),
+      Game.Runtime.service(Sprites, sprites),
+    ),
     resources: {
       DeltaTime: host.clock.deltaSeconds,
       Viewport: {
@@ -365,10 +317,7 @@ export const startPixiExample = async (
   return {
     async destroy() {
       application.ticker.remove(tick);
-      for (const sprite of host.sprites.values()) {
-        sprite.destroy();
-      }
-      host.sprites.clear();
+      sprites.clear();
       application.destroy(true);
       mount.replaceChildren();
     },

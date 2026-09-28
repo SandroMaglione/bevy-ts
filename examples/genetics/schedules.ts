@@ -15,7 +15,13 @@ import {
   TickGenerationClockSystem,
   TickTransitionStateSystem
 } from "./systems/simulation.ts"
-import { CreateRenderNodesSystem, SyncHudSystem, SyncRenderNodesSystem } from "./systems/render.ts"
+import {
+  AnimateAgentNodesSystem,
+  CreateRenderNodesSystem,
+  DestroyRenderNodesSystem,
+  SyncHudSystem,
+  SyncRenderNodesSystem
+} from "./systems/render.ts"
 
 const runningEntry = Game.Schedule(
     ResetGenerationOnRunningEnterSystem,
@@ -31,7 +37,7 @@ export const setupSchedule = Game.Schedule(
   SetupWorldSystem,
   Game.Schedule.applyDeferred(),
   CreateRenderNodesSystem,
-  SyncRenderNodesSystem,
+  AnimateAgentNodesSystem,
   SyncHudSystem
 )
 
@@ -50,7 +56,9 @@ export const updateSchedule = Game.Schedule(
   QueueResumeSystem,
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
+  DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
   SyncRenderNodesSystem,
+  AnimateAgentNodesSystem,
   SyncHudSystem
 )

@@ -1,3 +1,4 @@
+import type { NodeRegistry } from "@bevy-ts/pixi"
 import type { Application, Container, Graphics } from "pixi.js"
 
 export type GeneValue = number
@@ -58,10 +59,11 @@ export type BrowserHud = {
   overlay: HTMLDivElement
 }
 
+export type GeneticsNodes = NodeRegistry.NodeRegistry<Graphics>
+
 export type BrowserHostValue = {
   application: Application
   scene: Container
-  nodes: Map<number, Graphics>
   clock: {
     deltaSeconds: number
   }

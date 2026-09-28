@@ -1,11 +1,13 @@
+import { NodeRegistry } from "@bevy-ts/pixi"
 import { Application, Container, Graphics } from "pixi.js"
 
 import { drawBoard } from "./render/board.ts"
 import { createHud } from "./render/hud.ts"
-import type { BrowserHostValue } from "./types.ts"
+import type { BrowserHostValue, GeneticsNodes } from "./types.ts"
 
 export type GeneticsBrowserHost = {
   readonly host: BrowserHostValue
+  readonly nodes: GeneticsNodes
   destroy(): Promise<void>
 }
 
@@ -49,11 +51,13 @@ export const createGeneticsBrowserHost = async (
   shell.appendChild(root)
   mount.replaceChildren(shell)
 
+  const nodes = NodeRegistry.inContainer<Graphics>(scene)
+
   return {
+    nodes,
     host: {
       application,
       scene,
-      nodes: new Map<number, Graphics>(),
       clock: {
         deltaSeconds: 1 / 60
       },
@@ -61,11 +65,7 @@ export const createGeneticsBrowserHost = async (
     },
     async destroy() {
       resizeObserver.disconnect()
-      for (const node of scene.children) {
-        if (node instanceof Graphics) {
-          node.destroy()
-        }
-      }
+      nodes.clear()
       board.destroy()
       application.destroy(true)
       mount.replaceChildren()

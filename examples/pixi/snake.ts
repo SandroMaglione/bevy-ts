@@ -1,6 +1,8 @@
 import { Application, Container, Graphics } from "pixi.js"
 
+import { Keyboard } from "@bevy-ts/browser"
 import { Descriptor, Entity, Schema } from "@bevy-ts/core"
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -48,10 +50,10 @@ const InputManager = Descriptor.Service<{
 
 const PixiHost = Descriptor.Service<{
   readonly scene: Container
-  readonly nodes: Map<number, Graphics>
   readonly tileSize: number
   readonly ui: SnakeHud
 }>()("Snake/PixiHost")
+const SnakeNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Graphics>>()("Snake/Nodes")
 
 const SNAKE_BOARD_WIDTH = 12
 const SNAKE_BOARD_HEIGHT = 12
@@ -118,26 +120,6 @@ const OccupiedCellQuery = Game.Query({
     body: Game.Query.optional(SnakeBody),
     food: Game.Query.optional(Food)
   }
-})
-
-const AddedRenderNodeQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    head: Game.Query.optional(SnakeHead),
-    body: Game.Query.optional(SnakeBody),
-    food: Game.Query.optional(Food)
-  },
-  filters: [Game.Query.added(Position)]
-})
-
-const ChangedRenderNodeQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    head: Game.Query.optional(SnakeHead),
-    body: Game.Query.optional(SnakeBody),
-    food: Game.Query.optional(Food)
-  },
-  filters: [Game.Query.changed(Position)]
 })
 
 const sameCell = (left: GridPosition, right: GridPosition): boolean =>
@@ -325,22 +307,12 @@ const renderBoard = (cellsWide: number, cellsHigh: number, tileSize: number): Gr
   return board
 }
 
-const snakeNodeKindForMatch = (match: { readonly data: {
+// Every positioned entity is a head, a body segment, or food.
+const snakeNodeKind = (data: {
   readonly head: { readonly present: boolean }
   readonly body: { readonly present: boolean }
-  readonly food: { readonly present: boolean }
-} }): "head" | "body" | "food" | null => {
-  if (match.data.head.present) {
-    return "head"
-  }
-  if (match.data.body.present) {
-    return "body"
-  }
-  if (match.data.food.present) {
-    return "food"
-  }
-  return null
-}
+}): "head" | "body" | "food" =>
+  data.head.present ? "head" : data.body.present ? "body" : "food"
 
 const placeNode = (
   node: Graphics,
@@ -752,121 +724,20 @@ const EnsureFoodSystem = Game.System(
     }
 )
 
-const DestroySnakeNodesSystem = Game.System(
-  "Snake/DestroyRenderNodes",
-  {
-    despawned: {
-      entities: Game.System.readDespawned()
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
+// Positions are both what makes an entity drawable and what moves it.
+const render = RenderSync.systems(Game, {
+  name: "Snake/Render",
+  renderable: Position,
+  transform: Position,
+  registry: SnakeNodes,
+  select: {
+    head: Game.Query.optional(SnakeHead),
+    body: Game.Query.optional(SnakeBody)
   },
-  ({ despawned, services }) =>
-    {
-      for (const entityId of despawned.entities.all()) {
-        const node = services.pixi.nodes.get(entityId.value)
-        if (!node) {
-          continue
-        }
-
-        services.pixi.scene.removeChild(node)
-        node.destroy()
-        services.pixi.nodes.delete(entityId.value)
-      }
-    }
-)
-
-const CreateSnakeNodesSystem = Game.System(
-  "Snake/CreateRenderNodes",
-  {
-    queries: {
-      added: AddedRenderNodeQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.added.each()) {
-        const kind = snakeNodeKindForMatch(match)
-        if (!kind) {
-          continue
-        }
-
-        const entityId = match.entity.id.value
-        let node = services.pixi.nodes.get(entityId)
-        if (!node) {
-          node = makeSnakeNode(kind, services.pixi.tileSize)
-          services.pixi.scene.addChild(node)
-          services.pixi.nodes.set(entityId, node)
-        }
-
-        placeNode(node, kind, services.pixi.tileSize, match.data.position.get())
-      }
-    }
-)
-
-const SyncSnakeNodeTransformsSystem = Game.System(
-  "Snake/SyncRenderNodeTransforms",
-  {
-    queries: {
-      moved: ChangedRenderNodeQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.moved.each()) {
-        const kind = snakeNodeKindForMatch(match)
-        if (!kind) {
-          continue
-        }
-
-        const entityId = match.entity.id.value
-        let node = services.pixi.nodes.get(entityId)
-        if (!node) {
-          node = makeSnakeNode(kind, services.pixi.tileSize)
-          services.pixi.scene.addChild(node)
-          services.pixi.nodes.set(entityId, node)
-        }
-
-        placeNode(node, kind, services.pixi.tileSize, match.data.position.get())
-      }
-    }
-)
-
-const ReconcileSnakeNodesSystem = Game.System(
-  "Snake/ReconcileRenderNodes",
-  {
-    queries: {
-      live: OccupiedCellQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      const liveEntityIds = new Set<number>()
-      for (const match of queries.live.each()) {
-        liveEntityIds.add(match.entity.id.value)
-      }
-
-      for (const [entityId, node] of services.pixi.nodes) {
-        if (liveEntityIds.has(entityId)) {
-          continue
-        }
-
-        services.pixi.scene.removeChild(node)
-        node.destroy()
-        services.pixi.nodes.delete(entityId)
-      }
-    }
-)
+  services: { pixi: PixiHost },
+  create: ({ data, services }) => makeSnakeNode(snakeNodeKind(data), services.pixi.tileSize),
+  apply: (node, { data, transform, services }) => placeNode(node, snakeNodeKind(data), services.pixi.tileSize, transform)
+})
 
 const SyncHudSystem = Game.System(
   "Snake/SyncHud",
@@ -920,9 +791,7 @@ const setupSchedule = Game.Schedule(
 
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
-  CreateSnakeNodesSystem,
-  SyncSnakeNodeTransformsSystem,
-  ReconcileSnakeNodesSystem,
+  render.create,
   SyncHudSystem
 )
 
@@ -954,10 +823,9 @@ const browserUpdateSchedule = Game.Schedule(
   BrowserInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  DestroySnakeNodesSystem,
-  CreateSnakeNodesSystem,
-  SyncSnakeNodeTransformsSystem,
-  ReconcileSnakeNodesSystem,
+  render.destroy,
+  render.create,
+  render.sync,
   SyncHudSystem
 )
 
@@ -1014,48 +882,25 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
   application.stage.addChild(renderBoard(cellsWide, cellsHigh, tileSize))
   application.stage.addChild(scene)
 
-  let pendingDirection: GridPosition | null = null
-  let restartQueued = false
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    switch (event.key) {
-      case "ArrowUp":
-      case "w":
-      case "W":
-        pendingDirection = { x: 0, y: -1 }
-        event.preventDefault()
-        return
-      case "ArrowDown":
-      case "s":
-      case "S":
-        pendingDirection = { x: 0, y: 1 }
-        event.preventDefault()
-        return
-      case "ArrowLeft":
-      case "a":
-      case "A":
-        pendingDirection = { x: -1, y: 0 }
-        event.preventDefault()
-        return
-      case "ArrowRight":
-      case "d":
-      case "D":
-        pendingDirection = { x: 1, y: 0 }
-        event.preventDefault()
-        return
-      case " ":
-      case "Enter":
-        restartQueued = true
-        event.preventDefault()
-        return
-    }
-  }
-
-  window.addEventListener("keydown", onKeyDown)
+  const keyboard = Keyboard.actions(window, {
+    up: ["ArrowUp", "w"],
+    down: ["ArrowDown", "s"],
+    left: ["ArrowLeft", "a"],
+    right: ["ArrowRight", "d"],
+    restart: [" ", "Enter"]
+  })
+  const directions = [
+    ["up", { x: 0, y: -1 }],
+    ["down", { x: 0, y: 1 }],
+    ["left", { x: -1, y: 0 }],
+    ["right", { x: 1, y: 0 }]
+  ] as const
+  // One snapshot per tick, so presses between ticks are never lost.
+  let input = keyboard.snapshot()
+  const nodes = NodeRegistry.inContainer<Graphics>(scene)
 
   const host = {
     scene,
-    nodes: new Map<number, Graphics>(),
     tileSize,
     ui: hud
   }
@@ -1064,17 +909,14 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, {
         consumeDirection() {
-          const next = pendingDirection
-          pendingDirection = null
-          return next
+          return directions.find(([action]) => input[action].pressed)?.[1] ?? null
         },
         consumeRestart() {
-          const next = restartQueued
-          restartQueued = false
-          return next
+          return input.restart.pressed
         }
       }),
-      Game.Runtime.service(PixiHost, host)
+      Game.Runtime.service(PixiHost, host),
+      Game.Runtime.service(SnakeNodes, nodes)
     ),
     resources: {
       Score: 0,
@@ -1090,17 +932,15 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
   runtime.tick(browserSetupSchedule)
 
   const intervalId = window.setInterval(() => {
+    input = keyboard.snapshot()
     runtime.tick(browserUpdateSchedule)
   }, 140)
 
   return {
     async destroy() {
       window.clearInterval(intervalId)
-      window.removeEventListener("keydown", onKeyDown)
-      for (const node of host.nodes.values()) {
-        node.destroy()
-      }
-      host.nodes.clear()
+      keyboard.dispose()
+      nodes.clear()
       application.destroy(true)
       mount.replaceChildren()
     }

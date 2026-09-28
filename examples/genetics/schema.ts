@@ -3,6 +3,7 @@ import type {
   ArenaValue,
   BrowserHostValue,
   FounderSeed,
+  GeneticsNodes,
   GenesValue,
   IntentKind,
   PopulationStatsValue,
@@ -83,6 +84,7 @@ export const NextGeneration = Descriptor.Resource<{
 }>()("GeneticsArena/NextGeneration")
 
 export const BrowserHost = Descriptor.Service<BrowserHostValue>()("GeneticsArena/BrowserHost")
+export const RenderNodes = Descriptor.Service<GeneticsNodes>()("GeneticsArena/RenderNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({
@@ -114,23 +116,13 @@ export const Game = Schema.bind(
 export const schema = Game.schema
 export const SimulationPhase = Game.StateMachine("SimulationPhase", ["Running", "GenerationSummary", "Extinction"] as const)
 
-export const AddedRenderableQuery = Game.Query({
+export const ChangedAgentVitalsQuery = Game.Query({
   selection: {
-    position: Game.Query.read(Position),
     renderable: Game.Query.read(Renderable),
-    agent: Game.Query.optional(Agent),
-    vitals: Game.Query.optional(Vitals)
+    agent: Game.Query.read(Agent),
+    vitals: Game.Query.read(Vitals)
   },
-  filters: [Game.Query.added(Renderable)]
-})
-
-export const LiveRenderableQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable),
-    agent: Game.Query.optional(Agent),
-    vitals: Game.Query.optional(Vitals)
-  }
+  filters: [Game.Query.changed(Vitals)]
 })
 
 export const AgentDecisionQuery = Game.Query({

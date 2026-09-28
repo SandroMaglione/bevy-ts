@@ -24,13 +24,13 @@ describe("@bevy-ts/pixi", () => {
       renderable: Sprite,
       transform: Position,
       registry: Nodes,
-      create: (sprite) => {
-        expect(sprite).type.toBe<{ readonly label: string }>()
+      create: ({ renderable }) => {
+        expect(renderable).type.toBe<{ readonly label: string }>()
         return { destroy() {}, x: 0 }
       },
-      apply: (node, position) => {
+      apply: (node, { transform }) => {
         expect(node).type.toBe<Node>()
-        node.x = position.x
+        node.x = transform.x
       }
     })
 
@@ -42,6 +42,76 @@ describe("@bevy-ts/pixi", () => {
     const withoutRegistry = Game.Runtime.make({ services: Game.Runtime.services() })
     // @ts-expect-error!
     withoutRegistry.tick(Game.Schedule(render.create))
+  })
+
+  it("types extra selections and services, and requires the extra services", () => {
+    const Scale = Descriptor.Service<{ readonly factor: number }>()("PixiTypes/Scale")
+    const render = RenderSync.systems(Game, {
+      name: "PixiTypes/Extra",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      select: { sprite: Game.Query.optional(Sprite) },
+      services: { scale: Scale },
+      create: ({ data, services }) => {
+        expect(services.scale.factor).type.toBe<number>()
+        if (data.sprite.present) expect(data.sprite.get()).type.toBe<{ readonly label: string }>()
+        return { destroy() {}, x: 0 }
+      },
+      apply: (node, { transform, services }) => {
+        node.x = transform.x * services.scale.factor
+      }
+    })
+
+    const withoutScale = Game.Runtime.make({
+      services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
+    })
+    // @ts-expect-error!
+    withoutScale.tick(Game.Schedule(render.create))
+  })
+
+  it("types resources as read cells and only accepts schema resources", () => {
+    const Zoom = Descriptor.Resource<number>()("PixiTypes/Zoom")
+    const Other = Descriptor.Resource<number>()("PixiTypes/Other")
+    const Zoomed = Schema.bind(Schema.fragment({ components: { Position, Sprite }, resources: { Zoom } }))
+    RenderSync.systems(Zoomed, {
+      name: "PixiTypes/Zoom",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      resources: { zoom: Zoom },
+      create: ({ resources }) => {
+        expect(resources.zoom.get()).type.toBe<number>()
+        return { destroy() {}, x: 0 }
+      },
+      apply: (node, { transform, resources }) => {
+        node.x = transform.x * resources.zoom.get()
+      }
+    })
+
+    RenderSync.systems(Zoomed, {
+      name: "PixiTypes/Unknown",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      // @ts-expect-error!
+      resources: { other: Other },
+      create: () => ({ destroy() {}, x: 0 }),
+      apply: () => {}
+    })
+  })
+
+  it("only accepts read-only extra slots", () => {
+    RenderSync.systems(Game, {
+      name: "PixiTypes/WriteSlot",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      // @ts-expect-error!
+      select: { position: Game.Query.write(Position) },
+      create: () => ({ destroy() {}, x: 0 }),
+      apply: () => {}
+    })
   })
 
   it("only accepts components registered in the bound schema", () => {

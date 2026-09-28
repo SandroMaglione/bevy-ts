@@ -13,6 +13,12 @@
  * after the `applyDeferred()` that commits spawns to render new entities in
  * the same tick.
  *
+ * `create` and `apply` receive one context: the renderable and transform
+ * values, the entity id, extra read-only slots declared in `select` (as query
+ * cells), resources declared in `resources` (as read cells), and extra
+ * services declared in `services`. Those resources and services become
+ * runtime requirements like the registry itself.
+ *
  * @module RenderSync
  * @docGroup pixi
  *
@@ -25,8 +31,9 @@
  *   renderable: Renderable,
  *   transform: Position,
  *   registry: Sprites,
- *   create: (renderable) => new Sprite(textures[renderable.texture]),
- *   apply: (sprite, position) => sprite.position.set(position.x, position.y)
+ *   services: { assets: Assets },
+ *   create: ({ renderable, services }) => new Sprite(services.assets.textures[renderable.texture]),
+ *   apply: (sprite, { transform }) => sprite.position.set(transform.x, transform.y)
  * })
  *
  * const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.destroy, render.create, render.sync)
@@ -34,11 +41,13 @@
  */
 import type { Descriptor } from "@bevy-ts/core/Descriptor"
 import type * as Entity from "@bevy-ts/core/Entity"
-import type { ReadonlyValue } from "@bevy-ts/core/Query"
+import type { OptionalReadAccess, OptionalReadCell, ReadAccess, ReadCell, ReadonlyValue } from "@bevy-ts/core/Query"
 import type { Schema } from "@bevy-ts/core/Schema"
 import type { NodeRegistry } from "./NodeRegistry.ts"
 
 type RegistryService = Descriptor<"service", string, NodeRegistry<any>>
+type ServiceDescriptor = Descriptor<"service", string, any>
+type ResourceDescriptor = Descriptor<"resource", string, any>
 
 /**
  * The node type held by a registry service.
@@ -46,12 +55,58 @@ type RegistryService = Descriptor<"service", string, NodeRegistry<any>>
 export type NodeOf<R extends RegistryService> =
   R extends Descriptor<"service", string, NodeRegistry<infer Node>> ? Node : never
 
+/**
+ * Extra read-only slots available to `create` and `apply`.
+ */
+export type Selection<S extends Schema.Any> = Readonly<Record<
+  string,
+  ReadAccess<Schema.ComponentDescriptor<S>> | OptionalReadAccess<Schema.ComponentDescriptor<S>>
+>>
+
+type SelectionCells<Select> = {
+  readonly [K in keyof Select]:
+    Select[K] extends ReadAccess<infer D> ? ReadCell<Descriptor.Value<D>>
+    : Select[K] extends OptionalReadAccess<infer D> ? OptionalReadCell<Descriptor.Value<D>>
+    : never
+}
+
+type ResourceCells<Resources> = {
+  readonly [K in keyof Resources]: Resources[K] extends ResourceDescriptor ? ReadCell<Descriptor.Value<Resources[K]>> : never
+}
+
+type ServiceValues<Services> = {
+  readonly [K in keyof Services]: Services[K] extends ServiceDescriptor ? Descriptor.Value<Services[K]> : never
+}
+
+/**
+ * What `create` and `apply` see for one entity.
+ */
+export interface NodeContext<
+  S extends Schema.Any,
+  Root,
+  Renderable extends Schema.ComponentDescriptor<S>,
+  Transform extends Schema.ComponentDescriptor<S>,
+  Select,
+  Services,
+  Resources = {}
+> {
+  readonly entity: Entity.EntityId<S, Root>
+  readonly renderable: ReadonlyValue<Descriptor.Value<Renderable>>
+  readonly transform: ReadonlyValue<Descriptor.Value<Transform>>
+  readonly data: SelectionCells<Select>
+  readonly resources: ResourceCells<Resources>
+  readonly services: ServiceValues<Services>
+}
+
 export interface Options<
   S extends Schema.Any,
   Root,
   Renderable extends Schema.ComponentDescriptor<S>,
   Transform extends Schema.ComponentDescriptor<S>,
-  Registry extends RegistryService
+  Registry extends RegistryService,
+  Select extends Selection<S>,
+  Services extends Readonly<Record<string, ServiceDescriptor>>,
+  Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {}
 > {
   /** Prefix for the generated system names. */
   readonly name: string
@@ -61,32 +116,31 @@ export interface Options<
   readonly transform: Transform
   /** The service providing the node registry. */
   readonly registry: Registry
+  /** Extra read-only query slots passed to the callbacks as `data`. */
+  readonly select?: Select
+  /** Extra services passed to the callbacks as `services`. */
+  readonly services?: Services
+  /** Resources passed to the callbacks as read-only cells in `resources`. */
+  readonly resources?: Resources
   /** Builds the node for a new renderable entity. */
-  readonly create: (
-    renderable: ReadonlyValue<Descriptor.Value<Renderable>>,
-    entity: Entity.EntityId<S, Root>
-  ) => NodeOf<Registry>
-  /** Applies the transform to the node. */
-  readonly apply: (
-    node: NodeOf<Registry>,
-    transform: ReadonlyValue<Descriptor.Value<Transform>>,
-    renderable: ReadonlyValue<Descriptor.Value<Renderable>>
-  ) => void
+  readonly create: (context: NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>) => NodeOf<Registry>
+  /** Applies the current state to the node, on creation and on every transform change. */
+  readonly apply: (node: NodeOf<Registry>, context: NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>) => void
 }
 
 /**
- * One generated system. Its only runtime requirement is the registry service.
+ * One generated system. It requires the registry and any extra services.
  */
-export type RenderSystem<S extends Schema.Any, Root, Registry extends RegistryService> =
-  Schema.BoundSystem<S, Root, any, void, never, string, Registry>
+export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor> =
+  Schema.BoundSystem<S, Root, any, void, never, string, Needs>
 
-export interface RenderSystems<S extends Schema.Any, Root, Registry extends RegistryService> {
+export interface RenderSystems<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor> {
   /** Destroys nodes of entities that lost the renderable or despawned. */
-  readonly destroy: RenderSystem<S, Root, Registry>
-  /** Creates nodes for entities that gained the renderable, and applies their transform. */
-  readonly create: RenderSystem<S, Root, Registry>
+  readonly destroy: RenderSystem<S, Root, Needs>
+  /** Creates nodes for entities that gained the renderable, and applies their state. */
+  readonly create: RenderSystem<S, Root, Needs>
   /** Applies changed transforms to existing nodes. */
-  readonly sync: RenderSystem<S, Root, Registry>
+  readonly sync: RenderSystem<S, Root, Needs>
 }
 
 /**
@@ -97,54 +151,82 @@ export const systems = <
   Root,
   const Renderable extends Schema.ComponentDescriptor<S>,
   const Transform extends Schema.ComponentDescriptor<S>,
-  const Registry extends RegistryService
+  const Registry extends RegistryService,
+  const Select extends Selection<S> = {},
+  const Services extends Readonly<Record<string, ServiceDescriptor>> = {},
+  const Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {}
 >(
   Game: Schema.Game<S, Root>,
-  options: Options<S, Root, Renderable, Transform, Registry>
-): RenderSystems<S, Root, Registry> => {
+  options: Options<S, Root, Renderable, Transform, Registry, Select, Services, Resources>
+): RenderSystems<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]> => {
   type Node = NodeOf<Registry>
+  type Context = NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>
   // Internally the generic descriptors are erased; the public result type
-  // above carries the exact requirement (the registry service).
+  // above carries the exact requirements (the registry and extra services).
   const System = Game.System as unknown as (name: string, spec: object, run: (context: any) => void) => unknown
-  const Query = Game.Query as unknown as ((spec: object) => object) & Schema.Game<S, Root>["Query"]
+  const Query = Game.Query as unknown as (spec: object) => object
   const selection = {
-    renderable: Game.Query.read(options.renderable),
-    transform: Game.Query.read(options.transform)
+    ...options.select,
+    __renderable: Game.Query.read(options.renderable),
+    __transform: Game.Query.read(options.transform)
   }
-  const services = { registry: Game.System.service(options.registry) }
+  const services: Record<string, unknown> = { __registry: Game.System.service(options.registry) }
+  for (const [key, descriptor] of Object.entries(options.services ?? {})) {
+    services[key] = Game.System.service(descriptor)
+  }
+  const resources: Record<string, unknown> = {}
+  for (const [key, descriptor] of Object.entries(options.resources ?? {})) {
+    resources[key] = Game.System.readResource(descriptor as Schema.ResourceDescriptor<S>)
+  }
+
+  const contextOf = (
+    entity: { readonly id: unknown },
+    data: Record<string, any>,
+    provided: Record<string, unknown>,
+    cells: Record<string, unknown>
+  ): Context => ({
+    entity: entity.id,
+    renderable: data["__renderable"].get(),
+    transform: data["__transform"].get(),
+    data,
+    resources: cells,
+    services: provided
+  }) as unknown as Context
 
   const destroy = System(`${options.name}/Destroy`, {
     removed: { renderables: Game.System.readRemoved(options.renderable) },
     despawned: { entities: Game.System.readDespawned() },
     services
   }, ({ removed, despawned, services }) => {
-    const registry = services.registry as NodeRegistry<Node>
+    const registry = services.__registry as NodeRegistry<Node>
     for (const entity of removed.renderables.all()) registry.remove(entity)
     for (const entity of despawned.entities.all()) registry.remove(entity)
   })
 
   const create = System(`${options.name}/Create`, {
     queries: { added: Query({ selection, filters: [Game.Query.added(options.renderable)] }) },
+    resources,
     services
-  }, ({ queries, services }) => {
-    const registry = services.registry as NodeRegistry<Node>
+  }, ({ queries, resources, services }) => {
+    const registry = services.__registry as NodeRegistry<Node>
     for (const { entity, data } of queries.added.each()) {
-      const renderable = data.renderable.get()
-      const node = registry.ensure(entity.id, () => options.create(renderable, entity.id))
-      options.apply(node, data.transform.get(), renderable)
+      const context = contextOf(entity, data, services, resources)
+      const node = registry.ensure(entity.id, () => options.create(context))
+      options.apply(node, context)
     }
   })
 
   const sync = System(`${options.name}/Sync`, {
     queries: { changed: Query({ selection, filters: [Game.Query.changed(options.transform)] }) },
+    resources,
     services
-  }, ({ queries, services }) => {
-    const registry = services.registry as NodeRegistry<Node>
+  }, ({ queries, resources, services }) => {
+    const registry = services.__registry as NodeRegistry<Node>
     for (const { entity, data } of queries.changed.each()) {
       const node = registry.get(entity.id)
-      if (node !== undefined) options.apply(node, data.transform.get(), data.renderable.get())
+      if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
     }
   })
 
-  return { destroy, create, sync } as unknown as RenderSystems<S, Root, Registry>
+  return { destroy, create, sync } as unknown as RenderSystems<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]>
 }

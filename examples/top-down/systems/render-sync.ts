@@ -1,20 +1,19 @@
 
-import {
-  AddedRenderableQuery,
-  ChangedRenderableTransformQuery,
-  PickupRenderQuery,
-  PlayerRenderQuery
-} from "../queries.ts"
+import { RenderSync } from "@bevy-ts/pixi"
+
+import { PickupRenderQuery, PlayerRenderQuery } from "../queries.ts"
 import {
   Camera,
   CurrentPlayerFrame,
   FocusedCollectable,
   Game,
+  Position,
   Renderable,
+  RenderNodes,
   TopDownHost,
   Viewport
 } from "../schema.ts"
-import { destroyRenderNode, ensureNode, textureForCurrentFrame } from "../render/nodes.ts"
+import { createRenderNode, textureForCurrentFrame } from "../render/nodes.ts"
 
 export const ApplyWorldCameraTransformSystem = Game.System(
   "TopDown/ApplyWorldCameraTransform",
@@ -36,104 +35,23 @@ export const ApplyWorldCameraTransformSystem = Game.System(
     }
 )
 
-export const DestroyRenderNodesSystem = Game.System(
-  "TopDown/DestroyRenderNodes",
-  {
-    removed: {
-      renderables: Game.System.readRemoved(Renderable)
-    },
-    despawned: {
-      entities: Game.System.readDespawned()
-    },
-    services: {
-      host: Game.System.service(TopDownHost)
-    }
-  },
-  ({ removed, despawned, services }) =>
-    {
-      const host = services.host
+const render = RenderSync.systems(Game, {
+  name: "TopDown/Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: RenderNodes,
+  services: { host: TopDownHost },
+  // The player's frame is refreshed every tick by SyncPlayerSpriteSystem.
+  create: ({ renderable, services }) =>
+    createRenderNode(renderable, services.host.playerFrames, { row: 1, column: 1 }),
+  apply: (renderNode, { transform }) => {
+    renderNode.node.position.set(transform.x, transform.y)
+  }
+})
 
-      for (const entityId of removed.renderables.all()) {
-        const renderNode = host.nodes.get(entityId.value)
-        if (!renderNode) {
-          continue
-        }
-
-        host.actorLayer.removeChild(renderNode.node)
-        destroyRenderNode(renderNode)
-        host.nodes.delete(entityId.value)
-      }
-
-      for (const entityId of despawned.entities.all()) {
-        const renderNode = host.nodes.get(entityId.value)
-        if (!renderNode) {
-          continue
-        }
-
-        host.actorLayer.removeChild(renderNode.node)
-        destroyRenderNode(renderNode)
-        host.nodes.delete(entityId.value)
-      }
-    }
-)
-
-export const CreateRenderNodesSystem = Game.System(
-  "TopDown/CreateRenderNodes",
-  {
-    queries: {
-      addedRenderables: AddedRenderableQuery
-    },
-    resources: {
-      playerFrame: Game.System.readResource(CurrentPlayerFrame)
-    },
-    services: {
-      host: Game.System.service(TopDownHost)
-    }
-  },
-  ({ queries, resources, services }) =>
-    {
-      const currentFrame = resources.playerFrame.get()
-
-      for (const match of queries.addedRenderables.each()) {
-        const renderNode = ensureNode(
-          services.host,
-          match.entity.id.value,
-          match.data.renderable.get(),
-          currentFrame
-        )
-        const position = match.data.position.get()
-        renderNode.node.position.set(position.x, position.y)
-      }
-    }
-)
-
-export const SyncRenderableTransformsSystem = Game.System(
-  "TopDown/SyncRenderableTransforms",
-  {
-    queries: {
-      renderables: ChangedRenderableTransformQuery
-    },
-    resources: {
-      playerFrame: Game.System.readResource(CurrentPlayerFrame)
-    },
-    services: {
-      host: Game.System.service(TopDownHost)
-    }
-  },
-  ({ queries, resources, services }) =>
-    {
-      const currentFrame = resources.playerFrame.get()
-
-      for (const match of queries.renderables.each()) {
-        const entityId = match.entity.id.value
-        const renderable = match.data.renderable.get()
-        const renderNode = ensureNode(services.host, entityId, renderable, currentFrame)
-        const position = match.data.position.get()
-
-        renderNode.node.position.set(position.x, position.y)
-      }
-    }
-)
+export const DestroyRenderNodesSystem = render.destroy
+export const CreateRenderNodesSystem = render.create
+export const SyncRenderableTransformsSystem = render.sync
 
 export const SyncPlayerSpriteSystem = Game.System(
   "TopDown/SyncPlayerSprite",
@@ -153,17 +71,17 @@ export const SyncPlayerSpriteSystem = Game.System(
       const currentFrame = resources.playerFrame.get()
 
       for (const match of queries.players.each()) {
-        const renderNode = services.host.nodes.get(match.entity.id.value)
+        const renderNode = services.host.nodes.get(match.entity.id)
         if (!renderNode || renderNode.kind !== "player") {
           continue
         }
 
         const renderable = match.data.renderable.get()
         renderNode.node.texture = textureForCurrentFrame(services.host.playerFrames, currentFrame)
+        // Sizing sets the scale, so it must come after any scale reset.
         renderNode.node.width = renderable.width
         renderNode.node.height = renderable.height
         renderNode.node.alpha = 1
-        renderNode.node.scale.set(1)
         renderNode.node.rotation = 0
       }
     }
@@ -187,7 +105,7 @@ export const SyncPickupPresentationSystem = Game.System(
       const focusedId = resources.focused.get().current?.value ?? null
 
       for (const match of queries.pickups.each()) {
-        const renderNode = services.host.nodes.get(match.entity.id.value)
+        const renderNode = services.host.nodes.get(match.entity.id)
         if (!renderNode || renderNode.kind !== "pickup") {
           continue
         }

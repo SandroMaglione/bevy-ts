@@ -1,3 +1,4 @@
+import type { NodeRegistry } from "@bevy-ts/pixi"
 import type { Application, Container, Graphics } from "pixi.js"
 import type * as Size2Value from "@bevy-ts/math/Size2"
 import type * as Vector2Value from "@bevy-ts/math/Vector2"
@@ -25,12 +26,13 @@ export type StateMachineHud = {
 export type BrowserHostValue = {
   readonly application: Application
   readonly scene: Container
-  readonly nodes: Map<number, Graphics>
   readonly clock: {
     deltaSeconds: number
   }
   readonly ui: StateMachineHud
 }
+
+export type ActorNodes = NodeRegistry.NodeRegistry<Graphics>
 
 export type StateMachineInputManager = {
   readonly movement: () => Vector

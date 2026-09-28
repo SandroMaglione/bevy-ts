@@ -1,88 +1,51 @@
 
+import { RenderSync } from "@bevy-ts/pixi"
 import { clamp } from "../math.ts"
-import { AddedRenderableQuery, AgentSnapshotQuery, BrowserHost, Game, GenerationClock, GenerationIndex, LiveRenderableQuery, PopulationStats, SimulationPhase, Summary } from "../schema.ts"
+import { Agent, AgentSnapshotQuery, BrowserHost, ChangedAgentVitalsQuery, Game, GenerationClock, GenerationIndex, PopulationStats, Position, RenderNodes, Renderable, SimulationPhase, Summary } from "../schema.ts"
 import { collectAgentSnapshots } from "../logic.ts"
 import { makeAgentNode, makeFoodNode } from "../render/nodes.ts"
 
-export const CreateRenderNodesSystem = Game.System(
-  "GeneticsArena/CreateRenderNodes",
+const render = RenderSync.systems(Game, {
+  name: "GeneticsArena/Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: RenderNodes,
+  select: { agent: Game.Query.optional(Agent) },
+  create: ({ renderable, data }) =>
+    renderable.kind === "food"
+      ? makeFoodNode(renderable)
+      : makeAgentNode(renderable, data.agent.present ? data.agent.get().size : 8),
+  apply: (node, { transform }) => node.position.set(transform.x, transform.y)
+})
+
+export const DestroyRenderNodesSystem = render.destroy
+export const CreateRenderNodesSystem = render.create
+export const SyncRenderNodesSystem = render.sync
+
+// Vitals pulse every frame, independently of movement.
+export const AnimateAgentNodesSystem = Game.System(
+  "GeneticsArena/AnimateAgentNodes",
   {
     queries: {
-      renderables: AddedRenderableQuery
+      agents: ChangedAgentVitalsQuery
     },
     services: {
-      browser: Game.System.service(BrowserHost)
+      nodes: Game.System.service(RenderNodes)
     }
   },
   ({ queries, services }) =>
     {
-      for (const match of queries.renderables.each()) {
-        if (services.browser.nodes.has(match.entity.id.value)) {
-          continue
-        }
-
-        const renderable = match.data.renderable.get()
-        const agent = match.data.agent.present ? match.data.agent.get() : null
-        const node =
-          renderable.kind === "food"
-            ? makeFoodNode(renderable)
-            : makeAgentNode(renderable, agent?.size ?? 8)
-
-        services.browser.scene.addChild(node)
-        services.browser.nodes.set(match.entity.id.value, node)
-      }
-    }
-)
-
-export const SyncRenderNodesSystem = Game.System(
-  "GeneticsArena/SyncRenderNodes",
-  {
-    queries: {
-      renderables: LiveRenderableQuery
-    },
-    services: {
-      browser: Game.System.service(BrowserHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      const live = new Set<number>()
-
-      for (const match of queries.renderables.each()) {
-        const id = match.entity.id.value
-        live.add(id)
-        let node = services.browser.nodes.get(id)
+      for (const match of queries.agents.each()) {
+        const node = services.nodes.get(match.entity.id)
         if (!node) {
-          const renderable = match.data.renderable.get()
-          const agent = match.data.agent.present ? match.data.agent.get() : null
-          node =
-            renderable.kind === "food"
-              ? makeFoodNode(renderable)
-              : makeAgentNode(renderable, agent?.size ?? 8)
-          services.browser.scene.addChild(node)
-          services.browser.nodes.set(id, node)
-        }
-
-        const position = match.data.position.get()
-        node.position.set(position.x, position.y)
-
-        const agent = match.data.agent.present ? match.data.agent.get() : null
-        const vitals = match.data.vitals.present ? match.data.vitals.get() : null
-        if (agent && vitals) {
-          node.rotation += (vitals.pulse - 1) * 0.03
-          node.scale.set(vitals.pulse, vitals.pulse)
-          node.alpha = clamp(match.data.renderable.get().alpha + (agent.maxHealth - vitals.health) / agent.maxHealth * 0.06, 0.45, 1)
-        }
-      }
-
-      for (const [entityId, node] of services.browser.nodes) {
-        if (live.has(entityId)) {
           continue
         }
 
-        services.browser.scene.removeChild(node)
-        node.destroy()
-        services.browser.nodes.delete(entityId)
+        const agent = match.data.agent.get()
+        const vitals = match.data.vitals.get()
+        node.rotation += (vitals.pulse - 1) * 0.03
+        node.scale.set(vitals.pulse, vitals.pulse)
+        node.alpha = clamp(match.data.renderable.get().alpha + (agent.maxHealth - vitals.health) / agent.maxHealth * 0.06, 0.45, 1)
       }
     }
 )

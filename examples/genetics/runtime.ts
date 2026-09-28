@@ -4,15 +4,16 @@ import {
   SUMMARY_DURATION_SECONDS
 } from "./constants.ts"
 import { makeFounderPool, makePopulationStats, makeRunningSummary } from "./logic.ts"
-import { BrowserHost, Game, SimulationPhase } from "./schema.ts"
-import type { BrowserHostValue } from "./types.ts"
+import { BrowserHost, Game, RenderNodes, SimulationPhase } from "./schema.ts"
+import type { BrowserHostValue, GeneticsNodes } from "./types.ts"
 
-export const createGeneticsRuntime = (browser: BrowserHostValue) => {
+export const createGeneticsRuntime = (browser: BrowserHostValue, nodes: GeneticsNodes) => {
   const initialPool = makeFounderPool(0x1f123bb, FOUNDER_COUNT)
 
   return Game.Runtime.make({
     services: Game.Runtime.services(
-      Game.Runtime.service(BrowserHost, browser)
+      Game.Runtime.service(BrowserHost, browser),
+      Game.Runtime.service(RenderNodes, nodes)
     ),
     resources: {
       DeltaTime: 1 / 60,

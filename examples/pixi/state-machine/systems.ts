@@ -1,5 +1,6 @@
 import * as Scalar from "@bevy-ts/math/Scalar"
 import * as Vector2 from "@bevy-ts/math/Vector2"
+import { RenderSync } from "@bevy-ts/pixi"
 import { PICKUP_POINTS } from "./content.ts"
 import { playerSpawn } from "./definitions.ts"
 import {
@@ -13,8 +14,6 @@ import {
   STAGE_WIDTH
 } from "./constants.ts"
 import {
-  AddedActorQuery,
-  ChangedActorTransformQuery,
   PickupQuery,
   PlayerQuery,
   PlayerReadQuery
@@ -22,6 +21,7 @@ import {
 import { createActorNode } from "./host.ts"
 import {
   Actor,
+  ActorNodes,
   Arena,
   BrowserHost,
   CountdownRemaining,
@@ -411,81 +411,18 @@ export const FadeTransitionNoticeSystem = Game.System(
     }
 )
 
-export const DestroyRenderNodesSystem = Game.System(
-  "StateMachineExample/DestroyRenderNodes",
-  {
-    despawned: {
-      entities: Game.System.readDespawned()
-    },
-    services: {
-      host: Game.System.service(BrowserHost)
-    }
-  },
-  ({ despawned, services }) =>
-    {
-      for (const entityId of despawned.entities.all()) {
-        const node = services.host.nodes.get(entityId.value)
-        if (!node) {
-          continue
-        }
+const render = RenderSync.systems(Game, {
+  name: "StateMachineExample/Render",
+  renderable: Actor,
+  transform: Position,
+  registry: ActorNodes,
+  create: ({ renderable }) => createActorNode(renderable.kind),
+  apply: (node, { transform }) => node.position.set(transform.x, transform.y)
+})
 
-        services.host.scene.removeChild(node)
-        node.destroy()
-        services.host.nodes.delete(entityId.value)
-      }
-    }
-)
-
-export const CreateRenderNodesSystem = Game.System(
-  "StateMachineExample/CreateRenderNodes",
-  {
-    queries: {
-      added: AddedActorQuery
-    },
-    services: {
-      host: Game.System.service(BrowserHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.added.each()) {
-        const entityId = match.entity.id.value
-        let node = services.host.nodes.get(entityId)
-        if (!node) {
-          node = createActorNode(match.data.actor.get().kind)
-          services.host.scene.addChild(node)
-          services.host.nodes.set(entityId, node)
-        }
-
-        const position = match.data.position.get()
-        node.position.set(position.x, position.y)
-      }
-    }
-)
-
-export const SyncRenderableTransformsSystem = Game.System(
-  "StateMachineExample/SyncRenderableTransforms",
-  {
-    queries: {
-      moved: ChangedActorTransformQuery
-    },
-    services: {
-      host: Game.System.service(BrowserHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.moved.each()) {
-        const node = services.host.nodes.get(match.entity.id.value)
-        if (!node) {
-          continue
-        }
-
-        const position = match.data.position.get()
-        node.position.set(position.x, position.y)
-      }
-    }
-)
+export const DestroyRenderNodesSystem = render.destroy
+export const CreateRenderNodesSystem = render.create
+export const SyncRenderableTransformsSystem = render.sync
 
 export const SyncHudSystem = Game.System(
   "StateMachineExample/SyncHud",

@@ -8,9 +8,9 @@ const render = RenderSync.systems(Game, {
   renderable: Renderable,
   transform: Position,
   registry: RenderNodes,
-  create: createRenderNode,
-  apply: (node, position) => {
-    node.position.set(position.x, position.y)
+  create: ({ renderable }) => createRenderNode(renderable),
+  apply: (node, { transform }) => {
+    node.position.set(transform.x, transform.y)
   }
 })
 

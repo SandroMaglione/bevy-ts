@@ -1,3 +1,4 @@
+import type { NodeRegistry } from "@bevy-ts/pixi"
 import type { Application, Container, Sprite, Texture } from "pixi.js"
 import type * as Size2Value from "@bevy-ts/math/Size2"
 import type * as Vector2Value from "@bevy-ts/math/Vector2"
@@ -49,7 +50,7 @@ export type TopDownHostValue = {
   application: Application
   world: Container
   actorLayer: Container
-  nodes: Map<number, RenderNode>
+  nodes: NodeRegistry.NodeRegistry<RenderNode>
   playerFrames: PlayerFrameAtlas
   hud: HudRefs
   clock: {
