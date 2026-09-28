@@ -189,3 +189,19 @@ describe("Format.value", () => {
     expect(Format.value(new Sprite())).toBe("Sprite{frame:1}")
   })
 })
+
+describe("Session report streams", () => {
+  it("lists streams held past the frame window by a reader", () => {
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
+    const Emit = Game.System("Dev/EmitHit", { events: { hit: Game.System.writeEvent(Hit) } }, ({ events }) => {
+      events.hit.emit(1)
+    })
+    const Read = Game.System("Dev/RareReader", { events: { hit: Game.System.readEvent(Hit) } }, () => {})
+    const session = Session.make(runtime, { schedules: { read: Game.Schedule(Read), emit: Game.Schedule(Emit) } })
+    session.run("read")
+    session.run("emit", { frames: 4 })
+    const report = session.report()
+    expect(report.data.streams).toMatchObject([{ stream: "Dev/Hit", size: 4, heldBy: "Dev/RareReader" }])
+    expect(report.text).toContain("# Streams held by readers\nevent Dev/Hit: 4/65536 retained, held by Dev/RareReader\n  Dev/RareReader: 4 unread")
+  })
+})

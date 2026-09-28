@@ -246,6 +246,33 @@ describe("Runtime debug handle", () => {
     })
   })
 
+  it("reports readers that lost entries at stream capacity", () => {
+    const runtime = makeRuntime()
+    const Flood = Game.System("Debug/Flood", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
+      for (let index = 0; index < 40_000; index++) events.ping.emit(index)
+    })
+    const Read = Game.System("Debug/StalledReader", { events: { ping: Game.System.readEvent(Ping) } }, () => {})
+    const read = Game.Schedule(Read)
+    runtime.tick(read)
+    const flood = Game.Schedule(Flood)
+    runtime.tick(flood)
+    runtime.tick(flood)
+    // Two more frames move the last batch out of the two-frame window.
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule())
+
+    const [ping] = runtime.debug.streams()
+    expect(ping).toMatchObject({
+      size: 40_000,
+      readers: [{ system: "Debug/StalledReader", unread: 40_000, lagged: true }],
+      heldBy: "Debug/StalledReader"
+    })
+    const { events } = collect(runtime)
+    runtime.tick(read)
+    const run = events.find((event): event is Debug.SystemEvent => event.type === "system")!
+    expect(run.missed).toEqual([{ kind: "event", stream: "Debug/Ping" }])
+  })
+
   it("reports removed reads older than the two-frame window as missed", () => {
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))

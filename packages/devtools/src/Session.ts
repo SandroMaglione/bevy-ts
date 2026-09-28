@@ -135,6 +135,8 @@ export interface Report {
   readonly history: readonly [number, number] | undefined
   readonly systems: ReadonlyArray<SystemStats>
   readonly warnings: ReadonlyArray<Warning>
+  /** Streams held past the two-frame window by a reader, or with lagged readers. */
+  readonly streams: ReadonlyArray<Debug.StreamStatus>
 }
 
 export interface SystemActivity {
@@ -415,7 +417,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       frames: debug.frame(),
       history: historyRange(),
       systems,
-      warnings: [...warnings.values()].map((warning) => ({ ...warning }))
+      warnings: [...warnings.values()].map((warning) => ({ ...warning })),
+      streams: debug.streams().filter((stream) => stream.heldBy !== undefined || stream.readers.some((reader) => reader.lagged))
     }
     const lines = [`${data.frames} frames run (${rangeText()})`, "", "# Systems (by total time)"]
     for (const entry of systems) {
@@ -425,6 +428,9 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     if (data.warnings.length === 0) lines.push("(none)")
     for (const warning of data.warnings) {
       lines.push(`${warning.code}: ${warning.message} (x${warning.count}, f${warning.firstFrame}-f${warning.lastFrame})`)
+    }
+    if (data.streams.length > 0) {
+      lines.push("", "# Streams held by readers", Format.streams(data.streams))
     }
     const lints = debug.describe().lints
     if (lints.length > 0) {
