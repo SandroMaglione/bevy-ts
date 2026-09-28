@@ -1,6 +1,6 @@
 {
   "name": "@typeonce/bevy-ts",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Type-safe, game-loop-agnostic ECS runtime for TypeScript, inspired by Bevy",
   "author": "Sandro Maglione",
   "license": "MIT",
