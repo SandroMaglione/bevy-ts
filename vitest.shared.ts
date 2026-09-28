@@ -4,7 +4,7 @@ import type { ViteUserConfig } from "vitest/config"
 const config: ViteUserConfig = {
   plugins: [tsconfigPaths({ ignoreConfigErrors: true })],
   test: {
-    include: ["packages/*/test/**/*.test.ts", "scripts/test/**/*.test.ts"],
+    include: ["packages/*/test/**/*.test.ts", "examples/*/test/**/*.test.ts", "scripts/test/**/*.test.ts"],
     exclude: [
       "**/node_modules/**",
       "**/dist/**",

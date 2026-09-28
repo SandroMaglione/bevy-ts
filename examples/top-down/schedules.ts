@@ -26,18 +26,6 @@ const animationSchedule = Game.Schedule(
   ResolveCurrentPlayerFrameSystem
 )
 
-const cameraSyncSchedule = Game.Schedule(
-  SyncCameraSystem,
-  ApplyWorldCameraTransformSystem
-)
-
-const renderSyncSchedule = Game.Schedule(
-  RenderNodesSystem,
-  SyncPlayerSpriteSystem,
-  SyncPickupPresentationSystem,
-  SyncHudSystem
-)
-
 const gameplaySchedule = Game.Schedule(
   CaptureFrameContextSystem,
   CaptureInputSystem,
@@ -51,10 +39,20 @@ const gameplaySchedule = Game.Schedule(
   Game.Schedule.applyStateTransitions()
 )
 
-export const setupSchedule = Game.Schedule(
-  SetupWorldSystem,
-  Game.Schedule.applyDeferred(),
-  SyncCameraSystem,
+/**
+ * Everything that changes world state. It needs only the keyboard and the
+ * frame context, so it also runs headless (see `simulation.ts`).
+ */
+export const simulationSchedule = Game.Schedule(
+  gameplaySchedule,
+  animationSchedule,
+  SyncCameraSystem
+)
+
+/**
+ * Mirrors the world into Pixi and the HUD. Reads world state only.
+ */
+export const presentationSchedule = Game.Schedule(
   ApplyWorldCameraTransformSystem,
   RenderNodesSystem,
   SyncPlayerSpriteSystem,
@@ -62,9 +60,18 @@ export const setupSchedule = Game.Schedule(
   SyncHudSystem
 )
 
+export const setupWorldSchedule = Game.Schedule(
+  SetupWorldSystem,
+  Game.Schedule.applyDeferred(),
+  SyncCameraSystem
+)
+
+export const setupSchedule = Game.Schedule(
+  setupWorldSchedule,
+  presentationSchedule
+)
+
 export const updateSchedule = Game.Schedule(
-  gameplaySchedule,
-  animationSchedule,
-  cameraSyncSchedule,
-  renderSyncSchedule
+  simulationSchedule,
+  presentationSchedule
 )

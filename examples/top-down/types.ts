@@ -48,6 +48,18 @@ export type PlayerFrameAtlas = Readonly<Record<FacingValue, readonly [
   Texture,
   Texture
 ]>>
+/**
+ * What one fixed update needs from the host: the step length and the
+ * current viewport size. The browser reads them from Pixi; a headless
+ * simulation passes constants.
+ */
+export type FrameContextValue = {
+  readonly deltaSeconds: number
+  readonly viewport: {
+    readonly width: number
+    readonly height: number
+  }
+}
 export type TopDownHostValue = {
   application: Application
   world: Container
