@@ -1,9 +1,9 @@
 import { Descriptor, Result, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/core/Size2"
-import * as Vector2 from "@bevy-ts/core/Vector2"
-import * as Runtime from "@bevy-ts/core/runtime"
-import * as Schedule from "@bevy-ts/core/schedule"
-import * as System from "@bevy-ts/core/system"
+import * as Size2 from "@bevy-ts/math/Size2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
+import * as Runtime from "@bevy-ts/core/Runtime"
+import * as Schedule from "@bevy-ts/core/Schedule"
+import * as System from "@bevy-ts/core/System"
 import { describe, expect, it } from "tstyche"
 
 const Time = Descriptor.Resource<number>()("Time")

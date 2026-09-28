@@ -1,5 +1,5 @@
 import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/runtime"
+import * as Runtime from "@bevy-ts/core/Runtime"
 import { describe, it } from "tstyche"
 
 const R01 = Descriptor.Resource<number>()("Architecture/R01")

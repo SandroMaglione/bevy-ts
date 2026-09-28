@@ -5,6 +5,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/browser" },
-    { "path": "packages/pixi" }
+    { "path": "packages/pixi" },
+    { "path": "packages/math" }
   ]
 }

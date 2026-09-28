@@ -1,9 +1,9 @@
 import { Descriptor, Result, Entity, Schema } from "@bevy-ts/core"
 import * as Public from "@bevy-ts/core"
-import type { EntityId } from "@bevy-ts/core/entity"
-import * as QueryTypes from "@bevy-ts/core/query"
-import * as Relation from "@bevy-ts/core/relation"
-import type * as SchemaTypes from "@bevy-ts/core/schema"
+import type { EntityId } from "@bevy-ts/core/Entity"
+import * as QueryTypes from "@bevy-ts/core/Query"
+import * as Relation from "@bevy-ts/core/Relation"
+import type * as SchemaTypes from "@bevy-ts/core/Schema"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

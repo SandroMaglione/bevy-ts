@@ -6,8 +6,13 @@ It keeps Bevy-style ECS concepts, but the public API is stricter and more explic
 
 Documentation: https://sandromaglione.github.io/bevy-ts/
 
-The current game API is shown in [GAME_API.md](./GAME_API.md). The carried-type
-design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+New to the library? Start with [CONCEPTS.md](./CONCEPTS.md) (the model in five
+minutes), then [GAME_API.md](./GAME_API.md). Type architecture and storage are
+documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+Packages: `@bevy-ts/core` (ECS), `@bevy-ts/math` (validated vectors and sizes),
+`@bevy-ts/browser` (fixed-step loop, keyboard actions), `@bevy-ts/pixi` (entity
+to Pixi node sync).
 
 ```ts
 import { Descriptor, Schema } from "@bevy-ts/core"

@@ -1,6 +1,6 @@
 import type { Application, Container, Sprite, Texture } from "pixi.js"
-import type * as Size2Value from "@bevy-ts/core/Size2"
-import type * as Vector2Value from "@bevy-ts/core/Vector2"
+import type * as Size2Value from "@bevy-ts/math/Size2"
+import type * as Vector2Value from "@bevy-ts/math/Vector2"
 
 export type Vector2 = Vector2Value.Vector2
 export type Size2 = Size2Value.Size2

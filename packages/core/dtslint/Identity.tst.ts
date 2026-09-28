@@ -46,4 +46,17 @@ describe("descriptor identity", () => {
     const Second = Game.System("Identity/Same", {}, () => {})
     expect(Game.Schedule(First, Second).kind).type.toBe<"schedule">()
   })
+
+  it("rejects features whose fragments reuse a descriptor name", () => {
+    const Core = Schema.Feature.define("Identity/Core", {
+      schema: Schema.fragment({ components: { Position } }),
+      build: () => ({})
+    })
+    const Clash = Schema.Feature.define("Identity/Clash", {
+      schema: Schema.fragment({ components: { Label } }),
+      build: () => ({})
+    })
+    // @ts-expect-error!
+    Schema.Feature.compose({ root: Schema.defineRoot("Identity/Features"), features: [Core, Clash] as const })
+  })
 })

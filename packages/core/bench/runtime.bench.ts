@@ -9,7 +9,7 @@
  * machines (see `scripts/bench.ts`).
  */
 import { Descriptor, Schema } from "@bevy-ts/core"
-import type * as Entity from "@bevy-ts/core/entity"
+import type * as Entity from "@bevy-ts/core/Entity"
 import type { BenchCase } from "./harness.ts"
 
 const N = 10_000

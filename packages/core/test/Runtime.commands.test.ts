@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Result, Schema } from "@bevy-ts/core"
-import type { EntityId } from "@bevy-ts/core/entity"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import type { EntityId } from "@bevy-ts/core/Entity"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

@@ -1,7 +1,7 @@
 import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/runtime"
-import type * as SchemaTypes from "@bevy-ts/core/schema"
-import * as System from "@bevy-ts/core/system"
+import * as Runtime from "@bevy-ts/core/Runtime"
+import type * as SchemaTypes from "@bevy-ts/core/Schema"
+import * as System from "@bevy-ts/core/System"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("StateMachine/Position")

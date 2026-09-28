@@ -23,6 +23,7 @@
     "example:top-down": "vite --open /examples/top-down/"
   },
   "devDependencies": {
+    "@bevy-ts/math": "workspace:*",
     "@effect/platform-node": "4.0.0-beta.43",
     "@types/markdown-it": "^14.1.2",
     "@types/matter-js": "^0.20.2",

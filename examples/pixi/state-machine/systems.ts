@@ -1,5 +1,5 @@
-import * as Scalar from "@bevy-ts/core/Scalar"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Scalar from "@bevy-ts/math/Scalar"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 import { PICKUP_POINTS } from "./content.ts"
 import { playerSpawn } from "./definitions.ts"
 import {

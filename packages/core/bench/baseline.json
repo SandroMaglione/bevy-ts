@@ -1,73 +1,73 @@
 {
   "runtime": {
     "tolerance": 0.35,
-    "calibrationMs": 2.9498,
+    "calibrationMs": 2.9175,
     "environment": "Apple M1 / node v24.16.0 / darwin",
     "cases": {
       "spawn/10k-3c": {
-        "minMs": 5.0337,
-        "medianMs": 5.2817,
-        "score": 1.6642
+        "minMs": 4.945,
+        "medianMs": 5.3164,
+        "score": 1.6855
       },
       "despawn/10k": {
-        "minMs": 4.9086,
-        "medianMs": 6.8705,
-        "score": 1.6229
+        "minMs": 4.7711,
+        "medianMs": 6.4624,
+        "score": 1.6151
       },
       "query/iterate-read-10k-of-20k": {
-        "minMs": 0.0934,
-        "medianMs": 0.0986,
-        "score": 0.0317
+        "minMs": 0.086,
+        "medianMs": 0.0882,
+        "score": 0.0295
       },
       "query/iterate-write-10k": {
-        "minMs": 0.3934,
-        "medianMs": 0.5178,
-        "score": 0.1334
+        "minMs": 0.4238,
+        "medianMs": 0.4491,
+        "score": 0.1453
       },
       "query/single-in-20k-x1000": {
-        "minMs": 0.3016,
-        "medianMs": 0.3099,
-        "score": 0.0997
+        "minMs": 0.2953,
+        "medianMs": 0.3038,
+        "score": 0.1012
       },
       "query/changed-100-of-10k-x20": {
-        "minMs": 0.3054,
-        "medianMs": 0.3113,
-        "score": 0.101
+        "minMs": 0.3052,
+        "medianMs": 0.3254,
+        "score": 0.1033
       },
       "structural/insert-remove-1k": {
-        "minMs": 0.1748,
-        "medianMs": 0.1831,
-        "score": 0.0578
+        "minMs": 0.1709,
+        "medianMs": 0.1855,
+        "score": 0.0586
       },
       "schedule/100-systems-x10": {
-        "minMs": 0.1971,
-        "medianMs": 0.2082,
-        "score": 0.0668
+        "minMs": 0.2005,
+        "medianMs": 0.2047,
+        "score": 0.0679
       },
       "lookup/get-10k": {
-        "minMs": 0.6474,
-        "medianMs": 0.6834,
-        "score": 0.214
+        "minMs": 0.6665,
+        "medianMs": 0.6962,
+        "score": 0.2272
       },
       "events/emit-read-10k": {
-        "minMs": 0.0955,
-        "medianMs": 0.0999,
-        "score": 0.0324
+        "minMs": 0.0956,
+        "medianMs": 0.0971,
+        "score": 0.0328
       },
       "relations/descendants-100x100": {
-        "minMs": 0.4591,
-        "medianMs": 0.4809,
-        "score": 0.1556
+        "minMs": 0.4532,
+        "medianMs": 0.4734,
+        "score": 0.1553
       },
       "snapshot/json-roundtrip-10k": {
-        "minMs": 17.7615,
-        "medianMs": 22.3207,
-        "score": 5.9498
+        "minMs": 17.671,
+        "medianMs": 21.416,
+        "score": 5.9819
       },
       "frame/50-systems-5k": {
-        "minMs": 2.2302,
-        "medianMs": 2.3784,
-        "score": 0.7561
+        "minMs": 2.4378,
+        "medianMs": 2.7831,
+        "score": 0.8356
       }
     }
   },
@@ -75,8 +75,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 35139,
-      "instantiations": 219875
+      "types": 35661,
+      "instantiations": 222301
     }
   }
 }

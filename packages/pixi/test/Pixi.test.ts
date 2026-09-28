@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { Descriptor, Schema } from "@bevy-ts/core"
-import type * as Entity from "@bevy-ts/core/entity"
+import type * as Entity from "@bevy-ts/core/Entity"
 import { NodeRegistry, RenderSync, packageTag } from "@bevy-ts/pixi"
 
 class FakeNode {

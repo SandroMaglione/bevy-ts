@@ -6,7 +6,7 @@
  * long as the entity keeps matching. Every read goes to live storage, so a
  * reused cell never observes a stale value.
  */
-import type { ResultConstructor } from "../descriptor.ts"
+import type { ResultConstructor } from "../Descriptor.ts"
 import * as Result from "../Result.ts"
 import type { EntityRecord, World } from "./world.ts"
 import { ABSENT } from "./world.ts"

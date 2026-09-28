@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/runtime"
-import * as Schedule from "@bevy-ts/core/schedule"
-import * as System from "@bevy-ts/core/system"
+import * as Runtime from "@bevy-ts/core/Runtime"
+import * as Schedule from "@bevy-ts/core/Schedule"
+import * as System from "@bevy-ts/core/System"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Log = Descriptor.Resource<ReadonlyArray<number>>()("Log")

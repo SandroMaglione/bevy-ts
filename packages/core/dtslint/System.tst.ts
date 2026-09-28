@@ -1,10 +1,10 @@
 import { Descriptor, Result, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/core/Size2"
-import * as Vector2 from "@bevy-ts/core/Vector2"
-import type { EntityMut } from "@bevy-ts/core/entity"
-import * as Query from "@bevy-ts/core/query"
-import * as System from "@bevy-ts/core/system"
-import type { Query as QueryTypes } from "@bevy-ts/core/query"
+import * as Size2 from "@bevy-ts/math/Size2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
+import type { EntityMut } from "@bevy-ts/core/Entity"
+import * as Query from "@bevy-ts/core/Query"
+import * as System from "@bevy-ts/core/System"
+import type { Query as QueryTypes } from "@bevy-ts/core/Query"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

@@ -4,17 +4,17 @@
  * Every constructor here is a thin, schema-aware wrapper over the unbound
  * module functions; the precise public types live on `Schema.Game`.
  */
-import * as Command from "../command.ts"
-import * as Entity from "../entity.ts"
-import * as EntityScope from "../entityScope.ts"
-import * as Inspector from "../inspector.ts"
-import * as Machine from "../machine.ts"
-import * as QueryModule from "../query.ts"
-import * as Relation from "../relation.ts"
-import * as Runtime from "../runtime.ts"
-import * as Schedule from "../schedule.ts"
-import type { Schema } from "../schema.ts"
-import * as System from "../system.ts"
+import * as Command from "../Command.ts"
+import * as Entity from "../Entity.ts"
+import * as EntityScope from "../EntityScope.ts"
+import * as Inspector from "../Inspector.ts"
+import * as Machine from "../Machine.ts"
+import * as QueryModule from "../Query.ts"
+import * as Relation from "../Relation.ts"
+import * as Runtime from "../Runtime.ts"
+import * as Schedule from "../Schedule.ts"
+import type { Schema } from "../Schema.ts"
+import * as System from "../System.ts"
 
 export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Schema.Game<S, Root> => {
   const definedMachines: Array<Machine.StateMachine.Any> = []

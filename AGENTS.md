@@ -1,7 +1,8 @@
 ## Repo Structure
 - [`packages/core`](./packages/core/): strict public ECS/runtime library surface.
-- [`packages/browser`](./packages/browser/): browser-specific package scaffold and tests.
-- [`packages/pixi`](./packages/pixi/): Pixi-specific package scaffold and tests.
+- [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard input.
+- [`packages/pixi`](./packages/pixi/): Pixi node registry and render-sync systems.
+- [`packages/math`](./packages/math/): validated math values (Scalar, Vector2, Size2, Aabb, InputAxis).
 - [`examples`](./examples/): workspace example apps that consume packages by package name.
 
 ## Core Principles

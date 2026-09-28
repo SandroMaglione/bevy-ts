@@ -17,11 +17,11 @@
  * identity is the descriptor key, which is derived from `(kind, name)`; a bound
  * schema guarantees those names are unique.
  */
-import type { Descriptor } from "../descriptor.ts"
-import * as Entity from "../entity.ts"
-import * as Relation from "../relation.ts"
+import type { Descriptor } from "../Descriptor.ts"
+import * as Entity from "../Entity.ts"
+import * as Relation from "../Relation.ts"
 import * as Result from "../Result.ts"
-import type { Schema } from "../schema.ts"
+import type { Schema } from "../Schema.ts"
 
 /**
  * Marks a component slot that the entity does not currently have.

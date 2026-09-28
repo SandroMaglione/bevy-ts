@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/runtime"
-import * as System from "@bevy-ts/core/system"
+import * as Runtime from "@bevy-ts/core/Runtime"
+import * as System from "@bevy-ts/core/System"
 import { readResourceValue } from "./utils/fixtures.ts"
 
 const Counter = Descriptor.Resource<number>()("StateMachineRuntime/Counter")

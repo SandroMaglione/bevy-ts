@@ -14,11 +14,11 @@
  * Matches are always returned in ascending entity id order, which is spawn
  * order, so iteration is deterministic.
  */
-import * as DescriptorModule from "../descriptor.ts"
-import type * as Entity from "../entity.ts"
-import * as Query from "../query.ts"
-import type { QueryMatch } from "../query.ts"
-import type * as Relation from "../relation.ts"
+import * as DescriptorModule from "../Descriptor.ts"
+import type * as Entity from "../Entity.ts"
+import * as Query from "../Query.ts"
+import type { QueryMatch } from "../Query.ts"
+import type * as Relation from "../Relation.ts"
 import * as Result from "../Result.ts"
 import * as Cells from "./cells.ts"
 import type { EntityRecord, World } from "./world.ts"

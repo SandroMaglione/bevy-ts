@@ -1,10 +1,10 @@
 /**
  * Runtime side of schema composition: merging fragments into one schema.
  *
- * The compile-time counterpart is `ValidateFragments` in `schema.ts`; these
+ * The compile-time counterpart is `ValidateFragments` in `Schema.ts`; these
  * guards cover schemas assembled from erased types.
  */
-import type { Schema, SchemaDefinition } from "../schema.ts"
+import type { Schema, SchemaDefinition } from "../Schema.ts"
 
 type NamedRegistry = Record<string, { readonly name: string }>
 

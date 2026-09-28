@@ -12,7 +12,7 @@ Descriptor identity is `(kind, name)`, and that is deliberate: descriptor types 
 
 The rules that keep this sound:
 
-- A schema rejects two descriptors of one kind with the same name, and two entries with the same registry key, at compile time (`ValidateFragments` in `schema.ts`) and again at runtime for erased types.
+- A schema rejects two descriptors of one kind with the same name, and two entries with the same registry key, at compile time (`ValidateFragments` in `Schema.ts`) and again at runtime for erased types.
 - The descriptor value type is invariant, so a look-alike descriptor with a narrower or wider value type is not accepted where the registered one is expected.
 - Machine names are unique per bound `Game`, checked when `Game.StateMachine(...)` runs.
 

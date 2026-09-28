@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Entity, Schema, Snapshot } from "@bevy-ts/core"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 
 const Root = Schema.defineRoot("SnapshotTest")
 const Position = Descriptor.ConstructedComponent(Vector2)("Snapshot/Position")

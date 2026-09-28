@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@bevy-ts/math':
+        specifier: workspace:*
+        version: link:packages/math
       '@effect/platform-node':
         specifier: 4.0.0-beta.43
         version: 4.0.0-beta.43(effect@4.0.0-beta.43)(ioredis@5.10.1)
@@ -86,6 +89,9 @@ importers:
       '@bevy-ts/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bevy-ts/math':
+        specifier: workspace:*
+        version: link:../../packages/math
       '@bevy-ts/pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
@@ -98,6 +104,9 @@ importers:
       '@bevy-ts/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bevy-ts/math':
+        specifier: workspace:*
+        version: link:../../packages/math
       '@bevy-ts/pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
@@ -110,6 +119,9 @@ importers:
       '@bevy-ts/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bevy-ts/math':
+        specifier: workspace:*
+        version: link:../../packages/math
       '@bevy-ts/pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
@@ -121,6 +133,12 @@ importers:
         version: link:../core
 
   packages/core: {}
+
+  packages/math:
+    dependencies:
+      '@bevy-ts/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/pixi:
     dependencies:

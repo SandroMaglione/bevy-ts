@@ -32,10 +32,10 @@
  * const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.destroy, render.create, render.sync)
  * ```
  */
-import type { Descriptor } from "@bevy-ts/core/descriptor"
-import type * as Entity from "@bevy-ts/core/entity"
-import type { ReadonlyValue } from "@bevy-ts/core/query"
-import type { Schema } from "@bevy-ts/core/schema"
+import type { Descriptor } from "@bevy-ts/core/Descriptor"
+import type * as Entity from "@bevy-ts/core/Entity"
+import type { ReadonlyValue } from "@bevy-ts/core/Query"
+import type { Schema } from "@bevy-ts/core/Schema"
 import type { NodeRegistry } from "./NodeRegistry.ts"
 
 type RegistryService = Descriptor<"service", string, NodeRegistry<any>>

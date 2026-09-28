@@ -1,6 +1,6 @@
 import { Descriptor, Entity, Result, Schema } from "@bevy-ts/core"
-import * as Command from "@bevy-ts/core/command"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Command from "@bevy-ts/core/Command"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

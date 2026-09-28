@@ -5,6 +5,7 @@
   "dependencies": {
     "@bevy-ts/core": "workspace:*",
     "@bevy-ts/browser": "workspace:*",
-    "@bevy-ts/pixi": "workspace:*"
+    "@bevy-ts/pixi": "workspace:*",
+    "@bevy-ts/math": "workspace:*"
   }
 }

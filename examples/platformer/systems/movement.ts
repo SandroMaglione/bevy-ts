@@ -1,4 +1,4 @@
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 import { GRAVITY, JUMP_VELOCITY, MAX_FALL_SPEED } from "../constants.ts"
 import { PlayerMovementQuery, SolidCollisionQuery } from "../queries.ts"
 import { DeltaTime, Game, InputState, PlayerContacts } from "../schema.ts"
