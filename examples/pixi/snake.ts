@@ -920,7 +920,6 @@ const setupSchedule = Game.Schedule(
 
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
-  Game.Schedule.updateLifecycle(),
   CreateSnakeNodesSystem,
   SyncSnakeNodeTransformsSystem,
   ReconcileSnakeNodesSystem,
@@ -955,7 +954,6 @@ const browserUpdateSchedule = Game.Schedule(
   BrowserInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   DestroySnakeNodesSystem,
   CreateSnakeNodesSystem,
   SyncSnakeNodeTransformsSystem,

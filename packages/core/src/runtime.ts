@@ -554,8 +554,8 @@ export interface Runtime<
    * Every resource, service, and machine the schedules need must have been
    * provided when the runtime was made; missing ones are compile errors.
    *
-   * Deferred commands, events, lifecycle records, and relation failures
-   * advance only at explicit schedule marker steps. Nothing is flushed when a
+   * Deferred commands, events, and relation failures advance only at explicit
+   * schedule marker steps; change detection is per system and needs none. Nothing is flushed when a
    * schedule ends: pending work stays pending, across schedules and ticks,
    * until a later marker advances it.
    *
@@ -746,8 +746,18 @@ const makeValidatedRuntime = <
 
   const entityId = (id: number): Entity.EntityId<S, Root> => world.entityIdOf(id) as Entity.EntityId<S, Root>
 
-  const resolve = <Q extends Query.Query.Any<Root>>(id: number, query: Q) =>
-    queries.get(id, query) as Result.Result<QueryMatch<S, Q>, Query.Query.LookupError>
+  /**
+   * Change-detection state of one system (or inspector): `since` is the tick
+   * of its previous completed run, which `added`/`changed` filters and
+   * removed/despawned reads compare against.
+   */
+  interface ReaderState {
+    since: number
+    lastRun: number
+  }
+
+  const resolve = <Q extends Query.Query.Any<Root>>(id: number, query: Q, reader: ReaderState) =>
+    queries.get(id, query, reader.since) as Result.Result<QueryMatch<S, Q>, Query.Query.LookupError>
 
   const relatedTarget = (
     target: Entity.EntityId<S, Root>,
@@ -763,12 +773,13 @@ const makeValidatedRuntime = <
     return Result.success(entityId(targetId))
   }
 
-  const lookup: LookupApi<S, Root> = {
+  const makeLookup = (reader: ReaderState): LookupApi<S, Root> => {
+    const lookup: LookupApi<S, Root> = {
     get(target, query) {
-      return resolve(target.value, query)
+      return resolve(target.value, query, reader)
     },
     getHandle(handle, query) {
-      return resolve(handle.value, query)
+      return resolve(handle.value, query, reader)
     },
     related: relatedTarget,
     relatedSources(target, relation) {
@@ -783,7 +794,7 @@ const makeValidatedRuntime = <
       }
       const matches: Array<QueryMatch<S, typeof query>> = []
       for (const sourceId of world.relatedSourceIds(relation, target.value)) {
-        const resolved = resolve(sourceId, query)
+        const resolved = resolve(sourceId, query, reader)
         if (resolved.ok) {
           matches.push(resolved.value)
         }
@@ -835,7 +846,7 @@ const makeValidatedRuntime = <
       }
       const matches: Array<QueryMatch<S, typeof query>> = []
       for (const descendantId of descendants.value) {
-        const resolved = resolve(descendantId.value, query)
+        const resolved = resolve(descendantId.value, query, reader)
         if (resolved.ok) {
           matches.push(resolved.value)
         }
@@ -855,13 +866,15 @@ const makeValidatedRuntime = <
       return Result.success(entityId(current))
     }
   }
+    return lookup
+  }
 
-  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q): QueryHandle<S, Q> => {
-    const each = () => queries.each(query) as ReadonlyArray<QueryMatch<S, Q>>
+  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q, reader: ReaderState): QueryHandle<S, Q> => {
+    const each = () => queries.each(query, reader.since) as ReadonlyArray<QueryMatch<S, Q>>
     return {
       each,
       get(target) {
-        return lookup.get(target, query)
+        return resolve(target.value, query, reader)
       },
       single() {
         const matches = each()
@@ -982,18 +995,18 @@ const makeValidatedRuntime = <
     }
   })
 
-  const makeRemovedReadView = (descriptor: Descriptor<"component", string, any>): RemovedReadView<S, Root> => {
+  const makeRemovedReadView = (descriptor: Descriptor<"component", string, any>, reader: ReaderState): RemovedReadView<S, Root> => {
     const ordinal = world.ordinalOf(descriptor)
     return {
       all() {
-        return [...(world.readableRemoved(ordinal) ?? [])].map(entityId)
+        return world.removedSince(ordinal, reader.since).map(entityId)
       }
     }
   }
 
-  const makeDespawnedReadView = (): DespawnedReadView<S, Root> => ({
+  const makeDespawnedReadView = (reader: ReaderState): DespawnedReadView<S, Root> => ({
     all() {
-      return [...world.readableDespawned()].map(entityId)
+      return world.despawnedSince(reader.since).map(entityId)
     }
   })
 
@@ -1060,11 +1073,11 @@ const makeValidatedRuntime = <
    * views the implementation is allowed to see. Views read live storage, so
    * one context is built per system and reused for every run.
    */
-  const makeContext = (system: SystemDefinition<any, any, any>): SystemContext<any> => {
+  const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState): SystemContext<any> => {
     const spec = system.spec
     return {
-      queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, makeQueryHandle),
-      lookup,
+      queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, (query) => makeQueryHandle(query, reader)),
+      lookup: makeLookup(reader),
       resources: mapRecord(spec.resources as Record<string, any>, (access) =>
         access.mode === "read"
           ? Cells.storeRead(resources, access.descriptor.key)
@@ -1077,8 +1090,8 @@ const makeValidatedRuntime = <
       nextMachines: mapRecord(spec.nextMachines as Record<string, any>, (access) => makeNextMachineWriteView(access.machine)),
       transitionEvents: mapRecord(spec.transitionEvents as Record<string, any>, (access) => makeTransitionEventReadView(access.machine)),
       transitions: mapRecord(spec.transitions as Record<string, any>, (access) => makeTransitionReadView(access.machine)),
-      removed: mapRecord(spec.removed as Record<string, any>, (access) => makeRemovedReadView(access.descriptor)),
-      despawned: mapRecord(spec.despawned as Record<string, any>, makeDespawnedReadView),
+      removed: mapRecord(spec.removed as Record<string, any>, (access) => makeRemovedReadView(access.descriptor, reader)),
+      despawned: mapRecord(spec.despawned as Record<string, any>, () => makeDespawnedReadView(reader)),
       relationFailures: mapRecord(spec.relationFailures as Record<string, any>, (access) => makeRelationFailureReadView(access.relation)),
       services: mapRecord(spec.services as Record<string, any>, (access) =>
         providedServices[access.descriptor.name as keyof Services]),
@@ -1086,15 +1099,21 @@ const makeValidatedRuntime = <
     } as SystemContext<any>
   }
 
-  const contexts = new WeakMap<SystemDefinition<any, any, any>, SystemContext<any>>()
+  interface SystemSlot {
+    readonly context: SystemContext<any>
+    readonly reader: ReaderState
+  }
 
-  const contextOf = (system: SystemDefinition<any, any, any>): SystemContext<any> => {
-    let context = contexts.get(system)
-    if (!context) {
-      context = makeContext(system)
-      contexts.set(system, context)
+  const slots = new WeakMap<SystemDefinition<any, any, any>, SystemSlot>()
+
+  const slotOf = (system: SystemDefinition<any, any, any>): SystemSlot => {
+    let slot = slots.get(system)
+    if (!slot) {
+      const reader: ReaderState = { since: 0, lastRun: 0 }
+      slot = { context: makeContext(system, reader), reader }
+      slots.set(system, slot)
     }
-    return context
+    return slot
   }
 
   const succeeded = Result.success(undefined)
@@ -1112,7 +1131,10 @@ const makeValidatedRuntime = <
         return succeeded
       }
     }
-    const context = contextOf(system)
+    const { context, reader } = slotOf(system)
+    // Changes stamped after the previous completed run are visible to this run.
+    reader.since = reader.lastRun
+    const thisRun = world.advanceTick()
     beginSystemTransaction()
     let outcome: Result.Result<unknown, unknown>
     try {
@@ -1131,6 +1153,8 @@ const makeValidatedRuntime = <
       return Result.failure({ kind: "SystemFailure", system: system.name, error: outcome.error })
     }
     commitSystemTransaction()
+    // A failed run leaves `lastRun` unchanged, so the next run sees the same changes again.
+    reader.lastRun = thisRun
     const queued = context.commands.flush()
     for (let index = 0; index < queued.length; index++) {
       pendingCommands.push(queued[index]!)
@@ -1141,6 +1165,7 @@ const makeValidatedRuntime = <
   const applyDeferred = (): void => {
     // Commands applied here may not queue further commands, so one drain is enough.
     const commands = pendingCommands.splice(0, pendingCommands.length)
+    world.advanceTick()
     for (const command of commands) {
       command.apply(commandWorld)
     }
@@ -1254,7 +1279,7 @@ const makeValidatedRuntime = <
   /**
    * Executes schedule steps in authored order.
    *
-   * Nothing advances implicitly: queued commands, events, lifecycle records,
+   * Nothing advances implicitly: queued commands, events,
    * and relation failures stay pending, across schedule runs if needed, until
    * a marker step advances them.
    */
@@ -1281,9 +1306,6 @@ const makeValidatedRuntime = <
         case "eventUpdate":
           updateEvents()
           break
-        case "lifecycleUpdate":
-          world.updateLifecycle()
-          break
         case "relationFailureUpdate":
           updateRelationFailures()
           break
@@ -1302,6 +1324,7 @@ const makeValidatedRuntime = <
   }
 
   const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any>>): Result.Result<void, SystemFailure> => {
+    world.advanceFrame()
     for (const schedule of schedules) {
       const result = runScheduleUnsafe(schedule)
       if (!result.ok) {
@@ -1336,17 +1359,24 @@ const makeValidatedRuntime = <
       })
     }
 
+    world.advanceFrame()
     return runScheduleUnsafe(schedule) as Result.Result<void, Schedule.FailureOf<Selected>>
   }
 
   /**
-   * Evaluates a declared read-only projection without running a schedule or
-   * advancing any visibility boundary.
+   * Evaluates a declared read-only projection without running a schedule.
+   * Like a system, an inspector sees `added`/`changed`/removed records made
+   * since its previous evaluation.
    */
   const inspect = <const Selected extends Inspector.InspectorDefinition<any, any, Root, any, any>>(
     inspector: Selected
-  ): Inspector.Inspector.Value<Selected> =>
-    inspector.read(contextOf(inspector.system)) as Inspector.Inspector.Value<Selected>
+  ): Inspector.Inspector.Value<Selected> => {
+    const { context, reader } = slotOf(inspector.system)
+    reader.since = reader.lastRun
+    const value = inspector.read(context) as Inspector.Inspector.Value<Selected>
+    reader.lastRun = world.advanceTick()
+    return value
+  }
 
   return {
     schema: options.schema,

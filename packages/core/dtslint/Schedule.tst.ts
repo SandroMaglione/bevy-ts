@@ -84,7 +84,6 @@ describe("Schedule", () => {
 
   it("creates reusable explicit fragments", () => {
     const hostMirror = Schedule.Schedule(
-        Schedule.updateLifecycle(),
         SuffixSystem
       )
 
@@ -100,7 +99,6 @@ describe("Schedule", () => {
 
   it("creates reusable explicit phases", () => {
     const hostMirrorPhase = Schedule.Schedule(
-        Schedule.updateLifecycle(),
         SuffixSystem
       )
 
@@ -115,7 +113,6 @@ describe("Schedule", () => {
 
   it("composes systems, markers, and fragments into one schedule", () => {
     const hostMirror = Schedule.Schedule(
-        Schedule.updateLifecycle(),
         SuffixSystem
       )
 

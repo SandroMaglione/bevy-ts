@@ -515,7 +515,6 @@ const setupSchedule = Game.Schedule(SetupSystem)
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreateRenderNodesSystem,
   SyncPlayerNodeSystem
 )
@@ -531,7 +530,6 @@ const browserUpdateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
   SyncPlayerNodeSystem

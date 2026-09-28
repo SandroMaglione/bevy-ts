@@ -323,7 +323,7 @@ describe("Schema", () => {
       services: Game.Runtime.services()
     })
 
-    const schedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveLifecycleSystem)
+    const schedule = Game.Schedule(ObserveLifecycleSystem)
 
     expect(schedule).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })

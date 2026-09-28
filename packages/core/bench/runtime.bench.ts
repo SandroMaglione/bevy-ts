@@ -182,8 +182,8 @@ const iterateWrite: BenchCase = {
 }
 
 const sparseSingle: BenchCase = {
-  name: "query/single-in-20k-x10",
-  description: "Resolve a single player entity among 20k entities, 10 schedule runs",
+  name: "query/single-in-20k-x1000",
+  description: "Resolve a single player entity among 20k entities, 1000 schedule runs",
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, N)
@@ -205,7 +205,7 @@ const sparseSingle: BenchCase = {
     const schedule = Game.Schedule(MovePlayer)
     return {
       run: () => {
-        for (let index = 0; index < 10; index++) {
+        for (let index = 0; index < 1000; index++) {
           runtime.tick(schedule)
         }
       }
@@ -214,8 +214,8 @@ const sparseSingle: BenchCase = {
 }
 
 const changedFilter: BenchCase = {
-  name: "query/changed-100-of-10k",
-  description: "Write 100 of 10k positions, advance lifecycle, read the changed set",
+  name: "query/changed-100-of-10k-x20",
+  description: "Write 100 of 10k positions and read the changed set from another system, 20 runs",
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
@@ -227,7 +227,7 @@ const changedFilter: BenchCase = {
           commands.insert(match.entity.id, [Hot, {}])
         }
       })
-    runtime.tick(Game.Schedule(TagHot, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle()))
+    runtime.tick(Game.Schedule(TagHot, Game.Schedule.applyDeferred()))
     const Writer = Game.System("Bench/WriteHot", {
       queries: { hot: Game.Query({ selection: { position: Game.Query.write(Position) }, with: [Hot] }) }
     }, ({ queries }) => {
@@ -250,8 +250,12 @@ const changedFilter: BenchCase = {
       }
       resources.sum.set(total)
     })
-    const schedule = Game.Schedule(Writer, Game.Schedule.updateLifecycle(), Reader)
-    return { run: () => runtime.tick(schedule) }
+    const schedule = Game.Schedule(Writer, Reader)
+    return {
+      run: () => {
+        for (let index = 0; index < 20; index++) runtime.tick(schedule)
+      }
+    }
   }
 }
 

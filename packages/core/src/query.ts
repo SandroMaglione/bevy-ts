@@ -84,7 +84,7 @@ type ComponentDescriptor = Descriptor<"component", string, any>
  *
  * - `selection` declares readable and writable slots
  * - `with` / `without` refine structural matching
- * - `added` / `changed` refine matching using lifecycle buffers
+ * - `added` / `changed` refine matching to changes since the system's previous run
  * - relation filters refine matching using explicit relation state
  *
  * The key mental model is that query matching is separate from the cell API:
@@ -161,8 +161,8 @@ export type SelectionAccess<
 > = Access<ComponentDescriptor> | Relation.SelectionAccess<S, Root>
 
 /**
- * A filter that matches entities whose component became present since the last
- * lifecycle update boundary.
+ * A filter that matches entities whose component was added since the reading
+ * system's previous run.
  */
 export interface AddedFilter<D extends ComponentDescriptor> {
   readonly kind: "added"
@@ -170,8 +170,8 @@ export interface AddedFilter<D extends ComponentDescriptor> {
 }
 
 /**
- * A filter that matches entities whose component was written since the last
- * lifecycle update boundary.
+ * A filter that matches entities whose component was added or written since
+ * the reading system's previous run.
  */
 export interface ChangedFilter<D extends ComponentDescriptor> {
   readonly kind: "changed"
@@ -234,18 +234,16 @@ export const optional = <D extends ComponentDescriptor>(descriptor: D): Optional
 })
 
 /**
- * Declares a lifecycle filter that matches newly added components.
+ * Declares a filter that matches components added since the reading system's
+ * previous run.
  *
- * This depends on the readable lifecycle buffer, so it only changes after an
- * explicit `Game.Schedule.updateLifecycle()` boundary.
- *
- * This is the usual entrypoint for incremental host sync: create host-owned
- * nodes only after lifecycle visibility has been advanced for the current
- * schedule. {@link changed} complements this for later update passes.
+ * Change detection is per system: every system sees each addition exactly
+ * once, on its first run after the addition, independently of other systems.
+ * A system's first run sees every existing component as added. This is the
+ * usual entrypoint for incremental host sync, such as creating renderer nodes.
  *
  * @example
  * ```ts
- * // React only to renderables that became visible after the lifecycle boundary.
  * const AddedRenderableQuery = Game.Query({
  *   selection: {
  *     position: Game.Query.read(Position),
@@ -261,20 +259,15 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
 })
 
 /**
- * Declares a lifecycle filter that matches components written since the last
- * lifecycle boundary.
+ * Declares a filter that matches components added or written since the
+ * reading system's previous run.
  *
- * This depends on the readable lifecycle buffer, so it only changes after an
- * explicit `Game.Schedule.updateLifecycle()` boundary.
- *
- * Use this for narrow host-sync passes after initial creation, for example one
- * transform-sync system that should only touch entities whose position changed
- * since the last lifecycle boundary. {@link added} is the matching
- * creation-side lifecycle filter.
+ * Any write through a write cell counts, even when the value is equal to the
+ * previous one. Writes from a system whose run failed are rolled back and do
+ * not count.
  *
  * @example
  * ```ts
- * // React only to entities whose position changed since the last lifecycle update.
  * const MovedQuery = Game.Query({
  *   selection: {
  *     position: Game.Query.read(Position)
@@ -318,7 +311,7 @@ export interface QuerySpec<
    */
   readonly without: Without
   /**
-   * Lifecycle-aware filters that refine matching over the current world.
+   * Change filters that refine matching relative to the reading system's previous run.
    */
   readonly filters: Filters
   /**

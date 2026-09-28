@@ -103,7 +103,6 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         ) => transitionSchedule({ machine, phase: "transition", from, to }, plan),
         applyDeferred: Schedule.applyDeferred,
         updateEvents: Schedule.updateEvents,
-        updateLifecycle: Schedule.updateLifecycle,
         updateRelationFailures: Schedule.updateRelationFailures,
         applyStateTransitions: Schedule.applyStateTransitions
       }

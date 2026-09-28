@@ -912,7 +912,6 @@ const gameplaySetupSchedule = Game.Schedule(SpawnPlayerSystem)
 const setupSchedule = Game.Schedule(
   gameplaySetupSchedule,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreateMatterBodiesSystem,
   CreatePixiNodesSystem
 )
@@ -923,7 +922,6 @@ const updateSchedule = Game.Schedule(
   ShootingSystem,
   EnemySpawnSystem,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreateMatterBodiesSystem,
   CreatePixiNodesSystem,
   MovementSystem,
@@ -936,7 +934,6 @@ const updateSchedule = Game.Schedule(
   EnemyDestroySystem,
   CullingSystem,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   DestroyMatterBodiesSystem,
   DestroyPixiNodesSystem,
   SyncPixiTransformsSystem

@@ -5,11 +5,13 @@
  * normalized steps, systems, and nominal requirement union.
  *
  * Steps run in authored order. Marker steps are the only way queued work
- * becomes visible, and nothing is flushed implicitly when a schedule ends:
+ * becomes visible, and nothing is flushed implicitly when a schedule ends.
+ * Change detection (`added`, `changed`, removed and despawned reads) needs no
+ * marker: each system sees the changes made since its own previous run.
+ *
  *
  * - `applyDeferred()` applies queued commands
  * - `updateEvents()` makes emitted events (and transition events) readable
- * - `updateLifecycle()` makes added/changed/removed/despawned records readable
  * - `updateRelationFailures()` makes relation mutation failures readable
  * - `applyStateTransitions(...)` applies queued commands, then queued machine
  *   transitions
@@ -30,10 +32,6 @@ export interface EventUpdateStep {
   readonly kind: "eventUpdate"
 }
 
-export interface LifecycleUpdateStep {
-  readonly kind: "lifecycleUpdate"
-}
-
 export interface RelationFailureUpdateStep {
   readonly kind: "relationFailureUpdate"
 }
@@ -50,7 +48,6 @@ export interface ApplyStateTransitionsStep<
 export type ScheduleMarkerStep =
   | ApplyDeferredStep
   | EventUpdateStep
-  | LifecycleUpdateStep
   | RelationFailureUpdateStep
   | ApplyStateTransitionsStep<any, any>
 
@@ -208,12 +205,6 @@ export const applyDeferred = (): ApplyDeferredStep => ({ kind: "applyDeferred" }
  * the previously readable ones.
  */
 export const updateEvents = (): EventUpdateStep => ({ kind: "eventUpdate" })
-
-/**
- * Makes lifecycle records collected since the previous `updateLifecycle()`
- * readable to `added(...)`/`changed(...)` filters and removed/despawned reads.
- */
-export const updateLifecycle = (): LifecycleUpdateStep => ({ kind: "lifecycleUpdate" })
 
 /**
  * Makes relation mutation failures collected since the previous

@@ -7,9 +7,9 @@
  * created once per entity and query and then reused, so steady-state iteration
  * allocates nothing.
  *
- * Lifecycle filters (`added`, `changed`) are evaluated per call from the
- * readable lifecycle buffers, starting from the smaller of the buffer and the
- * cached base match set.
+ * Lifecycle filters (`added`, `changed`) are evaluated per call against the
+ * reading system's previous-run tick (`since`), starting from the smaller of
+ * the world's change log and the cached base match set.
  *
  * Matches are always returned in ascending entity id order, which is spawn
  * order, so iteration is deterministic.
@@ -178,7 +178,11 @@ export const makeQueryEngine = (world: World) => {
       withoutRelations: query.withoutRelations,
       withRelated: unique(withRelated),
       withoutRelated: query.withoutRelated,
-      filters: query.filters.map((filter) => ({ kind: filter.kind, ordinal: world.ordinalOf(filter.descriptor) })),
+      filters: query.filters.map((filter) => {
+        const ordinal = world.ordinalOf(filter.descriptor)
+        world.trackChanges(ordinal)
+        return { kind: filter.kind, ordinal }
+      }),
       slots,
       proofSlots,
       writeSlots,
@@ -226,13 +230,12 @@ export const makeQueryEngine = (world: World) => {
     return true
   }
 
-  const matchesFilters = (state: QueryState, record: EntityRecord): boolean => {
+  const matchesFilters = (state: QueryState, record: EntityRecord, since: number): boolean => {
     for (const filter of state.filters) {
-      if (!world.has(record, filter.ordinal)) return false
-      const readable = filter.kind === "added"
-        ? world.isAdded(record, filter.ordinal)
-        : world.isChanged(record, filter.ordinal)
-      if (!readable) return false
+      const matched = filter.kind === "added"
+        ? world.addedSince(record, filter.ordinal, since)
+        : world.changedSince(record, filter.ordinal, since)
+      if (!matched) return false
     }
     return true
   }
@@ -332,35 +335,42 @@ export const makeQueryEngine = (world: World) => {
     })
   }
 
-  const each = (query: AnyQuery): ReadonlyArray<AnyMatch> => {
+  /**
+   * Current matches of a query. `since` is the tick of the reading system's
+   * previous run; `added`/`changed` filters match changes made after it.
+   */
+  const each = (query: AnyQuery, since: number): ReadonlyArray<AnyMatch> => {
     const state = stateOf(query)
     refresh(state)
     if (state.filters.length === 0) {
       return state.matches!
     }
 
-    // Start from whichever is smaller: the base match set or one lifecycle buffer.
-    let smallest: ReadonlyArray<number> | undefined
+    // Every added component is also logged as changed, so the changed log
+    // bounds the candidates for either filter.
+    let candidates: ReadonlyArray<number> | undefined
     for (const filter of state.filters) {
-      const buffer = filter.kind === "added"
-        ? world.readableAdded(filter.ordinal)
-        : world.readableChanged(filter.ordinal)
-      if (buffer === undefined || buffer.length === 0) return []
-      if (smallest === undefined || buffer.length < smallest.length) smallest = buffer
+      const logged = world.changedCandidates(filter.ordinal, since)
+      if (logged === undefined) continue
+      if (logged.length === 0) return []
+      if (candidates === undefined || logged.length < candidates.length) candidates = logged
     }
 
-    if (smallest!.length >= state.records.length) {
+    if (candidates === undefined || candidates.length >= state.records.length) {
       const result: Array<AnyMatch> = []
       for (const record of state.records) {
-        if (matchesFilters(state, record)) result.push(matchFor(state, record))
+        if (matchesFilters(state, record, since)) result.push(matchFor(state, record))
       }
       return result
     }
 
     const records: Array<EntityRecord> = []
-    for (const id of smallest!) {
+    const seen = new Set<number>()
+    for (const id of candidates) {
+      if (seen.has(id)) continue
+      seen.add(id)
       const record = world.records.get(id)
-      if (record && matchesStructure(state, record) && matchesFilters(state, record)) {
+      if (record && matchesStructure(state, record) && matchesFilters(state, record, since)) {
         records.push(record)
       }
     }
@@ -370,14 +380,15 @@ export const makeQueryEngine = (world: World) => {
 
   const get = (
     id: number,
-    query: AnyQuery
+    query: AnyQuery,
+    since: number
   ): Result.Result<AnyMatch, Query.Query.LookupError> => {
     const record = world.records.get(id)
     if (!record) {
       return Result.failure(Query.missingEntityError(id))
     }
     const state = stateOf(query)
-    if (!matchesStructure(state, record) || !matchesFilters(state, record)) {
+    if (!matchesStructure(state, record) || !matchesFilters(state, record, since)) {
       return Result.failure(Query.queryMismatchError(id))
     }
     return Result.success(matchFor(state, record))

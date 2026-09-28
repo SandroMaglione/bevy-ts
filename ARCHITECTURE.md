@@ -46,9 +46,10 @@ Visibility changes are explicit, and only markers advance them:
 
 - `applyDeferred()` applies queued world commands.
 - `updateEvents()` advances event buffers.
-- `updateLifecycle()` advances lifecycle buffers.
 - `updateRelationFailures()` advances relation-failure buffers.
 - `applyStateTransitions()` applies queued commands, then commits queued machine transitions.
+
+Change detection needs no marker: `added`/`changed` filters and removed/despawned reads are relative to each system's previous run (see Storage).
 
 Nothing is flushed when a schedule ends. Pending work stays in the runtime, across schedule runs, until a marker advances it.
 
@@ -84,7 +85,7 @@ The runtime lives in `packages/core/src/internal/`:
 
 - `world.ts` stores every live entity as one record with component values in a dense array indexed by a per-world component ordinal. Each ordinal keeps the set of records that have it, and a membership version that changes on add or remove. Relations keep source-to-target and target-to-sources maps with their own versions.
 - `queries.ts` compiles each query spec once per world. It caches the ordered match set and recomputes it only when a component or relation it depends on changed membership. The recompute walks the smallest required component set. Match objects (entity view plus cells) are created once per entity and query and reused. Cells read live storage, so reuse never exposes stale values. Results are in ascending entity id, which is spawn order.
-- Lifecycle records (`added`, `changed`, `removed`) are per-ordinal id lists deduplicated through per-record epoch marks. `updateLifecycle()` swaps pending into readable and advances the epoch.
+- Change detection uses ticks. The world tick advances for every system run and every command flush; each component slot stores the tick it was added and last changed at. Each system remembers the tick of its previous completed run, and `added`/`changed` filters compare against it, so every system sees each change exactly once, independently of other systems. Per-component change logs let sparse `changed` queries skip unchanged entities. Removed and despawned reads use the same per-system cursor over logs that keep the current and previous `runtime.tick(...)` only.
 - `cells.ts` holds the prototype-based cell objects used by query slots, resources, and states.
 
 System contexts are built once per system and runtime, then reused.

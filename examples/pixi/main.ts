@@ -302,7 +302,6 @@ const SyncPixiTransformsSystem = Game.System(
 const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreatePixiSpritesSystem,
 );
 
@@ -310,7 +309,6 @@ const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,
-  Game.Schedule.updateLifecycle(),
   SyncPixiTransformsSystem,
 );
 

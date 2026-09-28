@@ -334,7 +334,6 @@ type BoundScheduleEntry<S extends Schema.Any, Root> =
   | Schema.BoundSystem<S, Root, any, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.EventUpdateStep
-  | Schedule.LifecycleUpdateStep
   | Schedule.RelationFailureUpdateStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
   | Schema.BoundSchedule<S, Root, any, any>
@@ -615,7 +614,6 @@ export namespace Schema {
       ) => BoundTransitionScheduleResult<S, Root, M, Entries>
       applyDeferred: typeof Schedule.applyDeferred
       updateEvents: typeof Schedule.updateEvents
-      updateLifecycle: typeof Schedule.updateLifecycle
       updateRelationFailures: typeof Schedule.updateRelationFailures
       applyStateTransitions: <Bundle extends BoundTransitionBundle<S, Root, any, any, any> | undefined = undefined>(
         bundle?: Bundle

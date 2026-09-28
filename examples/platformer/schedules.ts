@@ -24,7 +24,6 @@ export const setupSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
-  Game.Schedule.updateLifecycle(),
   CreateRenderNodesSystem,
   SyncHudSystem
 )
@@ -52,7 +51,6 @@ export const updateSchedule = Game.Schedule(
   QueueRestartSystem,
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
   DestroyRenderNodesSystem,

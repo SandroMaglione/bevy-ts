@@ -55,7 +55,7 @@ const examples: ReadonlyArray<ExampleDefinition> = [
     title: "Two typed machines coordinate countdown, play, pause, win, and lose.",
     description:
       "This example exists specifically to show the finite-state-machine API. Session and round modes are modeled separately, systems queue next states, schedules apply transitions explicitly, transition bundles reset the round, and later systems react through typed transition events.",
-    meta: ["SessionState + RoundState", "Explicit applyStateTransitions() + updateEvents() + updateLifecycle()", "Transition bundles and transition events"],
+    meta: ["SessionState + RoundState", "Explicit applyStateTransitions() + updateEvents()", "Transition bundles and transition events"],
     start: startStateMachineExample
   },
   {

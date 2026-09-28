@@ -9,7 +9,7 @@
  *
  * - queries describe which entities may be visited
  * - resources, events, services, and machines are requested by name
- * - lifecycle and transition reads stay gated by schedule boundaries
+ * - change detection is per system: each run sees what changed since its previous run
  * - hidden ambient world access is impossible through the public API
  *
  * Reach for this module whenever you are writing gameplay, simulation, reset,
@@ -84,7 +84,8 @@ import type { CommandsApi } from "./command.ts"
  *
  * - deferred commands become visible after `Game.Schedule.applyDeferred()`
  * - event reads become visible after `Game.Schedule.updateEvents()`
- * - lifecycle reads become visible after `Game.Schedule.updateLifecycle()`
+ * - `added`/`changed` filters and removed/despawned reads cover the changes
+ *   made since the system's own previous run
  * - relation-failure reads become visible after
  *   `Game.Schedule.updateRelationFailures()`
  *
@@ -398,9 +399,11 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
 /**
  * Declares read access to removed-component lifecycle records.
  *
- * This reads the committed lifecycle buffer, not immediate removals. Systems
- * usually pair this with `Game.Schedule.updateLifecycle()` and host cleanup
- * logic such as removing renderer-owned nodes. {@link readDespawned}
+ * Each run returns the entities whose component was removed since the
+ * system's previous run (removals are applied when commands are). Records are
+ * kept for the current and previous `runtime.tick(...)`, so a reader that
+ * skips more than one tick misses older removals. Systems usually pair this
+ * with host cleanup such as removing renderer-owned nodes. {@link readDespawned}
  * complements this for whole-entity teardown.
  *
  * @example
@@ -434,7 +437,7 @@ export const readRelationFailures = <R extends Relation.Relation.Any>(
 /**
  * Declares read access to despawned-entity lifecycle records.
  *
- * This reads the committed despawn buffer after `Game.Schedule.updateLifecycle()`.
+ * Each run returns the entities despawned since the system's previous run.
  * Use it when host-owned state must be destroyed even if no single removed
  * component is the canonical trigger. {@link readRemoved} is often used
  * alongside this in authoritative host mirrors.

@@ -9,6 +9,9 @@
  *   so a query only visits entities that carry its rarest required component
  * - every component ordinal and relation keeps a membership version, bumped on
  *   structural change, so queries know when their cached match set is stale
+ * - every component slot records the change tick it was added and last
+ *   changed at; `added`/`changed` filters compare those ticks with the tick
+ *   of the reading system's previous run
  *
  * Ordinals are assigned per world from the schema, in schema order. Component
  * identity is the descriptor key, which is derived from `(kind, name)`; a bound
@@ -36,8 +39,9 @@ export interface EntityRecord {
    */
   readonly values: Array<unknown>
   /**
-   * Lifecycle epoch marks, `MARK_STRIDE` numbers per component ordinal. See
-   * `track` for the layout.
+   * Per component ordinal, `MARK_STRIDE` numbers: the tick the component was
+   * added, the tick it last changed, and the transaction that last journaled
+   * it.
    */
   readonly marks: Array<number>
   /**
@@ -47,19 +51,52 @@ export interface EntityRecord {
   alive: boolean
 }
 
-/**
- * Lifecycle channels tracked per component. Each channel uses two mark slots:
- * the epoch of the latest record, and the epoch of the record before it.
- */
 const ADDED = 0
-const CHANGED = 2
-const REMOVED = 4
-/**
- * Transaction mark: the id of the system run that last journaled this slot.
- */
-const JOURNALED = 6
-const MARK_STRIDE = 7
+const CHANGED = 1
+const JOURNALED = 2
+const MARK_STRIDE = 3
 const NO_MARK = -1
+
+/**
+ * An append-only list of entity ids with the change tick each entry was
+ * recorded at. Ticks are non-decreasing, so readers binary-search their start.
+ */
+interface TickLog {
+  readonly ids: Array<number>
+  readonly ticks: Array<number>
+}
+
+const makeLog = (): TickLog => ({ ids: [], ticks: [] })
+
+const appendLog = (log: TickLog, id: number, tick: number): void => {
+  log.ids.push(id)
+  log.ticks.push(tick)
+}
+
+/**
+ * Index of the first entry recorded after `since`.
+ */
+const firstAfter = (log: TickLog, since: number): number => {
+  let low = 0
+  let high = log.ticks.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (log.ticks[middle]! > since) high = middle
+    else low = middle + 1
+  }
+  return low
+}
+
+/**
+ * Drops entries recorded at or before `boundary`.
+ */
+const trimLog = (log: TickLog, boundary: number): void => {
+  const count = firstAfter(log, boundary)
+  if (count > 0) {
+    log.ids.splice(0, count)
+    log.ticks.splice(0, count)
+  }
+}
 
 type ComponentDescriptor = Descriptor<"component", string, any>
 
@@ -86,19 +123,28 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
   const relationDefinitions = Object.values(schema.relations) as ReadonlyArray<Relation.Relation.Any>
 
   /**
-   * Lifecycle buffers: entity ids per component ordinal, deduplicated through
-   * the record marks. `updateLifecycle()` swaps pending into readable and
-   * advances `epoch`, so "readable" means "recorded during epoch - 1".
+   * The world change tick. It advances for every system run and every command
+   * flush; all writes in that span are stamped with it.
    */
-  let epoch = 1
-  let pendingAdded: Array<Array<number> | undefined> = []
-  let readableAdded: Array<Array<number> | undefined> = []
-  let pendingChanged: Array<Array<number> | undefined> = []
-  let readableChanged: Array<Array<number> | undefined> = []
-  let pendingRemoved: Array<Array<number> | undefined> = []
-  let readableRemoved: Array<Array<number> | undefined> = []
-  let pendingDespawned: Array<number> = []
-  let readableDespawned: Array<number> = []
+  let tick = 0
+  /**
+   * Logs of changed and removed components per ordinal, and of despawned
+   * entities. They back sparse `changed` iteration and removed/despawned
+   * reads, and keep entries from the current and previous frame only (see
+   * `advanceFrame`). `retainedAfter` is the tick up to which entries may
+   * already have been dropped.
+   */
+  const changedLogs: Array<TickLog | undefined> = []
+  /**
+   * Per ordinal, the tick from which the changed log is complete, or
+   * `undefined` while no query filters on the component (writes then skip the
+   * log entirely).
+   */
+  const changedLogFrom: Array<number | undefined> = []
+  const removedLogs: Array<TickLog | undefined> = []
+  const despawnedLog = makeLog()
+  let retainedAfter = 0
+  let frameStart = 0
 
   /**
    * Journal of in-place component writes made by the running system. Each
@@ -137,37 +183,28 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
   const has = (record: EntityRecord, ordinal: number): boolean =>
     ordinal < record.values.length && record.values[ordinal] !== ABSENT
 
-  /**
-   * Records one lifecycle entry at most once per epoch. The channel's first
-   * mark slot holds the latest epoch, the second the epoch before it, which is
-   * enough to answer "recorded during epoch - 1" after a newer record.
-   */
-  const track = (
-    buffers: Array<Array<number> | undefined>,
-    channel: number,
-    record: EntityRecord,
-    ordinal: number
-  ): void => {
-    const marks = record.marks
-    const slot = ordinal * MARK_STRIDE + channel
-    const latest = marks[slot]!
-    if (latest === epoch) {
-      return
+  const logFor = (logs: Array<TickLog | undefined>, ordinal: number): TickLog => {
+    let log = logs[ordinal]
+    if (log === undefined) {
+      log = makeLog()
+      logs[ordinal] = log
     }
-    marks[slot + 1] = latest
-    marks[slot] = epoch
-    const buffer = buffers[ordinal]
-    if (buffer === undefined) {
-      buffers[ordinal] = [record.id]
-    } else {
-      buffer.push(record.id)
-    }
+    return log
   }
 
-  const isReadable = (channel: number, record: EntityRecord, ordinal: number): boolean => {
-    const slot = ordinal * MARK_STRIDE + channel
-    const readableEpoch = epoch - 1
-    return record.marks[slot] === readableEpoch || record.marks[slot + 1] === readableEpoch
+  /**
+   * Stamps a component slot as changed at the current tick, logging it once
+   * per tick.
+   */
+  const markChanged = (record: EntityRecord, ordinal: number): void => {
+    const slot = ordinal * MARK_STRIDE + CHANGED
+    if (record.marks[slot] === tick) {
+      return
+    }
+    record.marks[slot] = tick
+    if (changedLogFrom[ordinal] !== undefined) {
+      appendLog(logFor(changedLogs, ordinal), record.id, tick)
+    }
   }
 
   const ensureSlots = (record: EntityRecord, ordinal: number): void => {
@@ -232,7 +269,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     }
     if (!inTransaction) {
       record.values[ordinal] = value
-      track(pendingChanged, CHANGED, record, ordinal)
+      markChanged(record, ordinal)
       return
     }
     const slot = ordinal * MARK_STRIDE + JOURNALED
@@ -267,7 +304,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     for (let index = 0; index < journalRecords.length; index++) {
       const record = journalRecords[index]!
       if (record.alive) {
-        track(pendingChanged, CHANGED, record, journalOrdinals[index]!)
+        markChanged(record, journalOrdinals[index]!)
       }
     }
     clearJournal()
@@ -322,10 +359,10 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       ensureSlots(record, ordinal)
       members[ordinal]!.add(record)
       componentVersions[ordinal]! += 1
-      track(pendingAdded, ADDED, record, ordinal)
+      record.marks[ordinal * MARK_STRIDE + ADDED] = tick
     }
     record.values[ordinal] = value
-    track(pendingChanged, CHANGED, record, ordinal)
+    markChanged(record, ordinal)
   }
 
   const writeComponent = (id: number, descriptor: ComponentDescriptor, value: unknown): void => {
@@ -347,7 +384,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     record.values[ordinal] = ABSENT
     members[ordinal]!.delete(record)
     componentVersions[ordinal]! += 1
-    track(pendingRemoved, REMOVED, record, ordinal)
+    appendLog(logFor(removedLogs, ordinal), id, tick)
   }
 
   const relatedSourceIds = (relation: Relation.Relation.Any, targetId: number): ReadonlyArray<number> =>
@@ -509,25 +546,41 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
       values[ordinal] = ABSENT
       members[ordinal]!.delete(record)
       componentVersions[ordinal]! += 1
-      track(pendingRemoved, REMOVED, record, ordinal)
+      appendLog(logFor(removedLogs, ordinal), id, tick)
     }
     clearEntityScope(id)
-    pendingDespawned.push(id)
+    appendLog(despawnedLog, id, tick)
     record.alive = false
     records.delete(id)
     entitiesVersion += 1
   }
 
-  const updateLifecycle = (): void => {
-    readableAdded = pendingAdded
-    pendingAdded = []
-    readableChanged = pendingChanged
-    pendingChanged = []
-    readableRemoved = pendingRemoved
-    pendingRemoved = []
-    readableDespawned = pendingDespawned
-    pendingDespawned = []
-    epoch += 1
+  /**
+   * Advances the change tick and returns it.
+   */
+  const advanceTick = (): number => {
+    tick += 1
+    return tick
+  }
+
+  /**
+   * Starts a new frame (one `runtime.tick(...)` call): log entries older than
+   * the previous frame are dropped.
+   */
+  const advanceFrame = (): void => {
+    if (frameStart > 0) {
+      for (const log of changedLogs) if (log) trimLog(log, frameStart)
+      for (const log of removedLogs) if (log) trimLog(log, frameStart)
+      trimLog(despawnedLog, frameStart)
+      retainedAfter = frameStart
+    }
+    frameStart = tick
+  }
+
+  const entriesSince = (log: TickLog | undefined, since: number): ReadonlyArray<number> => {
+    if (log === undefined) return noSources
+    const start = firstAfter(log, since)
+    return start === log.ids.length ? noSources : log.ids.slice(start)
   }
 
   return {
@@ -552,17 +605,44 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
     reorderChildren,
     relationTarget,
     relatedSourceIds,
-    updateLifecycle,
+    advanceTick,
+    advanceFrame,
     descriptorAt: (ordinal: number): ComponentDescriptor => descriptors[ordinal]!,
     membersOf: (ordinal: number): ReadonlySet<EntityRecord> => members[ordinal]!,
     componentVersion: (ordinal: number): number => componentVersions[ordinal]!,
     relationVersion: (key: symbol): number => relationVersions.get(key) ?? 0,
     entitiesVersion: (): number => entitiesVersion,
-    readableAdded: (ordinal: number): ReadonlyArray<number> | undefined => readableAdded[ordinal],
-    readableChanged: (ordinal: number): ReadonlyArray<number> | undefined => readableChanged[ordinal],
-    readableRemoved: (ordinal: number): ReadonlyArray<number> | undefined => readableRemoved[ordinal],
-    readableDespawned: (): ReadonlyArray<number> => readableDespawned,
-    isAdded: (record: EntityRecord, ordinal: number): boolean => isReadable(ADDED, record, ordinal),
-    isChanged: (record: EntityRecord, ordinal: number): boolean => isReadable(CHANGED, record, ordinal)
+    currentTick: (): number => tick,
+    /**
+     * Whether the component was added after `since`.
+     */
+    addedSince: (record: EntityRecord, ordinal: number, since: number): boolean =>
+      has(record, ordinal) && record.marks[ordinal * MARK_STRIDE + ADDED]! > since,
+    /**
+     * Whether the component was added or changed after `since`.
+     */
+    changedSince: (record: EntityRecord, ordinal: number, since: number): boolean =>
+      has(record, ordinal) && record.marks[ordinal * MARK_STRIDE + CHANGED]! > since,
+    /**
+     * Candidate ids for a `changed`/`added` filter on `ordinal` after `since`,
+     * or `undefined` when the log no longer covers that range. Ids may repeat.
+     */
+    changedCandidates: (ordinal: number, since: number): ReadonlyArray<number> | undefined => {
+      const from = changedLogFrom[ordinal]
+      return from === undefined || since < from || since < retainedAfter
+        ? undefined
+        : entriesSince(changedLogs[ordinal], since)
+    },
+    /**
+     * Starts logging changes of one component, for sparse `added`/`changed`
+     * queries. Changes before this point are found by scanning instead.
+     */
+    trackChanges: (ordinal: number): void => {
+      if (changedLogFrom[ordinal] === undefined) {
+        changedLogFrom[ordinal] = tick
+      }
+    },
+    removedSince: (ordinal: number, since: number): ReadonlyArray<number> => entriesSince(removedLogs[ordinal], since),
+    despawnedSince: (since: number): ReadonlyArray<number> => entriesSince(despawnedLog, since)
   }
 }

@@ -203,7 +203,7 @@ describe("Runtime scheduling", () => {
     )
 
     const runtime = makeRuntime()
-    runtime.tick(Schedule.Schedule(first, Schedule.updateLifecycle(), second))
+    runtime.tick(Schedule.Schedule(first, second))
     expect(readResourceValue(runtime, schema, Log)).toEqual(["first", "second"])
   })
 
@@ -237,7 +237,6 @@ describe("Runtime scheduling", () => {
     )
 
     const hostMirror = Schedule.Schedule(
-      Schedule.updateLifecycle(),
       second
     )
 

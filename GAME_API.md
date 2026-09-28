@@ -131,7 +131,7 @@ const UnloadLevel = Game.System("Game/UnloadLevel", {}, ({ commands }) =>
 ```
 
 Persistent entities can still use `commands.spawn(...)`. Scope cleanup uses the
-normal deferred-command boundary, so lifecycle readers and renderer cleanup
+normal deferred-command boundary, so removal readers and renderer cleanup
 systems see the same despawns as any other entity removal.
 
 ## 5. Read the world without making a diagnostic system
@@ -164,7 +164,8 @@ const summary = runtime.inspect(WorldSummary)
 
 An inspector cannot declare write queries, write resources, commands, event
 writers, or state-transition writers. Runtime provisioning is checked at the
-call, and inspection does not advance events or lifecycle buffers.
+call, and inspection does not advance events. Like a system, an inspector's
+`added`/`changed` filters report changes since its previous evaluation.
 
 ## 6. Drive fixed updates from any renderer
 
