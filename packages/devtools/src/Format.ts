@@ -133,7 +133,13 @@ export const system = (input: Debug.SystemDescription): string => {
   return lines.join("\n")
 }
 
-/** The static description as sections: schema, schedules, systems, access, lints. */
+/** Lints first, so they are the first thing read. */
+export const lintLines = (lints: ReadonlyArray<Debug.Lint>): Array<string> => [
+  "# Lints",
+  ...(lints.length === 0 ? ["(none)"] : lints.map((lint) => `${lint.severity} ${lint.code}: ${lint.message}`))
+]
+
+/** The static description as sections: lints, schema, schedules, systems, access. */
 export const description = (input: Debug.Description): string => {
   const lines: Array<string> = []
   lines.push("# Components")
@@ -179,7 +185,7 @@ export const description = (input: Debug.Description): string => {
     lines.push("", "# Systems")
     for (const entry of input.systems) lines.push(system(entry))
   }
-  lines.push("", "# Access (readers / writers)")
+  lines.push("", "# Access in the named schedules (readers / writers; systems outside them are not counted)")
   for (const [label, entries] of [
     ["component", input.access.components],
     ["resource", input.access.resources],
@@ -189,10 +195,7 @@ export const description = (input: Debug.Description): string => {
       lines.push(`${label} ${entry.name}: read by ${list(entry.readers)}; written by ${list(entry.writers)}`)
     }
   }
-  lines.push("", "# Lints")
-  if (input.lints.length === 0) lines.push("(none)")
-  for (const lint of input.lints) lines.push(`${lint.severity} ${lint.code}: ${lint.message}`)
-  return lines.join("\n")
+  return [...lintLines(input.lints), "", ...lines].join("\n")
 }
 
 /** One entity per line, then resources, machines, and pending commands. */
@@ -439,4 +442,4 @@ export const lines = (event: Debug.TraceEvent, options: ValueOptions = {}): Read
 
 /** `f12 update  Game/Move  write e3 ...` */
 export const line = (input: Line): string =>
-  `f${input.frame} ${input.schedule}  ${input.system ?? "-"}  ${input.text}`
+  `f${input.frame} ${input.schedule}  ${input.system ?? "-"}  ${input.text}${input.noop && (input.kind === "write" || input.kind === "resource" || input.kind === "effect") ? " (unchanged)" : ""}`

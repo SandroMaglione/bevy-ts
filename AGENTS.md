@@ -58,7 +58,7 @@ if (!target.ok) {
 
 ## Debugging Game Behavior
 - Reproduce headless before changing code: build the game's simulation schedules on a runtime made with `debug: true` and scripted input (`Keyboard.scripted`). [`examples/top-down/simulation.ts`](./examples/top-down/simulation.ts) is the reference; copy [`examples/top-down/debug.ts`](./examples/top-down/debug.ts) and run it with `node --import tsx <script>`.
-- Use `@bevy-ts/devtools` sessions: `describe()` to orient, `run(name, { frames })` with an `Invariant` that encodes the bug, then `why(entity, Component)`, `journal({ frames, entity })`, and `report()` to explain it. See [`packages/devtools/README.md`](./packages/devtools/README.md).
+- Use `@bevy-ts/devtools` sessions: read the lints at the top of `describe()` first, then orient, `run(name, { frames })` with an `Invariant` that encodes the bug, then `why(entity, Component)`, `journal({ frames, entity })`, and `report()` to explain it. See [`packages/devtools/README.md`](./packages/devtools/README.md).
 - Once the script reproduces the bug, turn it into a test next to the game.
 
 ## Design References

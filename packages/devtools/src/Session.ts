@@ -87,6 +87,8 @@ export interface RunResult {
   readonly range: readonly [number, number] | undefined
   readonly stop: Stop
   readonly ms: number
+  /** Warning-level lints over the named schedules; details in `describe()`. */
+  readonly lintWarnings: number
 }
 
 export interface JournalFilter<S extends Schema.Any> {
@@ -123,7 +125,13 @@ export interface SystemStats {
 }
 
 export interface Warning {
-  readonly code: "missed-read" | "pending-commands" | "transition-failed" | "discarded-messages" | "system-failed"
+  readonly code:
+    | "missed-read"
+    | "pending-commands"
+    | "pending-next-state"
+    | "transition-failed"
+    | "discarded-messages"
+    | "system-failed"
   readonly message: string
   readonly count: number
   readonly firstFrame: number
@@ -137,6 +145,8 @@ export interface Report {
   readonly warnings: ReadonlyArray<Warning>
   /** Streams held past the two-frame window by a reader, or with lagged readers. */
   readonly streams: ReadonlyArray<Debug.StreamStatus>
+  /** Static lints over the named schedules (see `describe()`). */
+  readonly lints: ReadonlyArray<Debug.Lint>
 }
 
 export interface SystemActivity {
@@ -149,6 +159,8 @@ export interface Session<S extends Schema.Any, Names extends string> {
   readonly run: (name: Names, options?: RunOptions) => Rendered.Rendered<RunResult>
   readonly journal: (filter?: JournalFilter<S>) => Rendered.Rendered<ReadonlyArray<Format.Line>>
   readonly why: (entity: number, component: Schema.ComponentDescriptor<S>, options?: { readonly limit?: number }) => Rendered.Rendered<ReadonlyArray<Format.Line>>
+  /** Latest changes to one resource and the systems that made them. */
+  readonly whyResource: (resource: Schema.ResourceDescriptor<S>, options?: { readonly limit?: number }) => Rendered.Rendered<ReadonlyArray<Format.Line>>
   readonly system: (name: string, options?: { readonly limit?: number }) => Rendered.Rendered<SystemActivity>
   readonly describe: () => Rendered.Rendered<Debug.Description>
   readonly dump: (filter?: Debug.DumpFilter<S>) => Rendered.Rendered<Debug.WorldDump>
@@ -209,7 +221,17 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
 
   /** Commands queued and not yet applied, by queuing system. */
   const pending = new Map<string, number>()
+  /** Next states queued and not yet applied, by machine, with the queuing system. */
+  const pendingStates = new Map<string, string>()
   const checkPending = (frame: number) => {
+    for (const [machine, system] of pendingStates) {
+      warn(
+        "pending-next-state",
+        `pending-state:${machine}`,
+        `a next state of ${machine} queued by ${system} was still pending at the end of a frame; only an applyStateTransitions() marker applies it`,
+        frame
+      )
+    }
     if (pending.size === 0) return
     const systems = [...pending.keys()].sort()
     const count = [...pending.values()].reduce((total, value) => total + value, 0)
@@ -238,8 +260,12 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
         if (event.outcome !== "ok") {
           entry.failures += 1
           warn("system-failed", `failed:${event.system}`, `${event.system} ${event.outcome === "defect" ? "threw" : "failed"}: ${Format.value(event.error, format)}`, event.frame)
-        } else if (event.commands.length > 0) {
-          pending.set(event.system, (pending.get(event.system) ?? 0) + event.commands.length)
+        } else {
+          if (event.commands.length > 0) pending.set(event.system, (pending.get(event.system) ?? 0) + event.commands.length)
+          for (const next of event.nextStates) {
+            if (next.value === undefined) pendingStates.delete(next.machine)
+            else pendingStates.set(next.machine, event.system)
+          }
         }
         for (const missed of event.missed) {
           warn("missed-read", `missed:${event.system}:${missed.kind}:${missed.stream}`, `${event.system} missed ${missed.kind} ${missed.stream}: entries were dropped before it ran`, event.frame)
@@ -262,6 +288,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
         pending.clear()
         break
       case "transition":
+        if (event.outcome !== "failed") pendingStates.delete(event.machine)
         if (event.outcome === "failed" || event.outcome === "enterFailed") {
           warn("transition-failed", `transition:${event.machine}:${String(event.from)}:${String(event.to)}`, `transition ${event.machine} ${String(event.from)} -> ${String(event.to)} ${event.outcome}`, event.frame)
         }
@@ -321,15 +348,20 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       }
     }
     checkPending(debug.frame())
+    const lintWarnings = debug.describe().lints.filter((lint) => lint.severity === "warning")
     const data: RunResult = {
       schedule: name,
       ok: stop.reason === "completed" || stop.reason === "until",
       frames: first === undefined || last === undefined ? 0 : last - first + 1,
       range: first === undefined || last === undefined ? undefined : [first, last],
       stop,
-      ms: performance.now() - started
+      ms: performance.now() - started,
+      lintWarnings: lintWarnings.length
     }
-    return Rendered.make(data, renderRun(data, format))
+    const lintText = lintWarnings.length === 0
+      ? ""
+      : `\n${lintWarnings.length} lint warnings (see describe() or report()): ${lintWarnings.map((lint) => `${lint.code} ${lint.subject}`).join(", ")}`
+    return Rendered.make(data, renderRun(data, format) + lintText)
   }
 
   /** Lines hidden by the last `collectLines` call because they record no change. */
@@ -388,6 +420,18 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     return Rendered.make(lines, renderLines(header, lines))
   }
 
+  const whyResource = (resource: Schema.ResourceDescriptor<S>, whyOptions: { readonly limit?: number } = {}) => {
+    const lines = collectLines({ resource, kinds: ["resource"], limit: whyOptions.limit ?? 5 })
+    const resources = debug.dump({ limit: 0 }).resources
+    const now = resource.name in resources
+      ? `${resource.name} is now ${Format.value(resources[resource.name], format)}`
+      : `${resource.name} has no value now`
+    const header = lines.length === 0
+      ? `${now}; no change to it in ${rangeText()}`
+      : `${now}; last ${lines.length} changes (oldest first):`
+    return Rendered.make(lines, renderLines(header, lines))
+  }
+
   const statsFor = (system: string): SystemStats | undefined => {
     const entry = stats.get(system)
     return entry === undefined ? undefined : { system, ...entry }
@@ -407,7 +451,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     lines.push(entry === undefined
       ? "no traced runs"
       : `${entry.runs} runs, ${entry.failures} failures, ${entry.skips} skips, avg ${Format.value(entry.runs === 0 ? 0 : entry.totalMs / entry.runs)}ms, max ${Format.value(entry.maxMs)}ms`)
-    lines.push(`recent (${rangeText()}):`, ...recent.map(Format.line))
+    lines.push(`recent (${rangeText()}${hidden > 0 ? `, ${hidden} no-change lines hidden` : ""}):`)
+    lines.push(...(recent.length === 0 ? ["(no changes recorded; journal({ system, verbose: true }) shows every line)"] : recent.map(Format.line)))
     return Rendered.make(data, lines.join("\n"))
   }
 
@@ -418,9 +463,10 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       history: historyRange(),
       systems,
       warnings: [...warnings.values()].map((warning) => ({ ...warning })),
-      streams: debug.streams().filter((stream) => stream.heldBy !== undefined || stream.readers.some((reader) => reader.lagged))
+      streams: debug.streams().filter((stream) => stream.heldBy !== undefined || stream.readers.some((reader) => reader.lagged)),
+      lints: debug.describe().lints
     }
-    const lines = [`${data.frames} frames run (${rangeText()})`, "", "# Systems (by total time)"]
+    const lines = [`${data.frames} frames run (${rangeText()})`, "", ...Format.lintLines(data.lints), "", "# Systems (by total time)"]
     for (const entry of systems) {
       lines.push(`${entry.system}: ${entry.runs} runs, avg ${Format.value(entry.runs === 0 ? 0 : entry.totalMs / entry.runs)}ms, max ${Format.value(entry.maxMs)}ms${entry.failures > 0 ? `, ${entry.failures} failures` : ""}${entry.skips > 0 ? `, ${entry.skips} skips` : ""}`)
     }
@@ -432,11 +478,6 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     if (data.streams.length > 0) {
       lines.push("", "# Streams held by readers", Format.streams(data.streams))
     }
-    const lints = debug.describe().lints
-    if (lints.length > 0) {
-      lines.push("", "# Lints")
-      for (const lint of lints) lines.push(`${lint.severity} ${lint.code}: ${lint.message}`)
-    }
     return Rendered.make(data, lines.join("\n"))
   }
 
@@ -444,6 +485,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     run,
     journal,
     why,
+    whyResource,
     system,
     describe: () => {
       const description = debug.describe()

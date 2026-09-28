@@ -220,7 +220,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
   const components = new Index(componentDescriptors.map((descriptor) => descriptor.name))
   const resources = new Index(resourceDescriptors.map((descriptor) => descriptor.name))
   const events = new Index(eventDescriptors.map((descriptor) => descriptor.name))
-  const nextStates = new Set<string>()
+  const nextStates = new Map<string, Array<string>>()
   for (const system of systems) {
     for (const query of system.queries) {
       for (const name of [...query.reads, ...query.optional, ...query.with, ...query.added, ...query.changed]) {
@@ -236,7 +236,11 @@ export const describe = (input: DescribeInput): Debug.Description => {
     for (const name of system.resources.writes) resources.write(name, system.name)
     for (const name of system.events.reads) events.read(name, system.name)
     for (const name of system.events.writes) events.write(name, system.name)
-    for (const name of system.machines.next) nextStates.add(name)
+    for (const name of system.machines.next) {
+      const queuers = nextStates.get(name)
+      if (queuers) queuers.push(`${system.name} @ ${system.placements.join(", ")}`)
+      else nextStates.set(name, [`${system.name} @ ${system.placements.join(", ")}`])
+    }
   }
 
   const appliesTransitions = schedules.some(([, schedule]) =>
@@ -263,12 +267,12 @@ export const describe = (input: DescribeInput): Debug.Description => {
       }
     }
     if (!appliesTransitions) {
-      for (const name of nextStates) {
+      for (const [name, queuers] of nextStates) {
         lints.push({
           severity: "warning",
           code: "next-state-never-applied",
           subject: name,
-          message: `next states of ${name} are queued, but no described schedule has an applyStateTransitions() marker`
+          message: `next states of ${name} are queued by ${queuers.join("; ")}, but no described schedule has an applyStateTransitions() marker, so they never take effect`
         })
       }
     }

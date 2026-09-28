@@ -205,3 +205,38 @@ describe("Session report streams", () => {
     expect(report.text).toContain("# Streams held by readers\nevent Dev/Hit: 4/65536 retained, held by Dev/RareReader\n  Dev/RareReader: 4 unread")
   })
 })
+
+describe("Session next states and resources", () => {
+  it("warns about next states never applied, at run time and through lints", () => {
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(),
+      resources: { Score: 0 },
+      machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
+      debug: true
+    })
+    const session = Session.make(runtime, { schedules: { update: Game.Schedule(Play, Game.Schedule.applyDeferred()) } })
+    const run = session.run("update", { frames: 3 })
+    expect(run.data.lintWarnings).toBe(1)
+    expect(run.text.split("\n")[1]).toBe("1 lint warnings (see describe() or report()): next-state-never-applied Dev/Flow")
+    const report = session.report()
+    expect(report.data.warnings).toMatchObject([{ code: "pending-next-state", count: 3 }])
+    expect(report.text.split("\n").slice(2, 4)).toEqual([
+      "# Lints",
+      "warning next-state-never-applied: next states of Dev/Flow are queued by Dev/Play @ update#0, but no described schedule has an applyStateTransitions() marker, so they never take effect"
+    ])
+  })
+
+  it("explains the latest changes to a resource", () => {
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
+    const Add = Game.System("Dev/Add", { resources: { score: Game.System.writeResource(Score) } }, ({ resources }) => {
+      resources.score.update((score) => score + 5)
+    })
+    const session = Session.make(runtime, { schedules: { add: Game.Schedule(Add) } })
+    session.run("add", { frames: 2 })
+    expect(session.whyResource(Score).text).toBe([
+      "Dev/Score is now 10; last 2 changes (oldest first):",
+      "f1 add  Dev/Add  resource Dev/Score 0 -> 5",
+      "f2 add  Dev/Add  resource Dev/Score 5 -> 10"
+    ].join("\n"))
+  })
+})
