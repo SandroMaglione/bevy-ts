@@ -3,6 +3,8 @@ import * as Size2 from "../Size2.ts"
 import * as Vector2 from "../Vector2.ts"
 import type * as Aabb from "../Aabb.ts"
 import type * as Scalar from "../Scalar.ts"
+import { isRawShape as isSize2Shape } from "./size2.ts"
+import { isRawShape as isVector2Shape } from "./vector2.ts"
 
 const make = (position: Vector2.Vector2, size: Size2.Size2): Aabb.Aabb =>
   ({ position, size }) as Aabb.Aabb
@@ -63,3 +65,11 @@ export const overlapsVertically = (first: Aabb.Aabb, second: Aabb.Aabb): boolean
 
 export const translate = (aabb: Aabb.Aabb, delta: Vector2.Vector2): Aabb.Aabb =>
   make(Vector2.add(aabb.position, delta), aabb.size)
+
+export const decode = (raw: unknown): Result.Result<Aabb.Aabb, Aabb.Error | Aabb.DecodeError> => {
+  if (typeof raw !== "object" || raw === null) return Result.failure({ tag: "Aabb/Malformed", input: raw })
+  const { position, size } = raw as Record<string, unknown>
+  return isVector2Shape(position) && isSize2Shape(size)
+    ? result({ position, size })
+    : Result.failure({ tag: "Aabb/Malformed", input: raw })
+}

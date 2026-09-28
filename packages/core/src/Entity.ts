@@ -38,6 +38,7 @@ import type { Brand } from "./internal/brand.ts"
 import type { Descriptor } from "./Descriptor.ts"
 import type { StagedRelation } from "./Relation.ts"
 import type { Schema } from "./Schema.ts"
+import * as Result from "./Result.ts"
 
 /**
  * Entity identities, proofs, and long-lived handles.
@@ -275,6 +276,49 @@ export const handle = <
   _intent?: Intent
 ): Handle<Root, Intent> =>
   makeHandle<Root, Intent>("kind" in target && target.kind === "EntityId" ? target.value : (target as { readonly id: EntityId<S, Root> }).id.value)
+
+/**
+ * Why a stored handle could not be decoded.
+ */
+export interface InvalidHandle {
+  readonly _tag: "InvalidHandle"
+  readonly value: unknown
+}
+
+/**
+ * Decodes a handle from untrusted data, such as a component value inside a
+ * snapshot. Use it in the constructor of a component or resource that stores
+ * handles, so restoring validates them like any other value.
+ *
+ * A handle only names an entity; it never proves the entity exists. Resolving
+ * it with `lookup.getHandle(...)` stays the checked step, so any positive
+ * integer id decodes.
+ *
+ * @example
+ * ```ts
+ * const Target = Descriptor.ConstructedComponent({
+ *   result: (raw: unknown) => {
+ *     const enemy = Entity.decodeHandle(Root, isRecord(raw) ? raw["enemy"] : undefined, Health)
+ *     return enemy.ok ? Result.success({ enemy: enemy.value }) : enemy
+ *   }
+ * })("Target")
+ * ```
+ */
+export const decodeHandle = <
+  Root,
+  const Intent extends Descriptor<"component", string, any> | undefined = undefined
+>(
+  _root: Root,
+  raw: unknown,
+  _intent?: Intent
+): Result.Result<Handle<Root, Intent>, InvalidHandle> => {
+  const value = typeof raw === "object" && raw !== null && (raw as { readonly kind?: unknown }).kind === "EntityHandle"
+    ? (raw as { readonly value?: unknown }).value
+    : undefined
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? Result.success(makeHandle<Root, Intent>(value))
+    : Result.failure({ _tag: "InvalidHandle", value: raw })
+}
 
 /**
  * Creates a typed entity draft from an id and a proof.

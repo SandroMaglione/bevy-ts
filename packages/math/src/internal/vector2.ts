@@ -103,3 +103,12 @@ export const normalizeXYOrZero = (x: number, y: number): {
     length: magnitude
   }
 }
+
+/**
+ * Shape check for untrusted input; values are validated by `result`.
+ */
+export const isRawShape = (raw: unknown): raw is Vector2.Raw =>
+  typeof raw === "object" && raw !== null && typeof (raw as Record<string, unknown>)["x"] === "number" && typeof (raw as Record<string, unknown>)["y"] === "number"
+
+export const decode = (raw: unknown): Result.Result<Vector2.Vector2, Vector2.Error | Vector2.DecodeError> =>
+  isRawShape(raw) ? result(raw) : Result.failure({ tag: "Vector2/Malformed", input: raw })

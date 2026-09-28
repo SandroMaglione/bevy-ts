@@ -204,4 +204,19 @@ describe("helpers", () => {
     expect(Aabb.intersects(first, second)).toBe(true)
     expect(Aabb.intersects(first, Aabb.translate(second, Vector2.option({ x: 20, y: 0 })!))).toBe(false)
   })
+
+  it("decodes untrusted input of any shape", () => {
+    expect(Vector2.decode({ x: 1, y: 2 }).ok).toBe(true)
+    expect(Size2.decode({ width: 1, height: 2 }).ok).toBe(true)
+    expect(Aabb.decode({ position: { x: 0, y: 0 }, size: { width: 1, height: 1 } }).ok).toBe(true)
+    for (const raw of [null, 3, "x", [], { x: "1", y: 2 }]) {
+      const decoded = Vector2.decode(raw)
+      expect(decoded.ok ? undefined : decoded.error.tag).toBe("Vector2/Malformed")
+    }
+    const invalid = Vector2.decode({ x: Number.NaN, y: 0 })
+    expect(invalid.ok ? undefined : invalid.error.tag).toBe("Vector2/Invalid")
+    const box = Aabb.decode({ position: null, size: { width: 1, height: 1 } })
+    expect(box.ok ? undefined : box.error.tag).toBe("Aabb/Malformed")
+    expect(Size2.decode({ width: 1 }).ok).toBe(false)
+  })
 })

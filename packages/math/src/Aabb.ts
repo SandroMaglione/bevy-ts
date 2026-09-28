@@ -70,6 +70,16 @@ export type Error =
   | { readonly tag: "Aabb/InvalidSize"; readonly error: Size2.Error; readonly input: Raw }
 
 /**
+ * Failure produced by `decode` when the input does not have the raw shape.
+ *
+ * @category AABB Types
+ */
+export type DecodeError = {
+  readonly tag: "Aabb/Malformed"
+  readonly input: unknown
+}
+
+/**
  * Validates one raw AABB and returns an explicit result.
  *
  * @example
@@ -83,6 +93,14 @@ export type Error =
  * @category Construction
  */
 export const result: (raw: Raw) => Result.Result<Aabb, Error> = internal.result
+/**
+ * Validates untrusted input of any shape, for example a value read from a
+ * save file. Descriptors built from this module use it when restoring
+ * snapshots.
+ *
+ * @category Construction
+ */
+export const decode: (raw: unknown) => Result.Result<Aabb, Error | DecodeError> = internal.decode
 /**
  * Validates one raw AABB and returns `null` on failure.
  *

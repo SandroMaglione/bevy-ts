@@ -68,11 +68,29 @@ export type Error = {
 }
 
 /**
+ * Failure produced by `decode` when the input does not have the raw shape.
+ *
+ * @category Size Types
+ */
+export type DecodeError = {
+  readonly tag: "Size2/Malformed"
+  readonly input: unknown
+}
+
+/**
  * Validates one raw size and returns an explicit result.
  *
  * @category Construction
  */
 export const result: (raw: Raw) => Result.Result<Size2, Error> = internal.result
+/**
+ * Validates untrusted input of any shape, for example a value read from a
+ * save file. Descriptors built from this module use it when restoring
+ * snapshots.
+ *
+ * @category Construction
+ */
+export const decode: (raw: unknown) => Result.Result<Size2, Error | DecodeError> = internal.decode
 /**
  * Validates one raw size and returns `null` on failure.
  *

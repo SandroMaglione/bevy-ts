@@ -5,8 +5,8 @@ This is the mental model, one concept at a time, for someone who knows ECS. Ever
 ## 1. Descriptors name your data
 
 ```ts
-const Position = Descriptor.Component<{ x: number; y: number }>()("Concepts/Position")
-const DeltaTime = Descriptor.Resource<number>()("Concepts/DeltaTime")
+const Position = Descriptor.ConstructedComponent(vector)("Concepts/Position")
+const DeltaTime = Descriptor.TransientResource<number>()("Concepts/DeltaTime")
 const Hit = Descriptor.Event<{ readonly amount: number }>()("Concepts/Hit")
 const Log = Descriptor.Service<{ readonly write: (line: string) => void }>()("Concepts/Log")
 const { relation: ChildOf } = Descriptor.Hierarchy("Concepts/ChildOf", "Concepts/Children")
@@ -14,7 +14,8 @@ const { relation: ChildOf } = Descriptor.Hierarchy("Concepts/ChildOf", "Concepts
 
 - **Components** are per-entity data. **Resources** are world singletons. **Events** are messages between systems. **Services** are host capabilities (clock, audio, renderer) that live outside the world. **Relations** link entities.
 - Identity is `(kind, name)`. A schema rejects two descriptors of one kind with the same name, so prefix names per game or package.
-- `Descriptor.ConstructedComponent(Vector2)(...)` attaches a validating constructor. `@bevy-ts/math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`.
+- `Descriptor.Component<T>()` declares a plain component. `Descriptor.ConstructedComponent(validator)` attaches a validating constructor (`{ result: (raw) => Result }`), used for raw input and when loading saves. `@bevy-ts/math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`. `Descriptor.fromStandardSchema(schema)` adapts any Standard Schema validator (ArkType, Effect Schema, Zod, Valibot).
+- `Descriptor.TransientComponent<T>()` / `TransientResource<T>()` mark runtime-only state that saves skip.
 
 ## 2. A schema closes the world
 
@@ -142,6 +143,7 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 - Ticking a schedule whose systems need a resource, service or machine the runtime wasn't given is a compile error. `tryTick` is the checked-at-runtime path for schedules whose types were lost.
 - Resources with constructed descriptors take raw input, and `make` then returns a `Result`.
 - Snapshots are plain data. `restore` validates untrusted input and leaves the world unchanged on failure.
+- `snapshot` and `restore` only compile when every component and resource is transient or constructed with a validator that accepts untrusted input (`result(raw: unknown)`, or a `decode` such as `Vector2.decode`), so nothing unvalidated can load. Stored handles are validated with `Entity.decodeHandle(Root, raw, Intent)`.
 
 ## Packages
 

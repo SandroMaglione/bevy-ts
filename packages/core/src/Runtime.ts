@@ -583,14 +583,18 @@ export interface Runtime<
    * relation edges, resources, and committed machine values.
    *
    * Values are shared with the world, not copied; serialize the snapshot
-   * (for example with `JSON.stringify`) to detach it.
+   * (for example with `JSON.stringify`) to detach it. Transient components and
+   * resources are skipped.
+   *
+   * Callable only when every component and resource is constructed or
+   * transient; see the `Snapshot` module.
    */
-  readonly snapshot: () => Snapshot.WorldSnapshot
+  readonly snapshot: Snapshot.Gate<S, () => Snapshot.WorldSnapshot>
   /**
    * Replaces the world with a snapshot after validating it against the
-   * schema. On failure nothing changes. See the `snapshot` module.
+   * schema. On failure nothing changes. See the `Snapshot` module.
    */
-  readonly restore: (data: unknown) => Result.Result<void, Snapshot.RestoreError>
+  readonly restore: Snapshot.Gate<S, (data: unknown) => Result.Result<void, Snapshot.RestoreError>>
   /**
    * Evaluates one read-only projection without advancing schedule visibility.
    */
@@ -1411,7 +1415,9 @@ const makeValidatedRuntime = <
   const snapshot = (): Snapshot.WorldSnapshot => {
     const savedResources: Record<string, unknown> = {}
     for (const [name, descriptor] of resourcesByName) {
-      if (resources.has(descriptor.key)) savedResources[name] = resources.get(descriptor.key)
+      if (!DescriptorModule.isTransient(descriptor) && resources.has(descriptor.key)) {
+        savedResources[name] = resources.get(descriptor.key)
+      }
     }
     const savedMachines: Record<string, Machine.StateValue> = {}
     for (const [name, machine] of machinesByName) {
@@ -1421,17 +1427,17 @@ const makeValidatedRuntime = <
     return {
       version: 1,
       nextEntity: world.nextEntityValue(),
-      entities: world.exportEntities(),
+      entities: world.exportEntities(DescriptorModule.isTransient),
       relations: world.exportRelations(),
       resources: savedResources,
       machines: savedMachines
     }
   }
 
-  const validate = (value: unknown, descriptor: Descriptor.Any): Result.Result<unknown, unknown> => {
-    const constructor = DescriptorModule.constructorOf(descriptor) as DescriptorModule.ResultConstructor<unknown, unknown, unknown> | undefined
-    return constructor === undefined ? Result.success(value) : constructor.result(value)
-  }
+  // The public type only exposes `restore` when every saved descriptor has a
+  // constructor; a descriptor without one still fails closed here.
+  const validate = (value: unknown, descriptor: Descriptor.Any): Result.Result<unknown, unknown> | undefined =>
+    DescriptorModule.hasConstructor(descriptor) ? DescriptorModule.decoderOf(descriptor)(value) : undefined
 
   const restore = (data: unknown): Result.Result<void, Snapshot.RestoreError> => {
     const parsed = Snapshot.parse(data)
@@ -1447,8 +1453,11 @@ const makeValidatedRuntime = <
       const components: Array<Entity.StagedComponent> = []
       for (const [name, raw] of Object.entries(entity.components)) {
         const descriptor = componentsByName.get(name)
-        if (!descriptor) return Result.failure({ _tag: "UnknownComponent", entityId: entity.id, name })
+        if (!descriptor || DescriptorModule.isTransient(descriptor)) {
+          return Result.failure({ _tag: "UnknownComponent", entityId: entity.id, name })
+        }
         const value = validate(raw, descriptor)
+        if (value === undefined) return Result.failure({ _tag: "UnvalidatedDescriptor", name })
         if (!value.ok) return Result.failure({ _tag: "InvalidComponent", entityId: entity.id, name, error: value.error })
         components.push([descriptor, value.value])
       }
@@ -1457,8 +1466,9 @@ const makeValidatedRuntime = <
     const validatedResources: Array<readonly [symbol, unknown]> = []
     for (const [name, raw] of Object.entries(saved.resources)) {
       const descriptor = resourcesByName.get(name)
-      if (!descriptor) return Result.failure({ _tag: "UnknownResource", name })
+      if (!descriptor || DescriptorModule.isTransient(descriptor)) return Result.failure({ _tag: "UnknownResource", name })
       const value = validate(raw, descriptor)
+      if (value === undefined) return Result.failure({ _tag: "UnvalidatedDescriptor", name })
       if (!value.ok) return Result.failure({ _tag: "InvalidResource", name, error: value.error })
       validatedResources.push([descriptor.key, value.value])
     }
@@ -1528,8 +1538,9 @@ const makeValidatedRuntime = <
       return tickUnsafe(schedules) as never
     },
     tryTick: tryRunSchedule,
-    snapshot,
-    restore,
+    // The gate is type-only: the functions exist on every runtime.
+    snapshot: snapshot as unknown as Snapshot.Gate<S, typeof snapshot>,
+    restore: restore as unknown as Snapshot.Gate<S, typeof restore>,
     inspect
   }
 }

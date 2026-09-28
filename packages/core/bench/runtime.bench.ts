@@ -8,7 +8,7 @@
  * `calibration` case is plain JavaScript work used to normalize scores across
  * machines (see `scripts/bench.ts`).
  */
-import { Descriptor, Schema } from "@bevy-ts/core"
+import { Descriptor, Result, Schema } from "@bevy-ts/core"
 import type * as Entity from "@bevy-ts/core/Entity"
 import type { BenchCase } from "./harness.ts"
 
@@ -16,14 +16,30 @@ const N = 10_000
 
 type Vec = { x: number; y: number }
 
-const Position = Descriptor.Component<Vec>()("Bench/Position")
-const Velocity = Descriptor.Component<Vec>()("Bench/Velocity")
-const Health = Descriptor.Component<number>()("Bench/Health")
-const Static = Descriptor.Component<{}>()("Bench/Static")
-const Player = Descriptor.Component<{}>()("Bench/Player")
-const Hot = Descriptor.Component<{}>()("Bench/Hot")
-const Marker = Descriptor.Component<{}>()("Bench/Marker")
-const Sum = Descriptor.Resource<number>()("Bench/Sum")
+// Validators exist so snapshots can be restored; the round-trip case measures them.
+const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === "object" && raw !== null
+const vec = {
+  result: (raw: unknown): Result.Result<Vec, "NotAVector"> =>
+    isRecord(raw) && typeof raw["x"] === "number" && typeof raw["y"] === "number"
+      ? Result.success({ x: raw["x"], y: raw["y"] })
+      : Result.failure("NotAVector")
+}
+const number = {
+  result: (raw: unknown): Result.Result<number, "NotANumber"> =>
+    typeof raw === "number" ? Result.success(raw) : Result.failure("NotANumber")
+}
+const tag = {
+  result: (raw: unknown): Result.Result<{}, "NotATag"> => isRecord(raw) ? Result.success({}) : Result.failure("NotATag")
+}
+
+const Position = Descriptor.ConstructedComponent(vec)("Bench/Position")
+const Velocity = Descriptor.ConstructedComponent(vec)("Bench/Velocity")
+const Health = Descriptor.ConstructedComponent(number)("Bench/Health")
+const Static = Descriptor.ConstructedComponent(tag)("Bench/Static")
+const Player = Descriptor.ConstructedComponent(tag)("Bench/Player")
+const Hot = Descriptor.ConstructedComponent(tag)("Bench/Hot")
+const Marker = Descriptor.ConstructedComponent(tag)("Bench/Marker")
+const Sum = Descriptor.TransientResource<number>()("Bench/Sum")
 const Ping = Descriptor.Event<number>()("Bench/Ping")
 const { relation: ChildOf } = Descriptor.Hierarchy("Bench/ChildOf", "Bench/Children")
 

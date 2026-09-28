@@ -622,15 +622,18 @@ export const makeWorld = <S extends Schema.Any>(schema: S) => {
 
   /**
    * Plain export of every live entity: id and component values by
-   * descriptor name, in spawn order.
+   * descriptor name, in spawn order, leaving out `skip`ped descriptors.
    */
-  const exportEntities = (): Array<{ readonly id: number; readonly components: Record<string, unknown> }> =>
+  const exportEntities = (
+    skip: (descriptor: ComponentDescriptor) => boolean
+  ): Array<{ readonly id: number; readonly components: Record<string, unknown> }> =>
     [...records.values()]
       .sort((left, right) => left.id - right.id)
       .map((record) => {
         const components: Record<string, unknown> = {}
         record.values.forEach((value, ordinal) => {
-          if (value !== ABSENT) components[descriptors[ordinal]!.name] = value
+          const descriptor = descriptors[ordinal]!
+          if (value !== ABSENT && !skip(descriptor)) components[descriptor.name] = value
         })
         return { id: record.id, components }
       })

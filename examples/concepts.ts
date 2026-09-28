@@ -3,16 +3,32 @@
  * run by `packages/core/test/Concepts.test.ts`, so the guide cannot drift from
  * the API.
  */
-import { Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Fx, Result, Schema } from "@bevy-ts/core"
 
-// 1. Descriptors name the data a world can hold.
+// 1. Descriptors name the data a world can hold. Constructed descriptors carry
+//    a validator, so values loaded from a save are checked; transient ones are
+//    never saved. (Any Standard Schema validator works through
+//    `Descriptor.fromStandardSchema(...)`.)
 const Root = Schema.defineRoot("Concepts")
-const Position = Descriptor.Component<{ x: number; y: number }>()("Concepts/Position")
-const Velocity = Descriptor.Component<{ x: number; y: number }>()("Concepts/Velocity")
-const Health = Descriptor.Component<number>()("Concepts/Health")
-const Target = Descriptor.Component<{ readonly enemy: Entity.Handle<typeof Root, typeof Health> }>()("Concepts/Target")
-const DeltaTime = Descriptor.Resource<number>()("Concepts/DeltaTime")
-const Score = Descriptor.Resource<number>()("Concepts/Score")
+const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === "object" && raw !== null
+const number = { result: (raw: unknown) => typeof raw === "number" ? Result.success(raw) : Result.failure("NotANumber" as const) }
+const vector = {
+  result: (raw: unknown) =>
+    isRecord(raw) && typeof raw["x"] === "number" && typeof raw["y"] === "number"
+      ? Result.success({ x: raw["x"], y: raw["y"] })
+      : Result.failure("NotAVector" as const)
+}
+const Position = Descriptor.ConstructedComponent(vector)("Concepts/Position")
+const Velocity = Descriptor.ConstructedComponent(vector)("Concepts/Velocity")
+const Health = Descriptor.ConstructedComponent(number)("Concepts/Health")
+const Target = Descriptor.ConstructedComponent({
+  result: (raw: unknown) => {
+    const enemy = Entity.decodeHandle(Root, isRecord(raw) ? raw["enemy"] : undefined, Health)
+    return enemy.ok ? Result.success({ enemy: enemy.value }) : enemy
+  }
+})("Concepts/Target")
+const DeltaTime = Descriptor.TransientResource<number>()("Concepts/DeltaTime")
+const Score = Descriptor.ConstructedResource(number)("Concepts/Score")
 const Hit = Descriptor.Event<{ readonly amount: number }>()("Concepts/Hit")
 const Log = Descriptor.Service<{ readonly write: (line: string) => void }>()("Concepts/Log")
 const { relation: ChildOf } = Descriptor.Hierarchy("Concepts/ChildOf", "Concepts/Children")
@@ -107,11 +123,16 @@ export const update = Game.Schedule(
 // 10. The runtime owns the world; the host drives it.
 export const runConcepts = (frames: number): { readonly log: ReadonlyArray<string>; readonly failure: string | undefined } => {
   const log: Array<string> = []
-  const runtime = Game.Runtime.make({
+  // Constructed resources are validated here, so making the runtime can fail.
+  const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Log, { write: (line) => log.push(line) })),
     resources: { DeltaTime: 1, Score: 0 },
     machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Playing"))
   })
+  if (!made.ok) {
+    return { log, failure: "InvalidResources" }
+  }
+  const runtime = made.value
 
   runtime.tick(setup)
   for (let frame = 0; frame < frames; frame++) {

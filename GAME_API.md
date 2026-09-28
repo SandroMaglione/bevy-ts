@@ -180,9 +180,31 @@ if (!loaded.ok) {
 ```
 
 A snapshot is plain data keyed by descriptor, relation, and machine names.
-`restore` takes `unknown`, validates it against the schema (constructed
-descriptors run their constructors), and leaves the world untouched on
-failure. Entity ids are kept, so stored handles still resolve. A restore reads
+`restore` takes `unknown`, validates it against the schema (every component
+and resource value runs through its descriptor's constructor), and leaves the
+world untouched on failure.
+
+Both methods only exist when every component and resource is either
+transient (never saved) or constructed with a validator that accepts
+untrusted input: a `result(raw: unknown)`, or a `decode(raw: unknown)` next to
+a typed `result` (every `@bevy-ts/math` module exports one). Otherwise calling
+them fails to compile, and the error lists each descriptor to fix:
+
+```ts
+const Position = Descriptor.ConstructedComponent(Vector2)("Position")
+const Label = Descriptor.ConstructedComponent(Descriptor.fromStandardSchema(type("string")))("Label")
+const Sprite = Descriptor.TransientComponent<{ frame: number }>()("Sprite") // rebuilt after load
+const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === "object" && raw !== null
+const Target = Descriptor.ConstructedComponent({
+  result: (raw: unknown) => {
+    const enemy = Entity.decodeHandle(Root, isRecord(raw) ? raw["enemy"] : undefined, Health)
+    return enemy.ok ? Result.success({ enemy: enemy.value }) : enemy
+  }
+})("Target")
+```
+
+Restored entities come back without transient components, and transient
+resources keep their current values. Entity ids are kept, so stored handles still resolve. A restore reads
 as despawns and spawns to change detection, so renderer sync rebuilds itself.
 
 ## 6. Drive fixed updates from any renderer

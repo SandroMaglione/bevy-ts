@@ -9,14 +9,24 @@
  *
  * `runtime.restore(data)` accepts `unknown`, because saved data comes from
  * outside the program, and validates it before touching the world: shape,
- * unknown names, constructed-descriptor values (through their constructors),
- * and machine states. On failure the world is unchanged.
+ * unknown names, every component and resource value (through its descriptor's
+ * constructor), relation edges, and machine states. On failure the world is
+ * unchanged.
+ *
+ * Both methods exist only when every component and resource in the schema is
+ * either constructed with a constructor that accepts untrusted input
+ * (`Descriptor.ConstructedComponent(...)` given a `decode(raw: unknown)`, as
+ * `@bevy-ts/math` modules export, or a `result(raw: unknown)`) or transient
+ * (`Descriptor.TransientComponent<T>()`, which is not saved). Otherwise calling them is a compile error naming the descriptors
+ * without a validator, so no unvalidated value can enter the world through a
+ * save file. `Descriptor.fromStandardSchema(...)` turns any Standard Schema
+ * validator into a constructor.
  *
  * Restoring despawns every current entity and spawns the saved ones with their
  * original ids, so change detection and renderer sync see a restore as normal
- * despawns and spawns. Pending commands and events are dropped. Values of
- * plain (non-constructed) descriptors are trusted as-is; use constructed
- * descriptors for state that must be validated on load.
+ * despawns and spawns. Pending commands and events are dropped. Transient
+ * components are absent from restored entities; transient resources keep their
+ * current value.
  *
  * @module Snapshot
  * @docGroup runtime
@@ -31,7 +41,39 @@
  * }
  * ```
  */
+import type { DecodableDescriptor, Descriptor, TransientDescriptor } from "./Descriptor.ts"
 import * as Result from "./Result.ts"
+import type { Schema } from "./Schema.ts"
+
+// Loadable: transient, constructed with `decode`, or constructed with a
+// `result` that accepts `unknown` input.
+type UnvalidatedName<D> = D extends TransientDescriptor<any, any, any> ? never
+  : D extends DecodableDescriptor<any, any, any, any, any> ? never
+  : D extends Descriptor.AnyConstructed ? unknown extends Descriptor.Raw<D> ? never : D["name"]
+  : D extends Descriptor.Any ? D["name"]
+  : never
+
+type UnvalidatedIn<R> = { readonly [K in keyof R]: UnvalidatedName<R[K]> }[keyof R]
+
+/**
+ * Names of the schema's components and resources that a snapshot could not
+ * validate on load: neither transient nor constructed with a constructor that
+ * accepts untrusted input (`decode`, or `result` taking `unknown`).
+ */
+export type Unvalidated<S extends Schema.Any> = UnvalidatedIn<S["components"]> | UnvalidatedIn<S["resources"]>
+
+/**
+ * The `snapshot`/`restore` member type for schema `S`.
+ *
+ * When some component or resource is neither constructed nor transient, the
+ * member is an object with no call signature, so calling it fails to compile
+ * and the error lists each descriptor to fix, for example
+ * `{ "Game/Position needs a validator": "..." }`.
+ */
+export type Gate<S extends Schema.Any, Method> = Unvalidated<S> extends infer Names extends string
+  ? [Names] extends [never] ? Method
+  : { readonly [Name in Names as `${Name} needs a validator`]: "Use a Constructed* descriptor whose constructor accepts unknown input (validated on load) or a Transient* one (not saved)" }
+  : never
 
 export interface EntitySnapshot {
   readonly id: number
@@ -67,6 +109,7 @@ export type RestoreError =
   | { readonly _tag: "UnknownMachine"; readonly name: string }
   | { readonly _tag: "InvalidMachineState"; readonly name: string; readonly value: unknown }
   | { readonly _tag: "DuplicateEntity"; readonly entityId: number }
+  | { readonly _tag: "UnvalidatedDescriptor"; readonly name: string }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
