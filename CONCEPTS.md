@@ -151,7 +151,7 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 |---|---|
 | `@bevy-ts/core` | Schema, systems, schedules, runtime, snapshots |
 | `@bevy-ts/math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis` |
-| `@bevy-ts/browser` | `FixedLoop` timing, `Keyboard` action input |
-| `@bevy-ts/pixi` | `NodeRegistry` and `RenderSync` for mirroring entities into Pixi |
+| `@bevy-ts/browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
+| `@bevy-ts/pixi` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into Pixi |
 
 Next: [GAME_API.md](./GAME_API.md) for a larger walkthrough, [ARCHITECTURE.md](./ARCHITECTURE.md) for how the types and storage work.

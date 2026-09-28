@@ -15,7 +15,7 @@ const failedHandle = (): BrowserExampleHandle => ({
 
 export const startTopDownExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
   const browserHost = await createTopDownBrowserHost(mount)
-  const runtime = createTopDownRuntime(browserHost.host, browserHost.inputManager)
+  const runtime = createTopDownRuntime(browserHost.host, browserHost.keyboard)
   if (!runtime.ok) {
     await browserHost.destroy()
     mount.textContent = runtime.error.message

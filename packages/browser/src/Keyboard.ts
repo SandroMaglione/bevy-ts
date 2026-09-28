@@ -5,8 +5,8 @@
  * module owns the browser plumbing every game rewrites: key normalization,
  * `preventDefault` for bound keys, press/release edges that survive taps
  * shorter than one frame, clearing on window blur, and listener cleanup. It
- * does not know about the ECS; hosts usually expose `snapshot()` through a
- * service that a capture system copies into a resource.
+ * does not know about the ECS; `InputCapture.system(...)` copies snapshots
+ * from a service into a resource.
  *
  * @module Keyboard
  * @docGroup browser
@@ -87,6 +87,18 @@ export interface ActionsOptions {
    * the page. Defaults to `true`.
    */
   readonly preventDefault?: boolean
+}
+
+/**
+ * A snapshot with every action idle, for initializing an input resource
+ * before the first capture.
+ */
+export const idle = <const B extends Bindings>(bindings: B): Snapshot<B> => {
+  const snapshot = {} as Record<keyof B, ActionState>
+  for (const name of Object.keys(bindings) as Array<keyof B>) {
+    snapshot[name] = { held: false, pressed: false, released: false }
+  }
+  return snapshot
 }
 
 const normalize = (key: string): string => key.length === 1 ? key.toLowerCase() : key

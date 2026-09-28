@@ -249,25 +249,39 @@ loop.value.stop()
 Pixi, Three, Canvas, DOM, tests, and server simulations can provide another
 `TickSource`. The gameplay schedules do not change.
 
-Keyboard input is exposed the same way: bind named actions once, read one
-snapshot per update, and hand it to the ECS through a service.
+Keyboard input is exposed the same way: bind named actions once, and let
+`InputCapture` copy one snapshot per update into a resource that gameplay
+systems read like any other world data.
 
 ```ts
-import { Keyboard } from "@bevy-ts/browser"
+import { InputCapture, Keyboard } from "@bevy-ts/browser"
 
-const input = Keyboard.actions(window, {
-  left: ["ArrowLeft", "a"],
-  right: ["ArrowRight", "d"],
-  jump: [" ", "ArrowUp", "w"]
+const bindings = { left: ["ArrowLeft", "a"], right: ["ArrowRight", "d"], jump: [" ", "ArrowUp", "w"] } as const
+
+const KeyboardInput = Descriptor.Service<Keyboard.Actions<typeof bindings>>()("Game/Keyboard")
+const Input = Descriptor.TransientResource<Keyboard.Snapshot<typeof bindings>>()("Game/Input")
+
+const CaptureInput = InputCapture.system(Game, { name: "Game/CaptureInput", source: KeyboardInput, resource: Input })
+
+const Jump = Game.System("Game/Jump", { resources: { input: Game.System.readResource(Input) } }, ({ resources }) => {
+  const input = resources.input.get()
+  input.jump.pressed // true once per capture, even for taps shorter than a frame
+  input.left.held
 })
 
-// A capture system reads this through a service once per update.
-const snapshot = input.snapshot()
-snapshot.jump.pressed // true once per press, even for taps shorter than a frame
-snapshot.left.held
+const keyboard = Keyboard.actions(window, bindings)
+const runtime = Game.Runtime.make({
+  services: Game.Runtime.services(Game.Runtime.service(KeyboardInput, keyboard)),
+  resources: { Input: Keyboard.idle(bindings) }
+})
+const update = Game.Schedule(CaptureInput, Jump)
 
-input.dispose()
+keyboard.dispose() // on teardown
 ```
+
+The source can be any service with `snapshot()`, so a game that merges
+keyboard, pointer, and gamepad input captures its own adapter the same way.
+The resource's value type must match the snapshot type exactly.
 
 ## 7. Mirror entities into Pixi
 
@@ -283,8 +297,8 @@ const render = RenderSync.systems(Game, {
   renderable: Renderable,
   transform: Position,
   registry: RenderNodes,
-  create: (renderable) => makeNode(renderable),
-  apply: (node, position) => node.position.set(position.x, position.y)
+  create: ({ renderable }) => makeNode(renderable),
+  apply: (node, { transform }) => node.position.set(transform.x, transform.y)
 })
 
 const runtime = Game.Runtime.make({
@@ -297,7 +311,10 @@ const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.des
 ```
 
 The registry service is a normal requirement: ticking the render systems on a
-runtime that does not provide it is a compile error.
+runtime that does not provide it is a compile error. `select`, `resources`,
+and `services` pass extra read-only data to the callbacks, and `redrawOn`
+lists components whose changes re-run `apply` (animation frames, tints,
+interpolation).
 
 ## What remains adapter code
 

@@ -67,7 +67,7 @@ export const CollectFocusedCollectableSystem = Game.System(
   },
   ({ resources, lookup, commands }) =>
     {
-      if (!resources.input.get().interactJustPressed) {
+      if (!resources.input.get().interact.pressed) {
         return
       }
 

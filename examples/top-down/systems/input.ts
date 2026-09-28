@@ -1,23 +1,28 @@
+import { InputCapture } from "@bevy-ts/browser"
 import {
   DeltaTime,
   Game,
-  InputManager,
   InputState,
+  KeyboardInput,
   TopDownHost,
   Viewport
 } from "../schema.ts"
+
+export const CaptureInputSystem = InputCapture.system(Game, {
+  name: "TopDown/CaptureInput",
+  source: KeyboardInput,
+  resource: InputState
+})
 
 export const CaptureFrameContextSystem = Game.System(
   "TopDown/CaptureFrameContext",
   {
     resources: {
       deltaTime: Game.System.writeResource(DeltaTime),
-      viewport: Game.System.writeResource(Viewport),
-      input: Game.System.writeResource(InputState)
+      viewport: Game.System.writeResource(Viewport)
     },
     services: {
-      host: Game.System.service(TopDownHost),
-      inputManager: Game.System.service(InputManager)
+      host: Game.System.service(TopDownHost)
     }
   },
   ({ resources, services }) =>
@@ -27,6 +32,5 @@ export const CaptureFrameContextSystem = Game.System(
         width: services.host.application.screen.width,
         height: services.host.application.screen.height
       })
-      resources.input.set(services.inputManager.snapshot())
     }
 )

@@ -7,13 +7,12 @@ import { createWorldBackdrop } from "./render/backdrop.ts"
 import { createHud } from "./render/hud.ts"
 import { destroyRenderNode } from "./render/nodes.ts"
 import { createPlayerFrameAtlas } from "./render/player-sheet.ts"
-import type { InputStateValue, RenderNode, TopDownHostValue } from "./types.ts"
+import { inputBindings } from "./types.ts"
+import type { KeyboardInput, RenderNode, TopDownHostValue } from "./types.ts"
 
 export type TopDownBrowserHost = {
   readonly host: TopDownHostValue
-  readonly inputManager: {
-    readonly snapshot: () => InputStateValue
-  }
+  readonly keyboard: KeyboardInput
   destroy(): Promise<void>
 }
 
@@ -51,13 +50,7 @@ export const createTopDownBrowserHost = async (
   world.addChild(actorLayer)
   application.stage.addChild(world)
 
-  const keyboard = Keyboard.actions(window, {
-    up: ["ArrowUp", "w"],
-    down: ["ArrowDown", "s"],
-    left: ["ArrowLeft", "a"],
-    right: ["ArrowRight", "d"],
-    interact: ["e", " "]
-  })
+  const keyboard = Keyboard.actions(window, inputBindings)
 
   const host: TopDownHostValue = {
     application,
@@ -81,19 +74,7 @@ export const createTopDownBrowserHost = async (
 
   return {
     host,
-    inputManager: {
-      snapshot() {
-        const input = keyboard.snapshot()
-        return {
-          up: input.up.held,
-          down: input.down.held,
-          left: input.left.held,
-          right: input.right.held,
-          interactPressed: input.interact.held,
-          interactJustPressed: input.interact.pressed
-        }
-      }
-    },
+    keyboard,
     async destroy() {
       keyboard.dispose()
 
