@@ -8,8 +8,8 @@
  *    workspace (internal dependencies are overridden to the tarballs, since
  *    the new version is not on npm yet).
  * 4. Type-checks a consumer file with `skipLibCheck: false` under
- *    `moduleResolution: nodenext`, runs it with plain Node, and checks that
- *    `internal/*` paths are not exported.
+ *    `moduleResolution: nodenext` with TypeScript 7 and 6, runs it with
+ *    plain Node, and checks that `internal/*` paths are not exported.
  *
  *   pnpm pack:check
  */
@@ -117,8 +117,11 @@ console.log(JSON.stringify({
 `
 writeFileSync(path.join(consumer, "main.ts"), program)
 
-step("type-check the consumer (skipLibCheck: false)")
+step("type-check the consumer with TypeScript 7 (skipLibCheck: false)")
 run(path.join(root, "node_modules", ".bin", "tsc"), ["-p", "tsconfig.json", "--pretty", "false"], consumer)
+
+step("type-check the consumer with TypeScript 6 (skipLibCheck: false)")
+run("node", [path.join(root, "node_modules", "typescript6", "lib", "tsc.js"), "-p", "tsconfig.json", "--pretty", "false"], consumer)
 
 step("run the consumer with Node")
 execFileSync(path.join(root, "node_modules", ".bin", "tsc"), ["-p", "tsconfig.json", "--noEmit", "false", "--outDir", "out"], { cwd: consumer, stdio: "inherit" })
