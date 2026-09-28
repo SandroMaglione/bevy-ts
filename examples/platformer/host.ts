@@ -1,17 +1,10 @@
+import { Keyboard } from "@bevy-ts/browser"
 import { Application, Container } from "pixi.js"
 
 import { createHud } from "./render/hud.ts"
 import { createWorldBackdrop } from "./render/backdrop.ts"
 import { destroyRenderNode } from "./render/nodes.ts"
 import type { InputStateValue, PlatformerHostValue } from "./types.ts"
-
-const normalizeKey = (key: string): string => {
-  if (key.length === 1) {
-    return key.toLowerCase()
-  }
-
-  return key
-}
 
 export type PlatformerBrowserHost = {
   readonly host: PlatformerHostValue
@@ -49,52 +42,18 @@ export const createPlatformerBrowserHost = async (
   world.addChild(actorLayer)
   application.stage.addChild(world)
 
-  const pressedKeys = new Set<string>()
-  let previousJumpPressed = false
-  let restartQueued = false
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    const key = normalizeKey(event.key)
-    if (
-      key === " " ||
-      key === "ArrowUp" ||
-      key === "ArrowLeft" ||
-      key === "ArrowRight" ||
-      key === "w" ||
-      key === "a" ||
-      key === "d" ||
-      key === "Shift" ||
-      key === "Enter"
-    ) {
-      event.preventDefault()
-    }
-
-    if (key === "Enter") {
-      restartQueued = true
-      return
-    }
-
-    pressedKeys.add(key)
-  }
-
-  const onKeyUp = (event: KeyboardEvent) => {
-    pressedKeys.delete(normalizeKey(event.key))
-  }
-
+  const keyboard = Keyboard.actions(window, {
+    left: ["ArrowLeft", "a"],
+    right: ["ArrowRight", "d"],
+    jump: [" ", "ArrowUp", "w"],
+    run: ["Shift"],
+    restart: ["Enter"]
+  })
+  let pointerRestartQueued = false
   const onPointerDown = () => {
-    restartQueued = true
+    pointerRestartQueued = true
   }
-
-  const clearInput = () => {
-    pressedKeys.clear()
-    previousJumpPressed = false
-    restartQueued = false
-  }
-
-  window.addEventListener("keydown", onKeyDown)
-  window.addEventListener("keyup", onKeyUp)
   window.addEventListener("pointerdown", onPointerDown)
-  window.addEventListener("blur", clearInput)
 
   const host: PlatformerHostValue = {
     application,
@@ -111,30 +70,22 @@ export const createPlatformerBrowserHost = async (
     host,
     inputManager: {
       snapshot() {
-        const jumpPressed =
-          pressedKeys.has(" ") ||
-          pressedKeys.has("ArrowUp") ||
-          pressedKeys.has("w")
-
+        const input = keyboard.snapshot()
         const nextState: InputStateValue = {
-          left: pressedKeys.has("ArrowLeft") || pressedKeys.has("a"),
-          right: pressedKeys.has("ArrowRight") || pressedKeys.has("d"),
-          jumpPressed,
-          jumpJustPressed: jumpPressed && !previousJumpPressed,
-          runPressed: pressedKeys.has("Shift"),
-          restartJustPressed: restartQueued
+          left: input.left.held,
+          right: input.right.held,
+          jumpPressed: input.jump.held,
+          jumpJustPressed: input.jump.pressed,
+          runPressed: input.run.held,
+          restartJustPressed: input.restart.pressed || pointerRestartQueued
         }
-
-        previousJumpPressed = jumpPressed
-        restartQueued = false
+        pointerRestartQueued = false
         return nextState
       }
     },
     async destroy() {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
+      keyboard.dispose()
       window.removeEventListener("pointerdown", onPointerDown)
-      window.removeEventListener("blur", clearInput)
 
       for (const renderNode of host.nodes.values()) {
         destroyRenderNode(renderNode)

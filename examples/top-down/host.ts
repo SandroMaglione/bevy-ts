@@ -1,3 +1,4 @@
+import { Keyboard } from "@bevy-ts/browser"
 import { Application, Assets, Container, Texture } from "pixi.js"
 
 import { PLAYER_SHEET_URL } from "./constants.ts"
@@ -6,14 +7,6 @@ import { createHud } from "./render/hud.ts"
 import { destroyRenderNode } from "./render/nodes.ts"
 import { createPlayerFrameAtlas } from "./render/player-sheet.ts"
 import type { InputStateValue, RenderNode, TopDownHostValue } from "./types.ts"
-
-const normalizeKey = (key: string): string => {
-  if (key.length === 1) {
-    return key.toLowerCase()
-  }
-
-  return key
-}
 
 export type TopDownBrowserHost = {
   readonly host: TopDownHostValue
@@ -57,42 +50,13 @@ export const createTopDownBrowserHost = async (
   world.addChild(actorLayer)
   application.stage.addChild(world)
 
-  const pressedKeys = new Set<string>()
-  let previousInteractPressed = false
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    const key = normalizeKey(event.key)
-
-    if (
-      key === " " ||
-      key === "ArrowUp" ||
-      key === "ArrowDown" ||
-      key === "ArrowLeft" ||
-      key === "ArrowRight" ||
-      key === "w" ||
-      key === "a" ||
-      key === "s" ||
-      key === "d" ||
-      key === "e"
-    ) {
-      event.preventDefault()
-    }
-
-    pressedKeys.add(key)
-  }
-
-  const onKeyUp = (event: KeyboardEvent) => {
-    pressedKeys.delete(normalizeKey(event.key))
-  }
-
-  const clearKeys = () => {
-    pressedKeys.clear()
-    previousInteractPressed = false
-  }
-
-  window.addEventListener("keydown", onKeyDown)
-  window.addEventListener("keyup", onKeyUp)
-  window.addEventListener("blur", clearKeys)
+  const keyboard = Keyboard.actions(window, {
+    up: ["ArrowUp", "w"],
+    down: ["ArrowDown", "s"],
+    left: ["ArrowLeft", "a"],
+    right: ["ArrowRight", "d"],
+    interact: ["e", " "]
+  })
 
   const host: TopDownHostValue = {
     application,
@@ -110,24 +74,19 @@ export const createTopDownBrowserHost = async (
     host,
     inputManager: {
       snapshot() {
-        const interactPressed = pressedKeys.has("e") || pressedKeys.has(" ")
-        const nextState = {
-          up: pressedKeys.has("ArrowUp") || pressedKeys.has("w"),
-          down: pressedKeys.has("ArrowDown") || pressedKeys.has("s"),
-          left: pressedKeys.has("ArrowLeft") || pressedKeys.has("a"),
-          right: pressedKeys.has("ArrowRight") || pressedKeys.has("d"),
-          interactPressed,
-          interactJustPressed: interactPressed && !previousInteractPressed
+        const input = keyboard.snapshot()
+        return {
+          up: input.up.held,
+          down: input.down.held,
+          left: input.left.held,
+          right: input.right.held,
+          interactPressed: input.interact.held,
+          interactJustPressed: input.interact.pressed
         }
-
-        previousInteractPressed = interactPressed
-        return nextState
       }
     },
     async destroy() {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
-      window.removeEventListener("blur", clearKeys)
+      keyboard.dispose()
 
       for (const renderNode of host.nodes.values()) {
         destroyRenderNode(renderNode)

@@ -35,6 +35,7 @@
     "packages/core/src/Size2.ts",
     "packages/core/src/system.ts",
     "packages/core/src/Vector2.ts",
-    "packages/browser/src/FixedLoop.ts"
+    "packages/browser/src/FixedLoop.ts",
+    "packages/browser/src/Keyboard.ts"
   ]
 }

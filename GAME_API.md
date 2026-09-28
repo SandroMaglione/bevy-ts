@@ -209,6 +209,26 @@ loop.value.stop()
 Pixi, Three, Canvas, DOM, tests, and server simulations can provide another
 `TickSource`. The gameplay schedules do not change.
 
+Keyboard input is exposed the same way: bind named actions once, read one
+snapshot per update, and hand it to the ECS through a service.
+
+```ts
+import { Keyboard } from "@bevy-ts/browser"
+
+const input = Keyboard.actions(window, {
+  left: ["ArrowLeft", "a"],
+  right: ["ArrowRight", "d"],
+  jump: [" ", "ArrowUp", "w"]
+})
+
+// A capture system reads this through a service once per update.
+const snapshot = input.snapshot()
+snapshot.jump.pressed // true once per press, even for taps shorter than a frame
+snapshot.left.held
+
+input.dispose()
+```
+
 ## What remains adapter code
 
 The core deliberately does not choose an asset loader, renderer, audio engine,
