@@ -41,6 +41,7 @@
     "packages/math/src/Vector2.ts",
     "packages/browser/src/FixedLoop.ts",
     "packages/browser/src/Keyboard.ts",
+    "packages/browser/src/Pointer.ts",
     "packages/pixi/src/NodeRegistry.ts",
     "packages/pixi/src/RenderSync.ts",
     "packages/devtools/src/Session.ts",
