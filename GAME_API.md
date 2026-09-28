@@ -337,6 +337,12 @@ and `services` pass extra read-only data to the callbacks, and `redrawOn`
 lists components whose changes re-run `apply` (animation frames, tints,
 interpolation).
 
+With a fixed-step loop, draw movement between steps: copy `Position` into a
+`PrevPosition` component at the start of each step, leave out `transform`
+above, and add `RenderSync.interpolate(Game, { name, registry: RenderNodes,
+previous: PrevPosition, current: Position, clock: RenderClock, place })`,
+where `RenderClock` is a service holding `FixedLoop`'s render `alpha`.
+
 ## What remains adapter code
 
 The core deliberately does not choose an asset loader, renderer, audio engine,

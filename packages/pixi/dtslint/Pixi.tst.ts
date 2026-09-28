@@ -147,4 +147,68 @@ describe("@typeonce/bevy-ts-pixi", () => {
       apply: () => {}
     })
   })
+
+  it("makes the transform optional: callbacks then see `transform: undefined`", () => {
+    const render = RenderSync.system(Game, {
+      name: "PixiTypes/NoTransform",
+      renderable: Sprite,
+      registry: Nodes,
+      create: ({ transform }) => {
+        expect(transform).type.toBe<undefined>()
+        return { destroy() {}, x: 0 }
+      },
+      apply: () => {}
+    })
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
+    })
+    expect(runtime.tick(Game.Schedule(render)).ok).type.toBe<boolean>()
+  })
+
+  it("types interpolate: planar components, a clock with alpha, and required services", () => {
+    const Planar = Descriptor.Component<{ x: number; y: number }>()("PixiTypes/Planar")
+    const Previous = Descriptor.Component<{ x: number; y: number }>()("PixiTypes/Previous")
+    const Clock = Descriptor.Service<{ readonly alpha: number }>()("PixiTypes/Clock")
+    const NoAlpha = Descriptor.Service<{ readonly now: number }>()("PixiTypes/NoAlpha")
+    const Planet = Schema.bind(Schema.fragment({ components: { Planar, Previous, Position, Health } }))
+
+    const interpolate = RenderSync.interpolate(Planet, {
+      name: "PixiTypes/Interpolate",
+      registry: Nodes,
+      previous: Previous,
+      current: Planar,
+      clock: Clock,
+      place: (node, position) => {
+        expect(node).type.toBe<Node>()
+        expect(position).type.toBe<RenderSync.Planar>()
+      }
+    })
+
+    const withoutClock = Planet.Runtime.make({
+      services: Planet.Runtime.services(Planet.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
+    })
+    // @ts-expect-error!
+    withoutClock.tick(Planet.Schedule(interpolate))
+
+    RenderSync.interpolate(Planet, {
+      name: "PixiTypes/NotPlanar",
+      registry: Nodes,
+      // @ts-expect-error!
+      previous: Health,
+      current: Planar,
+      clock: Clock,
+      place: () => {}
+    })
+
+    RenderSync.interpolate(Planet, {
+      name: "PixiTypes/NoAlpha",
+      registry: Nodes,
+      previous: Previous,
+      current: Planar,
+      // @ts-expect-error!
+      clock: NoAlpha,
+      place: () => {}
+    })
+  })
 })
+

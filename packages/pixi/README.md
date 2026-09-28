@@ -1,6 +1,6 @@
 # `@typeonce/bevy-ts-pixi`
 
-Pixi integrations for bevy-ts: a render-node registry keyed by entity (`NodeRegistry`) and one system that creates, updates, and destroys renderer nodes from ECS entities (`RenderSync`).
+Pixi integrations for bevy-ts: a render-node registry keyed by entity (`NodeRegistry`), a system that creates, updates, and destroys renderer nodes from ECS entities (`RenderSync.system`), and a system that draws fixed-step movement smoothly between steps (`RenderSync.interpolate`).
 
 ```sh
 pnpm add @typeonce/bevy-ts-pixi @typeonce/bevy-ts
