@@ -205,4 +205,34 @@ describe("@typeonce/bevy-ts-pixi", () => {
     expect(old.destroyed).toBe(true)
     expect(layer.children.map((node) => node.label)).toEqual(["new"])
   })
+
+  it("creates, updates, and destroys nothing while its run conditions fail, and catches up after", () => {
+    const Mode = Game.StateMachine("PixiTest/Mode", ["Visible", "Hidden"] as const)
+    const layer = new FakeContainer()
+    const render = RenderSync.system(Game, {
+      name: "PixiTest/Gated",
+      renderable: Sprite,
+      transform: Position,
+      registry: Nodes,
+      when: [Game.Condition.inState(Mode, "Visible")],
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: (node, { transform }) => {
+        node.x = transform.x
+      }
+    })
+    const Spawn = Game.System("PixiTest/SpawnGated", {}, ({ commands }) => {
+      commands.spawn(Game.Command.spawn([Position, { x: 4, y: 0 }], [Sprite, { label: "late" }]))
+    })
+    const Show = Game.System("PixiTest/Show", { nextMachines: { mode: Game.System.nextState(Mode) } }, ({ nextMachines }) => {
+      nextMachines.mode.set("Visible")
+    })
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.inContainer(layer))),
+      machines: Game.Runtime.machines(Game.Runtime.machine(Mode, "Hidden"))
+    })
+    runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred(), render))
+    expect(layer.children).toEqual([])
+    runtime.tick(Game.Schedule(Show, Game.Schedule.applyStateTransitions(), render))
+    expect(layer.children.map((node) => [node.label, node.x])).toEqual([["late", 4]])
+  })
 })

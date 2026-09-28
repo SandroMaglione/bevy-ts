@@ -28,6 +28,23 @@ describe("InputCapture", () => {
     expect(ready.tick(Game.Schedule(Capture)).ok).type.toBe<boolean>()
   })
 
+  it("requires the machines its run conditions read", () => {
+    const Pace = Game.StateMachine("CaptureTypes/Pace", ["Running", "Frozen"] as const)
+    const Capture = InputCapture.system(Game, {
+      name: "CaptureTypes/Gated",
+      source: KeyboardInput,
+      resource: Input,
+      when: [Game.Condition.inState(Pace, "Running")]
+    })
+    const services = Game.Runtime.services(Game.Runtime.service(KeyboardInput, Keyboard.actions(window, bindings)))
+    const resources = { Input: Keyboard.idle(bindings), Wrong: { jump: false } }
+    const withoutMachine = Game.Runtime.make({ services, resources })
+    // @ts-expect-error!
+    withoutMachine.tick(Game.Schedule(Capture))
+    const ready = Game.Runtime.make({ services, resources, machines: Game.Runtime.machines(Game.Runtime.machine(Pace, "Running")) })
+    expect(ready.tick(Game.Schedule(Capture)).ok).type.toBe<boolean>()
+  })
+
   it("rejects resources whose value is not the snapshot type", () => {
     // @ts-expect-error!
     InputCapture.system(Game, { name: "CaptureTypes/Wrong", source: KeyboardInput, resource: Wrong })

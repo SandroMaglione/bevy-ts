@@ -43,6 +43,7 @@
  * ```
  */
 import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
+import type { Condition, MachineNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
 import type * as Entity from "@typeonce/bevy-ts/Entity"
 import type { OptionalReadAccess, OptionalReadCell, ReadAccess, ReadCell, ReadonlyValue } from "@typeonce/bevy-ts/Query"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
@@ -109,7 +110,8 @@ export interface Options<
   Registry extends RegistryService,
   Select extends Selection<S>,
   Services extends Readonly<Record<string, ServiceDescriptor>>,
-  Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {}
+  Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {},
+  When extends ReadonlyArray<Condition> = readonly []
 > {
   /** The system name. */
   readonly name: string
@@ -132,6 +134,12 @@ export interface Options<
    * should set the node's state rather than increment it.
    */
   readonly redrawOn?: ReadonlyArray<Schema.ComponentDescriptor<S>>
+  /**
+   * Run conditions, like a system's `when`. While they fail, nothing is
+   * created, updated, or destroyed; additions, changes, and removals are
+   * seen when the system runs again.
+   */
+  readonly when?: When
   /** Builds the node for a new renderable entity. */
   readonly create: (context: NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>) => NodeOf<Registry>
   /**
@@ -145,7 +153,7 @@ export interface Options<
  * The generated system. It requires the registry and any extra resources and
  * services.
  */
-export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor> =
+export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | MachineNeedsFromConditions<ReadonlyArray<Condition>>> =
   Schema.BoundSystem<S, Root, any, void, never, string, Needs>
 
 /**
@@ -159,11 +167,12 @@ export const system = <
   const Registry extends RegistryService,
   const Select extends Selection<S> = {},
   const Services extends Readonly<Record<string, ServiceDescriptor>> = {},
-  const Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {}
+  const Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {},
+  const When extends ReadonlyArray<Condition<Root>> = readonly []
 >(
   Game: Schema.Game<S, Root>,
-  options: Options<S, Root, Renderable, Transform, Registry, Select, Services, Resources>
-): RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]> => {
+  options: Options<S, Root, Renderable, Transform, Registry, Select, Services, Resources, When>
+): RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | MachineNeedsFromConditions<When>> => {
   type Node = NodeOf<Registry>
   type Context = NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>
   // Internally the generic descriptors are erased; the public result type
@@ -212,7 +221,8 @@ export const system = <
     removed: { renderables: Game.System.readRemoved(options.renderable) },
     despawned: { entities: Game.System.readDespawned() },
     resources,
-    services
+    services,
+    when: options.when ?? []
   }, ({ queries, removed, despawned, resources, services }) => {
     const registry = services.__registry as NodeRegistry<Node>
     // Destroy first, so an entity that lost and regained its renderable gets a fresh node.
@@ -233,5 +243,5 @@ export const system = <
         if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
       }
     }
-  }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]>
+  }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | MachineNeedsFromConditions<When>>
 }

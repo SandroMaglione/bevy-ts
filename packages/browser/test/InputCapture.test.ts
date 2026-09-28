@@ -32,6 +32,35 @@ describe("InputCapture", () => {
     expect(seen).toEqual(["false/false", "true/false", "false/true"])
   })
 
+  it("skips capture while its run conditions fail, keeping presses in the device", () => {
+    const Source = Descriptor.Service<Keyboard.Actions<typeof bindings>>()("CaptureTest/Keys")
+    const Input = Descriptor.TransientResource<Keyboard.Snapshot<typeof bindings>>()("CaptureTest/Held")
+    const Game = Schema.bind(Schema.fragment({ resources: { Input } }))
+    const Pace = Game.StateMachine("CaptureTest/Pace", ["Running", "Frozen"] as const)
+    const keyboard = Keyboard.scripted(bindings, [{ frame: 0, press: ["jump"], release: ["jump"] }])
+    const Capture = InputCapture.system(Game, {
+      name: "CaptureTest/Gated",
+      source: Source,
+      resource: Input,
+      when: [Game.Condition.inState(Pace, "Running")]
+    })
+    const Resume = Game.System("CaptureTest/Resume", { nextMachines: { pace: Game.System.nextState(Pace) } }, ({ nextMachines }) => {
+      nextMachines.pace.set("Running")
+    })
+    const ReadInput = Game.Inspector("CaptureTest/ReadInput", { resources: { input: Game.System.readResource(Input) } }, ({ resources }) => resources.input.get())
+
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(Game.Runtime.service(Source, keyboard)),
+      resources: { Input: Keyboard.idle(bindings) },
+      machines: Game.Runtime.machines(Game.Runtime.machine(Pace, "Frozen"))
+    })
+    runtime.tick(Game.Schedule(Capture))
+    expect(keyboard.frames()).toBe(0)
+    runtime.tick(Game.Schedule(Resume, Game.Schedule.applyStateTransitions(), Capture))
+    // The first snapshot is taken only now, so the tap is still there.
+    expect(runtime.inspect(ReadInput).jump.pressed).toBe(true)
+  })
+
   it("builds idle snapshots for every action", () => {
     expect(Keyboard.idle(bindings)).toEqual({
       jump: { held: false, pressed: false, released: false },
