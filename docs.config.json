@@ -9,6 +9,7 @@
     { "id": "runtime", "label": "Runtime" },
     { "id": "browser", "label": "Browser" },
     { "id": "pixi", "label": "Pixi" },
+    { "id": "devtools", "label": "Devtools" },
     { "id": "data-structures", "label": "Data Structures" },
     { "id": "helpers", "label": "Helpers" }
   ],
@@ -41,6 +42,10 @@
     "packages/browser/src/FixedLoop.ts",
     "packages/browser/src/Keyboard.ts",
     "packages/pixi/src/NodeRegistry.ts",
-    "packages/pixi/src/RenderSync.ts"
+    "packages/pixi/src/RenderSync.ts",
+    "packages/devtools/src/Session.ts",
+    "packages/devtools/src/Invariant.ts",
+    "packages/devtools/src/Format.ts",
+    "packages/devtools/src/Rendered.ts"
   ]
 }

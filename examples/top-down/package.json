@@ -6,6 +6,7 @@
     "@bevy-ts/core": "workspace:*",
     "@bevy-ts/browser": "workspace:*",
     "@bevy-ts/pixi": "workspace:*",
-    "@bevy-ts/math": "workspace:*"
+    "@bevy-ts/math": "workspace:*",
+    "@bevy-ts/devtools": "workspace:*"
   }
 }

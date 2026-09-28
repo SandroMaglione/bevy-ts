@@ -1,9 +1,10 @@
 import { Keyboard } from "@bevy-ts/browser"
+import { Session } from "@bevy-ts/devtools"
 import { describe, expect, it } from "vitest"
 
 import { createTopDownSimulation } from "../simulation.ts"
 import { PlayerCameraQuery } from "../queries.ts"
-import { Game } from "../schema.ts"
+import { CollectedCount, Game } from "../schema.ts"
 import { inputBindings } from "../types.ts"
 
 const start = (timeline: Keyboard.Timeline<typeof inputBindings>) => {
@@ -35,5 +36,33 @@ describe("top-down simulation", () => {
     const description = runtime.debug.describe()
     expect(description.schedules.map((schedule) => schedule.name)).toEqual(["setup", "update"])
     expect(description.lints.filter((lint) => lint.severity === "warning")).toEqual([])
+  })
+})
+
+describe("top-down debug session", () => {
+  it("walks to the first pickup and collects it", () => {
+    const keyboard = Keyboard.scripted(inputBindings, [
+      { frame: 0, press: ["left"] },
+      { frame: 85, release: ["left"] },
+      { frame: 88, press: ["interact"], release: ["interact"] }
+    ])
+    const simulation = createTopDownSimulation({ keyboard })
+    if (!simulation.ok) throw new Error(simulation.error.message)
+    const { runtime, setup, update } = simulation.value
+    const session = Session.make(runtime, { schedules: { setup, update } })
+    session.run("setup")
+
+    const run = session.run("update", { frames: 120 })
+    expect(run.data.ok).toBe(true)
+
+    const collected = session.journal({ system: "TopDown/CollectFocusedCollectable" })
+    expect(collected.data.map((line) => line.text)).toEqual([
+      "resource TopDown/CollectedCount 0 -> 1",
+      "resource TopDown/FocusedCollectable {current:&e12,label:\"Map Fragment\",distance:20.276} -> {current:null,label:null,distance:null}",
+      "queued despawn",
+      "applyDeferred: despawn e12"
+    ])
+    expect(session.journal({ resource: CollectedCount }).data).toHaveLength(1)
+    expect(session.report().data.warnings).toEqual([])
   })
 })
