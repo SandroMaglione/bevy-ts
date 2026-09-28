@@ -344,7 +344,7 @@ export const sampleFoundersFromSurvivors = (
 }
 
 export const spawnFoodDraft = (position: { x: number; y: number }) =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, position],
     [Velocity, { x: 0, y: 0 }],
     [Food, { nutrition: FOOD_ENERGY }],
@@ -358,7 +358,7 @@ export const spawnAgentDraft = (
   wanderAngle: number
 ) => {
   const agent = deriveAgentStats(founder.lineageId, founder.speciesHue, founder.genes, generationIndex)
-  return Game.Command.spawnWith(
+  return Game.Command.spawn(
     [Position, position],
     [Velocity, { x: 0, y: 0 }],
     [Genes, founder.genes],
@@ -406,7 +406,7 @@ export const collectAgentSnapshots = (
   }>
 ): ReadonlyArray<AgentSnapshot> =>
   matches.map((match) => ({
-    handle: Game.Entity.handleAs(Agent, match.entity.id),
+    handle: Game.Entity.handle(match.entity.id, Agent),
     entityId: match.entity.id.value,
     position: match.data.position.get(),
     genes: match.data.genes.get(),

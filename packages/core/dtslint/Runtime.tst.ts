@@ -1,16 +1,16 @@
-import { App, Descriptor, Fx, Result, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/core/Size2"
-import * as Vector2 from "@bevy-ts/core/Vector2"
-import * as Runtime from "@bevy-ts/core/runtime"
-import * as Schedule from "@bevy-ts/core/schedule"
-import * as System from "@bevy-ts/core/system"
+import { Descriptor, Result, Schema } from "@bevy-ts/core"
+import * as Size2 from "@bevy-ts/math/Size2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
+import * as Runtime from "@bevy-ts/core/Runtime"
+import * as Schedule from "@bevy-ts/core/Schedule"
+import * as System from "@bevy-ts/core/System"
 import { describe, expect, it } from "tstyche"
 
 const Time = Descriptor.Resource<number>()("Time")
 const Counter = Descriptor.Resource<number>()("Counter")
-const Phase = Descriptor.State<"Running" | "Paused">()("Phase")
+const Phase = Descriptor.Resource<"Running" | "Paused">()("Phase")
 const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
-const Camera = Descriptor.ConstructedState(Vector2)("Camera")
+const Camera = Descriptor.ConstructedResource(Vector2)("Camera")
 const Logger = Descriptor.Service<{ readonly log: (message: string) => void }>()("Logger")
 const PrefixedLogger = Descriptor.Service<{ readonly log: (message: string) => void }>()("RuntimeTypes/Logger")
 
@@ -18,9 +18,7 @@ const Game = Schema.bind(Schema.fragment({
   resources: {
     DeltaTime: Time,
     Counter,
-    Viewport
-  },
-  states: {
+    Viewport,
     CurrentPhase: Phase,
     Camera
   }
@@ -36,19 +34,19 @@ const ResourceSystem = System.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => resources.time.get())
+    { resources.time.get() }
 )
 
 const StateSystem = System.System(
   "RuntimeTypes/State",
   {
     schema,
-    states: {
-      phase: System.readState(Phase)
+    resources: {
+      phase: System.readResource(Phase)
     }
   },
-  ({ states }) =>
-    Fx.sync(() => states.phase.get())
+  ({ resources }) =>
+    { resources.phase.get() }
 )
 
 const ServiceSystem = System.System(
@@ -60,9 +58,9 @@ const ServiceSystem = System.System(
     }
   },
   ({ services }) =>
-    Fx.sync(() => {
+    {
       services.logger.log("ok")
-    })
+    }
 )
 
 const PrefixedServiceSystem = System.System(
@@ -74,9 +72,9 @@ const PrefixedServiceSystem = System.System(
     }
   },
   ({ services }) =>
-    Fx.sync(() => {
+    {
       services.logger.log("ok")
-    })
+    }
 )
 
 const resourceSchedule = Schedule.Schedule(ResourceSystem)
@@ -89,14 +87,12 @@ const prefixedServiceSchedule = Schedule.Schedule(PrefixedServiceSystem)
 
 describe("Runtime", () => {
   it("accepts initialization keyed by schema property names", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
         DeltaTime: 1 / 60,
-        Counter: 0
-      },
-      states: {
+        Counter: 0,
         CurrentPhase: "Running"
       }
     })
@@ -107,34 +103,13 @@ describe("Runtime", () => {
       {
         readonly DeltaTime: number
         readonly Counter: number
-      },
-      {
-        readonly CurrentPhase: "Running"
+        readonly CurrentPhase: "Running" | "Paused"
       }
     >>()
   })
 
-  it("makeRuntimeResult unwraps validated resource and state seeds", () => {
-    const runtime = Runtime.makeRuntimeResult({
-      schema,
-      services: Runtime.services(),
-      resources: {
-        DeltaTime: Result.success(1 / 60),
-        Counter: Result.success(0)
-      },
-      states: {
-        CurrentPhase: Result.success("Running" as const)
-      }
-    })
-
-    if (runtime.ok) {
-      runtime.value.runSchedule(resourceSchedule)
-      runtime.value.runSchedule(stateSchedule)
-    }
-  })
-
-  it("makeRuntimeConstructed accepts raw values for constructed resources and states", () => {
-    const runtime = Runtime.makeRuntimeConstructed({
+  it("make accepts raw values for constructed resources and returns a Result", () => {
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
@@ -143,9 +118,7 @@ describe("Runtime", () => {
         Viewport: {
           width: 320,
           height: 180
-        }
-      },
-      states: {
+        },
         CurrentPhase: "Running",
         Camera: {
           x: 10,
@@ -155,13 +128,13 @@ describe("Runtime", () => {
     })
 
     if (runtime.ok) {
-      runtime.value.runSchedule(resourceSchedule)
-      runtime.value.runSchedule(stateSchedule)
+      runtime.value.tick(resourceSchedule)
+      runtime.value.tick(stateSchedule)
     }
   })
 
-  it("makeRuntimeConstructed rejects carried values for constructed resources that bypass raw validation", () => {
-    Runtime.makeRuntimeConstructed({
+  it("make rejects Result-wrapped values for constructed resources", () => {
+    Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
@@ -174,7 +147,7 @@ describe("Runtime", () => {
   })
 
   it("rejects descriptor-name keys that are not schema keys", () => {
-    Runtime.makeRuntime({
+    Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
@@ -185,10 +158,10 @@ describe("Runtime", () => {
   })
 
   it("rejects descriptor-name state keys that are not schema keys", () => {
-    Runtime.makeRuntime({
+    Runtime.make({
       schema,
       services: Runtime.services(),
-      states: {
+      resources: {
         // @ts-expect-error!
         Phase: "Running"
       }
@@ -196,34 +169,32 @@ describe("Runtime", () => {
   })
 
   it("rejects schedules whose required service is missing from the runtime", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
         DeltaTime: 1 / 60,
-        Counter: 0
-      },
-      states: {
+        Counter: 0,
         CurrentPhase: "Running"
       }
     })
 
     // @ts-expect-error!
-    runtime.runSchedule(serviceSchedule)
+    runtime.tick(serviceSchedule)
   })
 
   it("rejects schedules whose required resource initialization is missing from the runtime", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services()
     })
 
     // @ts-expect-error!
-    runtime.runSchedule(resourceSchedule)
+    runtime.tick(resourceSchedule)
   })
 
   it("rejects schedules whose required state initialization is missing from the runtime", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
@@ -233,30 +204,26 @@ describe("Runtime", () => {
     })
 
     // @ts-expect-error!
-    runtime.runSchedule(stateSchedule)
+    runtime.tick(stateSchedule)
   })
 
   it("propagates runtime requirement checks through app.update", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(),
       resources: {
         DeltaTime: 1 / 60,
-        Counter: 0
-      },
-      states: {
+        Counter: 0,
         CurrentPhase: "Running"
       }
     })
 
-    const app = App.makeApp(runtime)
-
     // @ts-expect-error!
-    app.update(serviceSchedule)
+    runtime.tick(serviceSchedule)
   })
 
   it("accepts schedules whose requirements are fully satisfied", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(
         Runtime.service(Logger, {
@@ -267,9 +234,7 @@ describe("Runtime", () => {
       ),
       resources: {
         DeltaTime: 1 / 60,
-        Counter: 0
-      },
-      states: {
+        Counter: 0,
         CurrentPhase: "Running"
       }
     })
@@ -278,7 +243,7 @@ describe("Runtime", () => {
   })
 
   it("accepts descriptor-based provisioning for prefixed service names", () => {
-    const runtime = Runtime.makeRuntime({
+    const runtime = Runtime.make({
       schema,
       services: Runtime.services(
         Runtime.service(PrefixedLogger, {
@@ -289,18 +254,16 @@ describe("Runtime", () => {
       ),
       resources: {
         DeltaTime: 1 / 60,
-        Counter: 0
-      },
-      states: {
+        Counter: 0,
         CurrentPhase: "Running"
       }
     })
 
-    runtime.runSchedule(prefixedServiceSchedule)
+    runtime.tick(prefixedServiceSchedule)
   })
 
   it("rejects raw service objects so descriptor names cannot drift", () => {
-    Runtime.makeRuntime({
+    Runtime.make({
       schema,
       // @ts-expect-error!
       services: {
@@ -334,9 +297,7 @@ describe("Runtime", () => {
     const Core = Schema.Feature.define("Core", {
       schema: Schema.fragment({
         resources: {
-          DeltaTime: Time
-        },
-        states: {
+          DeltaTime: Time,
           CurrentPhase: Phase
         }
       }),
@@ -353,10 +314,8 @@ describe("Runtime", () => {
           "RuntimeTypes/FeatureMode",
           {
             resources: {
-              time: Game.System.readResource(Time)
-            },
-            states: {
-              phase: Game.System.readState(Phase)
+              time: Game.System.readResource(Time),
+              phase: Game.System.readResource(Phase)
             },
             services: {
               logger: Game.System.service(Logger)
@@ -365,13 +324,13 @@ describe("Runtime", () => {
               mode: Game.System.machine(Mode)
             }
           },
-          ({ resources, states, services, machines }) =>
-            Fx.sync(() => {
+          ({ resources, services, machines }) =>
+            {
               expect(resources.time.get()).type.toBe<number>()
-              expect(states.phase.get()).type.toBe<"Running" | "Paused">()
+              expect(resources.phase.get()).type.toBe<"Running" | "Paused">()
               expect(machines.mode.get()).type.toBe<"Idle" | "Live">()
               services.logger.log("feature")
-            })
+            }
         )
 
         return {
@@ -397,9 +356,7 @@ describe("Runtime", () => {
         })
       ),
       resources: {
-        DeltaTime: 1
-      },
-      states: {
+        DeltaTime: 1,
         CurrentPhase: "Running"
       },
       machines: project.Game.Runtime.machines(
@@ -409,54 +366,36 @@ describe("Runtime", () => {
 
     runtime.tick(...project.schedules.update)
 
-    project.App.make({
-      services: project.Game.Runtime.services(
-        project.Game.Runtime.service(Logger, {
-          log(_message) {}
-        })
-      ),
-      resources: {
-        DeltaTime: 1
-      },
-      states: {
-        CurrentPhase: "Running"
-      },
-      machines: project.Game.Runtime.machines(
-        project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
-      )
-    })
-
-    // @ts-expect-error!
-    project.App.make({
+    const runtime2 = project.Game.Runtime.make({
       services: project.Game.Runtime.services(),
       resources: {
-        DeltaTime: 1
-      },
-      states: {
+        DeltaTime: 1,
         CurrentPhase: "Running"
       },
       machines: project.Game.Runtime.machines(
         project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
       )
     })
-
     // @ts-expect-error!
-    project.App.make({
+    runtime2.tick(...project.schedules.update)
+
+    const runtime3 = project.Game.Runtime.make({
       services: project.Game.Runtime.services(
         project.Game.Runtime.service(Logger, {
           log(_message) {}
         })
       ),
-      states: {
+      resources: {
         CurrentPhase: "Running"
       },
       machines: project.Game.Runtime.machines(
         project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
       )
     })
-
     // @ts-expect-error!
-    project.App.make({
+    runtime3.tick(...project.schedules.update)
+
+    const runtime4 = project.Game.Runtime.make({
       services: project.Game.Runtime.services(
         project.Game.Runtime.service(Logger, {
           log(_message) {}
@@ -469,20 +408,21 @@ describe("Runtime", () => {
         project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
       )
     })
-
     // @ts-expect-error!
-    project.App.make({
+    runtime4.tick(...project.schedules.update)
+
+    const runtime5 = project.Game.Runtime.make({
       services: project.Game.Runtime.services(
         project.Game.Runtime.service(Logger, {
           log(_message) {}
         })
       ),
       resources: {
-        DeltaTime: 1
-      },
-      states: {
+        DeltaTime: 1,
         CurrentPhase: "Running"
       }
     })
+    // @ts-expect-error!
+    runtime5.tick(...project.schedules.update)
   })
 })

@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { CollectableQuery, PlayerCameraQuery } from "../queries.ts"
 import {
@@ -22,7 +21,7 @@ export const UpdateFocusedCollectableSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -45,7 +44,7 @@ export const UpdateFocusedCollectableSystem = Game.System(
         }
 
         bestDistanceSquared = distanceSquared
-        current = Game.Entity.handleAs(Collectable, collectable.entity.id)
+        current = Game.Entity.handle(collectable.entity.id, Collectable)
         label = data.label
       }
 
@@ -54,7 +53,7 @@ export const UpdateFocusedCollectableSystem = Game.System(
         label,
         distance: current === null ? null : Math.sqrt(bestDistanceSquared)
       })
-    })
+    }
 )
 
 export const CollectFocusedCollectableSystem = Game.System(
@@ -67,7 +66,7 @@ export const CollectFocusedCollectableSystem = Game.System(
     }
   },
   ({ resources, lookup, commands }) =>
-    Fx.sync(() => {
+    {
       if (!resources.input.get().interactJustPressed) {
         return
       }
@@ -86,5 +85,5 @@ export const CollectFocusedCollectableSystem = Game.System(
       commands.despawn(result.value.entity.id)
       resources.collectedCount.update((value) => value + 1)
       resources.focused.set(makeEmptyFocusedCollectable())
-    })
+    }
 )

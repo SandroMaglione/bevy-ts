@@ -10,7 +10,7 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -170,7 +170,7 @@ const setNodeTilePosition = (
 const INITIAL_PLAYER_POSITION = { col: 3, row: 3 } as const
 
 const makePlayerDraft = () =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, INITIAL_PLAYER_POSITION],
     [Movement, {
       direction: null,
@@ -186,7 +186,7 @@ const makePlayerDraft = () =>
   )
 
 const makeSolidDraft = (position: TilePosition) =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, position],
     [Renderable, {
       kind: "solid"
@@ -198,7 +198,7 @@ const SetupSystem = Game.System(
   "Pokemon/Setup",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
+    {
       commands.spawn(makePlayerDraft())
 
       const solids = [
@@ -211,7 +211,7 @@ const SetupSystem = Game.System(
       for (const solid of solids) {
         commands.spawn(makeSolidDraft(solid))
       }
-    })
+    }
 )
 
 const CaptureFrameInputSystem = Game.System(
@@ -225,9 +225,9 @@ const CaptureFrameInputSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.deltaTime.set(services.pixi.clock.deltaSeconds)
-    })
+    }
 )
 
 const InputSystem = Game.System(
@@ -241,7 +241,7 @@ const InputSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       const direction = services.input.direction()
       if (direction === null) {
         return
@@ -260,7 +260,7 @@ const InputSystem = Game.System(
               direction
             }
       )
-    })
+    }
 )
 
 const PlanMovementSystem = Game.System(
@@ -271,7 +271,7 @@ const PlanMovementSystem = Game.System(
     }
   },
   ({ queries }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -291,7 +291,7 @@ const PlanMovementSystem = Game.System(
         progress: 0,
         isMoving: true
       })
-    })
+    }
 )
 
 const CollisionSystem = Game.System(
@@ -306,7 +306,7 @@ const CollisionSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const { cols, rows } = resources.grid.get()
       const occupied = new Set(
         queries.solids.each().map((match) => {
@@ -341,7 +341,7 @@ const CollisionSystem = Game.System(
           isMoving: false
         })
       }
-    })
+    }
 )
 
 const AdvanceMovementSystem = Game.System(
@@ -355,7 +355,7 @@ const AdvanceMovementSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -388,7 +388,7 @@ const AdvanceMovementSystem = Game.System(
         ...movement,
         progress: nextProgress
       })
-    })
+    }
 )
 
 const DestroyRenderNodesSystem = Game.System(
@@ -405,7 +405,7 @@ const DestroyRenderNodesSystem = Game.System(
     }
   },
   ({ removed, despawned, services }) =>
-    Fx.sync(() => {
+    {
       for (const entityId of removed.renderables.all()) {
         const node = services.pixi.nodes.get(entityId.value)
         if (!node) {
@@ -427,7 +427,7 @@ const DestroyRenderNodesSystem = Game.System(
         node.destroy()
         services.pixi.nodes.delete(entityId.value)
       }
-    })
+    }
 )
 
 const CreateRenderNodesSystem = Game.System(
@@ -444,7 +444,7 @@ const CreateRenderNodesSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const { tileSize } = resources.grid.get()
 
       for (const match of queries.addedRenderables.each()) {
@@ -465,7 +465,7 @@ const CreateRenderNodesSystem = Game.System(
           position.row * tileSize
         )
       }
-    })
+    }
 )
 
 const SyncPlayerNodeSystem = Game.System(
@@ -482,7 +482,7 @@ const SyncPlayerNodeSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const { tileSize } = resources.grid.get()
 
       for (const match of queries.players.each()) {
@@ -507,13 +507,14 @@ const SyncPlayerNodeSystem = Game.System(
           renderY
         )
       }
-    })
+    }
 )
 
 const setupSchedule = Game.Schedule(SetupSystem)
 
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
+  Game.Schedule.applyDeferred(),
   CreateRenderNodesSystem,
   SyncPlayerNodeSystem
 )
@@ -528,6 +529,7 @@ const updateSchedule = Game.Schedule(
 const browserUpdateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   updateSchedule,
+  Game.Schedule.applyDeferred(),
   DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
   SyncPlayerNodeSystem
@@ -549,15 +551,12 @@ export const createPokemonExample = (input: {
       DeltaTime: 1 / 60
     }
   })
-
-  const app = App.makeApp(runtime)
-  app.bootstrap(setupSchedule)
+  runtime.tick(setupSchedule)
 
   return {
     runtime,
-    app,
     update() {
-      app.update(updateSchedule)
+      runtime.tick(updateSchedule)
     }
   }
 }
@@ -648,14 +647,12 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
       DeltaTime: host.clock.deltaSeconds
     }
   })
-
-  const app = App.makeApp(runtime)
-  app.bootstrap(browserSetupSchedule)
-  app.update(browserUpdateSchedule)
+  runtime.tick(browserSetupSchedule)
+  runtime.tick(browserUpdateSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
-    app.update(browserUpdateSchedule)
+    runtime.tick(browserUpdateSchedule)
   }
 
   application.ticker.add(tick)

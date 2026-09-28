@@ -6,11 +6,16 @@ It keeps Bevy-style ECS concepts, but the public API is stricter and more explic
 
 Documentation: https://sandromaglione.github.io/bevy-ts/
 
-The current game API is shown in [GAME_API.md](./GAME_API.md). The carried-type
-design is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+New to the library? Start with [CONCEPTS.md](./CONCEPTS.md) (the model in five
+minutes), then [GAME_API.md](./GAME_API.md). Type architecture and storage are
+documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+Packages: `@bevy-ts/core` (ECS), `@bevy-ts/math` (validated vectors and sizes),
+`@bevy-ts/browser` (fixed-step loop, keyboard actions), `@bevy-ts/pixi` (entity
+to Pixi node sync).
 
 ```ts
-import { App, Descriptor, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Schema } from "@bevy-ts/core"
 
 // Define the ECS world shape once.
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -24,21 +29,43 @@ const Game = Schema.bind(Schema.fragment({ components: { Position, Velocity }, r
 const Move = Game.System("Move", {
   queries: { moving: Game.Query({ selection: { position: Game.Query.write(Position), velocity: Game.Query.read(Velocity) } }) },
   resources: { deltaTime: Game.System.readResource(DeltaTime) }
-}, ({ queries, resources }) => Fx.sync(() => {
+}, ({ queries, resources }) => {
   for (const match of queries.moving.each()) {
     const position = match.data.position.get()
     const velocity = match.data.velocity.get()
     match.data.position.set({ x: position.x + velocity.x * resources.deltaTime.get(), y: position.y + velocity.y * resources.deltaTime.get() })
   }
-}))
+})
 
-const app = App.makeApp(Game.Runtime.make({
+const runtime = Game.Runtime.make({
   services: Game.Runtime.services(),
   resources: { DeltaTime: 1 / 60 }
-}))
-app.update(Game.Schedule(Move))
+})
+runtime.tick(Game.Schedule(Move))
 ```
 
 Start with the docs homepage for the full step-by-step Pixi example:
 
 - https://sandromaglione.github.io/bevy-ts/
+
+## Runtime semantics
+
+- Descriptor identity is `(kind, name)`. A bound schema rejects two descriptors of one kind with the same name at compile time, and a look-alike descriptor with a different value type is not accepted in place of the registered one.
+- Nothing becomes visible implicitly. Queued commands, events, and relation failures stay pending, across schedule runs if needed, until a schedule reaches `applyDeferred()`, `updateEvents()`, `updateRelationFailures()`, or `applyStateTransitions(...)`.
+- Change detection is per system: `added(...)`/`changed(...)` filters and removed/despawned reads show each system the changes made since its own previous run, exactly once.
+- Query results come back in spawn order.
+
+## Performance
+
+Queries only visit entities that carry their rarest required component, cache their match set until a component or relation they depend on changes membership, and reuse match objects between runs. See [ARCHITECTURE.md](./ARCHITECTURE.md#storage).
+
+The benchmark suite in [`packages/core/bench`](./packages/core/bench) covers spawn/despawn, query iteration, change detection, structural churn, schedule overhead, lookups, events, relations, and type-checker cost:
+
+```sh
+pnpm bench          # run and print
+pnpm bench:check    # compare with packages/core/bench/baseline.json (exit 1 on regression)
+pnpm bench:update   # record a new baseline
+```
+
+CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 35%, or type-checker growth over 5%.
+

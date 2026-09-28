@@ -1,6 +1,6 @@
 import { Descriptor, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/core/Size2"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Size2 from "@bevy-ts/math/Size2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 import type { InputStateValue, PlatformerHostValue, PlayerContactsValue } from "./types.ts"
 
 export const Position = Descriptor.ConstructedComponent(Vector2)("Platformer/Position")
@@ -27,6 +27,7 @@ export const InputManager = Descriptor.Service<{
   readonly snapshot: () => InputStateValue
 }>()("Platformer/InputManager")
 export const PlatformerHost = Descriptor.Service<PlatformerHostValue>()("Platformer/Host")
+export const RenderNodes = Descriptor.Service<PlatformerHostValue["nodes"]>()("Platformer/RenderNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({

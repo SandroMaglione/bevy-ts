@@ -17,13 +17,11 @@ import {
 } from "./systems/simulation.ts"
 import { CreateRenderNodesSystem, SyncHudSystem, SyncRenderNodesSystem } from "./systems/render.ts"
 
-const runningEntry = Game.Schedule.fragment({
-  entries: [
+const runningEntry = Game.Schedule(
     ResetGenerationOnRunningEnterSystem,
     Game.Schedule.applyDeferred(),
     SetupWorldSystem
-  ]
-})
+  )
 
 const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SimulationPhase, "Running", [runningEntry])
@@ -32,7 +30,6 @@ const stateTransitions = Game.Schedule.transitions(
 export const setupSchedule = Game.Schedule(
   SetupWorldSystem,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreateRenderNodesSystem,
   SyncRenderNodesSystem,
   SyncHudSystem
@@ -53,7 +50,6 @@ export const updateSchedule = Game.Schedule(
   QueueResumeSystem,
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreateRenderNodesSystem,
   SyncRenderNodesSystem,
   SyncHudSystem

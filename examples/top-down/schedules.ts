@@ -33,7 +33,6 @@ const cameraSyncSchedule = Game.Schedule(
 )
 
 const renderSyncSchedule = Game.Schedule(
-  Game.Schedule.updateLifecycle(),
   DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
   SyncRenderableTransformsSystem,
@@ -59,7 +58,6 @@ export const setupSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
-  Game.Schedule.updateLifecycle(),
   DestroyRenderNodesSystem,
   CreateRenderNodesSystem,
   SyncRenderableTransformsSystem,

@@ -1,4 +1,4 @@
-import { Collider, Game, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
+import { Collider, Game, Player, Position, Solid, Velocity } from "./schema.ts"
 
 export const PlayerMovementQuery = Game.Query({
   selection: {
@@ -31,20 +31,4 @@ export const SolidCollisionQuery = Game.Query({
     collider: Game.Query.read(Collider),
     solid: Game.Query.read(Solid)
   }
-})
-
-export const AddedRenderableQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable)
-  },
-  filters: [Game.Query.added(Renderable)]
-})
-
-export const ChangedRenderableTransformQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable)
-  },
-  filters: [Game.Query.changed(Position)]
 })

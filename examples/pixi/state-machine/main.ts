@@ -18,11 +18,11 @@ export const startStateMachineExample = async (mount: HTMLElement): Promise<Brow
     mount.textContent = runtime.error.message
     return failedHandle()
   }
-  runtime.value.initialize(setupSchedule)
+  runtime.value.tick(setupSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     browserHost.host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
-    runtime.value.runSchedule(updateSchedule)
+    runtime.value.tick(updateSchedule)
   }
 
   browserHost.host.application.ticker.add(tick)

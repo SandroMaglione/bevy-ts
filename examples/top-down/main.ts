@@ -21,7 +21,7 @@ export const startTopDownExample = async (mount: HTMLElement): Promise<BrowserEx
     mount.textContent = runtime.error.message
     return failedHandle()
   }
-  runtime.value.initialize(setupSchedule)
+  runtime.value.tick(setupSchedule)
 
   const loop = FixedLoop.start({
     source: FixedLoop.source((onTick) => {
@@ -36,7 +36,7 @@ export const startTopDownExample = async (mount: HTMLElement): Promise<BrowserEx
     maxStepsPerFrame: MAX_STEPS_PER_FRAME,
     update: (stepSeconds) => {
       browserHost.host.clock.deltaSeconds = stepSeconds
-      return runtime.value.runSchedule(updateSchedule)
+      return runtime.value.tick(updateSchedule)
     },
     render: () => {},
     onFailure: (failure) => {

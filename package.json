@@ -7,6 +7,10 @@
     "test": "vitest run",
     "test-types": "TSTYCHE_STORE_PATH=.tstyche TSTYCHE_TYPESCRIPT_MODULE=typescript tstyche",
     "check": "pnpm typecheck && pnpm test-types && pnpm test",
+    "bench": "node --expose-gc --import tsx scripts/bench.ts",
+    "bench:check": "node --expose-gc --import tsx scripts/bench.ts --check",
+    "bench:update": "node --expose-gc --import tsx scripts/bench.ts --update",
+    "bench:types:generate": "node --import tsx packages/core/bench/types/generate.ts",
     "coverage": "vitest --coverage",
     "docs:generate": "node --import tsx scripts/docs.ts",
     "docs:dev": "pnpm docs:generate && vite docs --host",
@@ -19,6 +23,7 @@
     "example:top-down": "vite --open /examples/top-down/"
   },
   "devDependencies": {
+    "@bevy-ts/math": "workspace:*",
     "@effect/platform-node": "4.0.0-beta.43",
     "@types/markdown-it": "^14.1.2",
     "@types/matter-js": "^0.20.2",

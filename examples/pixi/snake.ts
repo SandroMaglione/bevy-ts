@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from "pixi.js"
 
-import { App, Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Entity, Schema } from "@bevy-ts/core"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -157,7 +157,7 @@ const randomSeedFromNow = (): number => {
 }
 
 const makeHeadDraft = () =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, INITIAL_HEAD_POSITION],
     [PreviousPosition, INITIAL_HEAD_POSITION],
     [Velocity, INITIAL_VELOCITY],
@@ -169,7 +169,7 @@ const makeTailDraft = (
   position: GridPosition
 ) =>
   Game.Command.relate(
-    Game.Command.spawnWith(
+    Game.Command.spawn(
       [Position, position],
       [PreviousPosition, position],
       [SnakeBody, {
@@ -181,7 +181,7 @@ const makeTailDraft = (
   )
 
 const makeFoodDraft = (position: GridPosition) =>
-  Game.Command.spawnWith(
+  Game.Command.spawn(
     [Position, position],
     [PreviousPosition, position],
     [Food, {}]
@@ -383,7 +383,7 @@ const ResetGameSystem = Game.System(
     }
   },
   ({ queries, resources, commands }) =>
-    Fx.sync(() => {
+    {
       resources.score.set(0)
       resources.pendingGrowth.set(0)
       resources.reason.set(null)
@@ -403,7 +403,7 @@ const ResetGameSystem = Game.System(
       commands.spawn(
         makeTailDraft(headId, INITIAL_TAIL_POSITION)
       )
-    })
+    }
 )
 
 const QueueRestartSystem = Game.System(
@@ -418,12 +418,12 @@ const QueueRestartSystem = Game.System(
     }
   },
   ({ nextMachines, services }) =>
-    Fx.sync(() => {
+    {
       if (services.input.consumeRestart()) {
         // Restart is queued here and becomes real only at applyStateTransitions().
         nextMachines.phase.set("Playing")
       }
-    })
+    }
 )
 
 const CapturePreviousPositionsSystem = Game.System(
@@ -436,7 +436,7 @@ const CapturePreviousPositionsSystem = Game.System(
     }
   },
   ({ queries }) =>
-    Fx.sync(() => {
+    {
       const head = queries.head.singleOptional()
       if (!head.ok || !head.value) {
         return
@@ -448,7 +448,7 @@ const CapturePreviousPositionsSystem = Game.System(
       for (const match of queries.body.each()) {
         match.data.previousPosition.set(match.data.position.get())
       }
-    })
+    }
 )
 
 const BrowserInputSystem = Game.System(
@@ -463,7 +463,7 @@ const BrowserInputSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       const next = services.input.consumeDirection()
       if (!next) {
         return
@@ -481,7 +481,7 @@ const BrowserInputSystem = Game.System(
       }
 
       head.value.data.velocity.set(next)
-    })
+    }
 )
 
 const MoveHeadSystem = Game.System(
@@ -493,7 +493,7 @@ const MoveHeadSystem = Game.System(
     }
   },
   ({ queries }) =>
-    Fx.sync(() => {
+    {
       const head = queries.head.singleOptional()
       if (!head.ok || !head.value) {
         return
@@ -505,7 +505,7 @@ const MoveHeadSystem = Game.System(
         x: position.x + velocity.x,
         y: position.y + velocity.y
       }))
-    })
+    }
 )
 
 const MoveBodySystem = Game.System(
@@ -518,7 +518,7 @@ const MoveBodySystem = Game.System(
     }
   },
   ({ queries, lookup }) =>
-    Fx.sync(() => {
+    {
       const head = queries.head.singleOptional()
       if (!head.ok || !head.value) {
         return
@@ -535,7 +535,7 @@ const MoveBodySystem = Game.System(
         match.data.position.set(previous)
         previous = nextPrevious
       }
-    })
+    }
 )
 
 const DetectFoodCollisionSystem = Game.System(
@@ -556,7 +556,7 @@ const DetectFoodCollisionSystem = Game.System(
     }
   },
   ({ queries, events }) =>
-    Fx.sync(() => {
+    {
       const head = queries.head.singleOptional()
       if (!head.ok || !head.value) {
         return
@@ -568,11 +568,11 @@ const DetectFoodCollisionSystem = Game.System(
           // The event crosses updateEvents(), so store a durable handle now and
           // re-resolve it later in ResolveFoodEatenSystem.
           events.foodEaten.emit({
-            entity: Game.Entity.handleAs(Food, match.entity.id)
+            entity: Game.Entity.handle(match.entity.id, Food)
           })
         }
       }
-    })
+    }
 )
 
 const ResolveFoodEatenSystem = Game.System(
@@ -588,7 +588,7 @@ const ResolveFoodEatenSystem = Game.System(
     }
   },
   ({ events, resources, commands, lookup }) =>
-    Fx.sync(() => {
+    {
       for (const event of events.foodEaten.all()) {
         // Event visibility is committed now, but the food entity may already be
         // stale, so re-resolve the durable handle explicitly.
@@ -601,7 +601,7 @@ const ResolveFoodEatenSystem = Game.System(
         resources.score.update((score) => score + 1)
         resources.pendingGrowth.update((growth) => growth + 1)
       }
-    })
+    }
 )
 
 const GrowSnakeSystem = Game.System(
@@ -617,7 +617,7 @@ const GrowSnakeSystem = Game.System(
     }
   },
   ({ queries, resources, commands }) =>
-    Fx.sync(() => {
+    {
       const pendingGrowth = resources.pendingGrowth.get()
       if (pendingGrowth <= 0) {
         return
@@ -647,7 +647,7 @@ const GrowSnakeSystem = Game.System(
       }
 
       resources.pendingGrowth.set(pendingGrowth - 1)
-    })
+    }
 )
 
 const DetectSelfCollisionSystem = Game.System(
@@ -676,7 +676,7 @@ const DetectSelfCollisionSystem = Game.System(
     }
   },
   ({ queries, resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       const head = queries.head.singleOptional()
       if (!head.ok || !head.value) {
         return
@@ -690,7 +690,7 @@ const DetectSelfCollisionSystem = Game.System(
           return
         }
       }
-    })
+    }
 )
 
 const EnsureFoodSystem = Game.System(
@@ -710,7 +710,7 @@ const EnsureFoodSystem = Game.System(
     }
   },
   ({ queries, resources, nextMachines, commands }) =>
-    Fx.sync(() => {
+    {
       if (resources.reason.get() !== null) {
         return
       }
@@ -749,7 +749,7 @@ const EnsureFoodSystem = Game.System(
       commands.spawn(
         makeFoodDraft(spawnAt)
       )
-    })
+    }
 )
 
 const DestroySnakeNodesSystem = Game.System(
@@ -763,7 +763,7 @@ const DestroySnakeNodesSystem = Game.System(
     }
   },
   ({ despawned, services }) =>
-    Fx.sync(() => {
+    {
       for (const entityId of despawned.entities.all()) {
         const node = services.pixi.nodes.get(entityId.value)
         if (!node) {
@@ -774,7 +774,7 @@ const DestroySnakeNodesSystem = Game.System(
         node.destroy()
         services.pixi.nodes.delete(entityId.value)
       }
-    })
+    }
 )
 
 const CreateSnakeNodesSystem = Game.System(
@@ -788,7 +788,7 @@ const CreateSnakeNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.added.each()) {
         const kind = snakeNodeKindForMatch(match)
         if (!kind) {
@@ -805,7 +805,7 @@ const CreateSnakeNodesSystem = Game.System(
 
         placeNode(node, kind, services.pixi.tileSize, match.data.position.get())
       }
-    })
+    }
 )
 
 const SyncSnakeNodeTransformsSystem = Game.System(
@@ -819,7 +819,7 @@ const SyncSnakeNodeTransformsSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.moved.each()) {
         const kind = snakeNodeKindForMatch(match)
         if (!kind) {
@@ -836,7 +836,7 @@ const SyncSnakeNodeTransformsSystem = Game.System(
 
         placeNode(node, kind, services.pixi.tileSize, match.data.position.get())
       }
-    })
+    }
 )
 
 const ReconcileSnakeNodesSystem = Game.System(
@@ -850,7 +850,7 @@ const ReconcileSnakeNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       const liveEntityIds = new Set<number>()
       for (const match of queries.live.each()) {
         liveEntityIds.add(match.entity.id.value)
@@ -865,7 +865,7 @@ const ReconcileSnakeNodesSystem = Game.System(
         node.destroy()
         services.pixi.nodes.delete(entityId)
       }
-    })
+    }
 )
 
 const SyncHudSystem = Game.System(
@@ -883,7 +883,7 @@ const SyncHudSystem = Game.System(
     }
   },
   ({ resources, machines, services }) =>
-    Fx.sync(() => {
+    {
       const hud = services.pixi.ui
       const score = resources.score.get()
       const reason = resources.reason.get()
@@ -908,7 +908,7 @@ const SyncHudSystem = Game.System(
         ? `You filled all ${SNAKE_BOARD_WIDTH * SNAKE_BOARD_HEIGHT} cells. Final score ${score}.`
         : `The snake collided with itself. Final score ${score}.`
       hud.footer.textContent = "Press Space or Enter to restart"
-    })
+    }
 )
 
 const setupSchedule = Game.Schedule(
@@ -920,7 +920,6 @@ const setupSchedule = Game.Schedule(
 
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
-  Game.Schedule.updateLifecycle(),
   CreateSnakeNodesSystem,
   SyncSnakeNodeTransformsSystem,
   ReconcileSnakeNodesSystem,
@@ -955,7 +954,6 @@ const browserUpdateSchedule = Game.Schedule(
   BrowserInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   DestroySnakeNodesSystem,
   CreateSnakeNodesSystem,
   SyncSnakeNodeTransformsSystem,
@@ -976,14 +974,12 @@ export const createSnakeExample = () => {
       Game.Runtime.machine(GamePhase, "Playing")
     )
   })
-  const app = App.makeApp(runtime)
-  app.bootstrap(setupSchedule)
+  runtime.tick(setupSchedule)
 
   return {
     runtime,
-    app,
     update() {
-      runtime.runSchedule(updateSchedule)
+      runtime.tick(updateSchedule)
     }
   }
 }
@@ -1091,10 +1087,10 @@ export const startSnakeExample = async (mount: HTMLElement): Promise<BrowserExam
     )
   })
 
-  runtime.initialize(browserSetupSchedule)
+  runtime.tick(browserSetupSchedule)
 
   const intervalId = window.setInterval(() => {
-    runtime.runSchedule(browserUpdateSchedule)
+    runtime.tick(browserUpdateSchedule)
   }, 140)
 
   return {

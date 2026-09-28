@@ -41,7 +41,7 @@ const Move = Game.System(
     queries: { moving: Moving },
     resources: { dt: Game.System.readResource(DeltaTime) }
   },
-  ({ queries, resources }) => Fx.sync(() => {
+  ({ queries, resources }) => {
     const dt = resources.dt.get()
     for (const { data } of queries.moving.each()) {
       const position = data.position.get()
@@ -51,7 +51,7 @@ const Move = Game.System(
         y: position.y + velocity.y * dt
       })
     }
-  })
+  }
 )
 ```
 
@@ -82,7 +82,7 @@ const SpendHealth = Game.System(
       return Fx.fail("AlreadyDead" as const)
     }
 
-    return Fx.sync(() => target.value.data.health.set(health - 1))
+    target.value.data.health.set(health - 1)
   }
 )
 
@@ -92,7 +92,7 @@ const runtime = Game.Runtime.make({
   resources: { DeltaTime: 1 / 60 }
 })
 
-const update = runtime.runSchedule(gameplay)
+const update = runtime.tick(gameplay)
 if (!update.ok) {
   // update.error is the exact named-system failure union:
   // SystemFailure<"Game/SpendHealth", "TargetMissing" | "AlreadyDead">
@@ -100,7 +100,7 @@ if (!update.ok) {
 }
 ```
 
-Component, resource, state, event, queued-machine, and deferred-command writes
+Component, resource, event, queued-machine, and deferred-command writes
 from the failing system are rolled back or discarded. Earlier successful
 systems remain committed. External service effects, such as network or audio
 calls, cannot be rolled back by the ECS.
@@ -117,21 +117,21 @@ only to delete a level. Entity scopes model ownership directly.
 const Level = Game.EntityScope("Game/Level")
 
 const LoadLevel = Game.System("Game/LoadLevel", {}, ({ commands }) =>
-  Fx.sync(() => {
-    commands.spawnIn(Level, Game.Command.spawnWith(
+  {
+    commands.spawnIn(Level, Game.Command.spawn(
       Game.Command.entry(Position, { x: 10, y: 20 }),
       Game.Command.entry(Health, 3)
     ))
-  })
+  }
 )
 
 const UnloadLevel = Game.System("Game/UnloadLevel", {}, ({ commands }) =>
-  Fx.sync(() => commands.despawnScope(Level))
+  { commands.despawnScope(Level) }
 )
 ```
 
 Persistent entities can still use `commands.spawn(...)`. Scope cleanup uses the
-normal deferred-command boundary, so lifecycle readers and renderer cleanup
+normal deferred-command boundary, so removal readers and renderer cleanup
 systems see the same despawns as any other entity removal.
 
 ## 5. Read the world without making a diagnostic system
@@ -164,7 +164,26 @@ const summary = runtime.inspect(WorldSummary)
 
 An inspector cannot declare write queries, write resources, commands, event
 writers, or state-transition writers. Runtime provisioning is checked at the
-call, and inspection does not advance events or lifecycle buffers.
+call, and inspection does not advance events. Like a system, an inspector's
+`added`/`changed` filters report changes since its previous evaluation.
+
+## Save and load
+
+```ts
+localStorage.setItem("save", JSON.stringify(runtime.snapshot()))
+
+const loaded = runtime.restore(JSON.parse(localStorage.getItem("save") ?? "null"))
+if (!loaded.ok) {
+  // loaded.error: InvalidSnapshot | UnknownComponent | InvalidComponent | ...
+  console.error(loaded.error)
+}
+```
+
+A snapshot is plain data keyed by descriptor, relation, and machine names.
+`restore` takes `unknown`, validates it against the schema (constructed
+descriptors run their constructors), and leaves the world untouched on
+failure. Entity ids are kept, so stored handles still resolve. A restore reads
+as despawns and spawns to change detection, so renderer sync rebuilds itself.
 
 ## 6. Drive fixed updates from any renderer
 
@@ -182,7 +201,7 @@ const loop = FixedLoop.start({
   update: (stepSeconds) => {
     // A capture system can copy this host value into DeltaTime first.
     hostClock.deltaSeconds = stepSeconds
-    return runtime.runSchedule(gameplay)
+    return runtime.tick(gameplay)
   },
   render: ({ alpha, droppedSeconds }) => {
     renderer.render({ alpha })
@@ -207,6 +226,56 @@ loop.value.stop()
 
 Pixi, Three, Canvas, DOM, tests, and server simulations can provide another
 `TickSource`. The gameplay schedules do not change.
+
+Keyboard input is exposed the same way: bind named actions once, read one
+snapshot per update, and hand it to the ECS through a service.
+
+```ts
+import { Keyboard } from "@bevy-ts/browser"
+
+const input = Keyboard.actions(window, {
+  left: ["ArrowLeft", "a"],
+  right: ["ArrowRight", "d"],
+  jump: [" ", "ArrowUp", "w"]
+})
+
+// A capture system reads this through a service once per update.
+const snapshot = input.snapshot()
+snapshot.jump.pressed // true once per press, even for taps shorter than a frame
+snapshot.left.held
+
+input.dispose()
+```
+
+## 7. Mirror entities into Pixi
+
+`@bevy-ts/pixi` owns the node bookkeeping; what a node looks like stays yours.
+
+```ts
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
+
+const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Container>>()("Game/RenderNodes")
+
+const render = RenderSync.systems(Game, {
+  name: "Game/Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: RenderNodes,
+  create: (renderable) => makeNode(renderable),
+  apply: (node, position) => node.position.set(position.x, position.y)
+})
+
+const runtime = Game.Runtime.make({
+  services: Game.Runtime.services(
+    Game.Runtime.service(RenderNodes, NodeRegistry.inContainer(actorLayer))
+  )
+})
+
+const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.destroy, render.create, render.sync)
+```
+
+The registry service is a normal requirement: ticking the render systems on a
+runtime that does not provide it is a compile error.
 
 ## What remains adapter code
 

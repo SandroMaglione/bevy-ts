@@ -1,21 +1,21 @@
-import { Descriptor, Fx, Result, Schema } from "@bevy-ts/core"
-import * as Size2 from "@bevy-ts/core/Size2"
-import * as Vector2 from "@bevy-ts/core/Vector2"
-import type { EntityMut } from "@bevy-ts/core/entity"
-import * as Query from "@bevy-ts/core/query"
-import * as System from "@bevy-ts/core/system"
-import type { Query as QueryTypes } from "@bevy-ts/core/query"
+import { Descriptor, Result, Schema } from "@bevy-ts/core"
+import * as Size2 from "@bevy-ts/math/Size2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
+import type { EntityMut } from "@bevy-ts/core/Entity"
+import * as Query from "@bevy-ts/core/Query"
+import * as System from "@bevy-ts/core/System"
+import type { Query as QueryTypes } from "@bevy-ts/core/Query"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
 const Time = Descriptor.Resource<number>()("Time")
 const TickEvent = Descriptor.Event<{ dt: number }>()("TickEvent")
-const Phase = Descriptor.State<"Running" | "Paused">()("Phase")
+const Phase = Descriptor.Resource<"Running" | "Paused">()("Phase")
 const Logger = Descriptor.Service<{ log: (message: string) => void }>()("Logger")
 const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
 const Viewport = Descriptor.ConstructedResource(Size2)("Viewport")
-const Camera = Descriptor.ConstructedState(Vector2)("Camera")
+const Camera = Descriptor.ConstructedResource(Vector2)("Camera")
 
 const Game = Schema.bind(Schema.fragment({
   components: {
@@ -25,14 +25,12 @@ const Game = Schema.bind(Schema.fragment({
   },
   resources: {
     Time,
-    Viewport
+    Viewport,
+    Phase,
+    Camera
   },
   events: {
     TickEvent
-  },
-  states: {
-    Phase,
-    Camera
   }
 }))
 const schema = Game.schema
@@ -55,21 +53,19 @@ describe("System", () => {
         },
         resources: {
           time: System.readResource(Time),
-          viewport: System.writeResource(Viewport)
+          viewport: System.writeResource(Viewport),
+          phase: System.writeResource(Phase),
+          camera: System.writeResource(Camera)
         },
         events: {
           tick: System.writeEvent(TickEvent)
         },
         services: {
           logger: System.service(Logger)
-        },
-        states: {
-          phase: System.writeState(Phase),
-          camera: System.writeState(Camera)
         }
       },
-      ({ queries, resources, events, services, states }) =>
-        Fx.sync(() => {
+      ({ queries, resources, events, services }) =>
+        {
           expect(queries.moving.each()).type.toBe<ReadonlyArray<{
             readonly entity: EntityMut<typeof schema, {
               readonly position: Query.ReadonlyValue<Vector2.Vector2>
@@ -81,7 +77,7 @@ describe("System", () => {
           }>>()
 
           expect(resources.time.get()).type.toBe<number>()
-          expect(states.phase.get()).type.toBe<"Running" | "Paused">()
+          expect(resources.phase.get()).type.toBe<"Running" | "Paused">()
           expect(resources.viewport.setRaw({ width: 320, height: 180 })).type.toBe<Result.Result<void, Size2.Error>>()
           expect(resources.viewport.updateRaw((viewport) => ({
             width: viewport.width,
@@ -89,10 +85,10 @@ describe("System", () => {
           }))).type.toBe<Result.Result<void, Size2.Error>>()
           expect(services.logger).type.toBe<{ log: (message: string) => void }>()
           expect(events.tick.emit).type.toBe<(value: { dt: number }) => void>()
-          expect(states.phase.setResult(Result.success("Running"))).type.toBe<Result.Result<void, unknown>>()
-          expect(states.phase.updateResult(() => Result.success("Paused" as const))).type.toBe<Result.Result<void, unknown>>()
-          expect(states.camera.setRaw({ x: 0, y: 0 })).type.toBe<Result.Result<void, Vector2.Error>>()
-          expect(states.camera.updateRaw((camera) => ({
+          expect(resources.phase.setResult(Result.success("Running"))).type.toBe<Result.Result<void, unknown>>()
+          expect(resources.phase.updateResult(() => Result.success("Paused" as const))).type.toBe<Result.Result<void, unknown>>()
+          expect(resources.camera.setRaw({ x: 0, y: 0 })).type.toBe<Result.Result<void, Vector2.Error>>()
+          expect(resources.camera.updateRaw((camera) => ({
             x: camera.x + 1,
             y: camera.y + 1
           }))).type.toBe<Result.Result<void, Vector2.Error>>()
@@ -101,7 +97,7 @@ describe("System", () => {
           resources.missing
           // @ts-expect-error!
           resources.time.setRaw(1)
-        })
+        }
     )
 
     expect(system).type.toBeAssignableTo<System.SystemDefinition<any, void, never>>()
@@ -135,7 +131,7 @@ describe("System", () => {
         ...movementAccess
       },
       ({ queries, resources, services }) =>
-        Fx.sync(() => {
+        {
           expect(queries.moving.each()).type.toBe<ReadonlyArray<{
             readonly entity: EntityMut<typeof schema, {
               readonly position: Query.ReadonlyValue<Vector2.Vector2>
@@ -152,7 +148,7 @@ describe("System", () => {
 
           // @ts-expect-error!
           resources.missing
-        })
+        }
     )
 
     System.System(
@@ -162,13 +158,13 @@ describe("System", () => {
         ...movementAccess
       },
       ({ resources, services }) =>
-        Fx.sync(() => {
+        {
           expect(resources.time.get()).type.toBe<number>()
           expect(services.logger.log).type.toBe<(message: string) => void>()
 
           // @ts-expect-error!
           services.missing
-        })
+        }
     )
   })
 
@@ -178,6 +174,6 @@ describe("System", () => {
       resoruces: {
         time: Game.System.readResource(Time)
       }
-    }, () => Fx.sync<undefined, {}>(() => undefined))
+    }, () => {})
   })
 })

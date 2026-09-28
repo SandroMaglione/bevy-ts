@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json.schemastore.org/tsconfig",
+  "extends": "../../../../tsconfig.base.json",
+  "files": ["./stress.ts"],
+  "compilerOptions": {
+    "rootDir": "../../../..",
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "paths": {
+      "@bevy-ts/core": ["../../src/index.ts"],
+      "@bevy-ts/core/*": ["../../src/*"]
+    }
+  }
+}

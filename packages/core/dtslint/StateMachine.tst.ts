@@ -1,7 +1,7 @@
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/runtime"
-import type * as SchemaTypes from "@bevy-ts/core/schema"
-import * as System from "@bevy-ts/core/system"
+import { Descriptor, Schema } from "@bevy-ts/core"
+import * as Runtime from "@bevy-ts/core/Runtime"
+import type * as SchemaTypes from "@bevy-ts/core/Schema"
+import * as System from "@bevy-ts/core/System"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("StateMachine/Position")
@@ -36,9 +36,9 @@ const ReaderSystem = Game.System(
     }
   },
   ({ machines }) =>
-    Fx.sync(() => {
+    {
       expect(machines.app.get()).type.toBe<"Menu" | "Playing" | "Paused">()
-    })
+    }
 )
 
 const WriterSystem = Game.System(
@@ -49,11 +49,11 @@ const WriterSystem = Game.System(
     }
   },
   ({ nextMachines }) =>
-    Fx.sync(() => {
+    {
       nextMachines.app.set("Playing")
       nextMachines.app.setIfChanged("Paused")
       expect(nextMachines.app.getPending()).type.toBe<"Menu" | "Playing" | "Paused" | undefined>()
-    })
+    }
 )
 
 const TransitionSystem = Game.System(
@@ -64,10 +64,10 @@ const TransitionSystem = Game.System(
     }
   },
   ({ transitions }) =>
-    Fx.sync(() => {
+    {
       expect(transitions.app.get().from).type.toBe<"Menu" | "Playing" | "Paused">()
       expect(transitions.app.get().to).type.toBe<"Menu" | "Playing" | "Paused">()
-    })
+    }
 )
 
 const TransitionEventSystem = Game.System(
@@ -78,10 +78,10 @@ const TransitionEventSystem = Game.System(
     }
   },
   ({ transitionEvents }) =>
-    Fx.sync(() => {
+    {
       const events = transitionEvents.app.all()
       expect(events).type.toBe<ReadonlyArray<{ readonly from: "Menu" | "Playing" | "Paused"; readonly to: "Menu" | "Playing" | "Paused" }>>()
-    })
+    }
 )
 
 const PlayingOnlySystem = Game.System(
@@ -89,7 +89,7 @@ const PlayingOnlySystem = Game.System(
   {
     when: [Game.Condition.inState(AppState, "Playing")]
   },
-  () => Fx.sync<undefined, {}>(() => undefined)
+  () => {}
 )
 
 
@@ -122,13 +122,13 @@ describe("StateMachine", () => {
         }
       },
       ({ machines, nextMachines }) =>
-        Fx.sync(() => {
+        {
           expect(machines.app.get()).type.toBe<"Menu" | "Playing" | "Paused">()
           expect(machines.round.get()).type.toBe<"Warmup" | "Live" | "SuddenDeath">()
           nextMachines.round.set("Live")
           // @ts-expect-error!
           nextMachines.round.set("Paused")
-        })
+        }
     )
   })
 
@@ -147,10 +147,10 @@ describe("StateMachine", () => {
         }
       },
       ({ nextMachines }) =>
-        Fx.sync(() => {
+        {
           // @ts-expect-error!
           nextMachines.app.set("GameOver")
-        })
+        }
     )
   })
 
@@ -163,7 +163,7 @@ describe("StateMachine", () => {
           other: System.machine(OtherState)
         }
       },
-      () => Fx.sync<undefined, {}>(() => undefined)
+      () => {}
     )
 
     Game.System(
@@ -174,7 +174,7 @@ describe("StateMachine", () => {
           other: Game.System.readTransitionEvent(OtherState)
         }
       },
-      () => Fx.sync<undefined, {}>(() => undefined)
+      () => {}
     )
 
     // @ts-expect-error!
@@ -231,7 +231,7 @@ describe("StateMachine", () => {
           counter: System.writeResource(Counter)
         }
       },
-      () => Fx.sync<undefined, {}>(() => undefined)
+      () => {}
     )
 
     const runtime = Game.Runtime.make({
@@ -270,10 +270,10 @@ describe("StateMachine", () => {
       "StateMachine/NoTransitionContext",
       {},
       ({ transitions }) =>
-        Fx.sync(() => {
+        {
           // @ts-expect-error!
           transitions.app
-        })
+        }
     )
   })
 
@@ -307,9 +307,9 @@ describe("StateMachine", () => {
           }
         },
         ({ services }) =>
-          Fx.sync(() => {
+          {
             services.logger.log("ok")
-          })
+          }
       )
     ])
 

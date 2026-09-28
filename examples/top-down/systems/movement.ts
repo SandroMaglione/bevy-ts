@@ -1,5 +1,4 @@
-import { Fx } from "@bevy-ts/core"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 
 import { PLAYER_SPEED } from "../constants.ts"
 import { normalizeMovement, resolveHorizontalMovement, resolveVerticalMovement } from "../math.ts"
@@ -17,7 +16,7 @@ export const PlanPlayerVelocitySystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -30,7 +29,7 @@ export const PlanPlayerVelocitySystem = Game.System(
           y: direction.y * PLAYER_SPEED
         })
       )
-    })
+    }
 )
 
 export const MovePlayerSystem = Game.System(
@@ -45,7 +44,7 @@ export const MovePlayerSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -78,5 +77,5 @@ export const MovePlayerSystem = Game.System(
         x: nextX,
         y: nextY
       })
-    })
+    }
 )

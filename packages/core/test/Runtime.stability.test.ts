@@ -20,9 +20,9 @@ describe("Runtime stabilization APIs", () => {
     })
 
     const spawn = Game.System("Stability/Spawn", {}, ({ commands }) =>
-      Fx.sync(() => {
-        commands.spawn(Game.Command.spawnWith([Position, { x: 1 }]))
-      })
+      {
+        commands.spawn(Game.Command.spawn([Position, { x: 1 }]))
+      }
     )
     const fail = Game.System(
       "Stability/Fail",
@@ -42,7 +42,7 @@ describe("Runtime stabilization APIs", () => {
             resources.count.set(99)
             events.signal.emit(99)
             nextMachines.mode.set("Broken")
-            commands.spawn(Game.Command.spawnWith([Position, { x: 99 }]))
+            commands.spawn(Game.Command.spawn([Position, { x: 99 }]))
           }),
           () => Fx.fail("Rejected" as const)
         )
@@ -64,13 +64,13 @@ describe("Runtime stabilization APIs", () => {
         events: { signal: Game.System.readEvent(Signal) },
         machines: { mode: Game.System.machine(Mode) }
       },
-      ({ queries, resources, events, machines }) => Fx.sync(() => {
+      ({ queries, resources, events, machines }) => {
         const position = queries.positions.single()
         observedPosition = position.ok ? position.value.data.position.get().x : -1
         observedCount = resources.count.get()
         observedSignals = events.signal.all()
         observedMode = machines.mode.get()
-      })
+      }
     )
 
     const runtime = Game.Runtime.make({
@@ -79,8 +79,8 @@ describe("Runtime stabilization APIs", () => {
       machines: Game.Runtime.machines(Game.Runtime.machine(Mode, "Ready"))
     })
 
-    expect(runtime.runSchedule(Game.Schedule(spawn))).toEqual({ ok: true, value: undefined })
-    expect(runtime.runSchedule(Game.Schedule(fail))).toEqual({
+    expect(runtime.tick(Game.Schedule(spawn, Game.Schedule.applyDeferred()))).toEqual({ ok: true, value: undefined })
+    expect(runtime.tick(Game.Schedule(fail))).toEqual({
       ok: false,
       error: {
         kind: "SystemFailure",
@@ -88,7 +88,7 @@ describe("Runtime stabilization APIs", () => {
         error: "Rejected"
       }
     })
-    expect(runtime.runSchedule(Game.Schedule(observe))).toEqual({ ok: true, value: undefined })
+    expect(runtime.tick(Game.Schedule(observe))).toEqual({ ok: true, value: undefined })
     expect(observedPosition).toBe(1)
     expect(observedCount).toBe(1)
     expect(observedSignals).toEqual([])
@@ -103,25 +103,25 @@ describe("Runtime stabilization APIs", () => {
       selection: { actor: Game.Query.read(Actor) }
     })
 
-    const spawn = Game.System("Scopes/Spawn", {}, ({ commands }) => Fx.sync(() => {
-      commands.spawnIn(Level, Game.Command.spawnWith([Actor, { name: "level" }]))
-      commands.spawn(Game.Command.spawnWith([Actor, { name: "persistent" }]))
-    }))
-    const clear = Game.System("Scopes/Clear", {}, ({ commands }) => Fx.sync(() => {
+    const spawn = Game.System("Scopes/Spawn", {}, ({ commands }) => {
+      commands.spawnIn(Level, Game.Command.spawn([Actor, { name: "level" }]))
+      commands.spawn(Game.Command.spawn([Actor, { name: "persistent" }]))
+    })
+    const clear = Game.System("Scopes/Clear", {}, ({ commands }) => {
       commands.despawnScope(Level)
-    }))
+    })
     let names: ReadonlyArray<string> = []
     const observe = Game.System(
       "Scopes/Observe",
       { queries: { actors: Actors } },
-      ({ queries }) => Fx.sync(() => {
+      ({ queries }) => {
         names = queries.actors.each().map(({ data }) => data.actor.get().name)
-      })
+      }
     )
 
     const runtime = Game.Runtime.make({ services: Game.Runtime.services() })
-    runtime.runSchedule(Game.Schedule(spawn, Game.Schedule.applyDeferred(), clear))
-    runtime.runSchedule(Game.Schedule(observe))
+    runtime.tick(Game.Schedule(spawn, Game.Schedule.applyDeferred(), clear, Game.Schedule.applyDeferred()))
+    runtime.tick(Game.Schedule(observe))
 
     expect(names).toEqual(["persistent"])
   })
@@ -134,9 +134,9 @@ describe("Runtime stabilization APIs", () => {
       resources: { Score }
     }))
 
-    const spawn = Game.System("Inspector/Spawn", {}, ({ commands }) => Fx.sync(() => {
-      commands.spawn(Game.Command.spawnWith([Position, { x: 4 }]))
-    }))
+    const spawn = Game.System("Inspector/Spawn", {}, ({ commands }) => {
+      commands.spawn(Game.Command.spawn([Position, { x: 4 }]))
+    })
     const snapshot = Game.Inspector(
       "Inspector/Snapshot",
       {
@@ -157,7 +157,7 @@ describe("Runtime stabilization APIs", () => {
       services: Game.Runtime.services(),
       resources: { Score: 7 }
     })
-    runtime.runSchedule(Game.Schedule(spawn))
+    runtime.tick(Game.Schedule(spawn, Game.Schedule.applyDeferred()))
 
     expect(runtime.inspect(snapshot)).toEqual({ positions: [4], score: 7 })
     expect(runtime.inspect(snapshot)).toEqual({ positions: [4], score: 7 })
@@ -169,7 +169,7 @@ describe("Runtime stabilization APIs", () => {
     const start = Game.System(
       "TransitionFailure/Start",
       { nextMachines: { mode: Game.System.nextState(Mode) } },
-      ({ nextMachines }) => Fx.sync(() => nextMachines.mode.set("Playing"))
+      ({ nextMachines }) => { nextMachines.mode.set("Playing") }
     )
     const load = Game.System(
       "TransitionFailure/Load",
@@ -189,7 +189,7 @@ describe("Runtime stabilization APIs", () => {
       machines: Game.Runtime.machines(Game.Runtime.machine(Mode, "Menu"))
     })
 
-    expect(runtime.runSchedule(schedule)).toEqual({
+    expect(runtime.tick(schedule)).toEqual({
       ok: false,
       error: {
         kind: "SystemFailure",

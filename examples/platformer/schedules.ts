@@ -24,19 +24,16 @@ export const setupSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
-  Game.Schedule.updateLifecycle(),
   CreateRenderNodesSystem,
   SyncHudSystem
 )
 
-const restartOnPlayingEnter = Game.Schedule.fragment({
-  entries: [
+const restartOnPlayingEnter = Game.Schedule(
     ResetWorldResourcesOnPlayingEnterSystem,
     DespawnLevelEntitiesOnPlayingEnterSystem,
     Game.Schedule.applyDeferred(),
     SpawnWorldOnPlayingEnterSystem
-  ]
-})
+  )
 
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Playing", [
@@ -54,7 +51,6 @@ export const updateSchedule = Game.Schedule(
   QueueRestartSystem,
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
   DestroyRenderNodesSystem,

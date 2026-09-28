@@ -1,6 +1,5 @@
-import { Fx } from "@bevy-ts/core"
-import * as Scalar from "@bevy-ts/core/Scalar"
-import * as Vector2 from "@bevy-ts/core/Vector2"
+import * as Scalar from "@bevy-ts/math/Scalar"
+import * as Vector2 from "@bevy-ts/math/Vector2"
 import { PICKUP_POINTS } from "./content.ts"
 import { playerSpawn } from "./definitions.ts"
 import {
@@ -59,7 +58,7 @@ const distanceSquared = (left: Vector, right: Vector): number => {
 }
 
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
-  return Game.Command.spawnWithMixed(
+  return Game.Command.spawn(
     Game.Command.entryRaw(Position, position),
     Game.Command.entry(Actor, { kind: "pickup" }),
     Game.Command.entry(Pickup, {})
@@ -70,8 +69,8 @@ export const SpawnPlayerSystem = Game.System(
   "StateMachineExample/SpawnPlayer",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
-      const playerDraft = Game.Command.spawnWithMixed(
+    {
+      const playerDraft = Game.Command.spawn(
         Game.Command.entryResult(Position, playerSpawn),
         Game.Command.entry(Actor, { kind: "player" }),
         Game.Command.entry(Player, {})
@@ -80,7 +79,7 @@ export const SpawnPlayerSystem = Game.System(
         return
       }
       commands.spawn(playerDraft.value)
-    })
+    }
 )
 
 export const CaptureFrameInputSystem = Game.System(
@@ -94,9 +93,9 @@ export const CaptureFrameInputSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       resources.deltaTime.set(services.host.clock.deltaSeconds)
-    })
+    }
 )
 
 export const QueueStartFromTitleSystem = Game.System(
@@ -111,13 +110,13 @@ export const QueueStartFromTitleSystem = Game.System(
     }
   },
   ({ nextMachines, services }) =>
-    Fx.sync(() => {
+    {
       if (services.input.consumeStart()) {
         // Restart is routed back through Countdown so reset work stays on the
         // transition boundary instead of happening immediately in input code.
         nextMachines.session.set("Countdown")
       }
-    })
+    }
 )
 
 export const QueueRestartSystem = Game.System(
@@ -138,11 +137,11 @@ export const QueueRestartSystem = Game.System(
     }
   },
   ({ nextMachines, services }) =>
-    Fx.sync(() => {
+    {
       if (services.input.consumeStart()) {
         nextMachines.session.set("Countdown")
       }
-    })
+    }
 )
 
 export const QueuePauseSystem = Game.System(
@@ -160,11 +159,11 @@ export const QueuePauseSystem = Game.System(
     }
   },
   ({ nextMachines, services }) =>
-    Fx.sync(() => {
+    {
       if (services.input.consumePause()) {
         nextMachines.round.set("Paused")
       }
-    })
+    }
 )
 
 export const QueueResumeSystem = Game.System(
@@ -182,11 +181,11 @@ export const QueueResumeSystem = Game.System(
     }
   },
   ({ nextMachines, services }) =>
-    Fx.sync(() => {
+    {
       if (services.input.consumePause()) {
         nextMachines.round.set("Playing")
       }
-    })
+    }
 )
 
 export const TickCountdownSystem = Game.System(
@@ -203,14 +202,14 @@ export const TickCountdownSystem = Game.System(
     }
   },
   ({ resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       const remaining = clamp(resources.countdown.get() - resources.deltaTime.get(), 0, COUNTDOWN_DURATION_SECONDS)
       resources.countdown.set(remaining)
       if (remaining <= 0) {
         nextMachines.session.set("Round")
         nextMachines.round.set("Playing")
       }
-    })
+    }
 )
 
 export const MovePlayerSystem = Game.System(
@@ -229,7 +228,7 @@ export const MovePlayerSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -244,7 +243,7 @@ export const MovePlayerSystem = Game.System(
         x: clamp(position.x + movement.x * PLAYER_SPEED * dt, PLAYER_RADIUS, arena.width - PLAYER_RADIUS),
         y: clamp(position.y + movement.y * PLAYER_SPEED * dt, PLAYER_RADIUS, arena.height - PLAYER_RADIUS)
       })
-    })
+    }
 )
 
 export const CollectPickupsSystem = Game.System(
@@ -260,7 +259,7 @@ export const CollectPickupsSystem = Game.System(
     }
   },
   ({ queries, resources, commands }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -273,7 +272,7 @@ export const CollectPickupsSystem = Game.System(
           resources.score.update((value) => value + 1)
         }
       }
-    })
+    }
 )
 
 export const TickRoundClockSystem = Game.System(
@@ -286,9 +285,9 @@ export const TickRoundClockSystem = Game.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => {
+    {
       resources.roundTime.update((value) => clamp(value - resources.deltaTime.get(), 0, ROUND_DURATION_SECONDS))
-    })
+    }
 )
 
 export const QueueOutcomeSystem = Game.System(
@@ -305,7 +304,7 @@ export const QueueOutcomeSystem = Game.System(
     }
   },
   ({ resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       if (resources.score.get() >= resources.goal.get()) {
         nextMachines.round.setIfChanged("Victory")
         return
@@ -314,7 +313,7 @@ export const QueueOutcomeSystem = Game.System(
       if (resources.roundTime.get() <= 0) {
         nextMachines.round.setIfChanged("Defeat")
       }
-    })
+    }
 )
 
 export const ResetRoundOnCountdownEnterSystem = Game.System(
@@ -333,7 +332,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
     }
   },
   ({ queries, resources, commands }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (player.ok && player.value) {
         player.value.data.position.setResult(playerSpawn)
@@ -357,7 +356,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
       resources.score.set(0)
       resources.roundTime.set(ROUND_DURATION_SECONDS)
       resources.countdown.set(COUNTDOWN_DURATION_SECONDS)
-    })
+    }
 )
 
 export const WriteTransitionNoticeSystem = Game.System(
@@ -372,7 +371,7 @@ export const WriteTransitionNoticeSystem = Game.System(
     }
   },
   ({ transitionEvents, resources }) =>
-    Fx.sync(() => {
+    {
       const messages = [
         ...transitionEvents.session.all().map((event) => `Session ${event.from} -> ${event.to}`),
         ...transitionEvents.round.all().map((event) => `Round ${event.from} -> ${event.to}`)
@@ -386,7 +385,7 @@ export const WriteTransitionNoticeSystem = Game.System(
         text: messages.join(" | "),
         ttl: NOTICE_DURATION_SECONDS
       })
-    })
+    }
 )
 
 export const FadeTransitionNoticeSystem = Game.System(
@@ -398,7 +397,7 @@ export const FadeTransitionNoticeSystem = Game.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => {
+    {
       const notice = resources.notice.get()
       if (notice.ttl <= 0) {
         return
@@ -409,7 +408,7 @@ export const FadeTransitionNoticeSystem = Game.System(
         text: ttl > 0 ? notice.text : "",
         ttl
       })
-    })
+    }
 )
 
 export const DestroyRenderNodesSystem = Game.System(
@@ -423,7 +422,7 @@ export const DestroyRenderNodesSystem = Game.System(
     }
   },
   ({ despawned, services }) =>
-    Fx.sync(() => {
+    {
       for (const entityId of despawned.entities.all()) {
         const node = services.host.nodes.get(entityId.value)
         if (!node) {
@@ -434,7 +433,7 @@ export const DestroyRenderNodesSystem = Game.System(
         node.destroy()
         services.host.nodes.delete(entityId.value)
       }
-    })
+    }
 )
 
 export const CreateRenderNodesSystem = Game.System(
@@ -448,7 +447,7 @@ export const CreateRenderNodesSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.added.each()) {
         const entityId = match.entity.id.value
         let node = services.host.nodes.get(entityId)
@@ -461,7 +460,7 @@ export const CreateRenderNodesSystem = Game.System(
         const position = match.data.position.get()
         node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 export const SyncRenderableTransformsSystem = Game.System(
@@ -475,7 +474,7 @@ export const SyncRenderableTransformsSystem = Game.System(
     }
   },
   ({ queries, services }) =>
-    Fx.sync(() => {
+    {
       for (const match of queries.moved.each()) {
         const node = services.host.nodes.get(match.entity.id.value)
         if (!node) {
@@ -485,7 +484,7 @@ export const SyncRenderableTransformsSystem = Game.System(
         const position = match.data.position.get()
         node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 export const SyncHudSystem = Game.System(
@@ -507,7 +506,7 @@ export const SyncHudSystem = Game.System(
     }
   },
   ({ resources, machines, services }) =>
-    Fx.sync(() => {
+    {
       const session = machines.session.get()
       const round = machines.round.get()
       const score = resources.score.get()
@@ -570,5 +569,5 @@ export const SyncHudSystem = Game.System(
           hud.footer.textContent = "Press Enter to restart through Countdown."
           break
       }
-    })
+    }
 )

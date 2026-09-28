@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import {
   CollectedCount,
@@ -27,7 +26,7 @@ export const SyncHudSystem = Game.System(
     }
   },
   ({ resources, machines, services }) =>
-    Fx.sync(() => {
+    {
       const focused = resources.focused.get()
       const collectedCount = resources.collectedCount.get()
       const totalCollectables = resources.totalCollectables.get()
@@ -42,5 +41,5 @@ export const SyncHudSystem = Game.System(
         remaining === 0
           ? "Every collectable has been picked up. The ECS world is now empty except for the player and walls."
           : "Player facing and locomotion now live in typed state machines. Pixi only renders the selected sprite frame."
-    })
+    }
 )

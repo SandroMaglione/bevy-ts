@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../constants.ts"
 import { clamp } from "../math.ts"
 import { PlayerCameraQuery } from "../queries.ts"
@@ -16,7 +15,7 @@ export const SyncCameraSystem = Game.System(
     }
   },
   ({ queries, resources }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -35,5 +34,5 @@ export const SyncCameraSystem = Game.System(
         x: minCameraX > maxCameraX ? WORLD_WIDTH * 0.5 : clamp(playerPosition.x, minCameraX, maxCameraX),
         y: minCameraY > maxCameraY ? WORLD_HEIGHT * 0.5 : clamp(playerPosition.y, minCameraY, maxCameraY)
       })
-    })
+    }
 )

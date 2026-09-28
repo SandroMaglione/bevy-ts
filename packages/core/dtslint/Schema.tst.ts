@@ -1,14 +1,14 @@
-import { App, Descriptor, Entity, Fx, Schema } from "@bevy-ts/core"
+import { Descriptor, Result, Entity, Schema } from "@bevy-ts/core"
 import * as Public from "@bevy-ts/core"
-import type { EntityId } from "@bevy-ts/core/entity"
-import * as QueryTypes from "@bevy-ts/core/query"
-import * as Relation from "@bevy-ts/core/relation"
-import type * as SchemaTypes from "@bevy-ts/core/schema"
+import type { EntityId } from "@bevy-ts/core/Entity"
+import * as QueryTypes from "@bevy-ts/core/Query"
+import * as Relation from "@bevy-ts/core/Relation"
+import type * as SchemaTypes from "@bevy-ts/core/Schema"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
 const Time = Descriptor.Resource<number>()("Time")
-const Phase = Descriptor.State<"Running" | "Paused">()("Phase")
+const Phase = Descriptor.Resource<"Running" | "Paused">()("Phase")
 const TickEvent = Descriptor.Event<{ dt: number }>()("TickEvent")
 const Velocity = Descriptor.Component<{ dx: number; dy: number }>()("Velocity")
 const { relation: ChildOf } = Descriptor.Hierarchy("ChildOf", "Children")
@@ -36,21 +36,18 @@ describe("Schema", () => {
         Position
       },
       resources: {
-        DeltaTime: Time
+        DeltaTime: Time,
+        CurrentPhase: Phase
       },
       events: {
         Tick: TickEvent
-      },
-      states: {
-        CurrentPhase: Phase
       }
     })
 
     expect(fragment).type.toBe<Schema.SchemaDefinition<
       { readonly Position: typeof Position },
-      { readonly DeltaTime: typeof Time },
-      { readonly Tick: typeof TickEvent },
-      { readonly CurrentPhase: typeof Phase }
+      { readonly DeltaTime: typeof Time; readonly CurrentPhase: typeof Phase },
+      { readonly Tick: typeof TickEvent }
     >>()
   })
 
@@ -68,7 +65,7 @@ describe("Schema", () => {
       events: {
         Tick: TickEvent
       },
-      states: {
+      resources: {
         CurrentPhase: Phase
       }
     })
@@ -78,9 +75,8 @@ describe("Schema", () => {
 
     expect(schema).type.toBe<Schema.SchemaDefinition<
       { readonly Position: typeof Position },
-      { readonly DeltaTime: typeof Time },
-      { readonly Tick: typeof TickEvent },
-      { readonly CurrentPhase: typeof Phase }
+      { readonly DeltaTime: typeof Time } & { readonly CurrentPhase: typeof Phase },
+      { readonly Tick: typeof TickEvent }
     >>()
   })
 
@@ -107,9 +103,7 @@ describe("Schema", () => {
         Position
       },
       resources: {
-        DeltaTime: Time
-      },
-      states: {
+        DeltaTime: Time,
         CurrentPhase: Phase
       }
     })
@@ -130,12 +124,12 @@ describe("Schema", () => {
         }
       },
       ({ queries, resources }) =>
-        Fx.sync(() => {
+        {
           resources.time.get()
           for (const match of queries.moving.each()) {
             match.data.position.get()
           }
-        })
+        }
     )
 
     const update = Game.Schedule(MoveSystem)
@@ -143,15 +137,13 @@ describe("Schema", () => {
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services(),
       resources: {
-        DeltaTime: 1 / 60
-      },
-      states: {
+        DeltaTime: 1 / 60,
         CurrentPhase: "Running"
       }
     })
 
     expect(update).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
-    App.makeApp(runtime)
+    runtime.tick(update)
   })
 
   it("supports explicit optional component access without widening entity proofs", () => {
@@ -176,7 +168,7 @@ describe("Schema", () => {
         }
       },
       ({ queries }) =>
-        Fx.sync(() => {
+        {
           for (const match of queries.moving.each()) {
             expect(match.data.velocity).type.toBe<QueryTypes.OptionalReadCell<{ dx: number; dy: number }>>()
             expect(match.entity.proof).type.toBe<{
@@ -190,7 +182,7 @@ describe("Schema", () => {
               expect(match.data.velocity.get()).type.toBe<QueryTypes.ReadonlyValue<{ dx: number; dy: number }>>()
             }
           }
-        })
+        }
     )
 
     const runtime = Game.Runtime.make({
@@ -223,9 +215,9 @@ describe("Schema", () => {
         }
       },
       ({ queries }) =>
-        Fx.sync(() => {
+        {
           const result = queries.moving.singleOptional()
-          expect(result).type.toBe<QueryTypes.Query.Result<
+          expect(result).type.toBe<Result.Result<
             QueryTypes.QueryMatch<typeof schema, typeof MovingQuery> | undefined,
             QueryTypes.Query.MultipleEntitiesError
           >>()
@@ -240,7 +232,7 @@ describe("Schema", () => {
           }>()
           result.value.data.position.set({ x: 0, y: 0 })
           expect(result.value.data.velocity.get()).type.toBe<QueryTypes.ReadonlyValue<{ dx: number; dy: number }>>()
-        })
+        }
     )
 
     const runtime = Game.Runtime.make({
@@ -317,21 +309,21 @@ describe("Schema", () => {
         }
       },
       ({ queries, removed, despawned }) =>
-        Fx.sync(() => {
+        {
           for (const match of queries.moved.each()) {
             expect(match.data.velocity).type.toBe<QueryTypes.OptionalReadCell<{ dx: number; dy: number }>>()
           }
 
           expect(removed.positions.all()).type.toBe<ReadonlyArray<EntityId<typeof schema, typeof schema>>>()
           expect(despawned.entities.all()).type.toBe<ReadonlyArray<EntityId<typeof schema, typeof schema>>>()
-        })
+        }
     )
 
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services()
     })
 
-    const schedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveLifecycleSystem)
+    const schedule = Game.Schedule(ObserveLifecycleSystem)
 
     expect(schedule).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()
   })
@@ -384,7 +376,7 @@ describe("Schema", () => {
           })
         }
       },
-      () => Fx.sync<undefined, any>(() => undefined)
+      () => {}
     )
 
     const SystemB = GameB.System(
@@ -398,7 +390,7 @@ describe("Schema", () => {
           })
         }
       },
-      () => Fx.sync<undefined, any>(() => undefined)
+      () => {}
     )
 
     type GameBSystem = Parameters<typeof GameB.Schedule>[number]
@@ -415,7 +407,7 @@ describe("Schema", () => {
     const scheduleB = GameB.Schedule(SystemB)
 
     // @ts-expect-error!
-    runtimeA.runSchedule(scheduleB)
+    runtimeA.tick(scheduleB)
 
     const scheduleA = GameA.Schedule(SystemA)
     type GameAScheduleEntry = Parameters<typeof GameA.Schedule>[number]
@@ -463,7 +455,7 @@ describe("Schema", () => {
         }
       },
       ({ lookup, commands, relationFailures }) =>
-        Fx.sync(() => {
+        {
           lookup.parent(entityId, ChildOf)
           lookup.ancestors(entityId, ChildOf)
           lookup.childMatches(entityId, ChildOf, query)
@@ -484,11 +476,11 @@ describe("Schema", () => {
             typeof schema,
             typeof Game.schema
           >>>()
-          expect(lookup.childMatches(entityId, ChildOf, query)).type.toBeAssignableTo<Relation.Relation.Result<
+          expect(lookup.childMatches(entityId, ChildOf, query)).type.toBeAssignableTo<Result.Result<
             ReadonlyArray<QueryTypes.QueryMatch<typeof schema, typeof query>>,
             Relation.Relation.MissingEntityError
           >>()
-          expect(lookup.descendantMatches(entityId, ChildOf, query, { order: "breadth" })).type.toBeAssignableTo<Relation.Relation.Result<
+          expect(lookup.descendantMatches(entityId, ChildOf, query, { order: "breadth" })).type.toBeAssignableTo<Result.Result<
             ReadonlyArray<QueryTypes.QueryMatch<typeof schema, typeof query>>,
             Relation.Relation.MissingEntityError
           >>()
@@ -509,7 +501,7 @@ describe("Schema", () => {
           lookup.descendantMatches(entityId, Targeting, query)
           // @ts-expect-error!
           Game.System.readRelationFailures(Position)
-        })
+        }
     )
   })
 
@@ -545,7 +537,7 @@ describe("Schema", () => {
         }
       },
       ({ queries, lookup }) =>
-        Fx.sync(() => {
+        {
           for (const match of queries.player.each()) {
             match.data.position.get()
             // @ts-expect-error!
@@ -565,7 +557,7 @@ describe("Schema", () => {
             // @ts-expect-error!
             singleOptional.value.data.velocity.get()
 
-            const handle = Game.Entity.handleAs(Position, singleOptional.value.entity.id)
+            const handle = Game.Entity.handle(singleOptional.value.entity.id, Position)
             const fromHandle = lookup.getHandle(handle, CameraTargetQuery)
             if (fromHandle.ok) {
               fromHandle.value.data.position.get()
@@ -598,7 +590,7 @@ describe("Schema", () => {
               descendant.data.velocity.get()
             }
           }
-        })
+        }
     )
 
     expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
@@ -639,7 +631,7 @@ describe("Schema", () => {
         }
       },
       ({ queries, lookup }) =>
-        Fx.sync(() => {
+        {
           for (const match of queries.targets.each()) {
             const current = match.data.target.get().target
             if (!current) {
@@ -651,13 +643,13 @@ describe("Schema", () => {
             const unqualified = Game.Entity.handle(match.entity.id)
             expect(unqualified).type.toBe<Entity.Handle<typeof Root>>()
 
-            const fromRef = Game.Entity.handleFrom(match.entity)
+            const fromRef = Game.Entity.handle(match.entity)
             expect(fromRef).type.toBe<Entity.Handle<typeof Root>>()
 
-            const qualified = Game.Entity.handleAs(Position, match.entity.id)
+            const qualified = Game.Entity.handle(match.entity.id, Position)
             expect(qualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
 
-            const fromRefQualified = Game.Entity.handleAsFrom(Position, match.entity)
+            const fromRefQualified = Game.Entity.handle(match.entity, Position)
             expect(fromRefQualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
 
             const WithQuery = Game.Query({
@@ -711,7 +703,7 @@ describe("Schema", () => {
             // @ts-expect-error!
             lookup.getHandle(current, LifecycleOnlyQuery)
           }
-        })
+        }
     )
 
     expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
@@ -737,9 +729,9 @@ describe("Schema", () => {
             }
           },
           ({ resources }) =>
-            Fx.sync(() => {
+            {
               resources.time.get()
-            })
+            }
         )
 
         return {
@@ -777,13 +769,13 @@ describe("Schema", () => {
             }
           },
           ({ queries, resources, events }) =>
-            Fx.sync(() => {
+            {
               resources.time.get()
               events.damage.all()
               for (const match of queries.units.each()) {
                 match.data.health.get()
               }
-            })
+            }
         )
 
         return {
@@ -801,12 +793,12 @@ describe("Schema", () => {
     expect(project.features.Core.update).type.toBeAssignableTo<ReadonlyArray<SchemaTypes.Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
     expect(project.features.Combat.update).type.toBeAssignableTo<ReadonlyArray<SchemaTypes.Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
 
-    project.App.make({
+    project.Game.Runtime.make({
       services: project.Game.Runtime.services(),
       resources: {
         DeltaTime: 1
       }
-    })
+    }).tick(...project.schedules.update)
 
     Schema.Feature.define("InvalidCombat", {
       schema: Schema.fragment({}),

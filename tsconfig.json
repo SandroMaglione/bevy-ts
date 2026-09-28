@@ -7,6 +7,7 @@
     "examples/**/*.ts",
     "packages/*/test/**/*.ts",
     "packages/*/dtslint/**/*.ts",
+    "packages/*/bench/**/*.ts",
     "**/vite.config.ts",
     "**/vitest.config.ts",
     "vitest.shared.ts"
@@ -22,7 +23,9 @@
       "@bevy-ts/browser": ["./packages/browser/src/index.ts"],
       "@bevy-ts/browser/*": ["./packages/browser/src/*"],
       "@bevy-ts/pixi": ["./packages/pixi/src/index.ts"],
-      "@bevy-ts/pixi/*": ["./packages/pixi/src/*"]
+      "@bevy-ts/pixi/*": ["./packages/pixi/src/*"],
+      "@bevy-ts/math": ["./packages/math/src/index.ts"],
+      "@bevy-ts/math/*": ["./packages/math/src/*"]
     }
   }
 }

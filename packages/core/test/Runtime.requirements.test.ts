@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
-import * as Runtime from "@bevy-ts/core/runtime"
+import { Descriptor, Schema } from "@bevy-ts/core"
+import * as Runtime from "@bevy-ts/core/Runtime"
 
 describe("Runtime dynamic requirements", () => {
   it("reports missing nominal requirements before executing an erased schedule", () => {
@@ -13,17 +13,17 @@ describe("Runtime dynamic requirements", () => {
       resources: { counter: Game.System.writeResource(Counter) },
       services: { logger: Game.System.service(Logger) },
       machines: { phase: Game.System.machine(Phase) }
-    }, ({ resources, services }) => Fx.sync(() => {
+    }, ({ resources, services }) => {
       resources.counter.update((value) => value + 1)
       services.logger.log(resources.counter.get())
-    }))
+    })
 
     const schedule = Game.Schedule(run)
     const incomplete = Game.Runtime.make({
       services: Game.Runtime.services()
     })
 
-    expect(incomplete.tryRunSchedule(schedule)).toEqual({
+    expect(incomplete.tryTick(schedule)).toEqual({
       ok: false,
       error: {
         kind: "MissingRuntimeRequirements",
@@ -46,7 +46,7 @@ describe("Runtime dynamic requirements", () => {
       )
     })
 
-    expect(complete.tryRunSchedule(schedule)).toEqual({ ok: true, value: undefined })
+    expect(complete.tryTick(schedule)).toEqual({ ok: true, value: undefined })
     expect(logged).toEqual([1])
   })
 })

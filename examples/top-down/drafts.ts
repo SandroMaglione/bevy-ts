@@ -12,7 +12,7 @@ import {
 } from "./schema.ts"
 
 export const makeWallDraft = (x: number, y: number, width: number, height: number) => {
-  return Game.Command.spawnWithMixed(
+  return Game.Command.spawn(
     Game.Command.entryRaw(Position, { x, y }),
     Game.Command.entryRaw(Collider, { width, height }),
     Game.Command.entry(Renderable, {
@@ -27,7 +27,7 @@ export const makeWallDraft = (x: number, y: number, width: number, height: numbe
 }
 
 export const makePickupDraft = (x: number, y: number, label: string) => {
-  return Game.Command.spawnWithMixed(
+  return Game.Command.spawn(
     Game.Command.entryRaw(Position, { x, y }),
     Game.Command.entryResult(Collider, pickupCollider),
     Game.Command.entry(Renderable, {
@@ -45,7 +45,7 @@ export const makePickupDraft = (x: number, y: number, label: string) => {
 }
 
 export const makePlayerDraft = () => {
-  return Game.Command.spawnWithMixed(
+  return Game.Command.spawn(
     Game.Command.entryResult(Position, playerSpawn),
     Game.Command.entryResult(Velocity, playerZeroVelocity),
     Game.Command.entryResult(Collider, playerCollider),

@@ -1,373 +1,157 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Fx, Schema } from "@bevy-ts/core"
-import * as Entity from "@bevy-ts/core/entity"
-import { readResourceValue } from "./utils/fixtures.ts"
+import type * as Entity from "@bevy-ts/core/Entity"
 
-const Position = Descriptor.Component<{ x: number; y: number }>()("LifecyclePosition")
+const Position = Descriptor.Component<{ x: number }>()("Lifecycle/Position")
+const Tag = Descriptor.Component<{}>()("Lifecycle/Tag")
 
-const AddedBefore = Descriptor.Resource<number>()("AddedBefore")
-const AddedAfter = Descriptor.Resource<number>()("AddedAfter")
-const ChangedBefore = Descriptor.Resource<number>()("ChangedBefore")
-const ChangedAfter = Descriptor.Resource<number>()("ChangedAfter")
-const RemovedBefore = Descriptor.Resource<number>()("RemovedBefore")
-const RemovedAfter = Descriptor.Resource<number>()("RemovedAfter")
-const DespawnedBefore = Descriptor.Resource<number>()("DespawnedBefore")
-const DespawnedAfter = Descriptor.Resource<number>()("DespawnedAfter")
+const Game = Schema.bind(Schema.fragment({ components: { Position, Tag } }))
 
-const Game = Schema.bind(Schema.fragment({
-  components: {
-    Position
-  },
-  resources: {
-    AddedBefore,
-    AddedAfter,
-    ChangedBefore,
-    ChangedAfter,
-    RemovedBefore,
-    RemovedAfter,
-    DespawnedBefore,
-    DespawnedAfter
-  }
-}))
-const schema = Game.schema
+type Id = Entity.EntityId<typeof Game.schema, typeof Game.schema>
 
-const makeRuntime = () => Game.Runtime.make({
-  services: Game.Runtime.services(),
-  resources: {
-    AddedBefore: 0,
-    AddedAfter: 0,
-    ChangedBefore: 0,
-    ChangedAfter: 0,
-    RemovedBefore: 0,
-    RemovedAfter: 0,
-    DespawnedBefore: 0,
-    DespawnedAfter: 0
-  }
-})
+const makeRuntime = () => Game.Runtime.make({ services: Game.Runtime.services() })
 
-describe("Runtime lifecycle", () => {
-  it("added and changed filters become visible only after updateLifecycle()", () => {
-    const SpawnSystem = Game.System(
-      "Lifecycle/Spawn",
-      {},
-      ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Game.Command.spawnWith(
-            [Position, { x: 1, y: 2 }]
-          ))
-        })
-    )
+const Added = Game.Query({ selection: { position: Game.Query.read(Position) }, filters: [Game.Query.added(Position)] })
+const Changed = Game.Query({ selection: { position: Game.Query.read(Position) }, filters: [Game.Query.changed(Position)] })
+const Positions = Game.Query({ selection: { position: Game.Query.write(Position) } })
 
-    const ObserveBeforeSystem = Game.System(
-      "Lifecycle/ObserveBefore",
-      {
-        queries: {
-          added: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.added(Position)] as const
-          }),
-          changed: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.changed(Position)] as const
-          })
-        },
-        resources: {
-          addedBefore: Game.System.writeResource(AddedBefore),
-          changedBefore: Game.System.writeResource(ChangedBefore)
-        }
-      },
-      ({ queries, resources }) =>
-        Fx.sync(() => {
-          resources.addedBefore.set(queries.added.each().length)
-          resources.changedBefore.set(queries.changed.each().length)
-        })
-    )
+/**
+ * A system that records what its `added` and `changed` queries saw on each run.
+ */
+const observer = (name: string) => {
+  const runs: Array<{ added: Array<number>; changed: Array<number> }> = []
+  const system = Game.System(name, { queries: { added: Added, changed: Changed } }, ({ queries }) => {
+    runs.push({
+      added: queries.added.each().map((match) => match.data.position.get().x),
+      changed: queries.changed.each().map((match) => match.data.position.get().x)
+    })
+  })
+  return { system, runs }
+}
 
-    const ObserveAfterSystem = Game.System(
-      "Lifecycle/ObserveAfter",
-      {
-        queries: {
-          added: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.added(Position)] as const
-          }),
-          changed: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.changed(Position)] as const
-          })
-        },
-        resources: {
-          addedAfter: Game.System.writeResource(AddedAfter),
-          changedAfter: Game.System.writeResource(ChangedAfter)
-        }
-      },
-      ({ queries, resources }) =>
-        Fx.sync(() => {
-          resources.addedAfter.set(queries.added.each().length)
-          resources.changedAfter.set(queries.changed.each().length)
-        })
-    )
-
-    const runtime = makeRuntime()
-    const lifecycleSchedule = Game.Schedule(
-      SpawnSystem,
-      Game.Schedule.applyDeferred(),
-      ObserveBeforeSystem,
-      Game.Schedule.updateLifecycle(),
-      ObserveAfterSystem
-    )
-    runtime.runSchedule(lifecycleSchedule)
-
-    expect(readResourceValue(runtime, schema, AddedBefore)).toBe(0)
-    expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)
-    expect(readResourceValue(runtime, schema, AddedAfter)).toBe(1)
-    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
+const spawner = (values: ReadonlyArray<number>, ids: Array<Id> = []) =>
+  Game.System("Lifecycle/Spawn", {}, ({ commands }) => {
+    for (const x of values) {
+      ids.push(commands.spawn(Game.Command.spawn([Position, { x }])))
+    }
   })
 
-  it("removed and despawned streams become visible only after updateLifecycle()", () => {
-    let removableId: number | undefined
-    let doomedId: number | undefined
-
-    const SpawnSystem = Game.System(
-      "Lifecycle/SpawnForRemoval",
-      {},
-      ({ commands }) =>
-        Fx.sync(() => {
-          removableId = commands.spawn(Game.Command.spawnWith(
-            [Position, { x: 1, y: 1 }]
-          )).value
-          doomedId = commands.spawn(Game.Command.spawnWith(
-            [Position, { x: 2, y: 2 }]
-          )).value
-        })
-    )
-
-    const CleanupSystem = Game.System(
-      "Lifecycle/Cleanup",
-      {},
-      ({ commands }) =>
-        Fx.sync(() => {
-          if (!removableId || !doomedId) {
-            return
-          }
-          commands.remove(
-            Entity.makeEntityId<typeof schema, typeof schema>(removableId),
-            Position
-          )
-          commands.despawn(
-            Entity.makeEntityId<typeof schema, typeof schema>(doomedId)
-          )
-        })
-    )
-
-    const ObserveBeforeSystem = Game.System(
-      "Lifecycle/ObserveRemovalBefore",
-      {
-        removed: {
-          positions: Game.System.readRemoved(Position)
-        },
-        despawned: {
-          entities: Game.System.readDespawned()
-        },
-        resources: {
-          removedBefore: Game.System.writeResource(RemovedBefore),
-          despawnedBefore: Game.System.writeResource(DespawnedBefore)
-        }
-      },
-      ({ removed, despawned, resources }) =>
-        Fx.sync(() => {
-          resources.removedBefore.set(removed.positions.all().length)
-          resources.despawnedBefore.set(despawned.entities.all().length)
-        })
-    )
-
-    const ObserveAfterSystem = Game.System(
-      "Lifecycle/ObserveRemovalAfter",
-      {
-        removed: {
-          positions: Game.System.readRemoved(Position)
-        },
-        despawned: {
-          entities: Game.System.readDespawned()
-        },
-        resources: {
-          removedAfter: Game.System.writeResource(RemovedAfter),
-          despawnedAfter: Game.System.writeResource(DespawnedAfter)
-        }
-      },
-      ({ removed, despawned, resources }) =>
-        Fx.sync(() => {
-          resources.removedAfter.set(removed.positions.all().length)
-          resources.despawnedAfter.set(despawned.entities.all().length)
-        })
-    )
-
+describe("Runtime change detection", () => {
+  it("shows each addition to each system exactly once, after the commands are applied", () => {
+    const before = observer("Lifecycle/Before")
+    const after = observer("Lifecycle/After")
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
-    const observeSchedule = Game.Schedule(
-      CleanupSystem,
-      Game.Schedule.applyDeferred(),
-      ObserveBeforeSystem,
-      Game.Schedule.updateLifecycle(),
-      ObserveAfterSystem
-    )
-    runtime.tick(spawnSchedule, observeSchedule)
 
-    expect(readResourceValue(runtime, schema, RemovedBefore)).toBe(0)
-    expect(readResourceValue(runtime, schema, DespawnedBefore)).toBe(0)
-    expect(readResourceValue(runtime, schema, RemovedAfter)).toBe(2)
-    expect(readResourceValue(runtime, schema, DespawnedAfter)).toBe(1)
+    runtime.tick(Game.Schedule(before.system, spawner([1]), Game.Schedule.applyDeferred(), after.system))
+    runtime.tick(Game.Schedule(before.system, after.system))
+
+    // `before` ran ahead of the flush on the first tick, so it sees the addition on its next run.
+    expect(before.runs.map((run) => run.added)).toEqual([[], [1]])
+    expect(after.runs.map((run) => run.added)).toEqual([[1], []])
   })
 
-  it("refreshes readable lifecycle buffers instead of accumulating stale entries", () => {
-    const SpawnSystem = Game.System(
-      "Lifecycle/SpawnRefresh",
-      {},
-      ({ commands }) =>
-        Fx.sync(() => {
-          commands.spawn(Game.Command.spawnWith(
-            [Position, { x: 3, y: 4 }]
-          ))
-        })
-    )
-
-    const ObserveChanged = Game.System(
-      "Lifecycle/ObserveRefresh",
-      {
-        queries: {
-          added: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.added(Position)] as const
-          }),
-          changed: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.changed(Position)] as const
-          })
-        },
-        resources: {
-          addedAfter: Game.System.writeResource(AddedAfter),
-          changedAfter: Game.System.writeResource(ChangedAfter)
-        }
-      },
-      ({ queries, resources }) =>
-        Fx.sync(() => {
-          resources.addedAfter.set(queries.added.each().length)
-          resources.changedAfter.set(queries.changed.each().length)
-        })
-    )
-
+  it("gives independent readers their own view of the same changes", () => {
+    const first = observer("Lifecycle/First")
+    const second = observer("Lifecycle/Second")
+    const Move = Game.System("Lifecycle/Move", { queries: { positions: Positions } }, ({ queries }) => {
+      for (const { data } of queries.positions.each()) {
+        data.position.update((position) => ({ x: position.x + 10 }))
+      }
+    })
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
-    const clearSchedule = Game.Schedule(ObserveChanged)
-    runtime.tick(spawnSchedule, clearSchedule)
+    runtime.tick(Game.Schedule(spawner([1]), Game.Schedule.applyDeferred(), first.system))
 
-    expect(readResourceValue(runtime, schema, AddedAfter)).toBe(1)
-    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
+    runtime.tick(Game.Schedule(Move, first.system))
+    runtime.tick(Game.Schedule(second.system))
+    runtime.tick(Game.Schedule(first.system, second.system))
 
-    const refreshSchedule = Game.Schedule(Game.Schedule.updateLifecycle(), ObserveChanged)
-    runtime.runSchedule(refreshSchedule)
-
-    expect(readResourceValue(runtime, schema, AddedAfter)).toBe(0)
-    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(0)
+    expect(first.runs.map((run) => run.changed)).toEqual([[1], [11], []])
+    // `second` first runs after the move: everything that exists counts as added and changed.
+    expect(second.runs.map((run) => run.changed)).toEqual([[11], []])
+    expect(second.runs.map((run) => run.added)).toEqual([[11], []])
   })
 
-  it("treats overwrite inserts on existing components as changed after updateLifecycle()", () => {
-    let existingId: number | undefined
-
-    const SpawnSystem = Game.System(
-      "Lifecycle/SpawnForOverwrite",
-      {},
-      ({ commands }) =>
-        Fx.sync(() => {
-          existingId = commands.spawn(Game.Command.spawnWith(
-            [Position, { x: 1, y: 1 }]
-          )).value
-        })
-    )
-
-    const OverwriteSystem = Game.System(
-      "Lifecycle/OverwriteExisting",
-      {},
-      ({ commands }) =>
-        Fx.sync(() => {
-          if (!existingId) {
-            return
-          }
-          commands.insert(
-            Entity.makeEntityId<typeof schema, typeof schema>(existingId),
-            Position,
-            { x: 9, y: 9 }
-          )
-        })
-    )
-
-    const ObserveBeforeSystem = Game.System(
-      "Lifecycle/ObserveOverwriteBefore",
-      {
-        queries: {
-          changed: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.changed(Position)] as const
-          })
-        },
-        resources: {
-          changedBefore: Game.System.writeResource(ChangedBefore)
-        }
-      },
-      ({ queries, resources }) =>
-        Fx.sync(() => {
-          resources.changedBefore.set(queries.changed.each().length)
-        })
-    )
-
-    const ObserveAfterSystem = Game.System(
-      "Lifecycle/ObserveOverwriteAfter",
-      {
-        queries: {
-          changed: Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            },
-            filters: [Game.Query.changed(Position)] as const
-          })
-        },
-        resources: {
-          changedAfter: Game.System.writeResource(ChangedAfter)
-        }
-      },
-      ({ queries, resources }) =>
-        Fx.sync(() => {
-          resources.changedAfter.set(queries.changed.each().length)
-        })
-    )
-
+  it("counts an insert over an existing component as changed, not added", () => {
+    const ids: Array<Id> = []
+    const reader = observer("Lifecycle/Reader")
+    const Overwrite = Game.System("Lifecycle/Overwrite", {}, ({ commands }) => {
+      commands.insert(ids[0]!, [Position, { x: 9 }])
+    })
     const runtime = makeRuntime()
-    const spawnSchedule = Game.Schedule(SpawnSystem, Game.Schedule.applyDeferred(), Game.Schedule.updateLifecycle())
-    const observeSchedule = Game.Schedule(
-      Game.Schedule.updateLifecycle(),
-      OverwriteSystem,
-      Game.Schedule.applyDeferred(),
-      ObserveBeforeSystem,
-      Game.Schedule.updateLifecycle(),
-      ObserveAfterSystem
-    )
-    runtime.tick(spawnSchedule, observeSchedule)
+    runtime.tick(Game.Schedule(spawner([1], ids), Game.Schedule.applyDeferred(), reader.system))
+    runtime.tick(Game.Schedule(Overwrite, Game.Schedule.applyDeferred(), reader.system))
 
-    expect(readResourceValue(runtime, schema, ChangedBefore)).toBe(0)
-    expect(readResourceValue(runtime, schema, ChangedAfter)).toBe(1)
+    expect(reader.runs[1]).toEqual({ added: [], changed: [9] })
+  })
+
+  it("does not report writes from a system whose run failed", () => {
+    const reader = observer("Lifecycle/FailureReader")
+    const Failing = Game.System("Lifecycle/Failing", { queries: { positions: Positions } }, ({ queries }) => {
+      for (const { data } of queries.positions.each()) {
+        data.position.set({ x: 100 })
+      }
+      return Fx.fail("Rejected" as const)
+    })
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(spawner([1]), Game.Schedule.applyDeferred(), reader.system))
+
+    const result = runtime.tick(Game.Schedule(Failing))
+    runtime.tick(Game.Schedule(reader.system))
+
+    expect(result.ok).toBe(false)
+    expect(reader.runs[1]).toEqual({ added: [], changed: [] })
+  })
+
+  it("shows removed components and despawned entities to each reader once", () => {
+    const ids: Array<Id> = []
+    const seen: Array<{ removed: Array<number>; despawned: Array<number> }> = []
+    const Reader = Game.System("Lifecycle/RemovalReader", {
+      removed: { positions: Game.System.readRemoved(Position) },
+      despawned: { entities: Game.System.readDespawned() }
+    }, ({ removed, despawned }) => {
+      seen.push({
+        removed: removed.positions.all().map((id) => id.value),
+        despawned: despawned.entities.all().map((id) => id.value)
+      })
+    })
+    const Cleanup = Game.System("Lifecycle/Cleanup", {}, ({ commands }) => {
+      commands.remove(ids[0]!, Position)
+      commands.despawn(ids[1]!)
+    })
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(spawner([1, 2], ids), Game.Schedule.applyDeferred(), Reader))
+
+    runtime.tick(Game.Schedule(Cleanup, Reader))
+    runtime.tick(Game.Schedule(Game.Schedule.applyDeferred(), Reader))
+    runtime.tick(Game.Schedule(Reader))
+
+    expect(seen).toEqual([
+      { removed: [], despawned: [] },
+      // The cleanup commands stay pending until the next applyDeferred().
+      { removed: [], despawned: [] },
+      { removed: [ids[0]!.value, ids[1]!.value], despawned: [ids[1]!.value] },
+      { removed: [], despawned: [] }
+    ])
+  })
+
+  it("keeps removal records for the current and previous tick only", () => {
+    const ids: Array<Id> = []
+    const seen: Array<Array<number>> = []
+    const Reader = Game.System("Lifecycle/SlowReader", {
+      despawned: { entities: Game.System.readDespawned() }
+    }, ({ despawned }) => {
+      seen.push(despawned.entities.all().map((id) => id.value))
+    })
+    const Despawn = Game.System("Lifecycle/DespawnFirst", {}, ({ commands }) => {
+      commands.despawn(ids[0]!)
+    })
+    const Idle = Game.System("Lifecycle/Idle", {}, () => {})
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(spawner([1], ids), Game.Schedule.applyDeferred(), Reader))
+    runtime.tick(Game.Schedule(Despawn, Game.Schedule.applyDeferred()))
+    runtime.tick(Game.Schedule(Idle))
+    runtime.tick(Game.Schedule(Reader))
+
+    expect(seen).toEqual([[], []])
   })
 })

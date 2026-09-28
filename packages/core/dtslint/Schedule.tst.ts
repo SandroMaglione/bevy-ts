@@ -1,7 +1,7 @@
-import { Descriptor, Fx, Schema } from "@bevy-ts/core"
-import * as Query from "@bevy-ts/core/query"
-import * as Schedule from "@bevy-ts/core/schedule"
-import * as System from "@bevy-ts/core/system"
+import { Descriptor, Schema } from "@bevy-ts/core"
+import * as Query from "@bevy-ts/core/Query"
+import * as Schedule from "@bevy-ts/core/Schedule"
+import * as System from "@bevy-ts/core/System"
 import { describe, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -29,7 +29,7 @@ const MovementSystem = System.System(
       })
     }
   },
-  () => Fx.sync<undefined, {}>(() => undefined)
+  () => {}
 )
 
 const ExplicitNameSystem = System.System(
@@ -40,7 +40,7 @@ const ExplicitNameSystem = System.System(
       time: System.readResource(Time)
     }
   },
-  ({ resources }) => Fx.sync(() => resources.time.get())
+  ({ resources }) => { resources.time.get() }
 )
 
 const PlainSystem = System.System(
@@ -48,7 +48,7 @@ const PlainSystem = System.System(
   {
     schema
   },
-  () => Fx.sync<undefined, {}>(() => undefined)
+  () => {}
 )
 
 const SuffixSystem = System.System(
@@ -56,7 +56,7 @@ const SuffixSystem = System.System(
   {
     schema
   },
-  () => Fx.sync<undefined, {}>(() => undefined)
+  () => {}
 )
 
 describe("Schedule", () => {
@@ -83,13 +83,9 @@ describe("Schedule", () => {
   })
 
   it("creates reusable explicit fragments", () => {
-    const hostMirror = Schedule.fragment({
-      schema,
-      entries: [
-        Schedule.updateLifecycle(),
+    const hostMirror = Schedule.Schedule(
         SuffixSystem
-      ]
-    })
+      )
 
     const schedule = Schedule.Schedule(
       PlainSystem,
@@ -102,13 +98,9 @@ describe("Schedule", () => {
   })
 
   it("creates reusable explicit phases", () => {
-    const hostMirrorPhase = Schedule.phase({
-      schema,
-      steps: [
-        Schedule.updateLifecycle(),
+    const hostMirrorPhase = Schedule.Schedule(
         SuffixSystem
-      ]
-    })
+      )
 
     const schedule = Schedule.Schedule(
       PlainSystem,
@@ -120,26 +112,20 @@ describe("Schedule", () => {
   })
 
   it("composes systems, markers, and fragments into one schedule", () => {
-    const hostMirror = Schedule.fragment({
-      schema,
-      entries: [
-        Schedule.updateLifecycle(),
+    const hostMirror = Schedule.Schedule(
         SuffixSystem
-      ]
-    })
+      )
 
-    const plan = Schedule.compose({
-      entries: [
+    const plan = Schedule.Schedule(
         PlainSystem,
         Schedule.applyDeferred(),
         hostMirror
-      ]
-    })
+      )
 
     plan.steps
     plan.systems
 
-    const schedule = Schedule.build(
+    const schedule = Schedule.Schedule(
       PlainSystem,
       Schedule.applyDeferred(),
       hostMirror

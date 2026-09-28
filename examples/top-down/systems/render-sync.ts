@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import {
   AddedRenderableQuery,
@@ -29,12 +28,12 @@ export const ApplyWorldCameraTransformSystem = Game.System(
     }
   },
   ({ resources, services }) =>
-    Fx.sync(() => {
+    {
       services.host.world.position.set(
         resources.viewport.get().width * 0.5 - resources.camera.get().x,
         resources.viewport.get().height * 0.5 - resources.camera.get().y
       )
-    })
+    }
 )
 
 export const DestroyRenderNodesSystem = Game.System(
@@ -51,7 +50,7 @@ export const DestroyRenderNodesSystem = Game.System(
     }
   },
   ({ removed, despawned, services }) =>
-    Fx.sync(() => {
+    {
       const host = services.host
 
       for (const entityId of removed.renderables.all()) {
@@ -75,7 +74,7 @@ export const DestroyRenderNodesSystem = Game.System(
         destroyRenderNode(renderNode)
         host.nodes.delete(entityId.value)
       }
-    })
+    }
 )
 
 export const CreateRenderNodesSystem = Game.System(
@@ -92,7 +91,7 @@ export const CreateRenderNodesSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const currentFrame = resources.playerFrame.get()
 
       for (const match of queries.addedRenderables.each()) {
@@ -105,7 +104,7 @@ export const CreateRenderNodesSystem = Game.System(
         const position = match.data.position.get()
         renderNode.node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 export const SyncRenderableTransformsSystem = Game.System(
@@ -122,7 +121,7 @@ export const SyncRenderableTransformsSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const currentFrame = resources.playerFrame.get()
 
       for (const match of queries.renderables.each()) {
@@ -133,7 +132,7 @@ export const SyncRenderableTransformsSystem = Game.System(
 
         renderNode.node.position.set(position.x, position.y)
       }
-    })
+    }
 )
 
 export const SyncPlayerSpriteSystem = Game.System(
@@ -150,7 +149,7 @@ export const SyncPlayerSpriteSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const currentFrame = resources.playerFrame.get()
 
       for (const match of queries.players.each()) {
@@ -167,7 +166,7 @@ export const SyncPlayerSpriteSystem = Game.System(
         renderNode.node.scale.set(1)
         renderNode.node.rotation = 0
       }
-    })
+    }
 )
 
 export const SyncPickupPresentationSystem = Game.System(
@@ -184,7 +183,7 @@ export const SyncPickupPresentationSystem = Game.System(
     }
   },
   ({ queries, resources, services }) =>
-    Fx.sync(() => {
+    {
       const focusedId = resources.focused.get().current?.value ?? null
 
       for (const match of queries.pickups.each()) {
@@ -198,5 +197,5 @@ export const SyncPickupPresentationSystem = Game.System(
         renderNode.node.scale.set(isFocused ? 1.12 : 1)
         renderNode.node.alpha = isFocused ? 1 : 0.86
       }
-    })
+    }
 )

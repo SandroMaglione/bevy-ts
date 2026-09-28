@@ -1,7 +1,8 @@
 ## Repo Structure
 - [`packages/core`](./packages/core/): strict public ECS/runtime library surface.
-- [`packages/browser`](./packages/browser/): browser-specific package scaffold and tests.
-- [`packages/pixi`](./packages/pixi/): Pixi-specific package scaffold and tests.
+- [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard input.
+- [`packages/pixi`](./packages/pixi/): Pixi node registry and render-sync systems.
+- [`packages/math`](./packages/math/): validated math values (Scalar, Vector2, Size2, Aabb, InputAxis).
 - [`examples`](./examples/): workspace example apps that consume packages by package name.
 
 ## Core Principles
@@ -13,6 +14,7 @@
 - Build APIs as small composable lego blocks that remain independently type-safe.
 
 All changes to be complete MUST BE VERIFIED by running `pnpm run check`.
+Changes to runtime internals or public types must also pass `pnpm bench:check`; if a change intentionally moves the numbers, record it with `pnpm bench:update` and commit the new baseline.
 
 ## Public API Rules
 - Do not require user-facing casts.
@@ -29,13 +31,10 @@ All changes to be complete MUST BE VERIFIED by running `pnpm run check`.
 - Internal type optimization is allowed only when the user-facing API stays unchanged and requires no casts or scaffolding.
 
 ```ts
-const A = Game.System("A", { schema }, ...)
-const B = Game.System("B", { schema, after: [A] }, ...)
+const A = Game.System("A", { queries: { moving: Moving } }, ...)
+const B = Game.System("B", { resources: { score: Game.System.writeResource(Score) } }, ...)
 
-const schedule = Game.Schedule({
-  systems: [A, B],
-  steps: [A, Game.Schedule.applyDeferred(), B]
-})
+const schedule = Game.Schedule(A, Game.Schedule.applyDeferred(), B)
 
 // Acceptable internal strategy:
 // 1. Validate exact references here.

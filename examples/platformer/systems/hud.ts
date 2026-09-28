@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { levelBounds } from "../content.ts"
 import { PlayerReadQuery } from "../queries.ts"
@@ -22,7 +21,7 @@ export const SyncHudSystem = Game.System(
     }
   },
   ({ queries, resources, machines, services }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       const contacts = resources.contacts.get()
       const hud = services.host.hud
@@ -52,5 +51,5 @@ export const SyncHudSystem = Game.System(
       hud.overlayTitle.textContent = ""
       hud.overlaySubtitle.textContent = ""
       hud.overlayHint.textContent = ""
-    })
+    }
 )

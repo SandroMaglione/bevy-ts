@@ -1,0 +1,21 @@
+{
+  "name": "@bevy-ts/math",
+  "type": "module",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Validated math values for bevy-ts games",
+  "sideEffects": [],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./internal/*": null,
+    "./*/index": null
+  },
+  "scripts": {
+    "check": "tsc -b tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@bevy-ts/core": "workspace:*"
+  }
+}

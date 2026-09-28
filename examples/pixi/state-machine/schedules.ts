@@ -23,7 +23,6 @@ import { Game, SessionState } from "./schema.ts"
 export const setupSchedule = Game.Schedule(
   SpawnPlayerSystem,
   Game.Schedule.applyDeferred(),
-  Game.Schedule.updateLifecycle(),
   CreateRenderNodesSystem,
   SyncHudSystem
 )
@@ -49,8 +48,7 @@ export const updateSchedule = Game.Schedule(
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
   Game.Schedule.updateEvents(),
-  // Host sync only becomes correct after lifecycle visibility is committed.
-  Game.Schedule.updateLifecycle(),
+  // Host sync runs after the commands above are applied, so it sees this tick's spawns.
   WriteTransitionNoticeSystem,
   FadeTransitionNoticeSystem,
   DestroyRenderNodesSystem,

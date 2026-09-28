@@ -1,4 +1,3 @@
-import { Fx } from "@bevy-ts/core"
 
 import { levelBounds, levelSolids } from "../content.ts"
 import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
@@ -21,7 +20,7 @@ export const QueueLossSystem = Game.System(
     }
   },
   ({ queries, resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       const player = queries.player.singleOptional()
       if (!player.ok || !player.value) {
         return
@@ -34,7 +33,7 @@ export const QueueLossSystem = Game.System(
 
       resources.loseMessage.set("You fell into a hole. Click anywhere or press Enter to restart.")
       nextMachines.session.set("Lost")
-    })
+    }
 )
 
 export const QueueRestartSystem = Game.System(
@@ -49,11 +48,11 @@ export const QueueRestartSystem = Game.System(
     }
   },
   ({ resources, nextMachines }) =>
-    Fx.sync(() => {
+    {
       if (resources.input.get().restartJustPressed) {
         nextMachines.session.set("Playing")
       }
-    })
+    }
 )
 
 export const ResetWorldResourcesOnPlayingEnterSystem = Game.System(
@@ -65,26 +64,26 @@ export const ResetWorldResourcesOnPlayingEnterSystem = Game.System(
     }
   },
   ({ resources }) =>
-    Fx.sync(() => {
+    {
       resources.contacts.set(makeInitialPlayerContacts())
       resources.loseMessage.set("You fell into a hole.")
-    })
+    }
 )
 
 export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
   "Platformer/DespawnLevelEntitiesOnPlayingEnter",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
+    {
       commands.despawnScope(LevelScope)
-    })
+    }
 )
 
 export const SpawnWorldOnPlayingEnterSystem = Game.System(
   "Platformer/SpawnWorldOnPlayingEnter",
   {},
   ({ commands }) =>
-    Fx.sync(() => {
+    {
       const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawnIn(LevelScope, playerDraft.value)
@@ -96,5 +95,5 @@ export const SpawnWorldOnPlayingEnterSystem = Game.System(
           commands.spawnIn(LevelScope, solidDraft.value)
         }
       }
-    })
+    }
 )
