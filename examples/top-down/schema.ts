@@ -48,6 +48,7 @@ export const InputManager = Descriptor.Service<{
   readonly snapshot: () => InputStateValue
 }>()("TopDown/InputManager")
 export const TopDownHost = Descriptor.Service<TopDownHostValue>()("TopDown/Host")
+export const RenderNodes = Descriptor.Service<TopDownHostValue["nodes"]>()("TopDown/RenderNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({

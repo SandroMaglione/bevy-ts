@@ -13,7 +13,8 @@ import {
   Locomotion,
   TopDownHost,
   TotalCollectables,
-  Viewport
+  Viewport,
+  RenderNodes
 } from "./schema.ts"
 import { pickupLayout } from "./content.ts"
 import type { InputStateValue, TopDownHostValue } from "./types.ts"
@@ -54,7 +55,8 @@ const makeRuntime = (
   return Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
-      Game.Runtime.service(TopDownHost, host)
+      Game.Runtime.service(TopDownHost, host),
+      Game.Runtime.service(RenderNodes, host.nodes)
     ),
     resources: {
       DeltaTime: host.clock.deltaSeconds,

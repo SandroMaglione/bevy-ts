@@ -1,4 +1,5 @@
 import { Keyboard } from "@bevy-ts/browser"
+import { NodeRegistry } from "@bevy-ts/pixi"
 import { Application, Assets, Container, Texture } from "pixi.js"
 
 import { PLAYER_SHEET_URL } from "./constants.ts"
@@ -62,7 +63,15 @@ export const createTopDownBrowserHost = async (
     application,
     world,
     actorLayer,
-    nodes: new Map<number, RenderNode>(),
+    nodes: NodeRegistry.make<RenderNode>({
+      attach: (renderNode) => {
+        actorLayer.addChild(renderNode.node)
+      },
+      detach: (renderNode) => {
+        actorLayer.removeChild(renderNode.node)
+        destroyRenderNode(renderNode)
+      }
+    }),
     playerFrames: createPlayerFrameAtlas(playerSheet),
     hud: hud.refs,
     clock: {
@@ -87,10 +96,6 @@ export const createTopDownBrowserHost = async (
     },
     async destroy() {
       keyboard.dispose()
-
-      for (const renderNode of host.nodes.values()) {
-        destroyRenderNode(renderNode)
-      }
 
       host.nodes.clear()
       application.destroy(true)

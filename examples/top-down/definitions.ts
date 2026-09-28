@@ -3,7 +3,7 @@ import * as Size2 from "@bevy-ts/math/Size2"
 import * as Vector2 from "@bevy-ts/math/Vector2"
 import { PLAYER_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 
-export const playerSpawn = Definition.entry(Vector2, { x: 180, y: 180 })
+export const playerSpawn = Definition.entry(Vector2, { x: 640, y: 260 })
 export const playerZeroVelocity = Definition.entry(Vector2, { x: 0, y: 0 })
 export const playerCollider = Definition.entry(Size2, {
   width: PLAYER_SIZE,

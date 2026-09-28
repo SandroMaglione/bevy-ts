@@ -12,7 +12,7 @@ const failedHandle = (): BrowserExampleHandle => ({
 
 export const startStateMachineExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
   const browserHost = await createStateMachineBrowserHost(mount)
-  const runtime = createStateMachineRuntime(browserHost.host, browserHost.inputManager)
+  const runtime = createStateMachineRuntime(browserHost.host, browserHost.nodes, browserHost.inputManager)
   if (!runtime.ok) {
     await browserHost.destroy()
     mount.textContent = runtime.error.message
@@ -22,6 +22,7 @@ export const startStateMachineExample = async (mount: HTMLElement): Promise<Brow
 
   const tick = (ticker: { readonly deltaMS: number }) => {
     browserHost.host.clock.deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
+    browserHost.captureInput()
     runtime.value.tick(updateSchedule)
   }
 

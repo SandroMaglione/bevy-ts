@@ -60,10 +60,10 @@ describe("@bevy-ts/pixi", () => {
       renderable: Sprite,
       transform: Position,
       registry: Nodes,
-      create: (sprite) => new FakeNode(sprite.label),
-      apply: (node, position) => {
-        node.x = position.x
-        node.y = position.y
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: (node, { transform }) => {
+        node.x = transform.x
+        node.y = transform.y
       }
     })
 
@@ -99,5 +99,39 @@ describe("@bevy-ts/pixi", () => {
     expect(layer.children).toEqual([])
     expect(hero.destroyed).toBe(true)
     expect(registry.size).toBe(0)
+  })
+
+  it("passes selected data, resources, and services to the callbacks", () => {
+    const Zoom = Descriptor.Resource<number>()("PixiTest/Zoom")
+    const Prefix = Descriptor.Service<string>()("PixiTest/Prefix")
+    const Zoomed = Schema.bind(Schema.fragment({ components: { Position, Sprite }, resources: { Zoom } }))
+    const layer = new FakeContainer()
+    const render = RenderSync.systems(Zoomed, {
+      name: "PixiTest/Zoomed",
+      renderable: Position,
+      transform: Position,
+      registry: Nodes,
+      select: { sprite: Zoomed.Query.optional(Sprite) },
+      resources: { zoom: Zoom },
+      services: { prefix: Prefix },
+      create: ({ data, services }) => new FakeNode(`${services.prefix}${data.sprite.present ? data.sprite.get().label : "none"}`),
+      apply: (node, { transform, resources }) => {
+        node.x = transform.x * resources.zoom.get()
+      }
+    })
+    const Spawn = Zoomed.System("PixiTest/SpawnZoomed", {}, ({ commands }) => {
+      commands.spawn(Zoomed.Command.spawn([Position, { x: 3, y: 0 }], [Sprite, { label: "hero" }]))
+      commands.spawn(Zoomed.Command.spawn([Position, { x: 1, y: 0 }]))
+    })
+
+    const runtime = Zoomed.Runtime.make({
+      services: Zoomed.Runtime.services(
+        Zoomed.Runtime.service(Nodes, NodeRegistry.inContainer(layer)),
+        Zoomed.Runtime.service(Prefix, "#")
+      ),
+      resources: { Zoom: 2 }
+    })
+    runtime.tick(Zoomed.Schedule(Spawn, Zoomed.Schedule.applyDeferred(), render.create))
+    expect(layer.children.map((node) => [node.label, node.x])).toEqual([["#hero", 6], ["#none", 2]])
   })
 })

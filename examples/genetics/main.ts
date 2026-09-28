@@ -9,7 +9,7 @@ interface BrowserExampleHandle {
 
 export const startGeneticsExample = async (mount: HTMLElement): Promise<BrowserExampleHandle> => {
   const browserHost = await createGeneticsBrowserHost(mount)
-  const runtime = createGeneticsRuntime(browserHost.host)
+  const runtime = createGeneticsRuntime(browserHost.host, browserHost.nodes)
   runtime.tick(setupSchedule)
 
   const tick = (ticker: { readonly deltaMS: number }) => {
@@ -22,11 +22,6 @@ export const startGeneticsExample = async (mount: HTMLElement): Promise<BrowserE
   return {
     async destroy() {
       browserHost.host.application.ticker.remove(tick)
-      for (const node of browserHost.host.nodes.values()) {
-        browserHost.host.scene.removeChild(node)
-        node.destroy()
-      }
-      browserHost.host.nodes.clear()
       await browserHost.destroy()
     }
   }

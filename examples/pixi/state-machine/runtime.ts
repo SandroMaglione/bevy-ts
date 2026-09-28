@@ -1,5 +1,6 @@
 import * as Result from "@bevy-ts/core/Result"
 import {
+  ActorNodes,
   Arena,
   BrowserHost,
   CountdownRemaining,
@@ -19,10 +20,11 @@ import {
   PICKUP_GOAL,
   ROUND_DURATION_SECONDS
 } from "./constants.ts"
-import type { BrowserHostValue, StateMachineInputManager } from "./types.ts"
+import type { ActorNodes as ActorNodesValue, BrowserHostValue, StateMachineInputManager } from "./types.ts"
 
 const makeRuntime = (
   host: BrowserHostValue,
+  nodes: ActorNodesValue,
   inputManager: StateMachineInputManager
 ) => {
   const machines = Game.Runtime.machines(
@@ -33,7 +35,8 @@ const makeRuntime = (
   return Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, inputManager),
-      Game.Runtime.service(BrowserHost, host)
+      Game.Runtime.service(BrowserHost, host),
+      Game.Runtime.service(ActorNodes, nodes)
     ),
     resources: {
       Arena: {
@@ -57,9 +60,10 @@ const makeRuntime = (
 
 export const createStateMachineRuntime = (
   host: BrowserHostValue,
+  nodes: ActorNodesValue,
   inputManager: StateMachineInputManager
 ) =>
-  Result.match(makeRuntime(host, inputManager), {
+  Result.match(makeRuntime(host, nodes, inputManager), {
     onSuccess: Result.success,
     onFailure: (error) =>
       Result.failure({

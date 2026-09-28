@@ -18,6 +18,7 @@ Start by defining the ECS data you want to store. Components hold per-entity dat
 
 ```ts
 import { Descriptor, Schema } from "@bevy-ts/core"
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
 import { Application, Container, Sprite, Texture } from "pixi.js"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -31,9 +32,11 @@ const Viewport = Descriptor.Resource<{ width: number; height: number }>()("Viewp
 const PixiHost = Descriptor.Service<{
   readonly application: Application
   readonly scene: Container
-  readonly sprites: Map<number, Sprite>
   readonly clock: { deltaSeconds: number }
 }>()("PixiHost")
+
+// One Pixi sprite per rendered entity, owned by @bevy-ts/pixi.
+const Sprites = Descriptor.Service<NodeRegistry.NodeRegistry<Sprite>>()("Sprites")
 ```
 
 This split is the first important API rule:
@@ -67,32 +70,20 @@ Everything defined after this point is checked against the same closed world.
 
 ## 3. Define queries for the exact reads you need
 
-Queries are explicit. You declare exactly which components are read or written, then optionally add change filters.
+Queries are explicit. You declare exactly which components are read or written, then optionally add filters.
 
 ```ts
-const AddedRenderableQuery = Game.Query({
+const Moving = Game.Query({
   selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable),
-    tint: Game.Query.read(Tint)
-  },
-  filters: [Game.Query.added(Renderable)]
-})
-
-const ChangedPositionQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position)
-  },
-  filters: [Game.Query.changed(Position)]
+    position: Game.Query.write(Position),
+    velocity: Game.Query.read(Velocity)
+  }
 })
 ```
 
-These two queries drive rendering:
-
-- `added(Renderable)` finds entities that need a Pixi sprite created.
-- `changed(Position)` finds entities whose rendered transform needs syncing.
-
-Change detection is per system: each system sees the additions and changes made since its own previous run, so these queries report every new sprite and every move exactly once.
+- `write(...)` slots can be updated; `read(...)` slots are deeply readonly.
+- `with` / `without` refine which entities match.
+- `added(...)` / `changed(...)` filters match what changed since the reading system's previous run, so every system sees each change exactly once.
 
 ## 4. Define systems with explicit declared access
 
@@ -188,50 +179,34 @@ The full example adds a `BounceWithinViewportSystem` as the next simulation step
 
 ## 5. Bridge ECS changes back into Pixi
 
-Rendering systems stay explicit too. One system creates Pixi sprites when ECS renderables appear. Another system syncs transforms when positions change.
+`RenderSync` from `@bevy-ts/pixi` builds the three systems every renderer bridge needs: create a sprite when an entity gains `Renderable`, move it when `Position` changes, and destroy it when the entity loses `Renderable` or despawns.
 
 ```ts
-const CreatePixiSpritesSystem = Game.System(
-  "CreatePixiSpritesSystem",
-  {
-    queries: {
-      renderables: AddedRenderableQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
+const render = RenderSync.systems(Game, {
+  name: "Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: Sprites,
+  select: { tint: Game.Query.read(Tint) },
+  create: ({ renderable, data }) => {
+    const sprite = new Sprite(Texture.WHITE)
+    sprite.anchor.set(0.5)
+    sprite.width = renderable.size
+    sprite.height = renderable.size
+    sprite.tint = data.tint.get().value
+    return sprite
   },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.renderables.each()) {
-        const entityId = match.entity.id.value
-        let sprite = services.pixi.sprites.get(entityId)
-
-        if (!sprite) {
-          sprite = new Sprite(Texture.WHITE)
-          sprite.anchor.set(0.5)
-          services.pixi.scene.addChild(sprite)
-          services.pixi.sprites.set(entityId, sprite)
-        }
-
-        const position = match.data.position.get()
-        const renderable = match.data.renderable.get()
-        const tint = match.data.tint.get()
-
-        sprite.width = renderable.size
-        sprite.height = renderable.size
-        sprite.tint = tint.value
-        sprite.position.set(position.x, position.y)
-      }
-    }
-)
+  apply: (sprite, { transform }) => {
+    sprite.position.set(transform.x, transform.y)
+  }
+})
 ```
 
-The important part is not the constructor detail. The important part is the boundary:
+The important part is the boundary:
 
 - ECS owns the intent to render.
-- Pixi owns the actual renderer object.
-- The bridge is the `PixiHost` service plus `added`/`changed` queries and removal reads.
+- Pixi owns the actual renderer object; you decide what it looks like.
+- The registry service is a normal requirement: a runtime that does not provide `Sprites` cannot tick these systems.
 
 ## 6. Make schedule boundaries visible
 
@@ -241,14 +216,16 @@ Schedules define when deferred writes become visible.
 const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
-  CreatePixiSpritesSystem
+  render.create
 )
 
 const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,
-  SyncPixiTransformsSystem
+  render.destroy,
+  render.create,
+  render.sync
 )
 ```
 
@@ -256,7 +233,7 @@ This is why the walkthrough builds in this order:
 
 - `SetupSceneSystem` queues entity spawns.
 - `applyDeferred()` commits those queued commands.
-- `CreatePixiSpritesSystem` runs after the commit, so its `added(Renderable)` query sees the new entities on this run.
+- `render.create` runs after the commit, so it creates sprites for the new entities on this run.
 
 The same rule applies every frame. Schedule markers are explicit runtime semantics, not hidden engine magic: nothing is flushed when a schedule ends, so work queued after the last marker stays pending until a later schedule reaches one.
 
@@ -266,7 +243,10 @@ Create the host objects first, then inject them into the runtime through typed s
 
 ```ts
 const runtime = Game.Runtime.make({
-  services: Game.Runtime.services(Game.Runtime.service(PixiHost, host)),
+  services: Game.Runtime.services(
+    Game.Runtime.service(PixiHost, host),
+    Game.Runtime.service(Sprites, NodeRegistry.inContainer<Sprite>(host.scene))
+  ),
   resources: {
     DeltaTime: host.clock.deltaSeconds,
     Viewport: {

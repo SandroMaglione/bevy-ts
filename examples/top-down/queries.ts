@@ -48,22 +48,6 @@ export const CollectableQuery = Game.Query({
   }
 })
 
-export const AddedRenderableQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable)
-  },
-  filters: [Game.Query.added(Renderable)]
-})
-
-export const ChangedRenderableTransformQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable)
-  },
-  filters: [Game.Query.changed(Position)]
-})
-
 export const PlayerRenderQuery = Game.Query({
   selection: {
     renderable: Game.Query.read(Renderable),

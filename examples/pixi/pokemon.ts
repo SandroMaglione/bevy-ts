@@ -10,7 +10,9 @@
  */
 import { Application, Container, Graphics } from "pixi.js"
 
+import { Keyboard } from "@bevy-ts/browser"
 import { Descriptor, Schema } from "@bevy-ts/core"
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -50,11 +52,11 @@ const InputManager = Descriptor.Service<{
 const PixiHost = Descriptor.Service<{
   readonly application: Application
   readonly scene: Container
-  readonly nodes: Map<number, Graphics>
   readonly clock: {
     deltaSeconds: number
   }
 }>()("Pokemon/PixiHost")
+const PokemonNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Graphics>>()("Pokemon/Nodes")
 
 const Game = Schema.bind(
   Schema.fragment({
@@ -89,14 +91,6 @@ const SolidQuery = Game.Query({
   }
 })
 
-const AddedRenderableQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderable: Game.Query.read(Renderable)
-  },
-  filters: [Game.Query.added(Renderable)]
-})
-
 const PlayerRenderableQuery = Game.Query({
   selection: {
     position: Game.Query.read(Position),
@@ -125,29 +119,6 @@ const makePokemonNode = (kind: "player" | "solid", tileSize: number): Graphics =
     width: 2
   })
   return node
-}
-
-const normalizeDirection = (key: string): Direction | null => {
-  switch (key) {
-    case "ArrowUp":
-    case "w":
-    case "W":
-      return "up"
-    case "ArrowDown":
-    case "s":
-    case "S":
-      return "down"
-    case "ArrowLeft":
-    case "a":
-    case "A":
-      return "left"
-    case "ArrowRight":
-    case "d":
-    case "D":
-      return "right"
-    default:
-      return null
-  }
 }
 
 const nextTileFromDirection = (position: TilePosition, direction: Direction): TilePosition =>
@@ -391,82 +362,20 @@ const AdvanceMovementSystem = Game.System(
     }
 )
 
-const DestroyRenderNodesSystem = Game.System(
-  "Pokemon/DestroyRenderNodes",
-  {
-    removed: {
-      renderables: Game.System.readRemoved(Renderable)
-    },
-    despawned: {
-      entities: Game.System.readDespawned()
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ removed, despawned, services }) =>
-    {
-      for (const entityId of removed.renderables.all()) {
-        const node = services.pixi.nodes.get(entityId.value)
-        if (!node) {
-          continue
-        }
-
-        services.pixi.scene.removeChild(node)
-        node.destroy()
-        services.pixi.nodes.delete(entityId.value)
-      }
-
-      for (const entityId of despawned.entities.all()) {
-        const node = services.pixi.nodes.get(entityId.value)
-        if (!node) {
-          continue
-        }
-
-        services.pixi.scene.removeChild(node)
-        node.destroy()
-        services.pixi.nodes.delete(entityId.value)
-      }
-    }
-)
-
-const CreateRenderNodesSystem = Game.System(
-  "Pokemon/CreateRenderNodes",
-  {
-    queries: {
-      addedRenderables: AddedRenderableQuery
-    },
-    resources: {
-      grid: Game.System.readResource(GridSize)
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ queries, resources, services }) =>
-    {
-      const { tileSize } = resources.grid.get()
-
-      for (const match of queries.addedRenderables.each()) {
-        const entityId = match.entity.id.value
-        let node = services.pixi.nodes.get(entityId)
-        if (!node) {
-          node = makePokemonNode(match.data.renderable.get().kind, tileSize)
-          services.pixi.scene.addChild(node)
-          services.pixi.nodes.set(entityId, node)
-        }
-
-        const position = match.data.position.get()
-        setNodeTilePosition(
-          node,
-          match.data.renderable.get().kind,
-          tileSize,
-          position.col * tileSize,
-          position.row * tileSize
-        )
-      }
-    }
-)
+// Solids never move, so the tile position applied on creation is final. The
+// player is positioned every frame by `SyncPlayerNodeSystem` instead.
+const render = RenderSync.systems(Game, {
+  name: "Pokemon/Render",
+  renderable: Renderable,
+  transform: Position,
+  registry: PokemonNodes,
+  resources: { grid: GridSize },
+  create: ({ renderable, resources }) => makePokemonNode(renderable.kind, resources.grid.get().tileSize),
+  apply: (node, { renderable, transform, resources }) => {
+    const { tileSize } = resources.grid.get()
+    setNodeTilePosition(node, renderable.kind, tileSize, transform.col * tileSize, transform.row * tileSize)
+  }
+})
 
 const SyncPlayerNodeSystem = Game.System(
   "Pokemon/SyncPlayerNode",
@@ -478,7 +387,7 @@ const SyncPlayerNodeSystem = Game.System(
       grid: Game.System.readResource(GridSize)
     },
     services: {
-      pixi: Game.System.service(PixiHost)
+      nodes: Game.System.service(PokemonNodes)
     }
   },
   ({ queries, resources, services }) =>
@@ -486,7 +395,7 @@ const SyncPlayerNodeSystem = Game.System(
       const { tileSize } = resources.grid.get()
 
       for (const match of queries.players.each()) {
-        const node = services.pixi.nodes.get(match.entity.id.value)
+        const node = services.nodes.get(match.entity.id)
         if (!node) {
           continue
         }
@@ -515,7 +424,7 @@ const setupSchedule = Game.Schedule(SetupSystem)
 const browserSetupSchedule = Game.Schedule(
   setupSchedule,
   Game.Schedule.applyDeferred(),
-  CreateRenderNodesSystem,
+  render.create,
   SyncPlayerNodeSystem
 )
 
@@ -530,8 +439,9 @@ const browserUpdateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   updateSchedule,
   Game.Schedule.applyDeferred(),
-  DestroyRenderNodesSystem,
-  CreateRenderNodesSystem,
+  render.destroy,
+  render.create,
+  render.sync,
   SyncPlayerNodeSystem
 )
 
@@ -606,22 +516,18 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
   application.stage.addChild(renderGrid(GRID_COLS, GRID_ROWS, TILE_SIZE))
   application.stage.addChild(scene)
 
-  let pendingDirection: Direction | null = null
-  const onKeyDown = (event: KeyboardEvent) => {
-    const direction = normalizeDirection(event.key)
-    if (direction === null) {
-      return
-    }
-
-    event.preventDefault()
-    pendingDirection = direction
-  }
-  window.addEventListener("keydown", onKeyDown)
+  const keyboard = Keyboard.actions(window, {
+    up: ["ArrowUp", "w"],
+    down: ["ArrowDown", "s"],
+    left: ["ArrowLeft", "a"],
+    right: ["ArrowRight", "d"]
+  })
+  const directions = ["up", "down", "left", "right"] as const
+  const nodes = NodeRegistry.inContainer<Graphics>(scene)
 
   const host = {
     application,
     scene,
-    nodes: new Map<number, Graphics>(),
     clock: {
       deltaSeconds: 1 / 60
     }
@@ -630,13 +536,15 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
   const runtime = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, {
+        // Holding a direction keeps walking (movement only accepts a new
+        // direction once the current step finishes); a quick tap still counts.
         direction() {
-          const next = pendingDirection
-          pendingDirection = null
-          return next
+          const snapshot = keyboard.snapshot()
+          return directions.find((direction) => snapshot[direction].held || snapshot[direction].pressed) ?? null
         }
       }),
-      Game.Runtime.service(PixiHost, host)
+      Game.Runtime.service(PixiHost, host),
+      Game.Runtime.service(PokemonNodes, nodes)
     ),
     resources: {
       GridSize: {
@@ -660,12 +568,8 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
   return {
     async destroy() {
       application.ticker.remove(tick)
-      window.removeEventListener("keydown", onKeyDown)
-      for (const node of host.nodes.values()) {
-        scene.removeChild(node)
-        node.destroy()
-      }
-      host.nodes.clear()
+      keyboard.dispose()
+      nodes.clear()
       application.destroy(true)
       mount.replaceChildren()
     }

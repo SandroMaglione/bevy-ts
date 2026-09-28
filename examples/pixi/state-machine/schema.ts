@@ -3,6 +3,7 @@ import * as Size2 from "@bevy-ts/math/Size2"
 import * as Vector2 from "@bevy-ts/math/Vector2"
 import type {
   ActorKind,
+  ActorNodes as ActorNodesValue,
   BrowserHostValue,
   NoticeValue,
   StateMachineInputManager,
@@ -24,6 +25,7 @@ export const TransitionNotice = Descriptor.Resource<NoticeValue>()("StateMachine
 
 export const InputManager = Descriptor.Service<StateMachineInputManager>()("StateMachineExample/InputManager")
 export const BrowserHost = Descriptor.Service<BrowserHostValue>()("StateMachineExample/BrowserHost")
+export const ActorNodes = Descriptor.Service<ActorNodesValue>()("StateMachineExample/ActorNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({

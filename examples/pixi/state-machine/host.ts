@@ -1,3 +1,5 @@
+import { Keyboard } from "@bevy-ts/browser"
+import { NodeRegistry } from "@bevy-ts/pixi"
 import { Application, Container, Graphics } from "pixi.js"
 import * as InputAxis from "@bevy-ts/math/InputAxis"
 
@@ -177,18 +179,20 @@ const makeHud = () => {
   }
 }
 
-const normalizeMovement = (keys: Set<string>): Vector => {
-  return InputAxis.vectorFromAxisValues(
-    InputAxis.axis(
-      keys.has("ArrowLeft") || keys.has("a") || keys.has("A"),
-      keys.has("ArrowRight") || keys.has("d") || keys.has("D")
-    ),
-    InputAxis.axis(
-      keys.has("ArrowUp") || keys.has("w") || keys.has("W"),
-      keys.has("ArrowDown") || keys.has("s") || keys.has("S")
-    )
+const bindings = {
+  left: ["ArrowLeft", "a"],
+  right: ["ArrowRight", "d"],
+  up: ["ArrowUp", "w"],
+  down: ["ArrowDown", "s"],
+  start: ["Enter"],
+  pause: ["p"]
+} as const
+
+const movementFrom = (input: Keyboard.Snapshot<typeof bindings>): Vector =>
+  InputAxis.vectorFromAxisValues(
+    InputAxis.axis(input.left.held, input.right.held),
+    InputAxis.axis(input.up.held, input.down.held)
   )
-}
 
 export const createStateMachineBrowserHost = async (mount: HTMLElement) => {
   const application = new Application()
@@ -217,36 +221,16 @@ export const createStateMachineBrowserHost = async (mount: HTMLElement) => {
   application.stage.addChild(createBoard(STAGE_WIDTH, STAGE_HEIGHT))
   application.stage.addChild(scene)
 
-  const pressedKeys = new Set<string>()
+  const keyboard = Keyboard.actions(window, bindings)
+  let input = keyboard.snapshot()
+  // Start and pause are consumed once, so only one queue system reacts per press.
   let startQueued = false
   let pauseQueued = false
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    pressedKeys.add(event.key)
-
-    if (event.key === "Enter") {
-      startQueued = true
-      event.preventDefault()
-      return
-    }
-
-    if (event.key === "p" || event.key === "P") {
-      pauseQueued = true
-      event.preventDefault()
-    }
-  }
-
-  const onKeyUp = (event: KeyboardEvent) => {
-    pressedKeys.delete(event.key)
-  }
-
-  window.addEventListener("keydown", onKeyDown)
-  window.addEventListener("keyup", onKeyUp)
+  const nodes = NodeRegistry.inContainer<Graphics>(scene)
 
   const host: BrowserHostValue = {
     application,
     scene,
-    nodes: new Map<number, Graphics>(),
     clock: {
       deltaSeconds: 1 / 60
     },
@@ -255,7 +239,7 @@ export const createStateMachineBrowserHost = async (mount: HTMLElement) => {
 
   const inputManager: StateMachineInputManager = {
     movement() {
-      return normalizeMovement(pressedKeys)
+      return movementFrom(input)
     },
     consumeStart() {
       const next = startQueued
@@ -271,14 +255,17 @@ export const createStateMachineBrowserHost = async (mount: HTMLElement) => {
 
   return {
     host,
+    nodes,
     inputManager,
+    /** Reads the keyboard once per frame, before the update schedule runs. */
+    captureInput() {
+      input = keyboard.snapshot()
+      startQueued = input.start.pressed
+      pauseQueued = input.pause.pressed
+    },
     async destroy() {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
-      for (const node of host.nodes.values()) {
-        node.destroy()
-      }
-      host.nodes.clear()
+      keyboard.dispose()
+      nodes.clear()
       application.destroy(true)
       mount.replaceChildren()
     }

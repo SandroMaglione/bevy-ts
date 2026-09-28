@@ -1,7 +1,9 @@
 import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
+import { Keyboard } from "@bevy-ts/browser"
 import { Descriptor, Entity, Schema } from "@bevy-ts/core"
+import { NodeRegistry, RenderSync } from "@bevy-ts/pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -40,7 +42,6 @@ type DescentPatternValue = {
 type PixiHostValue = {
   application: Application
   scene: Container
-  nodes: Map<number, Graphics>
   clock: {
     deltaFrames: number
     deltaMilliseconds: number
@@ -72,11 +73,12 @@ const DestroyEnemy = Descriptor.Event<{
 }>()("SpaceInvaders/DestroyEnemy")
 
 const InputManager = Descriptor.Service<{
-  readonly isKeyPressed: (keyCode: "ArrowLeft" | "ArrowRight" | "Space") => boolean
+  readonly isHeld: (action: "left" | "right" | "shoot") => boolean
 }>()("SpaceInvaders/InputManager")
 
 const PixiHost = Descriptor.Service<PixiHostValue>()("SpaceInvaders/PixiHost")
 const MatterHost = Descriptor.Service<MatterHostValue>()("SpaceInvaders/MatterHost")
+const PixiNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Graphics>>()("SpaceInvaders/PixiNodes")
 
 const Game = Schema.bind(
   Schema.fragment({
@@ -180,14 +182,6 @@ const AddedRenderableQuery = Game.Query({
     renderBody: Game.Query.read(RenderBody)
   },
   filters: [Game.Query.added(RenderBody)]
-})
-
-const ChangedRenderableTransformQuery = Game.Query({
-  selection: {
-    position: Game.Query.read(Position),
-    renderBody: Game.Query.read(RenderBody)
-  },
-  filters: [Game.Query.changed(Position)]
 })
 
 const idleVelocity = { vx: 0, vy: 0, speed: 6 } as const
@@ -301,20 +295,6 @@ const bodyCenterFromPosition = (
   x: position.x + renderBody.width * (0.5 - renderBody.anchorX),
   y: position.y + renderBody.height * (0.5 - renderBody.anchorY)
 })
-
-const destroyPixiNode = (
-  entityId: Entity.EntityId<typeof schema>,
-  pixi: PixiHostValue
-) => {
-  const node = pixi.nodes.get(entityId.value)
-  if (!node) {
-    return
-  }
-
-  pixi.scene.removeChild(node)
-  node.destroy()
-  pixi.nodes.delete(entityId.value)
-}
 
 const ensureMatterBody = (
   entityId: Entity.EntityId<typeof schema>,
@@ -479,9 +459,9 @@ const PlayerInputSystem = Game.System(
 
       player.value.data.velocity.update((velocity) => ({
         ...velocity,
-        vx: services.input.isKeyPressed("ArrowLeft")
+        vx: services.input.isHeld("left")
           ? -velocity.speed
-          : services.input.isKeyPressed("ArrowRight")
+          : services.input.isHeld("right")
             ? velocity.speed
             : 0
       }))
@@ -509,7 +489,7 @@ const ShootingSystem = Game.System(
       )
 
       const player = queries.player.singleOptional()
-      if (!player.ok || !player.value || !services.input.isKeyPressed("Space")) {
+      if (!player.ok || !player.value || !services.input.isHeld("shoot")) {
         return
       }
 
@@ -828,84 +808,16 @@ const CullingSystem = Game.System(
     }
 )
 
-const CreatePixiNodesSystem = Game.System(
-  "SpaceInvaders/CreatePixiNodes",
-  {
-    queries: {
-      addedRenderables: AddedRenderableQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.addedRenderables.each()) {
-        const entityId = match.entity.id.value
-        let node = services.pixi.nodes.get(entityId)
-        if (!node) {
-          node = createNode(match.data.renderBody.get())
-          services.pixi.scene.addChild(node)
-          services.pixi.nodes.set(entityId, node)
-        }
-
-        const position = match.data.position.get()
-        node.position.set(position.x, position.y)
-      }
-    }
-)
-
-const SyncPixiTransformsSystem = Game.System(
-  "SpaceInvaders/SyncPixiTransforms",
-  {
-    queries: {
-      movedRenderables: ChangedRenderableTransformQuery
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ queries, services }) =>
-    {
-      for (const match of queries.movedRenderables.each()) {
-        const entityId = match.entity.id.value
-        let node = services.pixi.nodes.get(entityId)
-        if (!node) {
-          node = createNode(match.data.renderBody.get())
-          services.pixi.scene.addChild(node)
-          services.pixi.nodes.set(entityId, node)
-        }
-
-        const position = match.data.position.get()
-        node.position.set(position.x, position.y)
-      }
-    }
-)
-
-const DestroyPixiNodesSystem = Game.System(
-  "SpaceInvaders/DestroyPixiNodes",
-  {
-    removed: {
-      renderables: Game.System.readRemoved(RenderBody)
-    },
-    despawned: {
-      entities: Game.System.readDespawned()
-    },
-    services: {
-      pixi: Game.System.service(PixiHost)
-    }
-  },
-  ({ removed, despawned, services }) =>
-    {
-      for (const entityId of removed.renderables.all()) {
-        destroyPixiNode(entityId, services.pixi)
-      }
-
-      for (const entityId of despawned.entities.all()) {
-        destroyPixiNode(entityId, services.pixi)
-      }
-    }
-)
+// Matter bodies stay custom (they feed collisions back into the ECS); Pixi
+// nodes are a plain mirror of `RenderBody` + `Position`.
+const render = RenderSync.systems(Game, {
+  name: "SpaceInvaders/Render",
+  renderable: RenderBody,
+  transform: Position,
+  registry: PixiNodes,
+  create: ({ renderable }) => createNode(renderable),
+  apply: (node, { transform }) => node.position.set(transform.x, transform.y)
+})
 
 const gameplaySetupSchedule = Game.Schedule(SpawnPlayerSystem)
 
@@ -913,7 +825,7 @@ const setupSchedule = Game.Schedule(
   gameplaySetupSchedule,
   Game.Schedule.applyDeferred(),
   CreateMatterBodiesSystem,
-  CreatePixiNodesSystem
+  render.create
 )
 
 const updateSchedule = Game.Schedule(
@@ -923,7 +835,7 @@ const updateSchedule = Game.Schedule(
   EnemySpawnSystem,
   Game.Schedule.applyDeferred(),
   CreateMatterBodiesSystem,
-  CreatePixiNodesSystem,
+  render.create,
   MovementSystem,
   ClampPlayerBoundsSystem,
   EnemyDescentSystem,
@@ -935,8 +847,8 @@ const updateSchedule = Game.Schedule(
   CullingSystem,
   Game.Schedule.applyDeferred(),
   DestroyMatterBodiesSystem,
-  DestroyPixiNodesSystem,
-  SyncPixiTransformsSystem
+  render.destroy,
+  render.sync
 )
 
 export const startSpaceInvadersExample = async (
@@ -959,29 +871,17 @@ export const startSpaceInvadersExample = async (
   application.stage.addChild(renderBackdrop())
   application.stage.addChild(scene)
 
-  const keyStates = new Map<string, boolean>()
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.code === "ArrowLeft" || event.code === "ArrowRight" || event.code === "Space") {
-      event.preventDefault()
-      keyStates.set(event.code, true)
-    }
-  }
-
-  const onKeyUp = (event: KeyboardEvent) => {
-    if (event.code === "ArrowLeft" || event.code === "ArrowRight" || event.code === "Space") {
-      event.preventDefault()
-      keyStates.set(event.code, false)
-    }
-  }
-
-  window.addEventListener("keydown", onKeyDown)
-  window.addEventListener("keyup", onKeyUp)
+  const keyboard = Keyboard.actions(window, {
+    left: ["ArrowLeft"],
+    right: ["ArrowRight"],
+    shoot: [" "]
+  })
+  let input = keyboard.snapshot()
+  const nodes = NodeRegistry.inContainer<Graphics>(scene)
 
   const pixiHost: PixiHostValue = {
     application,
     scene,
-    nodes: new Map<number, Graphics>(),
     clock: {
       deltaFrames: 1,
       deltaMilliseconds: 1000 / 60
@@ -998,11 +898,12 @@ export const startSpaceInvadersExample = async (
   const runtime = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(InputManager, {
-        isKeyPressed(keyCode) {
-          return keyStates.get(keyCode) ?? false
+        isHeld(action) {
+          return input[action].held
         }
       }),
       Game.Runtime.service(PixiHost, pixiHost),
+      Game.Runtime.service(PixiNodes, nodes),
       Game.Runtime.service(MatterHost, matterHost)
     ),
     resources: {
@@ -1019,6 +920,7 @@ export const startSpaceInvadersExample = async (
   const tick = (ticker: { readonly deltaMS: number }) => {
     pixiHost.clock.deltaMilliseconds = ticker.deltaMS
     pixiHost.clock.deltaFrames = ticker.deltaMS / (1000 / 60)
+    input = keyboard.snapshot()
     runtime.tick(updateSchedule)
   }
 
@@ -1027,14 +929,8 @@ export const startSpaceInvadersExample = async (
   return {
     async destroy() {
       application.ticker.remove(tick)
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
-
-      for (const node of pixiHost.nodes.values()) {
-        scene.removeChild(node)
-        node.destroy()
-      }
-      pixiHost.nodes.clear()
+      keyboard.dispose()
+      nodes.clear()
 
       for (const body of matterHost.bodies.values()) {
         Matter.World.remove(matterHost.engine.world, body)

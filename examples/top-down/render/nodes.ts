@@ -3,8 +3,7 @@ import { Container, Graphics, Sprite, Texture } from "pixi.js"
 import type {
   CurrentPlayerFrameValue,
   PlayerFrameAtlas,
-  RenderNode,
-  TopDownHostValue
+  RenderNode
 } from "../types.ts"
 
 const createPlayerNode = (
@@ -113,40 +112,22 @@ export const destroyRenderNode = (renderNode: RenderNode): void => {
   })
 }
 
-export const ensureNode = (
-  host: TopDownHostValue,
-  entityId: number,
+/**
+ * Builds the render node for one renderable; `RenderSync` attaches it.
+ */
+export const createRenderNode = (
   renderable: {
-    kind: "player" | "wall" | "pickup"
-    width: number
-    height: number
-    color: number
-    accent: number
+    readonly kind: "player" | "wall" | "pickup"
+    readonly width: number
+    readonly height: number
+    readonly color: number
+    readonly accent: number
   },
+  frames: PlayerFrameAtlas,
   frame: CurrentPlayerFrameValue
-): RenderNode => {
-  const existing = host.nodes.get(entityId)
-  if (existing) {
-    return existing
-  }
-
-  const node =
-    renderable.kind === "player"
-      ? {
-          kind: "player" as const,
-          node: createPlayerNode(renderable, textureForCurrentFrame(host.playerFrames, frame))
-        }
+): RenderNode =>
+  renderable.kind === "player"
+    ? { kind: "player", node: createPlayerNode(renderable, textureForCurrentFrame(frames, frame)) }
     : renderable.kind === "wall"
-      ? {
-          kind: "wall" as const,
-          node: createWallNode(renderable)
-        }
-      : {
-          kind: "pickup" as const,
-          node: createPickupNode(renderable)
-        }
-
-  host.actorLayer.addChild(node.node)
-  host.nodes.set(entityId, node)
-  return node
-}
+      ? { kind: "wall", node: createWallNode(renderable) }
+      : { kind: "pickup", node: createPickupNode(renderable) }
