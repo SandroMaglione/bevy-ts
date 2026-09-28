@@ -1,8 +1,7 @@
 import {
   CaptureFrameInputSystem,
   CollectPickupsSystem,
-  CreateRenderNodesSystem,
-  DestroyRenderNodesSystem,
+  RenderNodesSystem,
   FadeTransitionNoticeSystem,
   MovePlayerSystem,
   QueueOutcomeSystem,
@@ -13,7 +12,6 @@ import {
   ResetRoundOnCountdownEnterSystem,
   SpawnPlayerSystem,
   SyncHudSystem,
-  SyncRenderableTransformsSystem,
   TickCountdownSystem,
   TickRoundClockSystem,
   WriteTransitionNoticeSystem
@@ -23,7 +21,7 @@ import { Game, SessionState } from "./schema.ts"
 export const setupSchedule = Game.Schedule(
   SpawnPlayerSystem,
   Game.Schedule.applyDeferred(),
-  CreateRenderNodesSystem,
+  RenderNodesSystem,
   SyncHudSystem
 )
 
@@ -50,8 +48,6 @@ export const updateSchedule = Game.Schedule(
   // Host sync runs after the commands above are applied, so it sees this tick's spawns.
   WriteTransitionNoticeSystem,
   FadeTransitionNoticeSystem,
-  DestroyRenderNodesSystem,
-  CreateRenderNodesSystem,
-  SyncRenderableTransformsSystem,
+  RenderNodesSystem,
   SyncHudSystem
 )

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Descriptor, Fx, Schema } from "@bevy-ts/core"
+import * as Runtime from "@bevy-ts/core/Runtime"
 
 const Ping = Descriptor.Event<{ value: number }>()("Ping")
 const Game = Schema.bind(Schema.fragment({ events: { Ping } }))
@@ -95,19 +96,110 @@ describe("Runtime events", () => {
     expect(log).toEqual([[], [0], [1]])
   })
 
-  it("keeps events for the current and previous tick only", () => {
+  it("holds events until every reading system has run, for schedules ticked at different rates", () => {
     const log: Array<ReadonlyArray<number>> = []
-    const read = reader("Events/ReadLate", log)
-    const idle = Game.Schedule()
+    let next = 0
+    const emitEveryFrame = Game.System("Events/EmitPerFrame", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
+      events.ping.emit({ value: next++ })
+    })
+    const fixed = Game.Schedule(reader("Events/FixedRead", log))
+    const frame = Game.Schedule(emitEveryFrame)
     const runtime = makeRuntime()
 
-    runtime.tick(Game.Schedule(emitter("Events/EmitKept", [1])))
-    runtime.tick(Game.Schedule(read))
-    expect(log).toEqual([[1]])
+    runtime.tick(fixed)
+    // The fixed schedule runs only every third tick.
+    for (let tick = 0; tick < 7; tick++) {
+      runtime.tick(frame)
+      if (tick % 3 === 2) runtime.tick(fixed)
+    }
+    runtime.tick(fixed)
+    expect(log).toEqual([[], [0, 1, 2], [3, 4, 5], [6]])
+  })
 
-    runtime.tick(Game.Schedule(emitter("Events/EmitDropped", [2])))
-    runtime.tick(idle)
-    runtime.tick(Game.Schedule(read))
-    expect(log).toEqual([[1], []])
+  it("keeps events no system has read yet for the current and previous tick only", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(emitter("Events/EmitUnread", [1])))
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule(reader("Events/TooLate", log)))
+    expect(log).toEqual([[]])
+  })
+
+  it("gives a new reader's first run the events still held for other readers", () => {
+    const log: Array<ReadonlyArray<number>> = []
+    const held = reader("Events/Holder", [])
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(held))
+    runtime.tick(Game.Schedule(emitter("Events/EmitHeld", [2])))
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule(reader("Events/Newcomer", log)))
+    expect(log).toEqual([[2]])
+  })
+
+  it("discards events published while a reader is skipped by its run conditions", () => {
+    const Local = Schema.bind(Schema.fragment({ events: { Ping } }))
+    const Mode = Local.StateMachine("Events/Mode", ["On", "Off"])
+    const log: Array<ReadonlyArray<number>> = []
+    const gated = Local.System("Events/Gated", {
+      when: [Local.Condition.inState(Mode, "On")],
+      events: { ping: Local.System.readEvent(Ping) }
+    }, ({ events }) => {
+      log.push(events.ping.all().map((event) => event.value))
+    })
+    const emit = Local.System("Events/EmitGated", { events: { ping: Local.System.writeEvent(Ping) } }, ({ events }) => {
+      events.ping.emit({ value: 1 })
+    })
+    const toggle = (value: "On" | "Off") => Local.System(`Events/Set${value}`, {
+      nextMachines: { mode: Local.System.nextState(Mode) }
+    }, ({ nextMachines }) => {
+      nextMachines.mode.set(value)
+    })
+    const runtime = Local.Runtime.make({
+      services: Local.Runtime.services(),
+      machines: Local.Runtime.machines(Local.Runtime.machine(Mode, "On"))
+    })
+    runtime.tick(Local.Schedule(gated))
+    runtime.tick(Local.Schedule(toggle("Off"), Local.Schedule.applyStateTransitions()))
+    runtime.tick(Local.Schedule(emit, gated))
+    runtime.tick(Local.Schedule(toggle("On"), Local.Schedule.applyStateTransitions(), gated))
+    expect(log).toEqual([[], []])
+  })
+
+  it("drops the oldest events past the stream capacity and reports lagged readers", () => {
+    const seen: Array<{ readonly count: number; readonly lagged: boolean }> = []
+    const dormant = Game.System("Events/Dormant", { events: { ping: Game.System.readEvent(Ping) } }, ({ events }) => {
+      seen.push({ count: events.ping.all().length, lagged: events.ping.lagged() })
+    })
+    const flood = Game.System("Events/Flood", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
+      for (let index = 0; index <= Runtime.streamCapacity; index++) events.ping.emit({ value: index })
+    })
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(dormant))
+    runtime.tick(Game.Schedule(flood))
+    runtime.tick(Game.Schedule(emitter("Events/After", [1])))
+    runtime.tick(Game.Schedule(dormant))
+    runtime.tick(Game.Schedule(dormant))
+    expect(seen).toEqual([
+      { count: 0, lagged: false },
+      { count: 1, lagged: true },
+      { count: 0, lagged: false }
+    ])
+  })
+
+  it("does not hold events for inspectors, which report lagged instead", () => {
+    const Peek = Game.Inspector("Events/Peek", { events: { ping: Game.System.readEvent(Ping) } }, ({ events }) => ({
+      values: events.ping.all().map((event) => event.value),
+      lagged: events.ping.lagged()
+    }))
+    const runtime = makeRuntime()
+    expect(runtime.inspect(Peek)).toEqual({ values: [], lagged: false })
+    runtime.tick(Game.Schedule(emitter("Events/EmitForPeek", [1])))
+    expect(runtime.inspect(Peek)).toEqual({ values: [1], lagged: false })
+    runtime.tick(Game.Schedule(emitter("Events/EmitMissed", [2])))
+    runtime.tick(Game.Schedule())
+    runtime.tick(Game.Schedule())
+    expect(runtime.inspect(Peek)).toEqual({ values: [], lagged: true })
   })
 })

@@ -1,21 +1,13 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Entity, Result, Schema, Snapshot } from "@bevy-ts/core"
+import { Decode, Descriptor, Entity, Result, Schema, Snapshot } from "@bevy-ts/core"
 import * as Vector2 from "@bevy-ts/math/Vector2"
-
-const string = { result: (raw: unknown) => typeof raw === "string" ? Result.success(raw) : Result.failure("NotAString" as const) }
-const number = { result: (raw: unknown) => typeof raw === "number" ? Result.success(raw) : Result.failure("NotANumber" as const) }
 
 const Root = Schema.defineRoot("SnapshotTest")
 const Position = Descriptor.ConstructedComponent(Vector2)("Snapshot/Position")
-const Name = Descriptor.ConstructedComponent(string)("Snapshot/Name")
-const Target = Descriptor.ConstructedComponent({
-  result: (raw: unknown) => {
-    const handle = Entity.decodeHandle(Root, typeof raw === "object" && raw !== null ? (raw as { handle?: unknown }).handle : undefined, Name)
-    return handle.ok ? Result.success({ handle: handle.value }) : handle
-  }
-})("Snapshot/Target")
+const Name = Descriptor.ConstructedComponent(Decode.string)("Snapshot/Name")
+const Target = Descriptor.ConstructedComponent(Decode.struct({ handle: Decode.handle(Root, Name) }))("Snapshot/Target")
 const Sprite = Descriptor.TransientComponent<{ readonly frame: number }>()("Snapshot/Sprite")
-const Score = Descriptor.ConstructedResource(number)("Snapshot/Score")
+const Score = Descriptor.ConstructedResource(Decode.number)("Snapshot/Score")
 const Frame = Descriptor.TransientResource<number>()("Snapshot/Frame")
 const { relation: ChildOf } = Descriptor.Hierarchy("Snapshot/ChildOf", "Snapshot/Children")
 

@@ -1,4 +1,4 @@
-import { Descriptor, Entity, Result, Schema } from "@bevy-ts/core"
+import { Decode, Descriptor, Entity, Result, Schema } from "@bevy-ts/core"
 import * as Size2 from "@bevy-ts/math/Size2"
 import * as Vector2 from "@bevy-ts/math/Vector2"
 import * as Runtime from "@bevy-ts/core/Runtime"
@@ -483,5 +483,21 @@ describe("Runtime snapshots", () => {
 
     const decoded = Entity.decodeHandle(Root, null, Label)
     expect(decoded).type.toBe<Result.Result<Entity.Handle<typeof Root, typeof Label>, Entity.InvalidHandle>>()
+  })
+})
+
+describe("Decode", () => {
+  it("infers descriptor values from codecs", () => {
+    const Stats = Descriptor.ConstructedComponent(Decode.struct({ level: Decode.integer, tags: Decode.array(Decode.string) }))("DecodeTypes/Stats")
+    expect<Descriptor.Descriptor.Value<typeof Stats>>().type.toBe<{ readonly level: number; readonly tags: ReadonlyArray<string> }>()
+    const Team = Descriptor.ConstructedComponent(Decode.literal("red", "blue"))("DecodeTypes/Team")
+    expect<Descriptor.Descriptor.Value<typeof Team>>().type.toBe<"red" | "blue">()
+    const Player = Descriptor.Tag("DecodeTypes/Player")
+    expect<Descriptor.Descriptor.Value<typeof Player>>().type.toBe<{}>()
+
+    const Root = Schema.defineRoot("DecodeTypes")
+    const Game = Schema.bind(Schema.fragment({ components: { Stats, Team, Player } }), Root)
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services() })
+    expect(runtime.snapshot()).type.toBe<import("@bevy-ts/core/Snapshot").WorldSnapshot>()
   })
 })

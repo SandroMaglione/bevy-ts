@@ -8,37 +8,22 @@
  * `calibration` case is plain JavaScript work used to normalize scores across
  * machines (see `scripts/bench.ts`).
  */
-import { Descriptor, Result, Schema } from "@bevy-ts/core"
+import { Decode, Descriptor, Schema } from "@bevy-ts/core"
 import type * as Entity from "@bevy-ts/core/Entity"
 import type { BenchCase } from "./harness.ts"
 
 const N = 10_000
 
-type Vec = { x: number; y: number }
-
 // Validators exist so snapshots can be restored; the round-trip case measures them.
-const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === "object" && raw !== null
-const vec = {
-  result: (raw: unknown): Result.Result<Vec, "NotAVector"> =>
-    isRecord(raw) && typeof raw["x"] === "number" && typeof raw["y"] === "number"
-      ? Result.success({ x: raw["x"], y: raw["y"] })
-      : Result.failure("NotAVector")
-}
-const number = {
-  result: (raw: unknown): Result.Result<number, "NotANumber"> =>
-    typeof raw === "number" ? Result.success(raw) : Result.failure("NotANumber")
-}
-const tag = {
-  result: (raw: unknown): Result.Result<{}, "NotATag"> => isRecord(raw) ? Result.success({}) : Result.failure("NotATag")
-}
+const vec = Decode.struct({ x: Decode.number, y: Decode.number })
 
 const Position = Descriptor.ConstructedComponent(vec)("Bench/Position")
 const Velocity = Descriptor.ConstructedComponent(vec)("Bench/Velocity")
-const Health = Descriptor.ConstructedComponent(number)("Bench/Health")
-const Static = Descriptor.ConstructedComponent(tag)("Bench/Static")
-const Player = Descriptor.ConstructedComponent(tag)("Bench/Player")
-const Hot = Descriptor.ConstructedComponent(tag)("Bench/Hot")
-const Marker = Descriptor.ConstructedComponent(tag)("Bench/Marker")
+const Health = Descriptor.ConstructedComponent(Decode.number)("Bench/Health")
+const Static = Descriptor.Tag("Bench/Static")
+const Player = Descriptor.Tag("Bench/Player")
+const Hot = Descriptor.Tag("Bench/Hot")
+const Marker = Descriptor.Tag("Bench/Marker")
 const Sum = Descriptor.TransientResource<number>()("Bench/Sum")
 const Ping = Descriptor.Event<number>()("Bench/Ping")
 const { relation: ChildOf } = Descriptor.Hierarchy("Bench/ChildOf", "Bench/Children")

@@ -4,8 +4,7 @@ import {
   CaptureFrameContextSystem,
   CaptureInputSystem,
   CollectFocusedCollectableSystem,
-  CreateRenderNodesSystem,
-  DestroyRenderNodesSystem,
+  RenderNodesSystem,
   MovePlayerSystem,
   PlanPlayerVelocitySystem,
   ResolveCurrentPlayerFrameSystem,
@@ -17,7 +16,6 @@ import {
   SyncHudSystem,
   SyncPickupPresentationSystem,
   SyncPlayerSpriteSystem,
-  SyncRenderableTransformsSystem,
   UpdateFocusedCollectableSystem
 } from "./systems/index.ts"
 import { Game } from "./schema.ts"
@@ -34,9 +32,7 @@ const cameraSyncSchedule = Game.Schedule(
 )
 
 const renderSyncSchedule = Game.Schedule(
-  DestroyRenderNodesSystem,
-  CreateRenderNodesSystem,
-  SyncRenderableTransformsSystem,
+  RenderNodesSystem,
   SyncPlayerSpriteSystem,
   SyncPickupPresentationSystem,
   SyncHudSystem
@@ -60,9 +56,7 @@ export const setupSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
-  DestroyRenderNodesSystem,
-  CreateRenderNodesSystem,
-  SyncRenderableTransformsSystem,
+  RenderNodesSystem,
   SyncPlayerSpriteSystem,
   SyncPickupPresentationSystem,
   SyncHudSystem

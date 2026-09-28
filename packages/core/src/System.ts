@@ -216,7 +216,15 @@ export type EventWrite<D extends Descriptor<"event", string, any>> = {
  * Each run of the reading system sees the events published since its own
  * previous completed run, once, in emission order: events from earlier
  * systems in the same schedule, and events emitted after it ran last time.
- * Events are kept for the current and previous `runtime.tick(...)` call.
+ *
+ * Events are kept until every system that reads them has run, so a reader in
+ * a schedule ticked less often than the emitter's (a fixed update below the
+ * render rate) still receives all of them. Events nobody has read yet are
+ * kept for the current and previous `runtime.tick(...)` call; a reader's
+ * first run sees whatever is still kept. A system skipped by its run
+ * conditions discards the events published meanwhile. Each stream is capped
+ * at `Runtime.streamCapacity` entries; a reader that missed dropped ones sees
+ * `lagged() === true`.
  *
  * This is the usual second half of a cross-system flow: one system emits an
  * event, and a later system reads it and re-validates any handles or lookups
@@ -332,6 +340,14 @@ export type ResourceWriteView<D extends Descriptor<"resource", string, any>> =
  */
 export interface EventReadView<T> {
   all(): ReadonlyArray<ReadonlyValue<T>>
+  /**
+   * Whether entries published since this system's previous run were dropped
+   * before it read them. Entries wait for every reading system, so this only
+   * happens when a reader has not run for so long that the stream exceeded
+   * its capacity (see `Runtime.streamCapacity`), or for inspectors, which do
+   * not hold entries.
+   */
+  lagged(): boolean
 }
 
 /**
@@ -371,6 +387,14 @@ export interface TransitionReadView<M extends Machine.StateMachine.Any = Machine
  */
 export interface TransitionEventReadView<M extends Machine.StateMachine.Any = Machine.StateMachine.Any> {
   all(): ReadonlyArray<Machine.TransitionSnapshot<M>>
+  /**
+   * Whether entries published since this system's previous run were dropped
+   * before it read them. Entries wait for every reading system, so this only
+   * happens when a reader has not run for so long that the stream exceeded
+   * its capacity (see `Runtime.streamCapacity`), or for inspectors, which do
+   * not hold entries.
+   */
+  lagged(): boolean
 }
 
 /**
@@ -483,6 +507,14 @@ export interface RelationFailureReadView<
   Root = unknown
 > {
   all(): ReadonlyArray<Relation.Relation.MutationFailure<R, S, Root>>
+  /**
+   * Whether entries published since this system's previous run were dropped
+   * before it read them. Entries wait for every reading system, so this only
+   * happens when a reader has not run for so long that the stream exceeded
+   * its capacity (see `Runtime.streamCapacity`), or for inspectors, which do
+   * not hold entries.
+   */
+  lagged(): boolean
 }
 
 /**

@@ -17,10 +17,8 @@ import {
 } from "./systems/simulation.ts"
 import {
   AnimateAgentNodesSystem,
-  CreateRenderNodesSystem,
-  DestroyRenderNodesSystem,
-  SyncHudSystem,
-  SyncRenderNodesSystem
+  RenderNodesSystem,
+  SyncHudSystem
 } from "./systems/render.ts"
 
 const runningEntry = Game.Schedule(
@@ -36,7 +34,7 @@ const stateTransitions = Game.Schedule.transitions(
 export const setupSchedule = Game.Schedule(
   SetupWorldSystem,
   Game.Schedule.applyDeferred(),
-  CreateRenderNodesSystem,
+  RenderNodesSystem,
   AnimateAgentNodesSystem,
   SyncHudSystem
 )
@@ -56,9 +54,7 @@ export const updateSchedule = Game.Schedule(
   QueueResumeSystem,
   Game.Schedule.applyStateTransitions(stateTransitions),
   Game.Schedule.applyDeferred(),
-  DestroyRenderNodesSystem,
-  CreateRenderNodesSystem,
-  SyncRenderNodesSystem,
+  RenderNodesSystem,
   AnimateAgentNodesSystem,
   SyncHudSystem
 )

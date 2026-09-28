@@ -3,9 +3,8 @@ import {
   ApplyJumpSystem,
   ApplyWorldCameraTransformSystem,
   CaptureFrameContextSystem,
-  CreateRenderNodesSystem,
+  RenderNodesSystem,
   DespawnLevelEntitiesOnPlayingEnterSystem,
-  DestroyRenderNodesSystem,
   MovePlayerSystem,
   QueueLossSystem,
   QueueRestartSystem,
@@ -14,8 +13,7 @@ import {
   SetupWorldSystem,
   SpawnWorldOnPlayingEnterSystem,
   SyncCameraSystem,
-  SyncHudSystem,
-  SyncRenderableTransformsSystem
+  SyncHudSystem
 } from "./systems/index.ts"
 import { Game, SessionState } from "./schema.ts"
 
@@ -24,7 +22,7 @@ export const setupSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
-  CreateRenderNodesSystem,
+  RenderNodesSystem,
   SyncHudSystem
 )
 
@@ -53,8 +51,6 @@ export const updateSchedule = Game.Schedule(
   Game.Schedule.applyDeferred(),
   SyncCameraSystem,
   ApplyWorldCameraTransformSystem,
-  DestroyRenderNodesSystem,
-  CreateRenderNodesSystem,
-  SyncRenderableTransformsSystem,
+  RenderNodesSystem,
   SyncHudSystem
 )

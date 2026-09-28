@@ -1,19 +1,20 @@
 /**
- * Systems that mirror ECS entities into renderer nodes.
+ * A system that mirrors ECS entities into renderer nodes.
  *
- * Most renderer integrations need the same three systems: create a node when
- * an entity gains its renderable component, keep the node's transform in sync
- * when a transform component changes, and destroy the node when the
- * renderable is removed or the entity despawns. `RenderSync.systems(...)`
- * builds those systems for one bound `Game`. What a node looks like and how a
- * transform is applied stay caller-defined.
+ * Every renderer integration does the same bookkeeping: create a node when an
+ * entity gains its renderable component, re-apply it when its transform
+ * changes, and destroy it when the renderable is removed or the entity
+ * despawns. `RenderSync.system(...)` builds one system that does all three,
+ * in a safe order (destroy, create, update), for one bound `Game`. What a
+ * node looks like and how state is applied stay caller-defined.
  *
- * Change detection is per system, so the systems see every addition, change,
- * and removal exactly once, wherever they sit in the schedule. `redrawOn`
- * lists more components whose changes re-run `apply`, for node state beyond
- * the transform (animation frames, tints, interpolation). Place them
- * after the `applyDeferred()` that commits spawns to render new entities in
- * the same tick.
+ * Change detection is per system, so the system sees every addition, change,
+ * and removal exactly once, wherever it sits in the schedule, and applies each
+ * node at most once per run: a node created in a run is not applied again for
+ * the same changes. `redrawOn` lists more components whose changes re-run
+ * `apply`, for node state beyond the transform (animation frames, tints,
+ * interpolation). Place the system after the `applyDeferred()` that commits
+ * spawns to render new entities in the same tick.
  *
  * `create` and `apply` receive one context: the renderable and transform
  * values, the entity id, extra read-only slots declared in `select` (as query
@@ -28,7 +29,7 @@
  * ```ts
  * const Sprites = Descriptor.Service<NodeRegistry.NodeRegistry<Sprite>>()("Game/Sprites")
  *
- * const render = RenderSync.systems(Game, {
+ * const Render = RenderSync.system(Game, {
  *   name: "Game/Render",
  *   renderable: Renderable,
  *   transform: Position,
@@ -38,7 +39,7 @@
  *   apply: (sprite, { transform }) => sprite.position.set(transform.x, transform.y)
  * })
  *
- * const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render.destroy, render.create, render.sync)
+ * const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), Render)
  * ```
  */
 import type { Descriptor } from "@bevy-ts/core/Descriptor"
@@ -110,7 +111,7 @@ export interface Options<
   Services extends Readonly<Record<string, ServiceDescriptor>>,
   Resources extends Readonly<Record<string, Schema.ResourceDescriptor<S>>> = {}
 > {
-  /** Prefix for the generated system names. */
+  /** The system name. */
   readonly name: string
   /** The component whose presence means "this entity has a node". */
   readonly renderable: Renderable
@@ -141,24 +142,16 @@ export interface Options<
 }
 
 /**
- * One generated system. It requires the registry and any extra services.
+ * The generated system. It requires the registry and any extra resources and
+ * services.
  */
 export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor> =
   Schema.BoundSystem<S, Root, any, void, never, string, Needs>
 
-export interface RenderSystems<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor> {
-  /** Destroys nodes of entities that lost the renderable or despawned. */
-  readonly destroy: RenderSystem<S, Root, Needs>
-  /** Creates nodes for entities that gained the renderable, and applies their state. */
-  readonly create: RenderSystem<S, Root, Needs>
-  /** Re-applies nodes whose transform or `redrawOn` components changed. */
-  readonly sync: RenderSystem<S, Root, Needs>
-}
-
 /**
- * Builds the destroy, create, and sync systems for one renderable component.
+ * Builds the render system for one renderable component.
  */
-export const systems = <
+export const system = <
   S extends Schema.Any,
   Root,
   const Renderable extends Schema.ComponentDescriptor<S>,
@@ -170,7 +163,7 @@ export const systems = <
 >(
   Game: Schema.Game<S, Root>,
   options: Options<S, Root, Renderable, Transform, Registry, Select, Services, Resources>
-): RenderSystems<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]> => {
+): RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]> => {
   type Node = NodeOf<Registry>
   type Context = NodeContext<S, Root, Renderable, Transform, Select, Services, Resources>
   // Internally the generic descriptors are erased; the public result type
@@ -205,54 +198,40 @@ export const systems = <
     services: provided
   }) as unknown as Context
 
-  const destroy = System(`${options.name}/Destroy`, {
-    removed: { renderables: Game.System.readRemoved(options.renderable) },
-    despawned: { entities: Game.System.readDespawned() },
-    services
-  }, ({ removed, despawned, services }) => {
-    const registry = services.__registry as NodeRegistry<Node>
-    for (const entity of removed.renderables.all()) registry.remove(entity)
-    for (const entity of despawned.entities.all()) registry.remove(entity)
-  })
-
-  const create = System(`${options.name}/Create`, {
-    queries: { added: Query({ selection, filters: [Game.Query.added(options.renderable)] }) },
-    resources,
-    services
-  }, ({ queries, resources, services }) => {
-    const registry = services.__registry as NodeRegistry<Node>
-    for (const { entity, data } of queries.added.each()) {
-      const context = contextOf(entity, data, services, resources)
-      const node = registry.ensure(entity.id, () => options.create(context))
-      options.apply(node, context)
-    }
-  })
-
   // One `changed` query per trigger; filters within one query must all match.
   const triggers = [options.transform, ...(options.redrawOn ?? [])]
-  const changedQueries: Record<string, object> = {}
+  const queries: Record<string, object> = {
+    added: Query({ selection, filters: [Game.Query.added(options.renderable)] })
+  }
   triggers.forEach((trigger, index) => {
-    changedQueries[`changed${index}`] = Query({ selection, filters: [Game.Query.changed(trigger)] })
+    queries[`changed${index}`] = Query({ selection, filters: [Game.Query.changed(trigger)] })
   })
 
-  const sync = System(`${options.name}/Sync`, {
-    queries: changedQueries,
+  return System(options.name, {
+    queries,
+    removed: { renderables: Game.System.readRemoved(options.renderable) },
+    despawned: { entities: Game.System.readDespawned() },
     resources,
     services
-  }, ({ queries, resources, services }) => {
+  }, ({ queries, removed, despawned, resources, services }) => {
     const registry = services.__registry as NodeRegistry<Node>
-    const applied = triggers.length > 1 ? new Set<number>() : undefined
-    for (const key in queries) {
-      for (const { entity, data } of queries[key].each()) {
-        if (applied !== undefined) {
-          if (applied.has(entity.id.value)) continue
-          applied.add(entity.id.value)
-        }
+    // Destroy first, so an entity that lost and regained its renderable gets a fresh node.
+    for (const entity of removed.renderables.all()) registry.remove(entity)
+    for (const entity of despawned.entities.all()) registry.remove(entity)
+
+    const applied = new Set<number>()
+    for (const { entity, data } of queries.added.each()) {
+      const context = contextOf(entity, data, services, resources)
+      options.apply(registry.ensure(entity.id, () => options.create(context)), context)
+      applied.add(entity.id.value)
+    }
+    for (let index = 0; index < triggers.length; index++) {
+      for (const { entity, data } of queries[`changed${index}`].each()) {
+        if (applied.has(entity.id.value)) continue
+        applied.add(entity.id.value)
         const node = registry.get(entity.id)
         if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
       }
     }
-  })
-
-  return { destroy, create, sync } as unknown as RenderSystems<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]>
+  }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources]>
 }

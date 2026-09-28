@@ -5,7 +5,7 @@ import { Agent, AgentSnapshotQuery, BrowserHost, ChangedAgentVitalsQuery, Game, 
 import { collectAgentSnapshots } from "../logic.ts"
 import { makeAgentNode, makeFoodNode } from "../render/nodes.ts"
 
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "GeneticsArena/Render",
   renderable: Renderable,
   transform: Position,
@@ -18,9 +18,7 @@ const render = RenderSync.systems(Game, {
   apply: (node, { transform }) => node.position.set(transform.x, transform.y)
 })
 
-export const DestroyRenderNodesSystem = render.destroy
-export const CreateRenderNodesSystem = render.create
-export const SyncRenderNodesSystem = render.sync
+export const RenderNodesSystem = render
 
 // Vitals pulse every frame, independently of movement.
 export const AnimateAgentNodesSystem = Game.System(

@@ -179,10 +179,10 @@ The full example adds a `BounceWithinViewportSystem` as the next simulation step
 
 ## 5. Bridge ECS changes back into Pixi
 
-`RenderSync` from `@bevy-ts/pixi` builds the three systems every renderer bridge needs: create a sprite when an entity gains `Renderable`, move it when `Position` changes, and destroy it when the entity loses `Renderable` or despawns.
+`RenderSync` from `@bevy-ts/pixi` builds the one system every renderer bridge needs: it creates a sprite when an entity gains `Renderable`, moves it when `Position` changes, and destroys it when the entity loses `Renderable` or despawns.
 
 ```ts
-const render = RenderSync.systems(Game, {
+const render = RenderSync.system(Game, {
   name: "Render",
   renderable: Renderable,
   transform: Position,
@@ -206,7 +206,7 @@ The important part is the boundary:
 
 - ECS owns the intent to render.
 - Pixi owns the actual renderer object; you decide what it looks like.
-- The registry service is a normal requirement: a runtime that does not provide `Sprites` cannot tick these systems.
+- The registry service is a normal requirement: a runtime that does not provide `Sprites` cannot tick this system.
 
 ## 6. Make schedule boundaries visible
 
@@ -216,16 +216,14 @@ Schedules define when deferred writes become visible.
 const setupSchedule = Game.Schedule(
   SetupSceneSystem,
   Game.Schedule.applyDeferred(),
-  render.create
+  render
 )
 
 const updateSchedule = Game.Schedule(
   CaptureFrameInputSystem,
   IntegrateMotionSystem,
   BounceWithinViewportSystem,
-  render.destroy,
-  render.create,
-  render.sync
+  render
 )
 ```
 
@@ -233,7 +231,7 @@ This is why the walkthrough builds in this order:
 
 - `SetupSceneSystem` queues entity spawns.
 - `applyDeferred()` commits those queued commands.
-- `render.create` runs after the commit, so it creates sprites for the new entities on this run.
+- `render` runs after the commit, so it creates sprites for the new entities on this run.
 
 The same rule applies every frame. Schedule markers are explicit runtime semantics, not hidden engine magic: nothing is flushed when a schedule ends, so work queued after the last marker stays pending until a later schedule reaches one.
 

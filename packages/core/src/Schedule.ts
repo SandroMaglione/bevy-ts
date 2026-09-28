@@ -15,9 +15,9 @@
  * Reads need no marker. Change detection (`added`, `changed`, removed and
  * despawned reads), events, transition events, and relation failures are
  * per-reader streams: each system sees what was published since its own
- * previous run, once, in order. Entries are kept for the current and previous
- * `runtime.tick(...)` call, so a system that does not run for longer misses
- * older ones.
+ * previous run, once, in order. Change-detection records are kept for the
+ * current and previous `runtime.tick(...)` call; events, transition events,
+ * and relation failures until every system that reads them has run.
  *
  * @module Schedule
  * @docGroup runtime
