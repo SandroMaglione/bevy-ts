@@ -4,7 +4,8 @@
  * Authoring-time structure is validated once, then schedules carry only their
  * normalized steps, systems, and nominal requirement union.
  *
- * Steps run in authored order. Marker steps are the only way queued
+ * Steps run in authored order. `when(conditions, ...entries)` gates a whole
+ * group of systems on run conditions at once. Marker steps are the only way queued
  * structural work is applied, and nothing is flushed implicitly when a
  * schedule ends:
  *
@@ -22,7 +23,7 @@
  * @module Schedule
  * @docGroup runtime
  */
-import type { StateMachine } from "./Machine.ts"
+import type { Condition, MachineNeedsFromConditions, StateMachine } from "./Machine.ts"
 import * as Requirement from "./Requirement.ts"
 import type { Schema } from "./Schema.ts"
 import type { FailureOf as SystemFailureOf, SystemDefinition, SystemFailure } from "./System.ts"
@@ -165,6 +166,23 @@ export type AnonymousScheduleBuildFor<
   CompositionFailure<Entries>
 >
 
+/**
+ * The schedule built by `when(conditions, ...entries)`: the entries' needs
+ * plus the machines the conditions read.
+ */
+export type ConditionalScheduleBuildFor<
+  S extends Schema.Any,
+  Conditions extends ReadonlyArray<Condition>,
+  Entries extends ReadonlyArray<ScheduleEntry>,
+  Root = unknown
+> = ScheduleDefinition<
+  S,
+  CompositionExactRequirements<Entries> | MachineNeedsFromConditions<Conditions>,
+  Root,
+  CompositionExactRequirements<Entries> | MachineNeedsFromConditions<Conditions>,
+  CompositionFailure<Entries>
+>
+
 export type TransitionBundleInput<S extends Schema.Any = Schema.Any, Root = unknown> =
   | StateMachine.AnyTransitionSchedule<S, Root>
   | TransitionBundleDefinition<S, ReadonlyArray<StateMachine.AnyTransitionSchedule<S, Root>>, any, Root, any, any>
@@ -260,6 +278,47 @@ export const make = <S extends Schema.Any, const Entries extends ReadonlyArray<S
     requirements: collectStepRequirements(steps)
   } as AnonymousScheduleBuildFor<S, Entries>
 }
+
+/**
+ * Builds one schedule whose systems run only while every condition passes,
+ * in addition to their own `when` conditions: the group equivalent of a
+ * system's `when`, for gating many systems on one mode (playing, paused,
+ * a hit-stop) without repeating it on each.
+ *
+ * Conditions gate every system in `entries`, nested schedules included.
+ * Marker steps (`applyDeferred`, `applyStateTransitions`) in the group still
+ * run. A gated system is the same system as far as the runtime is concerned:
+ * it shares change detection and event cursors with the original and with
+ * any other gated copy, so using one system in two groups of one schedule is
+ * a duplicate like any other.
+ */
+export const when = <
+  S extends Schema.Any,
+  const Conditions extends ReadonlyArray<Condition>,
+  const Entries extends ReadonlyArray<ScheduleEntry>
+>(
+  schema: S,
+  conditions: Conditions,
+  entries: Entries
+): ConditionalScheduleBuildFor<S, Conditions, Entries> => {
+  const steps = normalizeEntries(entries).map((step) => isSystemStep(step) ? gate(step, conditions) : step)
+  validateUniqueSystemSteps(steps, "schedule")
+  return {
+    kind: "schedule",
+    schema,
+    steps,
+    systems: collectUniqueSystems(steps),
+    requirements: collectStepRequirements(steps)
+  } as unknown as ConditionalScheduleBuildFor<S, Conditions, Entries>
+}
+
+/** A copy of `system` that also requires `conditions`, sharing runtime state with the original. */
+const gate = (system: AnySystem, conditions: ReadonlyArray<Condition>): AnySystem => ({
+  ...system,
+  spec: { ...system.spec, when: [...conditions, ...system.spec.when] },
+  requirements: Requirement.collect([...system.requirements, ...conditions.flatMap((condition) => condition.requirements)]),
+  base: system.base ?? system
+})
 
 export const isSystemStep = (step: ScheduleStep | ScheduleEntry): step is AnySystem =>
   typeof step === "object" && step !== null && "spec" in step

@@ -611,6 +611,18 @@ export namespace Schema {
         transition: readonly [Machine.StateMachine.Value<M>, Machine.StateMachine.Value<M>],
         plan: readonly [...Entries]
       ) => BoundTransitionScheduleResult<S, Root, M, Entries>
+      /**
+       * Builds a schedule whose systems run only while every condition
+       * passes (in addition to their own `when`). Nested schedules are
+       * gated too; marker steps still run.
+       */
+      when: <
+        const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],
+        const Entries extends ReadonlyArray<BoundScheduleEntry<S, Root>>
+      >(
+        conditions: Conditions,
+        ...entries: Entries
+      ) => Schedule.ConditionalScheduleBuildFor<S, Conditions, Entries, Root>
       applyDeferred: typeof Schedule.applyDeferred
       applyStateTransitions: <Bundle extends BoundTransitionBundle<S, Root, any, any, any> | undefined = undefined>(
         bundle?: Bundle

@@ -1354,12 +1354,15 @@ const makeValidatedRuntime = <
     if (Object.keys(spec.despawned).length > 0) world.registerDespawnedReader(reader)
   }
 
+  /** Gated copies (`Schedule.when`) share the state of the system they copy. */
+  const stateKey = (system: SystemDefinition<any, any, any>): SystemDefinition<any, any, any> => system.base ?? system
+
   const slotOf = (system: SystemDefinition<any, any, any>, holdsStreams: boolean): SystemSlot => {
-    let slot = slots.get(system)
+    let slot = slots.get(stateKey(system))
     if (!slot) {
       const reader: ReaderState = { since: 0, lastRun: 0, streamSince: 0, streamLastRun: 0, registeredAt: world.currentTick() }
       slot = { context: makeContext(system, reader), reader }
-      slots.set(system, slot)
+      slots.set(stateKey(system), slot)
       if (holdsStreams) registerStreamReader(system, slot.reader)
     }
     return slot
@@ -1379,7 +1382,7 @@ const makeValidatedRuntime = <
       if (!evaluateCondition(condition)) {
         // A skipped system discards the messages published meanwhile, so it
         // neither holds them nor receives a backlog when it runs again.
-        const skipped = slots.get(system)
+        const skipped = slots.get(stateKey(system))
         if (tracing) traceSkipped(system, condition, skipped?.reader)
         if (skipped) skipped.reader.streamLastRun = world.currentTick()
         return succeeded

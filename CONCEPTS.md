@@ -111,9 +111,11 @@ filters: [Game.Query.changed(Position)]
 const Flow = Game.StateMachine("Concepts/Flow", ["Playing", "Won"])
 // nextMachines: { flow: Game.System.nextState(Flow) } → nextMachines.flow.set("Won")
 // when: [Game.Condition.inState(Flow, "Playing")]      → gate a system
+// Game.Schedule.when([Game.Condition.inState(Flow, "Playing")], Move, Attack) → gate a group
 ```
 
 - Transitions are queued and committed at `applyStateTransitions(bundle)`. That step runs the bundle's `onExit` / `onTransition` / `onEnter` schedules.
+- `Game.Schedule.when(conditions, ...entries)` gates every system in a group (nested schedules included) without repeating `when` on each. Marker steps in the group still run, and the machines the conditions read are requirements of the schedule.
 
 ## 10. Schedules make every boundary visible
 

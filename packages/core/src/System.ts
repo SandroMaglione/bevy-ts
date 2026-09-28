@@ -949,6 +949,13 @@ export interface SystemDefinition<
    * The executable implementation of the system.
    */
   readonly run: SystemRun<Spec, A, E>
+  /**
+   * The system this one is a gated copy of, made by `Schedule.when(...)`:
+   * the same system with extra run conditions. The runtime keys per-system
+   * state (change detection, event cursors) by the original, so a system and
+   * its gated copies are one reader.
+   */
+  readonly base?: SystemDefinition<any, any, any, any, any, any> | undefined
 }
 
 /**
