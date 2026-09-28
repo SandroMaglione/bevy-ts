@@ -103,7 +103,7 @@ filters: [Game.Query.changed(Position)]
 - `added(...)` and `changed(...)` match what happened since this system's previous run. Every system sees each change exactly once, independently of other systems.
 - A system's first run sees everything that already exists as added.
 - `readRemoved(...)` and `readDespawned()` work the same way.
-- Nothing needs a marker; these records are kept for two frames.
+- Nothing needs a marker. Removal records are kept until every system that reads them has run, so a render schedule ticked after several fixed updates still sees every despawn.
 
 ## 9. State machines model modes
 

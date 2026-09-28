@@ -575,9 +575,9 @@ export interface Runtime<
    * ticks, until a later marker applies it. Reads need no marker: change
    * detection, events, transition events, and relation failures are per
    * system, each run seeing what was published since its previous run.
-   * Change-detection records are kept for the current and previous tick;
-   * events, transition events, and relation failures until every system that
-   * reads them has run.
+   * Changes are visible to `added`/`changed` filters until a reader runs;
+   * removed/despawned records, events, transition events, and relation
+   * failures are kept until every system that reads them has run.
    *
    * The first expected system failure stops the tick and is returned; that
    * system's ECS writes are rolled back and earlier systems stay committed.
@@ -649,9 +649,10 @@ export interface Runtime<
  * ```
  */
 /**
- * Most entries one event, transition-event, or relation-failure stream keeps
- * for readers that have not run yet. Past it the oldest entries are dropped,
- * and readers that missed them see `lagged() === true`.
+ * Most entries one event, transition-event, relation-failure, removed, or
+ * despawned stream keeps for readers that have not run yet. Past it the
+ * oldest entries are dropped, and readers that missed them see
+ * `lagged() === true` (or a `missed` read in the debug trace).
  */
 export const streamCapacity = 65_536
 
@@ -669,7 +670,7 @@ const makeValidatedRuntime = <
   readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
   readonly debug: boolean
 }): Runtime<S, Services, Resources, Root, Machines> => {
-  const world = makeWorld(options.schema)
+  const world = makeWorld(options.schema, streamCapacity)
   const queries = makeQueryEngine(world)
 
   /**
@@ -1246,12 +1247,13 @@ const makeValidatedRuntime = <
         missed.push({ kind: stream.kind, stream: stream.name })
       }
     }
-    // Removed/despawned records older than the two-frame window are gone.
-    if (reader.since >= reader.registeredAt && reader.since < world.retainedAfter()) {
-      for (const access of Object.values(system.spec.removed as Record<string, { readonly descriptor: Descriptor.Any }>)) {
+    for (const access of Object.values(system.spec.removed as Record<string, { readonly descriptor: Descriptor<"component", string, any> }>)) {
+      if (world.removedLagged(world.ordinalOf(access.descriptor), reader.since, reader.registeredAt)) {
         missed.push({ kind: "removed", stream: access.descriptor.name })
       }
-      if (Object.keys(system.spec.despawned).length > 0) missed.push({ kind: "despawned", stream: "despawned" })
+    }
+    if (Object.keys(system.spec.despawned).length > 0 && world.despawnedLagged(reader.since, reader.registeredAt)) {
+      missed.push({ kind: "despawned", stream: "despawned" })
     }
     return missed
   }
@@ -1328,8 +1330,9 @@ const makeValidatedRuntime = <
   }
 
   /**
-   * Systems hold stream entries until they have read them; inspectors are
-   * evaluated on demand, so they do not (and report `lagged` instead).
+   * Systems hold stream and removed/despawned entries until they have read
+   * them; inspectors are evaluated on demand, so they do not (and report
+   * `lagged` instead).
    */
   const registerStreamReader = (system: SystemDefinition<any, any, any>, reader: ReaderState): void => {
     if (debugEnabled) streamReaders.set(reader, { system: system.name, reader })
@@ -1343,6 +1346,12 @@ const makeValidatedRuntime = <
     for (const access of Object.values(spec.relationFailures as Record<string, { readonly relation: Relation.Relation.Any }>)) {
       relationFailures.register(access.relation.key, reader)
     }
+    // Removed/despawned reads use the change-detection cursor, so a system
+    // skipped by its run conditions keeps them, like `added`/`changed`.
+    for (const access of Object.values(spec.removed as Record<string, { readonly descriptor: Descriptor<"component", string, any> }>)) {
+      world.registerRemovedReader(world.ordinalOf(access.descriptor), reader)
+    }
+    if (Object.keys(spec.despawned).length > 0) world.registerDespawnedReader(reader)
   }
 
   const slotOf = (system: SystemDefinition<any, any, any>, holdsStreams: boolean): SystemSlot => {

@@ -134,24 +134,66 @@ describe("Runtime change detection", () => {
     ])
   })
 
-  it("keeps removal records for the current and previous tick only", () => {
+  it("holds removal records until every reading system has run, for schedules ticked at different rates", () => {
+    const ids: Array<Id> = []
+    const seen: Array<{ removed: Array<number>; despawned: Array<number> }> = []
+    const Reader = Game.System("Lifecycle/SlowReader", {
+      removed: { positions: Game.System.readRemoved(Position) },
+      despawned: { entities: Game.System.readDespawned() }
+    }, ({ removed, despawned }) => {
+      seen.push({
+        removed: removed.positions.all().map((id) => id.value),
+        despawned: despawned.entities.all().map((id) => id.value)
+      })
+    })
+    let next = 0
+    const DespawnNext = Game.System("Lifecycle/DespawnNext", {}, ({ commands }) => {
+      commands.despawn(ids[next++]!)
+    })
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(spawner([1, 2, 3, 4], ids), Game.Schedule.applyDeferred(), Reader))
+
+    // A fixed update despawning once per tick, ticked four times per render.
+    const fixed = Game.Schedule(DespawnNext, Game.Schedule.applyDeferred())
+    for (let step = 0; step < 4; step++) runtime.tick(fixed)
+    runtime.tick(Game.Schedule(Reader))
+    runtime.tick(Game.Schedule(Reader))
+
+    const all = ids.map((id) => id.value)
+    expect(seen).toEqual([
+      { removed: [], despawned: [] },
+      { removed: all, despawned: all },
+      { removed: [], despawned: [] }
+    ])
+  })
+
+  it("keeps removal records while a reader is skipped by its run conditions", () => {
+    const Flow = Game.StateMachine("Lifecycle/Flow", ["On", "Off"])
     const ids: Array<Id> = []
     const seen: Array<Array<number>> = []
-    const Reader = Game.System("Lifecycle/SlowReader", {
-      despawned: { entities: Game.System.readDespawned() }
+    const Reader = Game.System("Lifecycle/GatedReader", {
+      despawned: { entities: Game.System.readDespawned() },
+      when: [Game.Condition.inState(Flow, "On")]
     }, ({ despawned }) => {
       seen.push(despawned.entities.all().map((id) => id.value))
     })
-    const Despawn = Game.System("Lifecycle/DespawnFirst", {}, ({ commands }) => {
-      commands.despawn(ids[0]!)
+    const Toggle = Game.System("Lifecycle/Toggle", { machines: { flow: Game.System.machine(Flow) }, nextMachines: { flow: Game.System.nextState(Flow) } }, ({ machines, nextMachines }) => {
+      nextMachines.flow.set(machines.flow.get() === "On" ? "Off" : "On")
     })
-    const Idle = Game.System("Lifecycle/Idle", {}, () => {})
-    const runtime = makeRuntime()
+    const Despawn = Game.System("Lifecycle/DespawnAll", {}, ({ commands }) => {
+      for (const id of ids) commands.despawn(id)
+    })
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(),
+      machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "On"))
+    })
     runtime.tick(Game.Schedule(spawner([1], ids), Game.Schedule.applyDeferred(), Reader))
-    runtime.tick(Game.Schedule(Despawn, Game.Schedule.applyDeferred()))
-    runtime.tick(Game.Schedule(Idle))
+    runtime.tick(Game.Schedule(Toggle, Game.Schedule.applyStateTransitions()))
+    runtime.tick(Game.Schedule(Despawn, Game.Schedule.applyDeferred(), Reader))
     runtime.tick(Game.Schedule(Reader))
+    runtime.tick(Game.Schedule(Reader))
+    runtime.tick(Game.Schedule(Toggle, Game.Schedule.applyStateTransitions(), Reader))
 
-    expect(seen).toEqual([[], []])
+    expect(seen).toEqual([[], [ids[0]!.value]])
   })
 })
