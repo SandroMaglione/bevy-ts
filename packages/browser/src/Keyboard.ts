@@ -8,6 +8,15 @@
  * does not know about the ECS; `InputCapture.system(...)` copies snapshots
  * from a service into a resource.
  *
+ * Bind by character (`"w"`) or by physical key (`Keyboard.code("KeyW")`);
+ * see {@link KeyBinding}. A key released while a modifier changed its
+ * character (W pressed, then Option, then W released as "∑") still releases
+ * its action.
+ *
+ * Some combinations never reach the page: browsers reserve shortcuts such as
+ * Ctrl+W / Cmd+W (close tab), Ctrl+T / Cmd+T, and Cmd+Q, and pages cannot
+ * prevent them. Avoid Ctrl and Cmd as held modifiers in games.
+ *
  * @module Keyboard
  * @docGroup browser
  *
@@ -47,10 +56,12 @@
 import * as Result from "@typeonce/bevy-ts/Result"
 
 /**
- * The subset of `KeyboardEvent` the module reads.
+ * The subset of `KeyboardEvent` the module reads. `code` (the physical key)
+ * is optional so simple test hosts can omit it; browsers always provide it.
  */
 export interface KeyEvent {
   readonly key: string
+  readonly code?: string
   readonly repeat: boolean
   preventDefault(): void
 }
@@ -66,11 +77,44 @@ export interface KeyboardHost {
 }
 
 /**
- * Action name to the keys that trigger it, as `KeyboardEvent.key` values.
- * Single characters match case-insensitively. Every action needs at least one
+ * A key matched by physical position (`KeyboardEvent.code`, for example
+ * `"KeyW"`, `"Digit1"`, `"ShiftLeft"`), whatever character it types. Build it
+ * with {@link code}.
+ */
+export interface PhysicalKey {
+  readonly code: string
+}
+
+/**
+ * One key that triggers an action: a `KeyboardEvent.key` value (the
+ * character typed; single characters match case-insensitively) or a
+ * {@link PhysicalKey}.
+ *
+ * Character bindings follow the keyboard layout and are what a menu should
+ * show. Physical bindings keep a position fixed: WASD stays under the left
+ * hand on AZERTY keyboards, and modifiers cannot change the match (with
+ * Option held on macOS, W types "∑"; with Shift, 1 types "!").
+ */
+export type KeyBinding = string | PhysicalKey
+
+/**
+ * Action name to the keys that trigger it. Every action needs at least one
  * key.
  */
-export type Bindings = Readonly<Record<string, readonly [string, ...Array<string>]>>
+export type Bindings = Readonly<Record<string, readonly [KeyBinding, ...Array<KeyBinding>]>>
+
+/**
+ * A binding to a physical key by its `KeyboardEvent.code`.
+ *
+ * @example
+ * ```ts
+ * const bindings = {
+ *   up: [Keyboard.code("KeyW")],
+ *   jump: [Keyboard.code("Space")]
+ * } as const
+ * ```
+ */
+export const code = <const Code extends string>(code: Code): PhysicalKey & { readonly code: Code } => ({ code })
 
 /**
  * One action's state in a snapshot.
@@ -121,6 +165,11 @@ export const idle = <const B extends Bindings>(bindings: B): Snapshot<B> => {
 
 const normalize = (key: string): string => key.length === 1 ? key.toLowerCase() : key
 
+/** One internal lookup token per binding: characters and physical codes never collide. */
+const keyToken = (key: string): string => `key:${normalize(key)}`
+const codeToken = (code: string): string => `code:${code}`
+const bindingToken = (binding: KeyBinding): string => typeof binding === "string" ? keyToken(binding) : codeToken(binding.code)
+
 /**
  * Starts tracking bound keys on `host`.
  */
@@ -131,42 +180,65 @@ export const actions = <const B extends Bindings>(
 ): Actions<B> => {
   const preventDefault = options.preventDefault ?? true
   const names = Object.keys(bindings) as Array<keyof B & string>
-  const actionsByKey = new Map<string, Array<keyof B & string>>()
+  const actionsByToken = new Map<string, Array<keyof B & string>>()
   for (const name of names) {
-    for (const key of bindings[name]!) {
-      const normalized = normalize(key)
-      const bound = actionsByKey.get(normalized)
+    for (const binding of bindings[name]!) {
+      const token = bindingToken(binding)
+      const bound = actionsByToken.get(token)
       if (bound) bound.push(name)
-      else actionsByKey.set(normalized, [name])
+      else actionsByToken.set(token, [name])
     }
   }
 
-  const heldKeys = new Set<string>()
+  const heldTokens = new Set<string>()
+  /**
+   * The character token each physical key produced when it went down, so its
+   * release matches even if a modifier changed the character meanwhile
+   * (W pressed, Option pressed, W released as "∑").
+   */
+  const keyTokenByCode = new Map<string, string>()
   const pressed = new Set<keyof B>()
   const released = new Set<keyof B>()
 
   const onKeyDown = (event: KeyEvent): void => {
-    const key = normalize(event.key)
-    const bound = actionsByKey.get(key)
-    if (!bound) return
-    if (preventDefault) event.preventDefault()
-    if (event.repeat || heldKeys.has(key)) return
-    heldKeys.add(key)
-    for (const name of bound) pressed.add(name)
+    const tokens = [keyToken(event.key)]
+    if (event.code !== undefined) {
+      if (!keyTokenByCode.has(event.code)) keyTokenByCode.set(event.code, tokens[0]!)
+      tokens.push(codeToken(event.code))
+    }
+    let handled = false
+    for (const token of tokens) {
+      const bound = actionsByToken.get(token)
+      if (!bound) continue
+      handled = true
+      if (event.repeat || heldTokens.has(token)) continue
+      heldTokens.add(token)
+      for (const name of bound) pressed.add(name)
+    }
+    if (handled && preventDefault) event.preventDefault()
   }
 
   const onKeyUp = (event: KeyEvent): void => {
-    const key = normalize(event.key)
-    const bound = actionsByKey.get(key)
-    if (!bound || !heldKeys.delete(key)) return
-    for (const name of bound) released.add(name)
+    const tokens = [keyToken(event.key)]
+    if (event.code !== undefined) {
+      const downAs = keyTokenByCode.get(event.code)
+      keyTokenByCode.delete(event.code)
+      if (downAs !== undefined) tokens[0] = downAs
+      tokens.push(codeToken(event.code))
+    }
+    for (const token of tokens) {
+      const bound = actionsByToken.get(token)
+      if (!bound || !heldTokens.delete(token)) continue
+      for (const name of bound) released.add(name)
+    }
   }
 
   const onBlur = (): void => {
-    for (const key of heldKeys) {
-      for (const name of actionsByKey.get(key)!) released.add(name)
+    for (const token of heldTokens) {
+      for (const name of actionsByToken.get(token)!) released.add(name)
     }
-    heldKeys.clear()
+    heldTokens.clear()
+    keyTokenByCode.clear()
   }
 
   host.addEventListener("keydown", onKeyDown)
@@ -174,8 +246,8 @@ export const actions = <const B extends Bindings>(
   host.addEventListener("blur", onBlur)
 
   const isHeld = (name: keyof B & string): boolean => {
-    for (const key of bindings[name]!) {
-      if (heldKeys.has(normalize(key))) return true
+    for (const binding of bindings[name]!) {
+      if (heldTokens.has(bindingToken(binding))) return true
     }
     return false
   }
