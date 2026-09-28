@@ -240,3 +240,40 @@ describe("Session next states and resources", () => {
     ].join("\n"))
   })
 })
+
+describe("describe-only schedules", () => {
+  const Renderer = Descriptor.Service<{ readonly draw: (hits: number) => void }>()("Dev/Renderer")
+  const DrawHits = Game.System("Dev/DrawHits", {
+    events: { hit: Game.System.readEvent(Hit) },
+    services: { renderer: Game.System.service(Renderer) }
+  }, ({ events, services }) => {
+    services.renderer.draw(events.hit.all().length)
+  })
+
+  const headless = () => Game.Runtime.make({
+    services: Game.Runtime.services(),
+    resources: { Score: 0 },
+    machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Playing")),
+    debug: true
+  })
+  const update = Game.Schedule(Damage)
+
+  it("counts their reads in lints without making them runnable", () => {
+    const lintCodes = (session: { describe: () => { data: { lints: ReadonlyArray<{ code: string; message: string }> } } }) =>
+      session.describe().data.lints.filter((lint) => lint.message.includes("Dev/Hit")).map((lint) => lint.code)
+
+    const without = Session.make(headless(), { schedules: { update } })
+    expect(lintCodes(without)).toContain("event-never-read")
+
+    const withRender = Session.make(headless(), { schedules: { update }, describe: { render: Game.Schedule(DrawHits) } })
+    expect(lintCodes(withRender)).not.toContain("event-never-read")
+    expect(withRender.describe().data.schedules.map((schedule) => schedule.name).sort()).toEqual(["render", "update"])
+    // The renderer is shown as needed but not provided, which is not a lint.
+    expect(withRender.describe().data.services).toContainEqual({ name: "Dev/Renderer", provided: false })
+  })
+
+  it("rejects a name used for both a runnable and a described-only schedule", () => {
+    expect(() => Session.make(headless(), { schedules: { update }, describe: { update: Game.Schedule(DrawHits) } })).toThrow(/both a runnable/)
+  })
+})
+

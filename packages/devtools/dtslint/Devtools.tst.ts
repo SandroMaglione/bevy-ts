@@ -22,6 +22,15 @@ describe("Session.make", () => {
     expect(Session.make).type.not.toBeCallableWith(debugged, { schedules: { foreign } })
   })
 
+  it("describes but does not run describe-only schedules", () => {
+    const render = Game.Schedule(Game.System("DevtoolsTypes/Render", {}, () => {}))
+    const session = Session.make(Game.Runtime.make({ services: Game.Runtime.services(), debug: true }), { schedules: { update }, describe: { render } })
+    expect(session.run).type.toBeCallableWith("update")
+    expect(session.run).type.not.toBeCallableWith("render")
+    const foreign = OtherGame.Schedule(OtherGame.System("DevtoolsTypes/ForeignRender", {}, () => {}))
+    expect(Session.make).type.not.toBeCallableWith(Game.Runtime.make({ services: Game.Runtime.services(), debug: true }), { schedules: { update }, describe: { foreign } })
+  })
+
   it("runs only named schedules and filters by the runtime's descriptors", () => {
     const session = Session.make(Game.Runtime.make({ services: Game.Runtime.services(), debug: true }), { schedules: { update } })
     expect(session.run).type.toBeCallableWith("update")

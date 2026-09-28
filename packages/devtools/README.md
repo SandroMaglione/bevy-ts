@@ -66,6 +66,7 @@ const HealthNeverNegative = Invariant.make("health >= 0", () => {
 
 const session = Session.make(runtime, {
   schedules: { setup, update },           // names used by run() and in traces
+  describe: { render },                   // described and linted, never run (needs a renderer)
   invariants: [HealthNeverNegative],      // checked after every frame of every run
   history: 600                            // frames kept for journal/why
 })

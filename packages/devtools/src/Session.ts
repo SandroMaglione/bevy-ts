@@ -54,6 +54,14 @@ export interface Target<S extends Schema.Any, Root> {
 export interface Options<S extends Schema.Any, Root, Names extends string> {
   /** The schedules `run` can drive, by name. Also names them in traces. */
   readonly schedules: Readonly<Record<Names, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  /**
+   * More schedules to include in `describe()`, its lints, and the access
+   * maps, without making them runnable: typically a render schedule that
+   * needs services a headless runtime does not have. Without them, events
+   * and components only those schedules read are reported as never read.
+   * Their services show as not provided, which is not a lint.
+   */
+  readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
   /** Checked after every frame of every run. */
   readonly invariants?: ReadonlyArray<Invariant>
   /** Frames of trace history kept for `journal` and `why`. Defaults to 600. */
@@ -193,7 +201,11 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
   const capacity = options.history ?? 600
   const format = options.format ?? {}
   const schedules = options.schedules as Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
-  debug.nameSchedules(schedules)
+  const described = options.describe ?? {}
+  for (const name of Object.keys(described)) {
+    if (name in schedules) throw new Error(`Session: "${name}" is both a runnable and a described-only schedule`)
+  }
+  debug.nameSchedules({ ...described, ...schedules })
 
   const history: Array<FrameRecord> = []
   let current: FrameRecord = { frame: debug.frame(), events: [] }
