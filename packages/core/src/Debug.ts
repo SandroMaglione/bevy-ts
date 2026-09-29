@@ -77,6 +77,8 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
   readonly observe: (listener: (event: TraceEvent) => void) => () => void
   /** Retention and reader state of every stream that has readers or entries. */
   readonly streams: () => ReadonlyArray<StreamStatus>
+  /** Live entity count and, per component, how many entities have it. Cheap enough to sample every frame. */
+  readonly population: () => Population
   /** Number of frames (`tick`/`tryTick` calls) run so far. */
   readonly frame: () => number
 }
@@ -177,6 +179,7 @@ export interface Lint {
     | "event-never-written"
     | "next-state-never-applied"
     | "component-never-read"
+    | "read-before-write"
   readonly message: string
   readonly subject: string
 }
@@ -208,6 +211,13 @@ export interface Description {
     readonly events: ReadonlyArray<AccessIndexEntry>
   }
   readonly lints: ReadonlyArray<Lint>
+}
+
+/** How many entities are alive, and how many have each component. */
+export interface Population {
+  readonly entities: number
+  /** Entities per component, by descriptor name, for every schema component. */
+  readonly components: Readonly<Record<string, number>>
 }
 
 /**
