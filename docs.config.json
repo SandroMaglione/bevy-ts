@@ -43,6 +43,7 @@
     "packages/browser/src/FixedLoop.ts",
     "packages/browser/src/Keyboard.ts",
     "packages/browser/src/Pointer.ts",
+    "packages/browser/src/Touch.ts",
     "packages/pixi/src/NodeRegistry.ts",
     "packages/pixi/src/RenderSync.ts",
     "packages/devtools/src/Session.ts",
