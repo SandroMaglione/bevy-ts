@@ -226,6 +226,11 @@ console.log(session.why(12, Health))                 // latest changes and the s
 console.log(session.journal({ frames: [180, 185], entity: 12 }))
 ```
 
+Runs also warn about what types cannot rule out: NaN or infinite numbers
+written anywhere, and component counts that keep growing (entities never
+despawned). `describe()` notes systems that read a value before the schedule
+writes it.
+
 Keep the simulation schedules free of renderer services so they run in Node,
 and feed input through `Keyboard.scripted(...)`. See
 [`packages/devtools/README.md`](./packages/devtools/README.md).

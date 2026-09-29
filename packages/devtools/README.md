@@ -23,6 +23,10 @@ with `debug: true`. Production runtimes carry no handle and pay nothing.
    is often the whole answer. Then it lists every schedule step, each
    system's declared reads and writes, and who reads and writes each
    component, resource, and event. `run()` also prints the lint warning count.
+   Info-level `read-before-write` lints list systems that run before the
+   schedule's first writer of what they read, so they see the previous run's
+   value. That is often intended (input before movement), but it is a
+   one-frame lag worth checking when a reaction looks late.
 3. **Reproduce.** Script the input with `Keyboard.scripted(bindings, timeline)`
    (or replay a recorded browser session), add an `Invariant` that encodes the
    bug, and `session.run("update", { frames: 600 })`. The run stops at the
@@ -31,7 +35,8 @@ with `debug: true`. Production runtimes carry no handle and pay nothing.
    `session.whyResource(Resource)` show the latest changes and which system
    made them. `session.journal({ frames: [from, to], entity })`
    shows everything that touched an entity around the failure.
-   `session.report()` lists warnings the trace collected.
+   `session.report()` lists warnings the trace collected and the current
+   entity counts per component. `run()` prints the warnings it raised.
 5. **Fix and keep it.** Rerun the same script, then turn it into a test next
    to the game so the bug stays fixed.
 
@@ -129,6 +134,8 @@ f186 update  -                   transition Game/Flow Playing -> Paused applied
 | `discarded-messages` | A skipped system discarded messages published while it was skipped. |
 | `transition-failed` | An exit or transition schedule failed (queued again), or an enter schedule failed. |
 | `system-failed` | A system returned an expected failure or threw. |
+| `non-finite-value` | A system wrote NaN or an infinity into a component, resource, event, or spawned entity. The message names the entity and path; `why()` shows the history. |
+| `population-growing` | A component's count rose through every quarter of a run of 60+ frames: its lowest count in each quarter was higher than in the quarter before. Bursts that are cleaned up do not trigger it; entities that are never despawned do. `run()` returns the counts in `growing`. |
 
 The report also starts with the static lints from `describe()`.
 
