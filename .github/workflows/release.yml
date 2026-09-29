@@ -37,6 +37,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # TypeScript versions TSTyche downloads to type-test against (>=5.9).
+      - name: Cache TypeScript versions for type tests
+        uses: actions/cache@v6
+        with:
+          path: .tstyche
+          key: tstyche-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: tstyche-
+
       - name: Check
         run: pnpm check
 

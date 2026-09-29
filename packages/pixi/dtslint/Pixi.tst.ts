@@ -40,7 +40,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
     expect(withRegistry.tick(Game.Schedule(render))).type.toBe<Result.Result<void, never>>()
 
     const withoutRegistry = Game.Runtime.make({ services: Game.Runtime.services() })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "PixiTypes/Nodes"
     withoutRegistry.tick(Game.Schedule(render))
   })
 
@@ -66,7 +66,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
     const withoutScale = Game.Runtime.make({
       services: Game.Runtime.services(Game.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "PixiTypes/Scale"
     withoutScale.tick(Game.Schedule(render))
   })
 
@@ -94,7 +94,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
       renderable: Sprite,
       transform: Position,
       registry: Nodes,
-      // @ts-expect-error!
+      // @ts-expect-error Type '"PixiTypes/Other"' is not assignable to type '"PixiTypes/Zoom"'.
       resources: { other: Other },
       create: () => ({ destroy() {}, x: 0 }),
       apply: () => {}
@@ -107,7 +107,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
       renderable: Sprite,
       transform: Position,
       registry: Nodes,
-      // @ts-expect-error!
+      // @ts-expect-error Type '"write"' is not assignable to type '"optional"'.
       select: { position: Game.Query.write(Position) },
       create: () => ({ destroy() {}, x: 0 }),
       apply: () => {}
@@ -129,7 +129,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
       renderable: Sprite,
       transform: Position,
       registry: Nodes,
-      // @ts-expect-error!
+      // @ts-expect-error Type '"PixiTypes/Health"' is not assignable to type '"PixiTypes/Position"'.
       redrawOn: [Health],
       create: () => ({ destroy() {}, x: 0 }),
       apply: () => {}
@@ -139,7 +139,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
   it("only accepts components registered in the bound schema", () => {
     RenderSync.system(Game, {
       name: "PixiTypes/Invalid",
-      // @ts-expect-error!
+      // @ts-expect-error Type '"PixiTypes/Health"' is not assignable to type '"PixiTypes/Position"'.
       renderable: Health,
       transform: Position,
       registry: Nodes,
@@ -187,13 +187,13 @@ describe("@typeonce/bevy-ts-pixi", () => {
     const withoutClock = Planet.Runtime.make({
       services: Planet.Runtime.services(Planet.Runtime.service(Nodes, NodeRegistry.make<Node>({ attach() {}, detach() {} })))
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "PixiTypes/Clock"
     withoutClock.tick(Planet.Schedule(interpolate))
 
     RenderSync.interpolate(Planet, {
       name: "PixiTypes/NotPlanar",
       registry: Nodes,
-      // @ts-expect-error!
+      // @ts-expect-error Type 'Descriptor<"component", "PixiTypes/Health", number>' is not assignable to type '"The previous component
       previous: Health,
       current: Planar,
       clock: Clock,
@@ -205,7 +205,7 @@ describe("@typeonce/bevy-ts-pixi", () => {
       registry: Nodes,
       previous: Previous,
       current: Planar,
-      // @ts-expect-error!
+      // @ts-expect-error Type 'Descriptor<"service", "PixiTypes/NoAlpha", { readonly now: number; }>' is not assignable to type '"The
       clock: NoAlpha,
       place: () => {}
     })

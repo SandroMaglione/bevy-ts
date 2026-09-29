@@ -71,7 +71,7 @@ describe("Schedule", () => {
     schedule.systems
     schedule.requirements
 
-    // @ts-expect-error!
+    // @ts-expect-error Property 'label' does not exist on type 'AnonymousScheduleBuildFor<SchemaDefinition<{ readonly Position
     schedule.label
 
     // @ts-expect-error ScheduleEntry

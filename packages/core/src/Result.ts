@@ -152,6 +152,6 @@ export const match: <Value, Error, SuccessReturn, FailureReturn>(
  *
  * @category Operations
  */
-export const all: <Input extends ReadonlyArray<Result<any, any>> | Readonly<Record<string, Result<any, any>>>>(
+export const all: <const Input extends ReadonlyArray<Result<any, any>> | Readonly<Record<string, Result<any, any>>>>(
   input: Input
 ) => Result<AllSuccess<Input>, AllError<Input>> = internal.all

@@ -138,7 +138,11 @@ importers:
         specifier: workspace:^
         version: link:../core
 
-  packages/core: {}
+  packages/core:
+    dependencies:
+      typescript:
+        specifier: '>=5.9'
+        version: 7.0.2
 
   packages/devtools:
     dependencies:

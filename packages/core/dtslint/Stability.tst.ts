@@ -65,7 +65,7 @@ describe("stability types", () => {
     expect(scope).type.toBe<EntityScope.EntityScope<"Level", typeof Game.schema>>()
 
     const system = OtherGame.System("Other/Spawn", {}, ({ commands }) => {
-      // @ts-expect-error!
+      // @ts-expect-error Type 'SchemaDefinition<{ readonly Position: Descriptor<"component", "StabilityTypes/Position", { x: number;
       commands.despawnScope(scope)
     })
     expect(system).type.toBeAssignableTo<Schema.Schema.BoundSystem<typeof OtherGame.schema, Schema.RootToken<"Other">>>()
@@ -85,7 +85,7 @@ describe("stability types", () => {
       ({ queries, resources }) => {
         const first = queries.positions.each()[0]
         if (first) {
-          // @ts-expect-error!
+          // @ts-expect-error Cannot assign to 'x' because it is a read-only property.
           first.data.position.get().x = 1
         }
         return { value: resources.value.get() }
@@ -98,7 +98,7 @@ describe("stability types", () => {
       "StabilityTypes/InvalidInspector",
       {
         queries: {
-          // @ts-expect-error!
+          // @ts-expect-error Type 'QuerySpec<{ readonly position: WriteAccess<Descriptor<"component", "StabilityTypes/Position", { x
           invalid: Game.Query({
             selection: { position: Game.Query.write(Position) }
           })

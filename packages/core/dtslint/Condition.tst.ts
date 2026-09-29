@@ -27,57 +27,57 @@ describe("Game.Condition.check", () => {
       expect(context.resources.freeze.get().remaining).type.toBe<number>()
       expect(context.machines.flow.get()).type.toBe<"Playing" | "Over">()
       expect(context.queries.enemies.each()[0]?.data.health.get()).type.toBe<number | undefined>()
-      // @ts-expect-error!
+      // @ts-expect-error Property 'set' does not exist on type 'ResourceReadView<{ readonly remaining: number; }>'.
       context.resources.freeze.set({ remaining: 0 })
-      // @ts-expect-error!
+      // @ts-expect-error Property 'events' does not exist on type 'CheckContext<SystemSpec<SchemaDefinition<{ readonly Enemy
       context.events
-      // @ts-expect-error!
+      // @ts-expect-error Property 'services' does not exist on type 'CheckContext<SystemSpec<SchemaDefinition<{ readonly Enemy
       context.services
-      // @ts-expect-error!
+      // @ts-expect-error Property 'commands' does not exist on type 'CheckContext<SystemSpec<SchemaDefinition<{ readonly Enemy
       context.commands
       return true
     })
   })
 
   it("rejects reads that consume or advance a cursor, services, and unknown categories", () => {
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'events' does not exist in type
     Game.Condition.check("events", { events: { ping: Game.System.readEvent(Ping) } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'services' does not exist in type
     Game.Condition.check("services", { services: { clock: Game.System.service(Clock) } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'removed' does not exist in type
     Game.Condition.check("removed", { removed: { enemy: Game.System.readRemoved(Enemy) } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'despawned' does not exist in type
     Game.Condition.check("despawned", { despawned: { entities: Game.System.readDespawned() } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'transitionEvents' does not exist in type
     Game.Condition.check("transitions", { transitionEvents: { flow: Game.System.readTransitionEvent(Flow) } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Type '"write"' is not assignable to type '"read"'.
     Game.Condition.check("writes", { resources: { freeze: Game.System.writeResource(Freeze) } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'commands' does not exist in type
     Game.Condition.check("unknown", { commands: {} }, () => true)
   })
 
   it("rejects queries that write or filter on changes", () => {
     Game.Condition.check("writeQuery", {
-      // @ts-expect-error!
+      // @ts-expect-error Type 'QuerySpec<{ readonly health: WriteAccess<Descriptor<"component", "CheckTypes/Health", number>>; }, []
       queries: { enemies: Game.Query({ selection: { health: Game.Query.write(Health) } }) }
     }, () => true)
     Game.Condition.check("changedQuery", {
-      // @ts-expect-error!
+      // @ts-expect-error Type 'QuerySpec<{ readonly health: ReadAccess<Descriptor<"component", "CheckTypes/Health", number>>; }, []
       queries: { enemies: Game.Query({ selection: { health: Game.Query.read(Health) }, filters: [Game.Query.changed(Health)] }) }
     }, () => true)
     Game.Condition.check("addedQuery", {
-      // @ts-expect-error!
+      // @ts-expect-error Type 'QuerySpec<{ readonly health: ReadAccess<Descriptor<"component", "CheckTypes/Health", number>>; }, []
       queries: { enemies: Game.Query({ selection: { health: Game.Query.read(Health) }, filters: [Game.Query.added(Health)] }) }
     }, () => true)
   })
 
   it("rejects descriptors of another game and non-boolean predicates", () => {
-    // @ts-expect-error!
+    // @ts-expect-error Type '"CheckTypes/OtherFreeze"' is not assignable to type '"CheckTypes/Freeze"'.
     Game.Condition.check("foreignResource", { resources: { freeze: Other.System.readResource(OtherFreeze) } }, () => true)
-    // @ts-expect-error!
+    // @ts-expect-error Type '{}' is missing the following properties from type '{ readonly Enemy: DecodableDescriptor<"component"
     Game.Condition.check("foreignMachine", { machines: { flow: Other.System.machine(OtherFlow) } }, () => true)
     Game.Condition.check("notBoolean", { resources: { freeze: Game.System.readResource(Freeze) } },
-      // @ts-expect-error!
+      // @ts-expect-error Type 'number' is not assignable to type 'boolean'.
       ({ resources }) => resources.freeze.get().remaining)
   })
 
@@ -87,9 +87,9 @@ describe("Game.Condition.check", () => {
     const group = Game.Schedule.when([Game.Condition.and(frozen, Game.Condition.inState(Flow, "Playing"))], Noop)
 
     const withoutFreeze = Game.Runtime.make({ services: Runtime.services(), machines: Runtime.machines(Runtime.machine(Flow, "Playing")) })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "CheckTypes/Freeze"
     withoutFreeze.tick(Game.Schedule(gatedSystem))
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "CheckTypes/Freeze"
     withoutFreeze.tick(group)
 
     const ready = Game.Runtime.make({

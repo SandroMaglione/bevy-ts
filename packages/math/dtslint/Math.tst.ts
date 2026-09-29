@@ -86,10 +86,10 @@ describe("helpers", () => {
     expect(Vector2.length(vector)).type.toBe<Scalar.NonNegative>()
     expect(Aabb.option({ position: vector, size })).type.toBe<Aabb.Aabb | null>()
 
-    // @ts-expect-error!
-    Vector2.length({ x: 1, y: 2 })
+    // @ts-expect-error Type 'number' is not assignable to type 'PublicBrand<"Scalar/Finite">'.
+    Vector2.length({ x: 1, y: vector.y })
 
-    // @ts-expect-error!
+    // @ts-expect-error Property '__publicBrand' is missing in type '{ position: Vector2.Vector2; size: Size2.Size2; }' but required
     Aabb.translate({ position: vector, size }, vector)
   })
 

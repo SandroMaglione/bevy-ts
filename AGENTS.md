@@ -19,6 +19,12 @@ Changes to what a package publishes (exports, `package.json`, build config) must
 Every change to a published package needs a changeset (`pnpm changeset`); all `@typeonce/bevy-ts*` packages share one version.
 Changes to runtime internals or public types must also pass `pnpm bench:check`; if a change intentionally moves the numbers, record it with `pnpm bench:update` and commit the new baseline.
 
+## Type Tests
+- Public types are tested with TSTyche in `packages/*/dtslint/*.tst.ts` (`pnpm test-types`).
+- Every public API gets a test of its inferred type (`expect(...).type.toBe<...>()`) and a failing test for each constraint.
+- A failing test states the error it expects: `// @ts-expect-error <fragment of the message>`, or `expect(fn).type.not.toBeCallableWith(...)` paired with a passing call. `// @ts-expect-error!` (message not checked) is rejected by `pnpm test-types`, because such a test also passes for unrelated errors.
+- Pick fragments that name the cause (the missing requirement, the conflicting name, the wrong value) and avoid printed unions, whose order is not stable.
+
 ## Public API Rules
 - Do not require user-facing casts.
 - Do not require explicit generic arguments for normal usage.

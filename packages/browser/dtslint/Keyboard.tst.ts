@@ -8,14 +8,14 @@ describe("Keyboard", () => {
     const input = Keyboard.actions(host, { jump: [" "], left: ["ArrowLeft", "a"] })
     expect(input.snapshot()).type.toBe<Keyboard.Snapshot<{ readonly jump: readonly [" "]; readonly left: readonly ["ArrowLeft", "a"] }>>()
     expect(input.snapshot().jump.pressed).type.toBe<boolean>()
-    // @ts-expect-error!
+    // @ts-expect-error Property 'crouch' does not exist on type 'Snapshot<{ readonly jump: readonly [" "]; readonly left: readonly
     input.snapshot().crouch
   })
 
   it("accepts physical-key bindings alongside characters", () => {
     const input = Keyboard.actions(host, { up: [Keyboard.code("KeyW"), "ArrowUp"] })
     expect(input.snapshot().up.held).type.toBe<boolean>()
-    // @ts-expect-error!
+    // @ts-expect-error Object literal may only specify known properties, and 'key' does not exist in type 'PhysicalKey'.
     Keyboard.actions(host, { up: [{ key: "w" }] })
   })
 
@@ -24,7 +24,7 @@ describe("Keyboard", () => {
   })
 
   it("requires at least one key per action", () => {
-    // @ts-expect-error!
+    // @ts-expect-error Type '[]' is not assignable to type 'readonly [KeyBinding, ...KeyBinding[]]'.
     Keyboard.actions(host, { jump: [] })
   })
 })
