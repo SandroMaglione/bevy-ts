@@ -1,6 +1,6 @@
 {
   "name": "@typeonce/bevy-ts-browser",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Browser fixed-step loop, keyboard actions, and input capture for bevy-ts",
   "author": "Sandro Maglione",
   "license": "MIT",
