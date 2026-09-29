@@ -1993,6 +1993,13 @@ const makeValidatedRuntime = <
       }
     },
     streams,
+    population: () => {
+      const components: Record<string, number> = {}
+      for (const descriptor of Object.values(options.schema.components) as ReadonlyArray<Descriptor<"component", string, unknown>>) {
+        components[descriptor.name] = world.membersOf(world.ordinalOf(descriptor)).size
+      }
+      return { entities: world.records.size, components }
+    },
     frame: () => frameCount
   }
   return Object.assign(runtime, { debug: handle })

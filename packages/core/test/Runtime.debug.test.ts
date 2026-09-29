@@ -325,3 +325,46 @@ describe("Runtime debug handle", () => {
     expect(events).toEqual([])
   })
 })
+
+describe("Runtime debug handle: population and ordering lints", () => {
+  it("counts live entities and entities per component", () => {
+    const runtime = makeRuntime()
+    expect(runtime.debug.population()).toEqual({
+      entities: 0,
+      components: { "Debug/Position": 0, "Debug/Tagged": 0, "Debug/Sprite": 0 }
+    })
+    runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
+    runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
+    expect(runtime.debug.population()).toEqual({
+      entities: 4,
+      components: { "Debug/Position": 2, "Debug/Tagged": 2, "Debug/Sprite": 2 }
+    })
+  })
+
+  it("notes systems that read something before the schedule's first writer of it", () => {
+    const runtime = makeRuntime()
+    const ReadAll = Game.System("Debug/ReadAll", {
+      queries: {
+        positions: Game.Query({ selection: { position: Game.Query.read(Position) } }),
+        tagged: Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Tagged] })
+      },
+      resources: { score: Game.System.readResource(Score) },
+      events: { ping: Game.System.readEvent(Ping) }
+    }, () => {})
+    const ReadTagged = Game.System("Debug/ReadTagged", {
+      queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) }
+    }, () => {})
+    // ReadAll before Move: previous-run values. ReadAll after Move: current values, no lint.
+    runtime.debug.nameSchedules({ early: Game.Schedule(ReadAll, ReadTagged, Move), late: Game.Schedule(Move, ReadAll) })
+    const lints = runtime.debug.describe().lints.filter((lint) => lint.code === "read-before-write")
+    expect(lints.map((lint) => [lint.severity, lint.subject])).toEqual([
+      ["info", "Debug/Position"],
+      ["info", "Debug/Score"],
+      ["info", "Debug/Ping"]
+    ])
+    expect(lints[0]!.message).toBe(
+      "in early, Debug/ReadAll runs before Debug/Move writes Debug/Position, so it sees the Debug/Position value from the previous run"
+    )
+    expect(lints[2]!.message).toContain("sees Debug/Ping events one run late")
+  })
+})

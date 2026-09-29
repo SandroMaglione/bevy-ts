@@ -64,7 +64,10 @@ describe("Session", () => {
     expect(session.run("setup").data).toMatchObject({ ok: true, frames: 1, range: [1, 1], stop: { reason: "completed" } })
     const run = session.run("update", { frames: 2 })
     expect(run.data).toMatchObject({ ok: true, frames: 2, range: [2, 3] })
-    expect(String(run)).toMatch(/^run update: 2 frames \(f2-f3\) in .*ms, completed$/)
+    expect(String(run).split("\n")[0]).toMatch(/^run update: 2 frames \(f2-f3\) in .*ms, completed$/)
+    // The paused-only reader discards the hits emitted while playing.
+    expect(String(run).split("\n").slice(1)).toEqual(["warnings during the run (see report()): discarded-messages x2"])
+    expect(run.data).toMatchObject({ warnings: { "discarded-messages": 2 }, entities: { start: 1, peak: 1, end: 1 }, growing: [] })
     expect(inspect(run)).toBe(run.text)
     expect(JSON.parse(JSON.stringify(run))).toMatchObject({ schedule: "update", ok: true })
   })
@@ -277,3 +280,70 @@ describe("describe-only schedules", () => {
   })
 })
 
+
+describe("Session risk checks", () => {
+  const Velocity = Descriptor.Component<{ readonly x: number }>()("Risk/Velocity")
+  const Shot = Descriptor.Component<{ readonly speed: number }>()("Risk/Shot")
+  const Total = Descriptor.Resource<{ readonly sum: number }>()("Risk/Total")
+  const Blast = Descriptor.Event<{ readonly force: number }>()("Risk/Blast")
+  const RiskGame = Schema.bind(Schema.fragment({ components: { Velocity, Shot }, resources: { Total }, events: { Blast } }))
+
+  const makeRiskSession = (update: ReturnType<typeof RiskGame.Schedule>) => {
+    const runtime = RiskGame.Runtime.make({ services: RiskGame.Runtime.services(), resources: { Total: { sum: 0 } }, debug: true })
+    return Session.make(runtime, { schedules: { update } })
+  }
+
+  it("warns about NaN and infinite numbers in writes, resources, events, and spawns", () => {
+    const SpawnMover = RiskGame.System("Risk/SpawnMover", {}, ({ commands }) => {
+      commands.spawn(RiskGame.Command.spawn([Velocity, { x: 1 }], [Shot, { speed: Number.POSITIVE_INFINITY }]))
+    })
+    const Normalize = RiskGame.System("Risk/Normalize", {
+      queries: { movers: RiskGame.Query({ selection: { velocity: RiskGame.Query.write(Velocity) } }) },
+      resources: { total: RiskGame.System.writeResource(Total) },
+      events: { blast: RiskGame.System.writeEvent(Blast) }
+    }, ({ queries, resources, events }) => {
+      for (const { data } of queries.movers.each()) data.velocity.set({ x: 0 / 0 })
+      resources.total.set({ sum: 1 / 0 })
+      events.blast.emit({ force: Number.NaN })
+    })
+    const session = makeRiskSession(RiskGame.Schedule(SpawnMover, RiskGame.Schedule.applyDeferred(), Normalize))
+    const run = session.run("update", { frames: 2 })
+    expect(run.data.warnings).toEqual({ "non-finite-value": 9 })
+    expect(session.report().data.warnings.map((warning) => warning.message)).toEqual([
+      "Risk/SpawnMover wrote a NaN or infinite number to e1 Risk/Shot.speed (first at f1; why() shows its history)",
+      "Risk/Normalize wrote a NaN or infinite number to e1 Risk/Velocity.x (first at f1; why() shows its history)",
+      "Risk/Normalize wrote a NaN or infinite number to Risk/Total.sum (first at f1; why() shows its history)",
+      "Risk/Normalize wrote a NaN or infinite number to Risk/Blast[0].force (first at f1; why() shows its history)"
+    ])
+  })
+
+  it("warns about counts that rise through a whole run, not about bursts that are cleaned up", () => {
+    const Fire = RiskGame.System("Risk/Fire", {}, ({ commands }) => {
+      commands.spawn(RiskGame.Command.spawn([Shot, { speed: 1 }]))
+    })
+    const leaking = makeRiskSession(RiskGame.Schedule(Fire, RiskGame.Schedule.applyDeferred()))
+    const leak = leaking.run("update", { frames: 80 })
+    expect(leak.data.growing).toEqual([{ component: "Risk/Shot", start: 0, peak: 80, end: 80 }])
+    expect(leak.data.entities).toEqual({ start: 0, peak: 80, end: 80 })
+    expect(leak.text.split("\n")[1]).toBe("warnings during the run (see report()): population-growing x1")
+    expect(leaking.report().text).toContain("# Population: 80 entities\nRisk/Shot: 80")
+
+    // A run too short to judge is not checked.
+    expect(makeRiskSession(RiskGame.Schedule(Fire, RiskGame.Schedule.applyDeferred())).run("update", { frames: 30 }).data.growing).toEqual([])
+
+    // Shots live 20 frames, so the count rises and then stays level.
+    const Expire = RiskGame.System("Risk/Expire", {
+      queries: { shots: RiskGame.Query({ selection: { shot: RiskGame.Query.write(Shot) } }) }
+    }, ({ queries, commands }) => {
+      for (const { entity, data } of queries.shots.each()) {
+        const speed = data.shot.get().speed + 1
+        if (speed > 20) commands.despawn(entity.id)
+        else data.shot.set({ speed })
+      }
+    })
+    const bounded = makeRiskSession(RiskGame.Schedule(Fire, Expire, RiskGame.Schedule.applyDeferred()))
+    const steady = bounded.run("update", { frames: 200 })
+    expect(steady.data.growing).toEqual([])
+    expect(steady.data.warnings).toEqual({})
+  })
+})

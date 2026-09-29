@@ -247,7 +247,8 @@ export const describe = (input: DescribeInput): Debug.Description => {
       else placements.set(system, [placement])
     })
   }
-  const systems = [...placements].map(([system, where]) => describeSystem(system, where))
+  const described = new Map([...placements].map(([system, where]) => [system, describeSystem(system, where)] as const))
+  const systems = [...described.values()]
 
   const components = new Index(componentDescriptors.map((descriptor) => descriptor.name))
   const resources = new Index(resourceDescriptors.map((descriptor) => descriptor.name))
@@ -308,6 +309,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
         })
       }
     }
+    lints.push(...readBeforeWriteLints(schedules, described))
     for (const entry of components.list()) {
       if (entry.writers.length > 0 && entry.readers.every((reader) => entry.writers.includes(reader))) {
         lints.push({
@@ -351,6 +353,55 @@ export const describe = (input: DescribeInput): Debug.Description => {
     },
     lints
   }
+}
+
+type Accesses = { readonly reads: ReadonlyArray<string>; readonly writes: ReadonlyArray<string> }
+
+/** What a system reads and writes, per kind. `with`/`without` filters test presence and are not reads. */
+const accessesOf = (system: Debug.SystemDescription): Record<"component" | "resource" | "event", Accesses> => ({
+  component: {
+    reads: system.queries.flatMap((query) => [...query.reads, ...query.optional, ...query.added, ...query.changed]),
+    writes: system.queries.flatMap((query) => query.writes)
+  },
+  resource: system.resources,
+  event: system.events
+})
+
+/**
+ * Systems that read a component, resource, or event earlier in a schedule
+ * than the first system that writes it there: they see the value (or events)
+ * from the schedule's previous run. Often intended, so `info`.
+ */
+const readBeforeWriteLints = (
+  schedules: ReadonlyArray<readonly [string, AnySchedule]>,
+  described: ReadonlyMap<AnySystem, Debug.SystemDescription>
+): Array<Debug.Lint> => {
+  const lints: Array<Debug.Lint> = []
+  for (const [name, schedule] of schedules) {
+    const steps = schedule.steps.flatMap((step) =>
+      Schedule.isSystemStep(step) ? [{ system: described.get(step as AnySystem)!, accesses: accessesOf(described.get(step as AnySystem)!) }] : [])
+    for (const kind of ["component", "resource", "event"] as const) {
+      const firstWriter = new Map<string, number>()
+      steps.forEach((step, index) => {
+        for (const subject of step.accesses[kind].writes) if (!firstWriter.has(subject)) firstWriter.set(subject, index)
+      })
+      for (const [subject, writerIndex] of firstWriter) {
+        const readers = [...new Set(steps.slice(0, writerIndex)
+          .filter((step) => step.accesses[kind].reads.includes(subject) && !step.accesses[kind].writes.includes(subject))
+          .map((step) => step.system.name))]
+        if (readers.length === 0) continue
+        const writer = steps[writerIndex]!.system.name
+        const sees = kind === "event" ? `${subject} events one run late` : `the ${subject} value from the previous run`
+        lints.push({
+          severity: "info",
+          code: "read-before-write",
+          subject,
+          message: `in ${name}, ${readers.join(", ")} ${readers.length === 1 ? "runs" : "run"} before ${writer} writes ${subject}, so ${readers.length === 1 ? "it sees" : "they see"} ${sees}`
+        })
+      }
+    }
+  }
+  return lints
 }
 
 const describeServices = (
