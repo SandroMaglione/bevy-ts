@@ -16,17 +16,17 @@ const { relation: Targeting } = Descriptor.Relation("Targeting", "TargetedBy")
 
 describe("Schema", () => {
   it("does not export top-level runtime authoring namespaces from the public barrel", () => {
-    // @ts-expect-error Property 'System' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/be
+    // @ts-expect-error Property 'System' does not exist on type
     Public.System
-    // @ts-expect-error Property 'Schedule' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/
+    // @ts-expect-error Property 'Schedule' does not exist on type
     Public.Schedule
-    // @ts-expect-error Property 'Runtime' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/b
+    // @ts-expect-error Property 'Runtime' does not exist on type
     Public.Runtime
-    // @ts-expect-error Property 'Query' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/bev
+    // @ts-expect-error Property 'Query' does not exist on type
     Public.Query
-    // @ts-expect-error Property 'Command' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/b
+    // @ts-expect-error Property 'Command' does not exist on type
     Public.Command
-    // @ts-expect-error Property 'StateMachine' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/game
+    // @ts-expect-error Property 'StateMachine' does not exist on type
     Public.StateMachine
   })
 
