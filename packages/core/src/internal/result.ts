@@ -54,7 +54,7 @@ export const match = <Value, Error, SuccessReturn, FailureReturn>(
 ): MatchReturn<Value, Error, SuccessReturn, FailureReturn> =>
   result.ok ? handlers.onSuccess(result.value) : handlers.onFailure(result.error)
 
-export const all = <Input extends ResultCollection>(
+export const all = <const Input extends ResultCollection>(
   input: Input
 ): Result<AllSuccess<Input>, AllError<Input>> => {
   if (Array.isArray(input)) {
