@@ -13,7 +13,9 @@
  * - `describe()`, `dump(filter)`, `streams()` render the core debug handle.
  * - `report()` summarizes per-system timing and warnings accumulated while
  *   tracing: missed reads, commands still pending at the end of a frame,
- *   failed transitions, and skipped systems that discarded messages.
+ *   failed transitions, skipped systems that discarded messages, NaN or
+ *   infinite numbers written anywhere, and entity counts that keep growing
+ *   through a run.
  *
  * Everything returns a `Rendered` value that prints as text.
  *
@@ -97,6 +99,22 @@ export interface RunResult {
   readonly ms: number
   /** Warning-level lints over the named schedules; details in `describe()`. */
   readonly lintWarnings: number
+  /** Warnings raised during this run, by code; details in `report()`. */
+  readonly warnings: Readonly<Partial<Record<Warning["code"], number>>>
+  /** Live entities before the run, at its peak, and after it. */
+  readonly entities: PopulationRange
+  /**
+   * Components whose count rose through the whole run (see the
+   * `population-growing` warning), or `[]`.
+   */
+  readonly growing: ReadonlyArray<PopulationRange & { readonly component: string }>
+}
+
+/** How one count changed over a run. */
+export interface PopulationRange {
+  readonly start: number
+  readonly peak: number
+  readonly end: number
 }
 
 export interface JournalFilter<S extends Schema.Any> {
@@ -140,6 +158,8 @@ export interface Warning {
     | "transition-failed"
     | "discarded-messages"
     | "system-failed"
+    | "non-finite-value"
+    | "population-growing"
   readonly message: string
   readonly count: number
   readonly firstFrame: number
@@ -155,6 +175,8 @@ export interface Report {
   readonly streams: ReadonlyArray<Debug.StreamStatus>
   /** Static lints over the named schedules (see `describe()`). */
   readonly lints: ReadonlyArray<Debug.Lint>
+  /** Live entities and entities per component now. */
+  readonly population: Debug.Population
 }
 
 export interface SystemActivity {
@@ -189,6 +211,42 @@ const inRange = (frame: number, frames: number | readonly [number, number] | und
   frames === undefined ? true
   : typeof frames === "number" ? frame === frames
   : frame >= frames[0] && frame <= frames[1]
+
+/**
+ * The path of the first NaN or infinite number inside a value (`""` for the
+ * value itself), or `undefined`. Walks arrays and object properties; stops at
+ * `depth` levels and at objects already visited.
+ */
+const nonFinitePath = (value: unknown, depth = 6, seen: Set<object> = new Set()): string | undefined => {
+  if (typeof value === "number") return Number.isFinite(value) ? undefined : ""
+  if (typeof value !== "object" || value === null || depth === 0 || seen.has(value)) return undefined
+  seen.add(value)
+  for (const [key, entry] of Array.isArray(value) ? value.entries() : Object.entries(value)) {
+    const path = nonFinitePath(entry, depth - 1, seen)
+    if (path !== undefined) return `${typeof key === "number" ? `[${key}]` : `.${key}`}${path}`
+  }
+  return undefined
+}
+
+/** Minimum frames in a run before its counts are checked for steady growth. */
+const growthMinFrames = 60
+
+/**
+ * Whether counts sampled once per frame grow steadily: the lowest count in
+ * each quarter of the run is higher than in the quarter before. Spawn bursts
+ * that are cleaned up do not raise the floor; entities never despawned do.
+ */
+const growsSteadily = (samples: ReadonlyArray<number>): boolean => {
+  const quarter = Math.floor(samples.length / 4)
+  let previous = Number.NEGATIVE_INFINITY
+  for (let index = 0; index < 4; index++) {
+    const window = samples.slice(index * quarter, index === 3 ? samples.length : (index + 1) * quarter)
+    const floor = Math.min(...window)
+    if (floor <= previous) return false
+    previous = floor
+  }
+  return true
+}
 
 const describeError = (error: unknown): { readonly kind?: unknown; readonly system?: unknown; readonly error?: unknown; readonly requirements?: unknown } =>
   typeof error === "object" && error !== null ? error : {}
@@ -255,6 +313,17 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     )
   }
 
+  const checkFinite = (system: string, subject: string, value: unknown, frame: number, entity?: number) => {
+    const path = nonFinitePath(value)
+    if (path === undefined) return
+    warn(
+      "non-finite-value",
+      `nonfinite:${system}:${subject}`,
+      `${system} wrote a NaN or infinite number to ${entity === undefined ? "" : `e${entity} `}${subject}${path} (first at f${frame}; why() shows its history)`,
+      frame
+    )
+  }
+
   const record = (event: Debug.TraceEvent) => {
     if (event.type === "frame") {
       checkPending(current.frame)
@@ -274,6 +343,9 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
           warn("system-failed", `failed:${event.system}`, `${event.system} ${event.outcome === "defect" ? "threw" : "failed"}: ${Format.value(event.error, format)}`, event.frame)
         } else {
           if (event.commands.length > 0) pending.set(event.system, (pending.get(event.system) ?? 0) + event.commands.length)
+          for (const write of event.writes) checkFinite(event.system, write.component, write.after, event.frame, write.entity)
+          for (const write of event.resources) checkFinite(event.system, write.resource, write.after, event.frame)
+          for (const emit of event.events) checkFinite(event.system, emit.event, emit.values, event.frame)
           for (const next of event.nextStates) {
             if (next.value === undefined) pendingStates.delete(next.machine)
             else pendingStates.set(next.machine, event.system)
@@ -298,6 +370,21 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       }
       case "deferred":
         pending.clear()
+        for (const command of event.commands) {
+          for (const effect of command.effects) {
+            switch (effect.kind) {
+              case "spawn":
+                for (const [component, value] of Object.entries(effect.components)) checkFinite(command.system, component, value, event.frame, effect.entity)
+                break
+              case "insert":
+                checkFinite(command.system, effect.component, effect.value, event.frame, effect.entity)
+                break
+              case "overwrite":
+                checkFinite(command.system, effect.component, effect.after, event.frame, effect.entity)
+                break
+            }
+          }
+        }
         break
       case "transition":
         if (event.outcome !== "failed") pendingStates.delete(event.machine)
@@ -318,6 +405,15 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     const schedule = schedules[name]!
     const frames = runOptions.frames ?? 1
     const started = performance.now()
+    const warningsBefore = new Map([...warnings].map(([key, warning]) => [key, warning.count]))
+    const initial = debug.population()
+    const entityCounts: Array<number> = []
+    const componentCounts = new Map<string, Array<number>>(Object.keys(initial.components).map((name) => [name, []]))
+    const sample = () => {
+      const population = debug.population()
+      entityCounts.push(population.entities)
+      for (const [name, count] of Object.entries(population.components)) componentCounts.get(name)?.push(count)
+    }
     let first: number | undefined
     let last: number | undefined
     let stop: Stop = { reason: "completed" }
@@ -335,6 +431,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       const frame = debug.frame()
       first ??= frame
       last = frame
+      sample()
       if (!result.ok) {
         const error = describeError(result.error)
         stop = error.kind === "MissingRuntimeRequirements"
@@ -360,6 +457,29 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       }
     }
     checkPending(debug.frame())
+    const range = (start: number, samples: ReadonlyArray<number>): PopulationRange => ({
+      start,
+      peak: Math.max(start, ...samples),
+      end: samples.length === 0 ? start : samples[samples.length - 1]!
+    })
+    const growing = entityCounts.length < growthMinFrames
+      ? []
+      : [...componentCounts]
+        .filter(([, samples]) => growsSteadily(samples))
+        .map(([component, samples]) => ({ component, ...range(initial.components[component]!, samples) }))
+    for (const entry of growing) {
+      warn(
+        "population-growing",
+        `growing:${entry.component}`,
+        `${entry.component} count rose through every quarter of a ${entityCounts.length}-frame ${name} run (${entry.start} -> ${entry.end}); entities may never be despawned`,
+        debug.frame()
+      )
+    }
+    const raised: Partial<Record<Warning["code"], number>> = {}
+    for (const [key, warning] of warnings) {
+      const count = warning.count - (warningsBefore.get(key) ?? 0)
+      if (count > 0) raised[warning.code] = (raised[warning.code] ?? 0) + count
+    }
     const lintWarnings = debug.describe().lints.filter((lint) => lint.severity === "warning")
     const data: RunResult = {
       schedule: name,
@@ -368,12 +488,19 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       range: first === undefined || last === undefined ? undefined : [first, last],
       stop,
       ms: performance.now() - started,
-      lintWarnings: lintWarnings.length
+      lintWarnings: lintWarnings.length,
+      warnings: raised,
+      entities: range(initial.entities, entityCounts),
+      growing
     }
     const lintText = lintWarnings.length === 0
       ? ""
       : `\n${lintWarnings.length} lint warnings (see describe() or report()): ${lintWarnings.map((lint) => `${lint.code} ${lint.subject}`).join(", ")}`
-    return Rendered.make(data, renderRun(data, format) + lintText)
+    const raisedCodes = Object.entries(raised)
+    const warningText = raisedCodes.length === 0
+      ? ""
+      : `\nwarnings during the run (see report()): ${raisedCodes.map(([code, count]) => `${code} x${count}`).join(", ")}`
+    return Rendered.make(data, renderRun(data, format) + lintText + warningText)
   }
 
   /** Lines hidden by the last `collectLines` call because they record no change. */
@@ -476,7 +603,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       systems,
       warnings: [...warnings.values()].map((warning) => ({ ...warning })),
       streams: debug.streams().filter((stream) => stream.heldBy !== undefined || stream.readers.some((reader) => reader.lagged)),
-      lints: debug.describe().lints
+      lints: debug.describe().lints,
+      population: debug.population()
     }
     const lines = [`${data.frames} frames run (${rangeText()})`, "", ...Format.lintLines(data.lints), "", "# Systems (by total time)"]
     for (const entry of systems) {
@@ -490,6 +618,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     if (data.streams.length > 0) {
       lines.push("", "# Streams held by readers", Format.streams(data.streams))
     }
+    const counted = Object.entries(data.population.components).filter(([, count]) => count > 0).sort(([, left], [, right]) => right - left)
+    lines.push("", `# Population: ${data.population.entities} entities`, ...counted.map(([component, count]) => `${component}: ${count}`))
     return Rendered.make(data, lines.join("\n"))
   }
 
