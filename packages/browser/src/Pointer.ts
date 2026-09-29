@@ -1,5 +1,6 @@
 /**
- * Mouse and pen input over one element: position and button edges.
+ * Mouse and pen input over one element: position and button edges. Touches
+ * are ignored by default; on-screen touch controls are `Touch`.
  *
  * Games that aim with the mouse read one snapshot per update, like keyboard
  * actions. The module owns the browser plumbing: element-relative
@@ -84,6 +85,8 @@ export interface PointerEventLike {
   readonly clientY: number
   readonly button: number
   readonly pointerId: number
+  /** `"mouse"`, `"pen"`, or `"touch"`; events without it count as mouse. */
+  readonly pointerType?: string
   preventDefault(): void
 }
 
@@ -121,6 +124,12 @@ export interface TrackOptions {
    * usable. Defaults to `true`.
    */
   readonly preventContextMenu?: boolean
+  /**
+   * `PointerEvent.pointerType`s tracked. Defaults to `["mouse", "pen"]`:
+   * touches are left to `Touch`, so a finger on an on-screen control is not
+   * also a click.
+   */
+  readonly pointerTypes?: ReadonlyArray<string>
 }
 
 /**
@@ -163,6 +172,8 @@ const snapshotOf = (position: Position, over: boolean, edges: ButtonEdges): Snap
  */
 export const track = (target: PointerTarget, blurHost: BlurHost, options: TrackOptions = {}): Pointer => {
   const preventContextMenu = options.preventContextMenu ?? true
+  const pointerTypes = options.pointerTypes ?? ["mouse", "pen"]
+  const tracked = (event: PointerEventLike): boolean => pointerTypes.includes(event.pointerType ?? "mouse")
   const edges = makeEdges()
   let position: Position = { x: 0, y: 0 }
   let over = false
@@ -173,6 +184,7 @@ export const track = (target: PointerTarget, blurHost: BlurHost, options: TrackO
   }
 
   const onDown = (event: PointerEventLike): void => {
+    if (!tracked(event)) return
     locate(event)
     over = true
     const button = buttonOf(event.button)
@@ -185,6 +197,7 @@ export const track = (target: PointerTarget, blurHost: BlurHost, options: TrackO
   }
 
   const onUp = (event: PointerEventLike): void => {
+    if (!tracked(event)) return
     locate(event)
     const button = buttonOf(event.button)
     if (button === undefined || !edges.held.delete(button)) return
@@ -193,22 +206,28 @@ export const track = (target: PointerTarget, blurHost: BlurHost, options: TrackO
   }
 
   const onMove = (event: PointerEventLike): void => {
+    if (!tracked(event)) return
     locate(event)
     over = true
   }
 
   const onEnter = (event: PointerEventLike): void => {
+    if (!tracked(event)) return
     locate(event)
     over = true
   }
 
-  const onLeave = (): void => {
-    over = false
+  const onLeave = (event: PointerEventLike): void => {
+    if (tracked(event)) over = false
   }
 
   const releaseAll = (): void => {
     for (const button of edges.held) edges.released.add(button)
     edges.held.clear()
+  }
+
+  const onCancel = (event: PointerEventLike): void => {
+    if (tracked(event)) releaseAll()
   }
 
   const onContextMenu = (event: { preventDefault(): void }): void => {
@@ -220,7 +239,7 @@ export const track = (target: PointerTarget, blurHost: BlurHost, options: TrackO
   target.addEventListener("pointermove", onMove)
   target.addEventListener("pointerenter", onEnter)
   target.addEventListener("pointerleave", onLeave)
-  target.addEventListener("pointercancel", releaseAll)
+  target.addEventListener("pointercancel", onCancel)
   target.addEventListener("contextmenu", onContextMenu)
   blurHost.addEventListener("blur", releaseAll)
 
@@ -237,7 +256,7 @@ export const track = (target: PointerTarget, blurHost: BlurHost, options: TrackO
       target.removeEventListener("pointermove", onMove)
       target.removeEventListener("pointerenter", onEnter)
       target.removeEventListener("pointerleave", onLeave)
-      target.removeEventListener("pointercancel", releaseAll)
+      target.removeEventListener("pointercancel", onCancel)
       target.removeEventListener("contextmenu", onContextMenu)
       blurHost.removeEventListener("blur", releaseAll)
     }
