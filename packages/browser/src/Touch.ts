@@ -1,12 +1,15 @@
 /**
- * Touch controls over one element: a floating stick and buttons, some of which
- * aim by dragging (tap to use, drag to aim, release to fire).
+ * Touch controls over one element: a floating stick, buttons (some of which
+ * aim by dragging: tap to use, drag to aim, release to fire), and an optional
+ * swipe area that reports how far a finger moved, for turning or camera
+ * control (Genshin Impact style: move on the left, swipe anywhere to look).
  *
  * The layout is a function of the element's size, so controls stay anchored
  * to corners on any screen. Each finger belongs to the first control it lands
  * on: a button when it lands inside one, otherwise the stick when it lands in
- * the stick's region (the stick then appears under the thumb). Fingers that
- * land elsewhere are ignored, and a control keeps its finger until it lifts.
+ * the stick's region (the stick then appears under the thumb), otherwise the
+ * swipe area when it lands in its region. Fingers that land elsewhere are
+ * ignored, and a control keeps its finger until it lifts.
  *
  * Games read one snapshot per update, like keyboard actions: the stick's
  * vector, and per button `held`/`pressed`/`released` edges that survive taps
@@ -82,9 +85,16 @@ export interface ButtonZone {
   readonly aimDeadZone?: number
 }
 
+export interface SwipeZone {
+  /** Where a touch that is not on a button or the stick starts a swipe. */
+  readonly region: Rect
+}
+
 export interface Layout<B extends string> {
   readonly stick: StickZone
   readonly buttons: { readonly [K in B]: ButtonZone }
+  /** Optional: fingers here report their movement, for turning or looking around. */
+  readonly swipe?: SwipeZone
 }
 
 /** The element's size in CSS pixels, passed to the layout function. */
@@ -111,9 +121,17 @@ export interface ButtonState extends ActionState {
   readonly cancelled: boolean
 }
 
+export interface Swipe {
+  /** Whether a finger is on the swipe area. */
+  readonly active: boolean
+  /** How far the finger moved since the previous snapshot, in CSS pixels. */
+  readonly delta: Vector
+}
+
 export interface Snapshot<B extends string> {
   readonly stick: Stick
   readonly buttons: { readonly [K in B]: ButtonState }
+  readonly swipe: Swipe
   /** Whether any tracked touch has been seen, for switching controls on. */
   readonly touched: boolean
 }
@@ -172,6 +190,7 @@ const released = (): ButtonState => ({ held: false, pressed: false, released: fa
 export const idle = <const B extends string>(buttons: ReadonlyArray<B>): Snapshot<B> => ({
   stick: { active: false, vector: zero },
   buttons: Object.fromEntries(buttons.map((button) => [button, released()])) as { readonly [K in B]: ButtonState },
+  swipe: { active: false, delta: zero },
   touched: false
 })
 
@@ -262,6 +281,9 @@ export const track = <const B extends string>(
   let stick: { readonly pointerId: number; readonly origin: Position; knob: Position } | undefined
   /** Which button each finger holds. */
   const fingers = new Map<number, B>()
+  let swipe: { readonly pointerId: number; last: Position } | undefined
+  /** Swipe movement since the previous snapshot, including fingers already lifted. */
+  let swiped: Vector = zero
 
   const locate = (event: TouchEventLike): Position => {
     const rect = target.getBoundingClientRect()
@@ -288,6 +310,11 @@ export const track = <const B extends string>(
     if (stick === undefined && inside(current.stick.region, at)) {
       stick = { pointerId: event.pointerId, origin: at, knob: at }
       target.setPointerCapture?.(event.pointerId)
+      return
+    }
+    if (swipe === undefined && current.swipe !== undefined && inside(current.swipe.region, at)) {
+      swipe = { pointerId: event.pointerId, last: at }
+      target.setPointerCapture?.(event.pointerId)
     }
   }
 
@@ -298,6 +325,11 @@ export const track = <const B extends string>(
       stick.knob = at
       return
     }
+    if (swipe !== undefined && swipe.pointerId === event.pointerId) {
+      swiped = { x: swiped.x + at.x - swipe.last.x, y: swiped.y + at.y - swipe.last.y }
+      swipe.last = at
+      return
+    }
     const name = fingers.get(event.pointerId)
     if (name !== undefined) buttons.get(name)!.aim = aimOf(current.buttons[name], at)
   }
@@ -306,6 +338,10 @@ export const track = <const B extends string>(
     if (!tracked(event)) return
     if (stick !== undefined && stick.pointerId === event.pointerId) {
       stick = undefined
+      return
+    }
+    if (swipe !== undefined && swipe.pointerId === event.pointerId) {
+      swipe = undefined
       return
     }
     const name = fingers.get(event.pointerId)
@@ -320,6 +356,7 @@ export const track = <const B extends string>(
   const onCancel = (event: TouchEventLike): void => end(event, true)
   const onBlur = (): void => {
     stick = undefined
+    swipe = undefined
     fingers.clear()
     for (const button of buttons.values()) lift(button, true)
   }
@@ -343,9 +380,11 @@ export const track = <const B extends string>(
       const snapshot: Snapshot<B> = {
         stick: stickState(),
         buttons: Object.fromEntries(names.map((name) => [name, buttonSnapshot(buttons.get(name)!)])) as { readonly [K in B]: ButtonState },
+        swipe: { active: swipe !== undefined, delta: swiped },
         touched
       }
       for (const button of buttons.values()) startWindow(button)
+      swiped = zero
       return snapshot
     },
     view() {
@@ -378,8 +417,8 @@ export const track = <const B extends string>(
 }
 
 /**
- * Control changes applied just before one snapshot, in this order: the stick,
- * presses, aims, releases. `frame` is the snapshot's index, counting from 0 at
+ * Control changes applied just before one snapshot, in this order: the stick
+ * and swipe, presses, aims, releases. `frame` is the snapshot's index, counting from 0 at
  * the first `snapshot()` call. A button pressed and released in one frame is a
  * tap shorter than a frame.
  */
@@ -387,6 +426,8 @@ export interface TimelineEntry<B extends string> {
   readonly frame: number
   /** The stick's vector from this frame on; `null` lifts the thumb. */
   readonly stick?: Vector | null
+  /** A swipe of this many CSS pixels reported by this frame's snapshot only. */
+  readonly swipe?: Vector
   readonly press?: ReadonlyArray<B>
   /** Aims of held buttons from this frame on (`null` for no aim). */
   readonly aim?: { readonly [K in B]?: Vector | null }
@@ -431,8 +472,14 @@ export const scripted = <const B extends string>(buttons: ReadonlyArray<B>, time
   return {
     snapshot() {
       for (const track of tracks.values()) startWindow(track)
+      const swipe = { active: false, x: 0, y: 0 }
       for (const entry of byFrame.get(frame) ?? []) {
         touched = true
+        if (entry.swipe !== undefined) {
+          swipe.active = true
+          swipe.x += entry.swipe.x
+          swipe.y += entry.swipe.y
+        }
         if (entry.stick !== undefined) stick = entry.stick === null ? null : clamp(entry.stick)
         for (const name of entry.press ?? []) press(tracks.get(name)!, null)
         for (const [name, aim] of Object.entries(entry.aim ?? {}) as Array<[B, Vector | null | undefined]>) {
@@ -446,6 +493,7 @@ export const scripted = <const B extends string>(buttons: ReadonlyArray<B>, time
       return {
         stick: { active: stick !== null, vector: stick ?? zero },
         buttons: Object.fromEntries(buttons.map((name) => [name, buttonSnapshot(tracks.get(name)!)])) as { readonly [K in B]: ButtonState },
+        swipe: { active: swipe.active, delta: { x: swipe.x, y: swipe.y } },
         touched
       }
     },
