@@ -124,6 +124,22 @@ const frozen = Game.Condition.check("frozen", { resources: { stop: Game.System.r
 Game.Schedule.when([Game.Condition.not(frozen)], Move, Attack)
 ```
 
+Per-entity modes (an enemy's attack phase, a door's open/closed) are components, not machines. `Descriptor.State` makes one from a closed set of states and an optional graph of allowed moves:
+
+```ts
+const Phase = Descriptor.State("Phase", ["ready", "windup", "active"] as const, {
+  transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }
+})
+Game.Command.spawn([Phase, "ready"])
+// write slot `phase`:
+const moved = data.phase.transition("windup", "active") // "ready" -> "active" does not compile
+if (!moved.ok) moved.error.actual // some earlier write already changed the phase
+```
+
+- It is an ordinary component: queried, change-detected, rolled back, and validated on restore (unknown states are rejected).
+- `transition(from, to)` writes immediately, and only while the state is still `from`. Otherwise it returns `StateMismatch` and writes nothing. The graph lists every state (`[]` for one with no way out), and it is checked at compile time only. `set` still writes any state.
+- There are no per-state schedules or filters. Branch on `get()` in the system that owns the component, and emit an event on a transition that other systems react to.
+
 ## 10. Schedules make every boundary visible
 
 ```ts
