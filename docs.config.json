@@ -46,6 +46,7 @@
     "packages/pixi/src/NodeRegistry.ts",
     "packages/pixi/src/RenderSync.ts",
     "packages/devtools/src/Session.ts",
+    "packages/devtools/src/Monitor.ts",
     "packages/devtools/src/Invariant.ts",
     "packages/devtools/src/Format.ts",
     "packages/devtools/src/Rendered.ts"
