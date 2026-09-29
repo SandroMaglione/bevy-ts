@@ -93,9 +93,9 @@ describe("System", () => {
             y: camera.y + 1
           }))).type.toBe<Result.Result<void, Vector2.Error>>()
 
-          // @ts-expect-error!
+          // @ts-expect-error Property 'missing' does not exist on type 'ResourceContext<SystemSpec<SchemaDefinition<{ readonly Position
           resources.missing
-          // @ts-expect-error!
+          // @ts-expect-error Property 'setRaw' does not exist on type 'ResourceReadView<number>'.
           resources.time.setRaw(1)
         }
     )
@@ -146,7 +146,7 @@ describe("System", () => {
           expect(resources.viewport.setRaw({ width: 320, height: 180 })).type.toBe<Result.Result<void, Size2.Error>>()
           expect(services.logger).type.toBe<{ log: (message: string) => void }>()
 
-          // @ts-expect-error!
+          // @ts-expect-error Property 'missing' does not exist on type 'ResourceContext<SystemSpec<SchemaDefinition<{ readonly Position
           resources.missing
         }
     )
@@ -162,7 +162,7 @@ describe("System", () => {
           expect(resources.time.get()).type.toBe<number>()
           expect(services.logger.log).type.toBe<(message: string) => void>()
 
-          // @ts-expect-error!
+          // @ts-expect-error Property 'missing' does not exist on type 'ServiceContext<SystemSpec<SchemaDefinition<{ readonly Position
           services.missing
         }
     )
@@ -170,7 +170,7 @@ describe("System", () => {
 
   it("rejects unknown access categories at the constructor boundary", () => {
     Game.System("InvalidAccess", {
-      // @ts-expect-error!
+      // @ts-expect-error Object literal may only specify known properties, but 'resoruces' does not exist in type
       resoruces: {
         time: Game.System.readResource(Time)
       }

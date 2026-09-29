@@ -16,17 +16,17 @@ const { relation: Targeting } = Descriptor.Relation("Targeting", "TargetedBy")
 
 describe("Schema", () => {
   it("does not export top-level runtime authoring namespaces from the public barrel", () => {
-    // @ts-expect-error!
+    // @ts-expect-error Property 'System' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/be
     Public.System
-    // @ts-expect-error!
+    // @ts-expect-error Property 'Schedule' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/
     Public.Schedule
-    // @ts-expect-error!
+    // @ts-expect-error Property 'Runtime' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/b
     Public.Runtime
-    // @ts-expect-error!
+    // @ts-expect-error Property 'Query' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/bev
     Public.Query
-    // @ts-expect-error!
+    // @ts-expect-error Property 'Command' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/gamedev/b
     Public.Command
-    // @ts-expect-error!
+    // @ts-expect-error Property 'StateMachine' does not exist on type 'typeof import("/Users/sandromaglione/Development/projects/game
     Public.StateMachine
   })
 
@@ -93,7 +93,7 @@ describe("Schema", () => {
       }
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __schemaConflicts__: "resources key \"DeltaTime\""
     Schema.merge(left, right)
   })
 
@@ -175,7 +175,7 @@ describe("Schema", () => {
               readonly position: QueryTypes.ReadonlyValue<{ x: number; y: number }>
             }>()
 
-            // @ts-expect-error!
+            // @ts-expect-error Property 'get' does not exist on type 'AbsentOptionalReadCell'.
             match.data.velocity.get()
 
             if (match.data.velocity.present) {
@@ -253,16 +253,16 @@ describe("Schema", () => {
     })
     const Game = Schema.bind(schema)
 
-    // @ts-expect-error!
+    // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
     Game.Query.read(Time)
-    // @ts-expect-error!
+    // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
     Game.Query.optional(Time)
     Game.Query({
       selection: {
         position: Game.Query.read(Position)
       },
       with: [
-        // @ts-expect-error!
+        // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
         Time
       ]
     })
@@ -271,7 +271,7 @@ describe("Schema", () => {
         position: Game.Query.read(Position)
       },
       without: [
-        // @ts-expect-error!
+        // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
         Time
       ]
     })
@@ -339,11 +339,11 @@ describe("Schema", () => {
     })
     const Game = Schema.bind(schema)
 
-    // @ts-expect-error!
+    // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
     Game.Query.added(Time)
-    // @ts-expect-error!
+    // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
     Game.Query.changed(Time)
-    // @ts-expect-error!
+    // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
     Game.System.readRemoved(Time)
   })
 
@@ -394,7 +394,7 @@ describe("Schema", () => {
     )
 
     type GameBSystem = Parameters<typeof GameB.Schedule>[number]
-    // @ts-expect-error!
+    // @ts-expect-error Type 'BoundSystem<SchemaDefinition<{ readonly Position: Descriptor<"component", "Position", { x: number; y
     const _invalidSystem: GameBSystem = SystemA
 
     const runtimeA = GameA.Runtime.make({
@@ -406,7 +406,7 @@ describe("Schema", () => {
 
     const scheduleB = GameB.Schedule(SystemB)
 
-    // @ts-expect-error!
+    // @ts-expect-error Property 'Position' is missing in type '{ readonly Velocity: Descriptor.Descriptor<"component", "Velocity", {
     runtimeA.tick(scheduleB)
 
     const scheduleA = GameA.Schedule(SystemA)
@@ -414,7 +414,7 @@ describe("Schema", () => {
 
     scheduleA
 
-    // @ts-expect-error!
+    // @ts-expect-error Type 'BoundSystem<SchemaDefinition<{ readonly Velocity: Descriptor<"component", "Velocity", { dx: number; dy
     const _invalidSystemForA: GameAScheduleEntry = SystemB
   })
 
@@ -485,21 +485,21 @@ describe("Schema", () => {
             Relation.Relation.MissingEntityError
           >>()
 
-          // @ts-expect-error!
+          // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
           commands.reorderChildren(entityId, Targeting, [entityId])
-          // @ts-expect-error!
+          // @ts-expect-error Type 'RelatedDefinition<"Children", "ChildOf", "hierarchy", PairBrand<"ChildOf", "Children", "hierarchy">>'
           commands.reorderChildren(entityId, ChildOf.related, [entityId])
-          // @ts-expect-error!
+          // @ts-expect-error Type 'Descriptor<"component", "Position", { x: number; y: number; }>' is missing the following properties
           Game.Query.readRelation(Position)
-          // @ts-expect-error!
+          // @ts-expect-error Type 'Descriptor<"component", "Position", { x: number; y: number; }>' is missing the following properties
           Game.Query.readRelated(Position)
-          // @ts-expect-error!
+          // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
           lookup.parent(entityId, Targeting)
-          // @ts-expect-error!
+          // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
           lookup.childMatches(entityId, Targeting, query)
-          // @ts-expect-error!
+          // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
           lookup.descendantMatches(entityId, Targeting, query)
-          // @ts-expect-error!
+          // @ts-expect-error Type 'Descriptor<"component", "Position", { x: number; y: number; }>' is missing the following properties
           Game.System.readRelationFailures(Position)
         }
     )
@@ -540,28 +540,28 @@ describe("Schema", () => {
         {
           for (const match of queries.player.each()) {
             match.data.position.get()
-            // @ts-expect-error!
+            // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
             match.data.velocity.get()
           }
 
           const single = queries.player.single()
           if (single.ok) {
             single.value.data.position.get()
-            // @ts-expect-error!
+            // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
             single.value.data.velocity.get()
           }
 
           const singleOptional = queries.player.singleOptional()
           if (singleOptional.ok && singleOptional.value) {
             singleOptional.value.data.position.get()
-            // @ts-expect-error!
+            // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
             singleOptional.value.data.velocity.get()
 
             const handle = Game.Entity.handle(singleOptional.value.entity.id, Position)
             const fromHandle = lookup.getHandle(handle, CameraTargetQuery)
             if (fromHandle.ok) {
               fromHandle.value.data.position.get()
-              // @ts-expect-error!
+              // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
               fromHandle.value.data.velocity.get()
             }
           }
@@ -569,7 +569,7 @@ describe("Schema", () => {
           const direct = lookup.get(entityId, CameraTargetQuery)
           if (direct.ok) {
             direct.value.data.position.get()
-            // @ts-expect-error!
+            // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
             direct.value.data.velocity.get()
           }
 
@@ -577,7 +577,7 @@ describe("Schema", () => {
           if (children.ok) {
             for (const child of children.value) {
               child.data.position.get()
-              // @ts-expect-error!
+              // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
               child.data.velocity.get()
             }
           }
@@ -586,7 +586,7 @@ describe("Schema", () => {
           if (descendants.ok) {
             for (const descendant of descendants.value) {
               descendant.data.position.get()
-              // @ts-expect-error!
+              // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
               descendant.data.velocity.get()
             }
           }
@@ -661,7 +661,7 @@ describe("Schema", () => {
 
             lookup.getHandle(current, WithQuery)
 
-            // @ts-expect-error!
+            // @ts-expect-error Property 'schema' is missing in type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name
             lookup.get(current, PositionQuery)
 
             const WrongQuery = Game.Query({
@@ -670,7 +670,7 @@ describe("Schema", () => {
               }
             })
 
-            // @ts-expect-error!
+            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
             lookup.getHandle(current, WrongQuery)
 
             const OptionalOnlyQuery = Game.Query({
@@ -680,7 +680,7 @@ describe("Schema", () => {
               }
             })
 
-            // @ts-expect-error!
+            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
             lookup.getHandle(current, OptionalOnlyQuery)
 
             const RelatedOnlyQuery = Game.Query({
@@ -690,7 +690,7 @@ describe("Schema", () => {
               with: [Target] as const
             })
 
-            // @ts-expect-error!
+            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
             lookup.getHandle(current, RelatedOnlyQuery)
 
             const LifecycleOnlyQuery = Game.Query({
@@ -700,7 +700,7 @@ describe("Schema", () => {
               filters: [Game.Query.changed(Position)] as const
             })
 
-            // @ts-expect-error!
+            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
             lookup.getHandle(current, LifecycleOnlyQuery)
           }
         }
@@ -804,23 +804,23 @@ describe("Schema", () => {
       schema: Schema.fragment({}),
       requires: [Core] as const,
       build: (Game) => {
-        // @ts-expect-error!
+        // @ts-expect-error Argument of type 'Descriptor<"component", "Velocity", { dx: number; dy: number; }>' is not assignable to
         Game.Query.read(Velocity)
-        // @ts-expect-error!
-        Game.System.readResource(Counter)
-        // @ts-expect-error!
+        // @ts-expect-error Type '"Phase"' is not assignable to type '"Time"'.
+        Game.System.readResource(Phase)
+        // @ts-expect-error Argument of type 'Descriptor<"event", "TickEvent", { dt: number; }>' is not assignable to parameter of type
         Game.System.writeEvent(TickEvent)
         return {}
       }
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __fixFeatureDependencies__: "Core"
     Schema.Feature.compose({
       root: Root,
       features: [Combat] as const
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __fixFeatureSelection__: "Core"
     Schema.Feature.compose({
       root: Root,
       features: [Core, Core] as const

@@ -18,7 +18,7 @@ describe("InputCapture", () => {
       services: Game.Runtime.services(),
       resources: { Input: Keyboard.idle(bindings), Wrong: { jump: false } }
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "CaptureTypes/Keyboard"
     withoutKeyboard.tick(Game.Schedule(Capture))
 
     const ready = Game.Runtime.make({
@@ -39,19 +39,19 @@ describe("InputCapture", () => {
     const services = Game.Runtime.services(Game.Runtime.service(KeyboardInput, Keyboard.actions(window, bindings)))
     const resources = { Input: Keyboard.idle(bindings), Wrong: { jump: false } }
     const withoutMachine = Game.Runtime.make({ services, resources })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing machine"; readonly __requirement__: "CaptureTypes/Pace"
     withoutMachine.tick(Game.Schedule(Capture))
     const ready = Game.Runtime.make({ services, resources, machines: Game.Runtime.machines(Game.Runtime.machine(Pace, "Running")) })
     expect(ready.tick(Game.Schedule(Capture)).ok).type.toBe<boolean>()
   })
 
   it("rejects resources whose value is not the snapshot type", () => {
-    // @ts-expect-error!
+    // @ts-expect-error Type 'ActionState' is not assignable to type 'boolean'.
     InputCapture.system(Game, { name: "CaptureTypes/Wrong", source: KeyboardInput, resource: Wrong })
   })
 
   it("rejects sources without snapshot()", () => {
-    // @ts-expect-error!
-    InputCapture.system(Game, { name: "CaptureTypes/NoSnapshot", source: Clock, resource: Input })
+    expect(InputCapture.system).type.not.toBeCallableWith(Game, { name: "CaptureTypes/NoSnapshot", source: Clock, resource: Input })
+    expect(InputCapture.system).type.toBeCallableWith(Game, { name: "CaptureTypes/Snapshot", source: KeyboardInput, resource: Input })
   })
 })

@@ -126,7 +126,7 @@ describe("StateMachine", () => {
           expect(machines.app.get()).type.toBe<"Menu" | "Playing" | "Paused">()
           expect(machines.round.get()).type.toBe<"Warmup" | "Live" | "SuddenDeath">()
           nextMachines.round.set("Live")
-          // @ts-expect-error!
+          // @ts-expect-error Argument of type '"Paused"' is not assignable to parameter of type
           nextMachines.round.set("Paused")
         }
     )
@@ -135,7 +135,7 @@ describe("StateMachine", () => {
   it("rejects invalid machine values in conditions and queued writes", () => {
     Game.Condition.inState(
       AppState,
-      // @ts-expect-error!
+      // @ts-expect-error Argument of type '"GameOver"' is not assignable to parameter of type
       "GameOver"
     )
 
@@ -148,7 +148,7 @@ describe("StateMachine", () => {
       },
       ({ nextMachines }) =>
         {
-          // @ts-expect-error!
+          // @ts-expect-error Argument of type '"GameOver"' is not assignable to parameter of type
           nextMachines.app.set("GameOver")
         }
     )
@@ -159,7 +159,7 @@ describe("StateMachine", () => {
       "StateMachine/CrossSchemaSystem",
       {
         machines: {
-          // @ts-expect-error!
+          // @ts-expect-error Property 'Position' is missing in type '{}' but required in type '{ readonly Position
           other: System.machine(OtherState)
         }
       },
@@ -170,14 +170,14 @@ describe("StateMachine", () => {
       "StateMachine/CrossSchemaTransitionEvents",
       {
         transitionEvents: {
-          // @ts-expect-error!
+          // @ts-expect-error Property 'Position' is missing in type '{}' but required in type '{ readonly Position
           other: Game.System.readTransitionEvent(OtherState)
         }
       },
       () => {}
     )
 
-    // @ts-expect-error!
+    // @ts-expect-error Property 'Position' is missing in type '{}' but required in type '{ readonly Position
     Game.Schedule.onEnter(OtherState, "Idle", [ReaderSystem])
 
     const OtherBundle = OtherGame.Schedule.transitions(
@@ -186,7 +186,7 @@ describe("StateMachine", () => {
 
     Game.Schedule(
       ReaderSystem,
-      // @ts-expect-error!
+      // @ts-expect-error Property 'Position' is missing in type '{}' but required in type '{ readonly Position
       Game.Schedule.applyStateTransitions(OtherBundle)
     )
   })
@@ -258,7 +258,7 @@ describe("StateMachine", () => {
         Runtime.machine(AppState, "Menu"),
         Runtime.machine(
           RoundState,
-          // @ts-expect-error!
+          // @ts-expect-error Argument of type '"Playing"' is not assignable to parameter of type
           "Playing"
         )
       )
@@ -271,7 +271,7 @@ describe("StateMachine", () => {
       {},
       ({ transitions }) =>
         {
-          // @ts-expect-error!
+          // @ts-expect-error Property 'app' does not exist on type 'TransitionContext<SystemSpec<SchemaDefinition<{ readonly Position
           transitions.app
         }
     )
@@ -286,7 +286,7 @@ describe("StateMachine", () => {
 
     Game.Schedule.onExit(
       AppState,
-      // @ts-expect-error!
+      // @ts-expect-error Argument of type '"GameOver"' is not assignable to parameter of type
       "GameOver",
       [TransitionSystem]
     )
@@ -330,7 +330,7 @@ describe("StateMachine", () => {
   it("rejects nested transition-application markers in transition schedules", () => {
     Game.Schedule.onEnter(AppState, "Playing", [
       TransitionSystem,
-      // @ts-expect-error!
+      // @ts-expect-error Type 'ApplyStateTransitionsStep<undefined, SchemaDefinition<{ readonly Position: Descriptor<"component"
       Game.Schedule.applyStateTransitions()
     ])
   })
@@ -349,20 +349,20 @@ describe("StateMachine", () => {
     withMachine.tick(gated)
 
     const withoutMachine = Game.Runtime.make({ services: Runtime.services(), resources: { Counter: 0 } })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing machine"; readonly __requirement__: "AppState"
     withoutMachine.tick(gated)
 
     // Conditions from another game do not fit.
     Game.Schedule.when(
       [
-        // @ts-expect-error!
+        // @ts-expect-error Property 'Position' is missing in type '{}' but required in type '{ readonly Position
         OtherGame.Condition.inState(OtherState, "Idle")
       ],
       Increment
     )
 
     // A group needs at least one condition.
-    // @ts-expect-error!
+    // @ts-expect-error Argument of type '[]' is not assignable to parameter of type 'readonly [Condition<SchemaDefinition<{ readonly
     Game.Schedule.when([], Increment)
 
     expect(gated).type.toBeAssignableTo<SchemaTypes.Schema.BoundSchedule<typeof schema, typeof schema>>()

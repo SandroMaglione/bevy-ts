@@ -53,12 +53,12 @@ describe("Command", () => {
   })
 
   it("rejects wrong component value types", () => {
-    // @ts-expect-error!
-    Command.spawnWith<typeof schema>([Position, { x: "0", y: 0 }])
+    expect(Game.Command.spawn).type.not.toBeCallableWith([Position, { x: "0", y: 0 }])
+    expect(Game.Command.spawn).type.toBeCallableWith([Position, { x: 0, y: 0 }])
   })
 
   it("rejects non-component descriptors", () => {
-    // @ts-expect-error!
+    // @ts-expect-error Type '"resource"' is not assignable to type '"component"'.
     Command.entry(Time, 1)
   })
 
@@ -103,7 +103,7 @@ describe("Command", () => {
   it("entryRaw rejects plain component descriptors", () => {
     const Game = Schema.bind(schema)
 
-    // @ts-expect-error!
+    // @ts-expect-error Type 'Descriptor<"component", "Position", { x: number; y: number; }>' is missing the following properties
     Game.Command.entryRaw(Position, { x: 0, y: 0 })
   })
 })

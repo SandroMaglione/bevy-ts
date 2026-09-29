@@ -59,7 +59,7 @@ describe("normalized type architecture", () => {
     const schedule = Game.Schedule(first, Game.Schedule.applyDeferred(), second)
 
     const incomplete = Game.Runtime.make({ services: Runtime.services() })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"
     incomplete.tick(schedule)
     incomplete.tryTick(schedule)
 

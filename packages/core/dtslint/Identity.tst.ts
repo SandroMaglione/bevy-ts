@@ -8,19 +8,19 @@ const Score = Descriptor.Resource<number>()("Identity/Position")
 
 describe("descriptor identity", () => {
   it("rejects two descriptors of one kind with the same name in a fragment", () => {
-    // @ts-expect-error!
+    // @ts-expect-error __schemaConflicts__: "components name \"Identity/Position\""
     Schema.fragment({ components: { Position, Label } })
   })
 
   it("rejects the same descriptor name across bound fragments", () => {
-    // @ts-expect-error!
+    // @ts-expect-error __schemaConflicts__: "components name \"Identity/Position\""
     Schema.bind(Schema.fragment({ components: { Position } }), Schema.fragment({ components: { Label } }))
-    // @ts-expect-error!
+    // @ts-expect-error __schemaConflicts__: "components name \"Identity/Position\""
     Schema.bind(Schema.fragment({ components: { Position } }), Schema.fragment({ components: { Other: Position } }), Schema.defineRoot("Identity"))
   })
 
   it("rejects the same registry key across bound fragments", () => {
-    // @ts-expect-error!
+    // @ts-expect-error __schemaConflicts__: "components key \"Position\""
     Schema.bind(Schema.fragment({ components: { Position } }), Schema.fragment({ components: { Position: Health } }))
   })
 
@@ -33,9 +33,9 @@ describe("descriptor identity", () => {
     const Game = Schema.bind(Schema.fragment({ components: { Health } }))
     const Narrowed = Descriptor.Component<1>()("Identity/Health")
     const Widened = Descriptor.Component<number | string>()("Identity/Health")
-    // @ts-expect-error!
+    // @ts-expect-error Type 'number' is not assignable to type '1'.
     Game.Query.read(Narrowed)
-    // @ts-expect-error!
+    // @ts-expect-error Type 'string' is not assignable to type 'number'.
     Game.Query.read(Widened)
     expect(Game.Query.read(Health).descriptor).type.toBe<typeof Health>()
   })
@@ -56,7 +56,7 @@ describe("descriptor identity", () => {
       schema: Schema.fragment({ components: { Label } }),
       build: () => ({})
     })
-    // @ts-expect-error!
+    // @ts-expect-error __schemaConflicts__: "components name \"Identity/Position\""
     Schema.Feature.compose({ root: Schema.defineRoot("Identity/Features"), features: [Core, Clash] as const })
   })
 })

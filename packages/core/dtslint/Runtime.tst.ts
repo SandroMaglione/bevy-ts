@@ -140,7 +140,7 @@ describe("Runtime", () => {
       resources: {
         DeltaTime: 1 / 60,
         Counter: 0,
-        // @ts-expect-error!
+        // @ts-expect-error Type 'Success<{ width: number; height: number; }>' is missing the following properties from type 'Raw'
         Viewport: Result.success({ width: 320, height: 180 })
       }
     })
@@ -151,7 +151,7 @@ describe("Runtime", () => {
       schema,
       services: Runtime.services(),
       resources: {
-        // @ts-expect-error!
+        // @ts-expect-error Object literal may only specify known properties, and 'Time' does not exist in type 'Partial<{ readonly
         Time: 1 / 60
       }
     })
@@ -162,7 +162,7 @@ describe("Runtime", () => {
       schema,
       services: Runtime.services(),
       resources: {
-        // @ts-expect-error!
+        // @ts-expect-error Object literal may only specify known properties, and 'Phase' does not exist in type 'Partial<{ readonly
         Phase: "Running"
       }
     })
@@ -179,7 +179,7 @@ describe("Runtime", () => {
       }
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "Logger"
     runtime.tick(serviceSchedule)
   })
 
@@ -189,7 +189,7 @@ describe("Runtime", () => {
       services: Runtime.services()
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "Time"
     runtime.tick(resourceSchedule)
   })
 
@@ -203,7 +203,7 @@ describe("Runtime", () => {
       }
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "Phase"
     runtime.tick(stateSchedule)
   })
 
@@ -218,7 +218,7 @@ describe("Runtime", () => {
       }
     })
 
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "Logger"
     runtime.tick(serviceSchedule)
   })
 
@@ -265,7 +265,7 @@ describe("Runtime", () => {
   it("rejects raw service objects so descriptor names cannot drift", () => {
     Runtime.make({
       schema,
-      // @ts-expect-error!
+      // @ts-expect-error Property '[runtimeServicesTypeId]' is missing in type '{ Logger: { log(_message: string): void; }; }' but
       services: {
         Logger: {
           log(_message: string) {}
@@ -276,7 +276,7 @@ describe("Runtime", () => {
 
   it("rejects non-service descriptors in Runtime.services", () => {
     Runtime.service(
-      // @ts-expect-error!
+      // @ts-expect-error Type '"resource"' is not assignable to type '"service"'.
       Time,
       1 / 60
     )
@@ -284,7 +284,7 @@ describe("Runtime", () => {
 
   it("rejects the old tuple entry syntax", () => {
     Runtime.services(
-      // @ts-expect-error!
+      // @ts-expect-error Type '(Descriptor<"service", "Logger", { readonly log: (message: string) => void; }> | { log(_message
       [Logger, {
         log(_message: string) {}
       }]
@@ -376,7 +376,7 @@ describe("Runtime", () => {
         project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
       )
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "Logger"
     runtime2.tick(...project.schedules.update)
 
     const runtime3 = project.Game.Runtime.make({
@@ -392,7 +392,7 @@ describe("Runtime", () => {
         project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
       )
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "Time"
     runtime3.tick(...project.schedules.update)
 
     const runtime4 = project.Game.Runtime.make({
@@ -408,7 +408,7 @@ describe("Runtime", () => {
         project.Game.Runtime.machine(project.features.Modes.machines.Mode, "Idle")
       )
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "Phase"
     runtime4.tick(...project.schedules.update)
 
     const runtime5 = project.Game.Runtime.make({
@@ -422,7 +422,7 @@ describe("Runtime", () => {
         CurrentPhase: "Running"
       }
     })
-    // @ts-expect-error!
+    // @ts-expect-error __runtimeRequirementError__: "Missing machine"; readonly __requirement__: "Mode"
     runtime5.tick(...project.schedules.update)
   })
 })
@@ -447,9 +447,9 @@ describe("Runtime snapshots", () => {
       readonly "SnapshotTypes/Label needs a validator": "Use a Constructed* descriptor whose constructor accepts unknown input (validated on load) or a Transient* one (not saved)"
       readonly "SnapshotTypes/Score needs a validator": "Use a Constructed* descriptor whose constructor accepts unknown input (validated on load) or a Transient* one (not saved)"
     }>()
-    // @ts-expect-error!
+    // @ts-expect-error Type '{ readonly "SnapshotTypes/Label needs a validator": "Use a Constructed* descriptor whose constructor
     invalid.snapshot()
-    // @ts-expect-error!
+    // @ts-expect-error Type '{ readonly "SnapshotTypes/Label needs a validator": "Use a Constructed* descriptor whose constructor
     invalid.restore(null)
   })
 
@@ -467,7 +467,7 @@ describe("Runtime snapshots", () => {
 
     const Unloadable = Schema.bind(Schema.fragment({ components: { Typed } }), Root)
     const unloadable = Unloadable.Runtime.make({ services: Unloadable.Runtime.services() })
-    // @ts-expect-error!
+    // @ts-expect-error Type '{ readonly "SnapshotTypes/Typed needs a validator": "Use a Constructed* descriptor whose constructor
     unloadable.snapshot()
   })
 

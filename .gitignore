@@ -7,3 +7,4 @@ docs/
 
 *.tsbuildinfo
 .bench/
+.tstyche/
