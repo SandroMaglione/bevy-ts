@@ -14,6 +14,9 @@ documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 pnpm add @typeonce/bevy-ts
 ```
 
+Requires TypeScript 5.9 or newer. The type tests run on every TypeScript
+version from 5.9 up, and the packages build with TypeScript 7.
+
 | Package | Contents |
 |---|---|
 | `@typeonce/bevy-ts` | The ECS runtime |

@@ -64,6 +64,14 @@
     "build": "tsc -b tsconfig.json --pretty false",
     "check": "tsc -b tsconfig.json --pretty false"
   },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
   "engines": {
     "node": ">=20"
   }

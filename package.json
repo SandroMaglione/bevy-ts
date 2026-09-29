@@ -5,7 +5,8 @@
   "scripts": {
     "typecheck": "tsc -b tsconfig.json --pretty false",
     "test": "vitest run",
-    "test-types": "node --import tsx scripts/check-type-tests.ts && TSTYCHE_STORE_PATH=.tstyche TSTYCHE_TYPESCRIPT_MODULE=typescript6/lib/typescript.js tstyche",
+    "test-types": "node --import tsx scripts/check-type-tests.ts && TSTYCHE_STORE_PATH=.tstyche tstyche --target '>=5.9'",
+    "test-types:current": "node --import tsx scripts/check-type-tests.ts && TSTYCHE_STORE_PATH=.tstyche TSTYCHE_TYPESCRIPT_MODULE=typescript6/lib/typescript.js tstyche",
     "check": "pnpm typecheck && pnpm test-types && pnpm test",
     "bench": "node --expose-gc --import tsx scripts/bench.ts",
     "bench:check": "node --expose-gc --import tsx scripts/bench.ts --check",
