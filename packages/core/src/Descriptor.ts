@@ -311,6 +311,72 @@ export const Tag = <const Name extends string>(
 ): DecodableDescriptor<"component", Name, {}, {}, DecodeModule.DecodeError> =>
   ConstructedComponent(DecodeModule.struct({}))(name)
 
+/** One state of a {@link State} component: a string or number literal. */
+export type StateValue = string | number
+
+/**
+ * The allowed moves of a {@link State} component: for every state, the
+ * states it may move to (`[]` for a state with no way out).
+ */
+export type StateTransitions<States extends readonly [StateValue, ...Array<StateValue>]> = {
+  readonly [From in States[number]]: ReadonlyArray<States[number]>
+}
+
+/**
+ * A component whose value is one of a closed set of states, with an optional
+ * graph of allowed moves. Built with {@link State}.
+ */
+export interface StateDescriptor<
+  out Name extends string,
+  in out States extends readonly [StateValue, ...Array<StateValue>],
+  in out Transitions extends StateTransitions<States> | undefined
+> extends DecodableDescriptor<"component", Name, States[number], States[number], DecodeModule.DecodeError> {
+  readonly states: States
+  readonly transitions: Transitions
+}
+
+/**
+ * Defines a state component: its value is one of `states`, validated (so
+ * snapshots reject unknown states), and it behaves like any other component
+ * (storage, change detection, rollback, traces).
+ *
+ * With `transitions`, its write cell gains `transition(from, to)`: the pair
+ * is checked against the graph at compile time, and at runtime the move
+ * happens only if the current state is still `from`, otherwise it returns a
+ * `StateMismatch` failure. Transitions are ordinary component writes:
+ * immediate, visible to later systems, rolled back with a failed system.
+ *
+ * @example
+ * ```ts
+ * const Phase = Descriptor.State("Phase", ["ready", "windup", "active"] as const, {
+ *   transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }
+ * })
+ * // in a system with a write slot `phase`:
+ * const moved = data.phase.transition("windup", "active")   // "ready" -> "active" does not compile
+ * ```
+ */
+export const State = <
+  const Name extends string,
+  const States extends readonly [StateValue, ...Array<StateValue>],
+  const Transitions extends StateTransitions<States> | undefined = undefined
+>(
+  name: Name,
+  states: States,
+  options?: {
+    readonly transitions: Transitions & { readonly [Key in Exclude<keyof Transitions, States[number]>]: never }
+  }
+): StateDescriptor<Name, States, Transitions> => ({
+  ...makeConstructedDescriptor("component", name, DecodeModule.literal(...states)),
+  states,
+  transitions: options?.transitions
+}) as unknown as StateDescriptor<Name, States, Transitions>
+
+/** Whether a descriptor was built with {@link State}. */
+export const isState = (
+  descriptor: Descriptor.Any
+): descriptor is StateDescriptor<string, readonly [StateValue, ...Array<StateValue>], StateTransitions<readonly [StateValue, ...Array<StateValue>]> | undefined> =>
+  "states" in descriptor
+
 /**
  * Defines a resource descriptor.
  *

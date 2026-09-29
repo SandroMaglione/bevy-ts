@@ -50,6 +50,21 @@ const withConstructor = <T, Raw, Error>(
   }
 })
 
+/**
+ * Adds `transition` to the write cell of a state component: a compare-and-set
+ * that writes `to` only while the current state is still `from`.
+ */
+const withTransition = (cell: WriteCellBase<unknown>, state: string) => Object.assign(cell, {
+  transition(from: unknown, to: unknown): Result.Result<void, { readonly _tag: "StateMismatch"; readonly state: string; readonly expected: unknown; readonly actual: unknown }> {
+    const actual = cell.get()
+    if (actual !== from) {
+      return Result.failure({ _tag: "StateMismatch", state, expected: from, actual })
+    }
+    cell.set(to)
+    return Result.success(undefined)
+  }
+})
+
 class ComponentReadCell {
   readonly record: EntityRecord
   readonly ordinal: number
@@ -146,10 +161,12 @@ export const componentWrite = (
   record: EntityRecord,
   ordinal: number,
   world: World,
-  constructor: ResultConstructor<unknown, unknown, unknown> | undefined
+  constructor: ResultConstructor<unknown, unknown, unknown> | undefined,
+  state: string | undefined
 ): WriteCellBase<unknown> => {
   const cell = new ComponentWriteCell(record, ordinal, world)
-  return constructor === undefined ? cell : withConstructor(cell, constructor)
+  const constructed = constructor === undefined ? cell : withConstructor(cell, constructor)
+  return state === undefined ? constructed : withTransition(constructed, state)
 }
 
 export const componentOptional = (record: EntityRecord, ordinal: number): { readonly present: boolean; get(): unknown } =>

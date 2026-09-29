@@ -33,6 +33,7 @@ type SlotPlan =
       readonly mode: "write"
       readonly ordinal: number
       readonly constructor: DescriptorModule.ResultConstructor<unknown, unknown, unknown> | undefined
+      readonly state: string | undefined
     }
   | {
       readonly slot: string
@@ -137,7 +138,13 @@ export const makeQueryEngine = (world: World) => {
           proofSlots.push([slot, ordinal])
           if (access.mode === "write") {
             writeSlots.push([slot, ordinal])
-            slots.push({ slot, mode: "write", ordinal, constructor: DescriptorModule.constructorOf(access.descriptor) })
+            slots.push({
+              slot,
+              mode: "write",
+              ordinal,
+              constructor: DescriptorModule.constructorOf(access.descriptor),
+              state: DescriptorModule.isState(access.descriptor) ? access.descriptor.name : undefined
+            })
           } else {
             slots.push({ slot, mode: "read", ordinal })
           }
@@ -248,7 +255,7 @@ export const makeQueryEngine = (world: World) => {
       case "read":
         return Cells.componentRead(record, plan.ordinal)
       case "write":
-        return Cells.componentWrite(record, plan.ordinal, world, plan.constructor)
+        return Cells.componentWrite(record, plan.ordinal, world, plan.constructor, plan.state)
       case "optional":
         return Cells.componentOptional(record, plan.ordinal)
       case "readRelation":
