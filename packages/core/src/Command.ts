@@ -111,9 +111,17 @@ type SchemaComponentDescriptor<S extends Schema.Any> =
   Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>
 
 /**
- * Any component entry accepted by a schema-aware command API.
+ * Pairs each descriptor of a union with its own value type. Building one pair
+ * from the whole union instead would accept any descriptor with any value of
+ * the schema, e.g. `[Health, "a name"]`.
  */
-export type SchemaEntry<S extends Schema.Any> = Entry<SchemaComponentDescriptor<S>>
+type EntryOf<D> = D extends Descriptor<"component", string, any> ? Entry<D> : never
+
+/**
+ * Any component entry accepted by a schema-aware command API: a descriptor of
+ * the schema with a value of that descriptor.
+ */
+export type SchemaEntry<S extends Schema.Any> = EntryOf<SchemaComponentDescriptor<S>>
 
 /**
  * One entry accepted by `spawn(...)` and `insert(...)`: a plain descriptor/value
