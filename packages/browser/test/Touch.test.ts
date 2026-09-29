@@ -158,6 +158,59 @@ describe("Touch.track", () => {
   })
 })
 
+describe("Touch.track swipe", () => {
+  /** Stick in the bottom-left quarter, swipe anywhere, buttons on the right. */
+  const withSwipe = (size: Touch.Size) => ({
+    ...layout(size),
+    stick: { region: { left: 0, top: size.height / 2, width: size.width / 2, height: size.height / 2 }, radius: 50 },
+    swipe: { region: { left: 0, top: 0, width: size.width, height: size.height } }
+  })
+
+  it("reports how far a finger outside the buttons and the stick moved since the previous snapshot", () => {
+    const fake = makeTarget()
+    const touch = Touch.track(fake.target, fake.blurHost, withSwipe)
+    expect(touch.snapshot().swipe).toEqual({ active: false, delta: { x: 0, y: 0 } })
+    fake.down(1, 400, 100)
+    fake.move(1, 430, 90)
+    fake.move(1, 450, 95)
+    expect(touch.snapshot().swipe).toEqual({ active: true, delta: { x: 50, y: -5 } })
+    expect(touch.snapshot().swipe).toEqual({ active: true, delta: { x: 0, y: 0 } })
+    // Movement before the finger lifts is still reported once.
+    fake.move(1, 470, 95)
+    fake.up(1, 470, 95)
+    expect(touch.snapshot().swipe).toEqual({ active: false, delta: { x: 20, y: 0 } })
+    expect(touch.snapshot().swipe.delta).toEqual({ x: 0, y: 0 })
+  })
+
+  it("leaves buttons and the stick their fingers, and swipes with a second finger while moving and firing", () => {
+    const fake = makeTarget()
+    const touch = Touch.track(fake.target, fake.blurHost, withSwipe)
+    fake.down(1, 100, 300)
+    fake.down(2, 700, 300)
+    fake.down(3, 300, 100)
+    fake.move(1, 150, 300)
+    fake.move(3, 340, 100)
+    const snapshot = touch.snapshot()
+    expect(snapshot.stick.vector.x).toBeCloseTo(1, 9)
+    expect(snapshot.buttons.attack.held).toBe(true)
+    expect(snapshot.swipe).toEqual({ active: true, delta: { x: 40, y: 0 } })
+    // A fourth finger does not take over the swipe.
+    fake.down(4, 500, 50)
+    fake.move(4, 600, 50)
+    expect(touch.snapshot().swipe.delta).toEqual({ x: 0, y: 0 })
+    fake.blur()
+    expect(touch.snapshot().swipe.active).toBe(false)
+  })
+
+  it("ignores touches outside every control when there is no swipe area", () => {
+    const fake = makeTarget()
+    const touch = Touch.track(fake.target, fake.blurHost, layout)
+    fake.down(1, 500, 50)
+    fake.move(1, 600, 50)
+    expect(touch.snapshot().swipe).toEqual({ active: false, delta: { x: 0, y: 0 } })
+  })
+})
+
 describe("Touch.scripted", () => {
   it("plays stick vectors, presses, aims, releases, and cancels by frame", () => {
     const touch = Touch.scripted(["attack", "skill"], [
@@ -174,5 +227,12 @@ describe("Touch.scripted", () => {
     expect(lifted.buttons.skill).toMatchObject({ pressed: true, released: true, cancelled: true })
     expect(touch.snapshot().stick.active).toBe(false)
     expect(touch.frames()).toBe(4)
+  })
+
+  it("reports a scripted swipe on its frame only", () => {
+    const touch = Touch.scripted(["attack"], [{ frame: 1, swipe: { x: 30, y: 0 } }, { frame: 1, swipe: { x: 5, y: 1 } }])
+    expect(touch.snapshot().swipe).toEqual({ active: false, delta: { x: 0, y: 0 } })
+    expect(touch.snapshot().swipe).toEqual({ active: true, delta: { x: 35, y: 1 } })
+    expect(touch.snapshot().swipe.active).toBe(false)
   })
 })
