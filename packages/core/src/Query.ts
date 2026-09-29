@@ -68,7 +68,8 @@
  * @groupDescription Functions
  * Query authoring helpers for selecting components and declaring explicit filters.
  */
-import type { Descriptor } from "./Descriptor.ts"
+import type { DecodeError } from "./Decode.ts"
+import type { Descriptor, StateValue } from "./Descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./Entity.ts"
 import type * as Result from "./Result.ts"
 import type * as Relation from "./Relation.ts"
@@ -539,10 +540,55 @@ export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
 }
 
 /**
+ * A `transition(from, to)` found the state component in another state, so
+ * nothing was written.
+ */
+export interface StateMismatchError<T> {
+  readonly _tag: "StateMismatch"
+  /** Name of the state component. */
+  readonly state: string
+  /** The `from` state the transition expected. */
+  readonly expected: T
+  /** The state the component was actually in. */
+  readonly actual: T
+}
+
+/**
+ * Writable cell for a state component (`Descriptor.State`).
+ *
+ * `transition(from, to)` is a compare-and-set: it writes `to` only while the
+ * current state is `from`, and otherwise returns `StateMismatch` without
+ * writing. With a transition graph, `to` must be one of the moves the graph
+ * allows from `from`; without one, any pair of states is accepted.
+ */
+export interface StateWriteCell<T, Transitions> extends ConstructedWriteCell<T, T, DecodeError> {
+  /**
+   * Moves from `from` to `to` if the component is still in `from`.
+   *
+   * @example
+   * ```ts
+   * const moved = data.phase.transition("windup", "active")
+   * if (!moved.ok) {
+   *   // moved.error.actual is the state some earlier write left
+   * }
+   * ```
+   */
+  transition<const From extends T & keyof Transitions>(
+    from: From,
+    to: StateTarget<T, Transitions, From>
+  ): Result.Result<void, StateMismatchError<T>>
+}
+
+type StateTarget<T, Transitions, From extends keyof Transitions> =
+  Transitions[From] extends ReadonlyArray<infer To> ? To & T : never
+
+/**
  * Write-cell surface produced for one queried component descriptor.
  */
 export type WriteCellForDescriptor<D extends ComponentDescriptor> =
-  D extends import("./Descriptor.ts").ConstructedDescriptor<"component", string, infer Value, infer Raw, infer Error>
+  D extends import("./Descriptor.ts").StateDescriptor<string, infer States extends readonly [StateValue, ...Array<StateValue>], any>
+    ? StateWriteCell<States[number], D["transitions"] extends undefined ? { readonly [K in States[number]]: States } : D["transitions"]>
+    : D extends import("./Descriptor.ts").ConstructedDescriptor<"component", string, infer Value, infer Raw, infer Error>
     ? ConstructedWriteCell<Value, Raw, Error>
     : WriteCell<Descriptor.Value<D>>
 
