@@ -1,6 +1,6 @@
 {
   "name": "@typeonce/bevy-ts-devtools",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Headless debug sessions, trace history, text reports, and a live browser monitor for bevy-ts runtimes",
   "author": "Sandro Maglione",
   "license": "MIT",
