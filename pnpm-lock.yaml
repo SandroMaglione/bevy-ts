@@ -17,6 +17,12 @@ importers:
       '@typeonce/bevy-ts-math':
         specifier: workspace:*
         version: link:packages/math
+      '@typeonce/bevy-ts-navigation':
+        specifier: workspace:*
+        version: link:packages/navigation
+      '@typeonce/bevy-ts-spatial':
+        specifier: workspace:*
+        version: link:packages/spatial
       '@types/markdown-it':
         specifier: ^14.1.2
         version: 14.1.2
@@ -71,6 +77,21 @@ importers:
       vitest:
         specifier: 4.0.18
         version: 4.0.18(@types/node@25.5.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.1)
+
+  examples/algorithms:
+    dependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@typeonce/bevy-ts-math':
+        specifier: workspace:*
+        version: link:../../packages/math
+      '@typeonce/bevy-ts-navigation':
+        specifier: workspace:*
+        version: link:../../packages/navigation
+      '@typeonce/bevy-ts-spatial':
+        specifier: workspace:*
+        version: link:../../packages/spatial
 
   examples/genetics:
     dependencies:
@@ -165,6 +186,12 @@ importers:
         specifier: workspace:^
         version: link:../core
 
+  packages/navigation:
+    dependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:^
+        version: link:../core
+
   packages/pixi:
     dependencies:
       '@typeonce/bevy-ts-render':
@@ -180,6 +207,15 @@ importers:
       '@typeonce/bevy-ts':
         specifier: workspace:^
         version: link:../core
+
+  packages/spatial:
+    dependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:^
+        version: link:../core
+      '@typeonce/bevy-ts-math':
+        specifier: workspace:^
+        version: link:../math
 
 packages:
 

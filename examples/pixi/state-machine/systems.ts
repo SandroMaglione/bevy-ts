@@ -1,4 +1,5 @@
 import * as Scalar from "@typeonce/bevy-ts-math/Scalar"
+import type * as Result from "@typeonce/bevy-ts/Result"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
 import { RenderSync } from "@typeonce/bevy-ts-render"
 import { PICKUP_POINTS } from "./content.ts"
@@ -42,19 +43,16 @@ import {
 } from "./schema.ts"
 import type { Vector } from "./types.ts"
 
-const clamp = (value: number, min: number, max: number): number => {
-  const nextValue = Scalar.Finite.option(value)
-  const nextMin = Scalar.Finite.option(min)
-  const nextMax = Scalar.Finite.option(max)
-  if (!nextValue || !nextMin || !nextMax) {
-    return value
-  }
-
-  return Scalar.clamp(nextValue, nextMin, nextMax)
+const checked = <A, E>(result: Result.Result<A, E>): A => {
+  if (!result.ok) throw new Error(`Invalid state-machine example math: ${JSON.stringify(result.error)}`)
+  return result.value
 }
 
+const clamp = (value: number, min: number, max: number): number =>
+  checked(Scalar.clamp(checked(Scalar.Finite.result(value)), checked(Scalar.Finite.result(min)), checked(Scalar.Finite.result(max))))
+
 const distanceSquared = (left: Vector, right: Vector): number => {
-  return Vector2.lengthSquared(Vector2.subtract(left, right))
+  return checked(Vector2.distanceSquared(left, right))
 }
 
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {

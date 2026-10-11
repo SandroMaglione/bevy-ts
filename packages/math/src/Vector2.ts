@@ -156,31 +156,31 @@ export const zero: () => Vector2 = internal.zero
  *
  * @category Operations
  */
-export const add: (left: Vector2, right: Vector2) => Vector2 = internal.add
+export const add: (left: Vector2, right: Vector2) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.add
 /**
  * Returns the component-wise difference between two branded vectors.
  *
  * @category Operations
  */
-export const subtract: (left: Vector2, right: Vector2) => Vector2 = internal.subtract
+export const subtract: (left: Vector2, right: Vector2) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.subtract
 /**
  * Scales one vector by one validated finite scalar.
  *
  * @category Operations
  */
-export const scale: (vector: Vector2, scalar: Scalar.Finite) => Vector2 = internal.scale
+export const scale: (vector: Vector2, scalar: Scalar.Finite) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.scale
 /**
  * Returns the squared length of one vector.
  *
  * @category Operations
  */
-export const lengthSquared: (vector: Vector2) => Scalar.NonNegative = internal.lengthSquared
+export const lengthSquared: (vector: Vector2) => Result.Result<Scalar.NonNegative, Scalar.ArithmeticError> = internal.lengthSquared
 /**
  * Returns the length of one vector.
  *
  * @category Operations
  */
-export const length: (vector: Vector2) => Scalar.NonNegative = internal.length
+export const length: (vector: Vector2) => Result.Result<Scalar.NonNegative, Scalar.ArithmeticError> = internal.length
 /**
  * Returns the normalized vector when its length is non-zero.
  *
@@ -202,3 +202,20 @@ export const normalize: (vector: Vector2) => Result.Result<Vector2, NormalizeErr
  * @category Operations
  */
 export const normalizeOrZero: (vector: Vector2) => Vector2 = internal.normalizeOrZero
+
+/** Distance between two vectors; fails when not representable. @category Operations */
+export const distance: (left: Vector2, right: Vector2) => Result.Result<Scalar.NonNegative, Scalar.ArithmeticError> = internal.distance
+/** Squared distance, with explicit overflow. @category Operations */
+export const distanceSquared: typeof distance = internal.distanceSquared
+/** Dot product, with explicit overflow. @category Operations */
+export const dot: (left: Vector2, right: Vector2) => Result.Result<Scalar.Finite, Scalar.ArithmeticError> = internal.dot
+/** Rotates by radians. @category Operations */
+export const rotate: (vector: Vector2, radians: Scalar.Finite) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.rotate
+/** Interpolates without clamping the amount. @category Operations */
+export const lerp: (left: Vector2, right: Vector2, amount: Scalar.Finite) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.lerp
+/** Moves at most maxDelta toward target, without overshooting. @category Operations */
+export const moveToward: (current: Vector2, target: Vector2, maxDelta: Scalar.NonNegative) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.moveToward
+/** Limits magnitude, retaining the original direction. @category Operations */
+export const clampLength: (vector: Vector2, max: Scalar.NonNegative) => Result.Result<Vector2, Scalar.ArithmeticError> = internal.clampLength
+/** Normalizes or returns the caller's vector fallback on zero. @category Operations */
+export const normalizeOr: (vector: Vector2, fallback: Vector2) => Vector2 = internal.normalizeOr

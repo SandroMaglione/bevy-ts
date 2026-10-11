@@ -1,0 +1,41 @@
+{
+  "name": "@typeonce/bevy-ts-spatial",
+  "version": "0.4.0",
+  "description": "Bounded, rebuildable spatial broad-phase queries for bevy-ts games",
+  "author": "Sandro Maglione",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandroMaglione/bevy-ts.git",
+    "directory": "packages/spatial"
+  },
+  "bugs": { "url": "https://github.com/SandroMaglione/bevy-ts/issues" },
+  "homepage": "https://sandromaglione.github.io/bevy-ts/",
+  "keywords": ["ecs", "gamedev", "bevy", "spatial", "broad-phase"],
+  "type": "module",
+  "sideEffects": false,
+  "files": ["src/**/*.ts", "dist", "README.md", "LICENSE"],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": { "types": "./src/index.ts", "import": "./src/index.ts" },
+    "./SpatialHash2": { "types": "./src/SpatialHash2.ts", "import": "./src/SpatialHash2.ts" }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "exports": {
+      "./package.json": "./package.json",
+      ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+      "./SpatialHash2": { "types": "./dist/SpatialHash2.d.ts", "import": "./dist/SpatialHash2.js" }
+    }
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json --pretty false",
+    "check": "tsc -b tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@typeonce/bevy-ts": "workspace:^",
+    "@typeonce/bevy-ts-math": "workspace:^"
+  },
+  "engines": { "node": ">=20" }
+}

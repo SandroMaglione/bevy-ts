@@ -10,20 +10,58 @@
     "noEmit": true,
     "erasableSyntaxOnly": false,
     "rewriteRelativeImportExtensions": false,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "@typeonce/bevy-ts": ["./packages/core/src/index.ts"],
-      "@typeonce/bevy-ts/*": ["./packages/core/src/*"],
-      "@typeonce/bevy-ts-browser": ["./packages/browser/src/index.ts"],
-      "@typeonce/bevy-ts-browser/*": ["./packages/browser/src/*"],
-      "@typeonce/bevy-ts-render": ["./packages/render/src/index.ts"],
-      "@typeonce/bevy-ts-render/*": ["./packages/render/src/*"],
-      "@typeonce/bevy-ts-pixi": ["./packages/pixi/src/index.ts"],
-      "@typeonce/bevy-ts-pixi/*": ["./packages/pixi/src/*"],
-      "@typeonce/bevy-ts-math": ["./packages/math/src/index.ts"],
-      "@typeonce/bevy-ts-math/*": ["./packages/math/src/*"],
-      "@typeonce/bevy-ts-devtools": ["./packages/devtools/src/index.ts"],
-      "@typeonce/bevy-ts-devtools/*": ["./packages/devtools/src/*"]
+      "@typeonce/bevy-ts": [
+        "./packages/core/src/index.ts"
+      ],
+      "@typeonce/bevy-ts/*": [
+        "./packages/core/src/*"
+      ],
+      "@typeonce/bevy-ts-browser": [
+        "./packages/browser/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-browser/*": [
+        "./packages/browser/src/*"
+      ],
+      "@typeonce/bevy-ts-render": [
+        "./packages/render/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-render/*": [
+        "./packages/render/src/*"
+      ],
+      "@typeonce/bevy-ts-pixi": [
+        "./packages/pixi/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-pixi/*": [
+        "./packages/pixi/src/*"
+      ],
+      "@typeonce/bevy-ts-math": [
+        "./packages/math/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-math/*": [
+        "./packages/math/src/*"
+      ],
+      "@typeonce/bevy-ts-devtools": [
+        "./packages/devtools/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-devtools/*": [
+        "./packages/devtools/src/*"
+      ],
+      "@typeonce/bevy-ts-spatial": [
+        "./packages/spatial/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-spatial/*": [
+        "./packages/spatial/src/*"
+      ],
+      "@typeonce/bevy-ts-navigation": [
+        "./packages/navigation/src/index.ts"
+      ],
+      "@typeonce/bevy-ts-navigation/*": [
+        "./packages/navigation/src/*"
+      ]
     }
   }
 }
