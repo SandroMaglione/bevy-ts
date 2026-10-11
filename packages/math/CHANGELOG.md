@@ -1,5 +1,12 @@
 # @typeonce/bevy-ts-math
 
+## 0.4.0
+
+### Patch Changes
+
+- Updated dependencies [e2b2275]
+  - @typeonce/bevy-ts@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes
