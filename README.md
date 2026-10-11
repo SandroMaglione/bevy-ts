@@ -73,7 +73,7 @@ Start with the docs homepage for the full step-by-step Pixi example:
 
 Queries only visit entities that carry their rarest required component, cache their match set until a component or relation they depend on changes membership, and reuse match objects between runs. See [ARCHITECTURE.md](./ARCHITECTURE.md#storage).
 
-The benchmark suite in [`packages/core/bench`](./packages/core/bench) covers spawn/despawn, query iteration, change detection, structural churn, schedule overhead, lookups, events, relations, and type-checker cost:
+The benchmark suite in [`packages/core/bench`](./packages/core/bench) covers spawn/despawn, query iteration, change detection, structural churn, schedule overhead, lookups, events, relations, and type-checker cost; [`packages/math/bench`](./packages/math/bench) and [`packages/render/bench`](./packages/render/bench) cover per-frame vector math, collision checks, input axes, and render sync:
 
 ```sh
 pnpm bench          # run and print
@@ -81,5 +81,5 @@ pnpm bench:check    # compare with packages/core/bench/baseline.json (exit 1 on 
 pnpm bench:update   # record a new baseline
 ```
 
-CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 35%, or type-checker growth over 5%.
+CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 25%, or type-checker growth over 5%.
 

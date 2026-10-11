@@ -20,6 +20,12 @@ Changes to what a package publishes (exports, `package.json`, build config) must
 Every change to a published package needs a changeset (`pnpm changeset`); all `@typeonce/bevy-ts*` packages share one version.
 Changes to runtime internals or public types must also pass `pnpm bench:check`; if a change intentionally moves the numbers, record it with `pnpm bench:update` and commit the new baseline.
 
+## Performance
+- Runtime cases live in `packages/<name>/bench/*.bench.ts` (core, math, render) and use only the public API; add a case when a change creates a new per-frame hot path.
+- The committed baseline (`packages/core/bench/baseline.json`) is the target for type-checker metrics on any machine; its runtime scores only compare on similar hardware.
+- For runtime work, compare against your own machine: run `pnpm bench --json .bench/before.json` before the change, then `pnpm bench --compare .bench/before.json` after it (exits 1 on a regression over the tolerance). Use `--filter <text>` to iterate on one case.
+- Differences under about 20% are within noise; do not report them as wins or losses.
+
 ## Type Tests
 - Public types are tested with TSTyche in `packages/*/dtslint/*.tst.ts` (`pnpm test-types`).
 - Every public API gets a test of its inferred type (`expect(...).type.toBe<...>()`) and a failing test for each constraint.

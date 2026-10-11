@@ -1,73 +1,113 @@
 {
   "runtime": {
-    "tolerance": 0.35,
-    "calibrationMs": 2.6637,
-    "environment": "Apple M1 / node v26.5.0 / darwin",
+    "tolerance": 0.25,
+    "calibrationMs": 4.4166,
+    "environment": "Intel(R) Xeon(R) Processor @ 2.10GHz / node v22.22.0 / linux",
     "cases": {
       "spawn/10k-3c": {
-        "minMs": 4.7196,
-        "medianMs": 5.5691,
-        "score": 1.7718
+        "minMs": 8.7382,
+        "medianMs": 14.9383,
+        "score": 1.9751
       },
       "despawn/10k": {
-        "minMs": 4.5393,
-        "medianMs": 5.6807,
-        "score": 1.6889
+        "minMs": 19.6745,
+        "medianMs": 24.2205,
+        "score": 4.447
       },
       "query/iterate-read-10k-of-20k": {
-        "minMs": 0.0895,
-        "medianMs": 0.0949,
-        "score": 0.0336
+        "minMs": 0.2544,
+        "medianMs": 0.2802,
+        "score": 0.0575
       },
       "query/iterate-write-10k": {
-        "minMs": 0.3477,
-        "medianMs": 0.4073,
-        "score": 0.1294
+        "minMs": 0.5893,
+        "medianMs": 0.6927,
+        "score": 0.1332
       },
       "query/single-in-20k-x1000": {
-        "minMs": 0.2993,
-        "medianMs": 0.3125,
-        "score": 0.1114
+        "minMs": 0.3808,
+        "medianMs": 0.4665,
+        "score": 0.0862
       },
       "query/changed-100-of-10k-x20": {
-        "minMs": 0.3006,
-        "medianMs": 0.3125,
-        "score": 0.1118
+        "minMs": 0.2915,
+        "medianMs": 0.3276,
+        "score": 0.066
       },
       "structural/insert-remove-1k": {
-        "minMs": 0.1729,
-        "medianMs": 0.1993,
-        "score": 0.0643
+        "minMs": 0.2129,
+        "medianMs": 0.274,
+        "score": 0.0472
       },
       "schedule/100-systems-x10": {
-        "minMs": 0.1924,
-        "medianMs": 0.1987,
-        "score": 0.0716
+        "minMs": 0.23,
+        "medianMs": 0.2741,
+        "score": 0.0521
       },
       "lookup/get-10k": {
-        "minMs": 0.6132,
-        "medianMs": 0.6426,
-        "score": 0.2282
+        "minMs": 0.8449,
+        "medianMs": 0.9221,
+        "score": 0.191
       },
       "events/emit-read-10k": {
-        "minMs": 0.094,
-        "medianMs": 0.0965,
-        "score": 0.035
+        "minMs": 0.1285,
+        "medianMs": 0.1551,
+        "score": 0.0291
       },
       "relations/descendants-100x100": {
-        "minMs": 0.3151,
-        "medianMs": 0.3232,
-        "score": 0.1169
+        "minMs": 0.3268,
+        "medianMs": 0.3742,
+        "score": 0.0739
       },
       "snapshot/json-roundtrip-10k": {
-        "minMs": 20.4746,
-        "medianMs": 25.8538,
-        "score": 7.5947
+        "minMs": 30.9426,
+        "medianMs": 42.591,
+        "score": 6.8531
       },
       "frame/50-systems-5k": {
-        "minMs": 2.2589,
-        "medianMs": 2.5384,
-        "score": 0.8405
+        "minMs": 3.4801,
+        "medianMs": 4.2995,
+        "score": 0.788
+      },
+      "math/vector2-move-10k": {
+        "minMs": 0.1687,
+        "medianMs": 0.2041,
+        "score": 0.0382
+      },
+      "math/vector2-validate-10k": {
+        "minMs": 0.1306,
+        "medianMs": 0.154,
+        "score": 0.0289
+      },
+      "math/scalar-approach-clamp-10k": {
+        "minMs": 0.0239,
+        "medianMs": 0.0272,
+        "score": 0.0054
+      },
+      "math/aabb-intersects-200x200": {
+        "minMs": 0.1018,
+        "medianMs": 0.1154,
+        "score": 0.0225
+      },
+      "math/input-axis-10k": {
+        "minMs": 0.1738,
+        "medianMs": 0.1979,
+        "score": 0.0393
+      },
+      "render/sync-1k-changed-of-10k": {
+        "minMs": 0.5936,
+        "medianMs": 0.6899,
+        "score": 0.1344
+      },
+      "render/sync-spawn-despawn-500": {
+        "minMs": 4.9409,
+        "medianMs": 5.7645,
+        "score": 1.1168
+      },
+      "render/interpolate-10k": {
+        "minMs": 0.4216,
+        "medianMs": 0.4739,
+        "score": 0.0955
       }
     }
   },
@@ -75,8 +115,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 40772,
-      "instantiations": 231244
+      "types": 40794,
+      "instantiations": 231325
     }
   }
 }
