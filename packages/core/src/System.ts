@@ -699,11 +699,16 @@ export interface SystemAccessInput {
   readonly transitions?: Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>
   /**
    * Scratch state owned by the system: a broad-phase grid, a path cache, a
-   * reused buffer. The factory runs once per runtime (and again after
-   * `restore`), and the value is passed to every run as `local`. It is not
+   * reused buffer. The factory runs on first encounter in each runtime,
+   * even if a gate skips that run, and again before a successful `restore`.
+   * Return fresh state using synchronous allocation without side effects.
+   * The value is passed to every run as `local`. It is not
    * world data: it is not rolled back when the system fails, not saved in
    * snapshots, and not visible to other systems. A system and its gated
-   * copies (`Schedule.when`, `Schedule.pauseWhen`) share one value.
+   * copies (`Schedule.when`, `Schedule.pauseWhen`) share one value. Mode
+   * changes do not reset it. Rebuild scratch buffers from current world
+   * data each run; keep timers, RNG state, and gameplay progress in resources.
+   * Values needing cleanup belong in host-managed services.
    */
   readonly local?: () => unknown
 }
@@ -725,6 +730,12 @@ type AccessField<
   Key extends PropertyKey,
   Fallback
 > = Key extends keyof Access ? NonNullable<Access[Key]> : Fallback
+
+// Unlike access maps, an absent factory produces an absent callback value.
+// Preserve optional factories and distribute over conditional access fragments.
+type LocalFactory<Access> = Access extends unknown
+  ? "local" extends keyof Access ? Access["local"] : undefined
+  : never
 
 /**
  * The exact access declaration normalized once at the system boundary.
@@ -751,7 +762,7 @@ export type SystemSpec<
   readonly when: AccessField<Access, "when", readonly []>
   readonly pauseWhen: AccessField<Access, "pauseWhen", readonly []>
   readonly transitions: AccessField<Access, "transitions", {}>
-  readonly local: AccessField<Access, "local", undefined>
+  readonly local: LocalFactory<Access>
   readonly schema: S
   readonly __schemaRoot: Root
 }
@@ -843,7 +854,8 @@ type QueryContext<Spec extends AnySystemSpec> = {
 }
 
 /** The value of the system's `local` factory, or `undefined` when it declares none. */
-type LocalContext<Spec extends AnySystemSpec> = Spec["local"] extends () => infer Local ? Local : undefined
+type LocalValue<Factory> = Factory extends () => infer Local ? Local : undefined
+type LocalContext<Spec extends AnySystemSpec> = LocalValue<Spec["local"]>
 
 /**
  * The implementation context derived from a system spec.
@@ -1049,7 +1061,7 @@ const requirementValuesFromCondition = (
 ): ReadonlyArray<Requirement.RequirementValue> => condition.requirements
 
 const collectSystemRequirements = (
-  spec: SystemAccessInput
+  spec: Omit<SystemAccessInput, "local">
 ): ReadonlyArray<Requirement.RequirementValue> => Requirement.collect([
   ...requirementValuesFromRecord(spec.services),
   ...requirementValuesFromRecord(spec.resources),

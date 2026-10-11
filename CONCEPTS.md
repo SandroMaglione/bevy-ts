@@ -185,6 +185,14 @@ The value belongs to one runtime, is shared by gated copies, is not rolled
 back on failure or saved in snapshots, and is rebuilt after restore. Keep
 gameplay state in components and resources.
 
+The factory allocates fresh state synchronously, without side effects. It runs
+when the runtime first encounters the system, even if a gate skips execution.
+Pauses and mode changes preserve the value; restore replaces it. Buffers should
+be cleared at the start of a run, so a failed run cannot leave partial work for
+the next one. Caches must validate all inputs against the current world. Timers,
+RNG state, and progress that changes gameplay belong in resources. GPU objects,
+listeners, and other values needing cleanup belong in host-managed services.
+
 Per-entity modes (an enemy's attack phase, a door's open/closed) are components, not machines. `Descriptor.State` makes one from a closed set of states and an optional graph of allowed moves:
 
 ```ts

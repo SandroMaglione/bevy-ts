@@ -18,6 +18,20 @@ describe("host APIs", () => {
       local.missing
     })
     Game.System("Types/NoLocal", {}, ({ local }) => { expect(local).type.toBe<undefined>() })
+    const optional: { local?: () => { runs: number } } = {}
+    Game.System("Types/OptionalLocal", optional, ({ local }) => {
+      expect(local).type.toBe<{ runs: number } | undefined>()
+      // @ts-expect-error 'local' is possibly 'undefined'
+      local.runs++
+      if (local !== undefined) local.runs++
+    })
+    const conditional = (access: { local: () => { runs: number } } | {}) => {
+      Game.System("Types/ConditionalLocal", access, ({ local }) => {
+        expect(local).type.toBe<{ runs: number } | undefined>()
+      })
+    }
+    conditional({})
+    conditional({ local: () => ({ runs: 0 }) })
     // @ts-expect-error is not assignable to type '() => unknown'
     Game.System("Types/BadFactory", { local: {} }, () => {})
   })

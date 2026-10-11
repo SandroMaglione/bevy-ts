@@ -142,6 +142,48 @@ describe("host events and pause gates", () => {
 })
 
 describe("system local state", () => {
+  it("keeps separate definitions independent even when their names match", () => {
+    const seen: Array<number> = []
+    const define = () => Game.System("Host/SameName", { local: () => ({ runs: 0 }) }, ({ local }) => { seen.push(++local.runs) })
+    const first = define()
+    const second = define()
+    const runtime = make()
+    runtime.tick(Game.Schedule(first, second))
+    runtime.tick(Game.Schedule(first, second))
+    expect(seen).toEqual([1, 1, 2, 2])
+  })
+
+  it("initializes on first encounter even while paused, and preserves state across gate changes", () => {
+    let factories = 0
+    const seen: Array<number> = []
+    const system = Game.System("Host/GatedLocal", { local: () => { factories++; return { runs: 0 } } }, ({ local }) => { seen.push(++local.runs) })
+    const runtime = make()
+    const gated = Game.Schedule.when([playing], Game.Schedule.pauseWhen([ready], system))
+    runtime.tick(Game.Schedule(setReady(false), gated))
+    expect(factories).toBe(1)
+    expect(seen).toEqual([])
+    runtime.tick(Game.Schedule(setReady(true), gated))
+    runtime.tick(Game.Schedule(setFlow("Menu"), Game.Schedule.applyStateTransitions(), gated))
+    runtime.tick(Game.Schedule(setFlow("Playing"), Game.Schedule.applyStateTransitions(), gated))
+    expect(factories).toBe(1)
+    expect(seen).toEqual([1, 2])
+  })
+
+  it("retries initialization after a factory throws without installing a partial slot", () => {
+    let factories = 0
+    const seen: Array<number> = []
+    const system = Game.System("Host/RetryFactory", { local: () => {
+      if (++factories === 1) throw new Error("initialization failed")
+      return { runs: 0 }
+    } }, ({ local }) => { seen.push(++local.runs) })
+    const runtime = make()
+    expect(() => runtime.tick(Game.Schedule(system))).toThrow("initialization failed")
+    runtime.tick(Game.Schedule(system))
+    runtime.tick(Game.Schedule(system))
+    expect(factories).toBe(2)
+    expect(seen).toEqual([1, 2])
+  })
+
   it("is per runtime, shared by gated copies, and excluded from rollback and snapshots", () => {
     let factories = 0
     const seen: Array<number> = []
@@ -180,6 +222,33 @@ describe("system local state", () => {
     fail = true
     expect(() => runtime.restore({ ...saved, resources: { "Host/Count": 100 } })).toThrow("factory failed")
     expect(runtime.snapshot()).toEqual(saved)
+  })
+
+  it("keeps every existing local if a later factory throws during restore", () => {
+    let fail = false
+    const seen: Array<{ runs: number }> = []
+    const first = Game.System("Host/FirstLocal", { local: () => ({ runs: 0 }) }, ({ local }) => { local.runs++; seen.push(local) })
+    const second = Game.System("Host/SecondLocal", { local: () => {
+      if (fail) throw new Error("second factory failed")
+      return { runs: 0 }
+    } }, ({ local }) => { local.runs++; seen.push(local) })
+    const runtime = make()
+    const schedule = Game.Schedule(first, second)
+    runtime.tick(schedule)
+    const saved = runtime.snapshot()
+    fail = true
+    expect(() => runtime.restore(saved)).toThrow("second factory failed")
+    expect(runtime.snapshot()).toEqual(saved)
+    runtime.tick(schedule)
+    expect(seen[2]).toBe(seen[0])
+    expect(seen[3]).toBe(seen[1])
+    expect(seen.map((local) => local.runs)).toEqual([2, 2, 2, 2])
+    fail = false
+    expect(runtime.restore(saved).ok).toBe(true)
+    runtime.tick(schedule)
+    expect(seen[4]).not.toBe(seen[0])
+    expect(seen[5]).not.toBe(seen[1])
+    expect(seen.slice(4).map((local) => local.runs)).toEqual([1, 1])
   })
 })
 
