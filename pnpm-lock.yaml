@@ -131,6 +131,9 @@ importers:
       '@typeonce/bevy-ts-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
+      '@typeonce/bevy-ts-render':
+        specifier: workspace:*
+        version: link:../../packages/render
 
   packages/browser:
     dependencies:
@@ -161,9 +164,15 @@ importers:
       '@typeonce/bevy-ts':
         specifier: workspace:^
         version: link:../core
-      '@typeonce/bevy-ts-browser':
+      '@typeonce/bevy-ts-render':
         specifier: workspace:^
-        version: link:../browser
+        version: link:../render
+
+  packages/render:
+    dependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:^
+        version: link:../core
 
 packages:
 

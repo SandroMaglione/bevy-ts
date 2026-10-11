@@ -31,7 +31,7 @@ const Game = Schema.bind(Schema.fragment({
 
 - Everything else is built from `Game`: queries, systems, schedules, state machines and the runtime.
 - Anything outside the schema, or from another `Game`, is a compile error.
-- Split large games into several `Schema.fragment(...)` values, or use `Schema.Feature` to bundle a fragment with its schedules.
+- Split large games into several `Schema.fragment(...)` values.
 
 ## 3. Systems declare exactly what they touch
 
@@ -75,12 +75,60 @@ if (enemy.ok) { /* the entity still exists and has Health */ }
 - A handle is safe to store in components, resources and events, but it doesn't prove the entity is still alive.
 - `lookup.getHandle` returns a `Result`.
 - A handle with an intent (`Health` here) can only be resolved through a query that proves that component.
+- Entity ids and handles are branded numbers. Use them directly as `Map` or `Set` keys; replace old `.value` reads with the id or handle itself. `Decode.handle` accepts numeric handles and the legacy `{ kind: "EntityHandle", value }` form for this release. New snapshots write numbers.
+
+### Lookups and reading the world
+
+When you already have a declared query, use its handle to look up one entity.
+`get` returns a `Result`: the entity may be gone or no longer match. Use
+`singleOptional` when zero or one match is expected; more than one is still
+an explicit error.
+
+```ts
+const found = queries.moving.get(id)
+if (found.ok) found.value.data.position.get()
+
+const only = queries.moving.singleOptional()
+if (only.ok && only.value !== undefined) only.value.data.position.get()
+```
+
+Helpers can take the exact cells of a query without spelling out cell types
+or passing a schema parameter:
+
+```ts
+import type { Query } from "@typeonce/bevy-ts/Query"
+
+const positionOf = (data: Query.Cells<typeof Moving>) => data.position.get()
+```
+
+Access declarations are plain values. Share and spread them into specs;
+their query types and requirements are preserved.
+
+```ts
+const ReadMoving = Game.Query({
+  selection: { position: Game.Query.read(Position), velocity: Game.Query.read(Velocity) }
+})
+const movementAccess = { queries: { moving: ReadMoving } }
+const InspectPosition = Game.Inspector("Concepts/InspectPosition", {
+  ...movementAccess,
+  machines: { flow: Game.System.machine(Flow) }
+}, ({ queries, machines }) => ({
+  position: queries.moving.each().map(({ data }) => data.position.get()),
+  flow: machines.flow.get()
+}))
+runtime.inspect(InspectPosition)
+```
+
+An inspector's queries must be read-only; systems can spread writable access too.
+Inspectors also read machines, so tests and UI can project the current mode
+without changing it or parsing a debug dump.
 
 ## 6. Events are read once per reader
 
 - A system's events are published when it completes; a failed system publishes nothing.
 - Each reader sees the events published since its own previous run, once, in order: from earlier systems in this schedule, and from anything that ran after it last time.
 - Events wait for every system that reads them, so a fixed-rate schedule ticked less often than rendering still sees everything. A system skipped by its run conditions discards the events published meanwhile. If a reader stops running long enough to overflow the stream's capacity, it sees `lagged() === true`.
+- `runtime.send(Hit, { amount: 1 })` publishes a host event immediately at a fresh tick. It is forbidden during a tick; systems use their declared event writers. Unread host messages survive restore, with each reader's position preserved. Simulation messages are cleared on restore.
 
 ## 7. Expected failures are typed and roll back
 
@@ -121,8 +169,21 @@ const Flow = Game.StateMachine("Concepts/Flow", ["Playing", "Won"])
 
 ```ts
 const frozen = Game.Condition.check("frozen", { resources: { stop: Game.System.readResource(HitStop) } }, ({ resources }) => resources.stop.get().remaining > 0)
-Game.Schedule.when([Game.Condition.not(frozen)], Move, Attack)
+Game.Schedule.when([Game.Condition.inState(Flow, "Playing")],
+  Game.Schedule.pauseWhen([Game.Condition.not(frozen)], Move, Attack)
+)
 ```
+
+`when` discards event messages across mode changes. `pauseWhen` holds them
+while a condition is false, up to the normal stream capacity. All `when`
+conditions are checked before pause conditions, regardless of nesting order.
+Marker steps still run. Debug traces distinguish held pauses from skips.
+
+For reusable scratch buffers or caches, a system can declare
+`local: () => ({ buffer: new Array<number>() })` and receive `local` in its callback.
+The value belongs to one runtime, is shared by gated copies, is not rolled
+back on failure or saved in snapshots, and is rebuilt after restore. Keep
+gameplay state in components and resources.
 
 Per-entity modes (an enemy's attack phase, a door's open/closed) are components, not machines. `Descriptor.State` makes one from a closed set of states and an optional graph of allowed moves:
 
@@ -177,6 +238,7 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 | `@typeonce/bevy-ts` | Schema, systems, schedules, runtime, snapshots |
 | `@typeonce/bevy-ts-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis` |
 | `@typeonce/bevy-ts-browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
-| `@typeonce/bevy-ts-pixi` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into Pixi |
+| `@typeonce/bevy-ts-render` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into any renderer |
+| `@typeonce/bevy-ts-pixi` | `NodeRegistry.inContainer` for Pixi containers, plus everything from `@typeonce/bevy-ts-render` |
 
 Next: [GAME_API.md](./GAME_API.md) for a larger walkthrough, [ARCHITECTURE.md](./ARCHITECTURE.md) for how the types and storage work.

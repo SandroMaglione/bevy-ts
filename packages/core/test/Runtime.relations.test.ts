@@ -101,9 +101,9 @@ describe("Runtime relationships", () => {
 
           resources.summary.set([
             rootChildren.ok ? rootChildren.value.data.children.get().length : -1,
-            childParent.ok ? childParent.value.data.parent.get().value : -1,
+            childParent.ok ? childParent.value.data.parent.get() : -1,
             descendants.ok ? descendants.value.length : -1,
-            target.ok ? target.value.value : -1,
+            target.ok ? target.value : -1,
             ancestors.ok ? ancestors.value.length : -1
           ].join("/"))
         }
@@ -244,7 +244,7 @@ describe("Runtime relationships", () => {
           const optionalSummary = queries.optionalTargets.each()
             .map((match) => {
               const target = match.data.target.present
-                ? match.data.target.get().value.toString()
+                ? match.data.target.get().toString()
                 : "none"
               const sources = match.data.sources.present
                 ? match.data.sources.get().length.toString()
@@ -255,7 +255,7 @@ describe("Runtime relationships", () => {
             .join("|")
 
           resources.summary.set([
-            betaTarget.ok ? betaTarget.value.value : -1,
+            betaTarget.ok ? betaTarget.value : -1,
             alphaSources.ok ? alphaSources.value.length : -1,
             optionalSummary
           ].join("/"))
@@ -326,7 +326,7 @@ describe("Runtime relationships", () => {
           const target = lookup.related(alphaId, Targeting)
           const sources = lookup.relatedSources(betaId, Targeting)
 
-          resources.summary.set(`${target.ok ? target.value.value : target.error._tag}/${sources.ok ? sources.value.length : -1}`)
+          resources.summary.set(`${target.ok ? target.value : target.error._tag}/${sources.ok ? sources.value.length : -1}`)
         }
     )
 
@@ -413,9 +413,9 @@ describe("Runtime relationships", () => {
           const fromQuery = queries.hasChildren.get(rootId)
           resources.summary.set(
             [
-              children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag,
-              descendants.ok ? descendants.value.map((child) => child.value).join(",") : descendants.error._tag,
-              fromQuery.ok ? fromQuery.value.data.children.get().map((child) => child.value).join(",") : fromQuery.error._tag
+              children.ok ? children.value.map((child) => String(child)).join(",") : children.error._tag,
+              descendants.ok ? descendants.value.map((child) => String(child)).join(",") : descendants.error._tag,
+              fromQuery.ok ? fromQuery.value.data.children.get().map((child) => String(child)).join(",") : fromQuery.error._tag
             ].join("/")
           )
         }
@@ -579,8 +579,8 @@ describe("Runtime relationships", () => {
           const target = lookup.related(alphaId, Targeting)
           const sources = lookup.relatedSources(betaId, Targeting)
           resources.summary.set([
-            target.ok ? String(target.value.value) : target.error._tag,
-            sources.ok ? sources.value.map((source) => source.value).join(",") : sources.error._tag,
+            target.ok ? String(target.value) : target.error._tag,
+            sources.ok ? sources.value.map((source) => String(source)).join(",") : sources.error._tag,
             relationFailures.targeting.all().length
           ].join("/"))
         }
@@ -842,7 +842,7 @@ describe("Runtime relationships", () => {
           const children = lookup.relatedSources(rootId, ChildOf)
           resources.summary.set([
             failures.map((failure) => `${failure.operation}:${failure.error._tag}`).join(","),
-            children.ok ? children.value.map((child) => child.value).join(",") : children.error._tag
+            children.ok ? children.value.map((child) => String(child)).join(",") : children.error._tag
           ].join("/"))
         }
     )

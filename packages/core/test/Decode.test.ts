@@ -31,7 +31,7 @@ describe("Decode", () => {
     const Health = Descriptor.ConstructedComponent(Decode.number)("DecodeTest/Health")
     const codec = Decode.struct({ target: Decode.handle(Root, Health) })
     const decoded = codec.decode(JSON.parse(JSON.stringify({ target: Entity.makeHandle(3) })))
-    expect(decoded.ok && decoded.value.target.value).toBe(3)
+    expect(decoded.ok && decoded.value.target).toBe(3)
     expect(errorOf(codec.decode({ target: { kind: "EntityHandle", value: 0 } }))?.path).toBe("$.target")
   })
 

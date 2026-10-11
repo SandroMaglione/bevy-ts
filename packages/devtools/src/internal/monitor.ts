@@ -116,7 +116,7 @@ export class Collector {
         break
       case "system.skipped": {
         this.windowOf(event.system).skips += 1
-        this.skippedBy.set(event.system, event.condition)
+        this.skippedBy.set(event.system, event.held ? `${event.condition} (paused, holding its stream entries)` : event.condition)
         for (const discarded of event.discarded) {
           this.alert(
             "discarded-messages",

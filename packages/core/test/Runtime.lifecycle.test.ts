@@ -110,8 +110,8 @@ describe("Runtime change detection", () => {
       despawned: { entities: Game.System.readDespawned() }
     }, ({ removed, despawned }) => {
       seen.push({
-        removed: removed.positions.all().map((id) => id.value),
-        despawned: despawned.entities.all().map((id) => id.value)
+        removed: removed.positions.all().map((id) => id),
+        despawned: despawned.entities.all().map((id) => id)
       })
     })
     const Cleanup = Game.System("Lifecycle/Cleanup", {}, ({ commands }) => {
@@ -129,7 +129,7 @@ describe("Runtime change detection", () => {
       { removed: [], despawned: [] },
       // The cleanup commands stay pending until the next applyDeferred().
       { removed: [], despawned: [] },
-      { removed: [ids[0]!.value, ids[1]!.value], despawned: [ids[1]!.value] },
+      { removed: [ids[0]!, ids[1]!], despawned: [ids[1]!] },
       { removed: [], despawned: [] }
     ])
   })
@@ -142,8 +142,8 @@ describe("Runtime change detection", () => {
       despawned: { entities: Game.System.readDespawned() }
     }, ({ removed, despawned }) => {
       seen.push({
-        removed: removed.positions.all().map((id) => id.value),
-        despawned: despawned.entities.all().map((id) => id.value)
+        removed: removed.positions.all().map((id) => id),
+        despawned: despawned.entities.all().map((id) => id)
       })
     })
     let next = 0
@@ -159,7 +159,7 @@ describe("Runtime change detection", () => {
     runtime.tick(Game.Schedule(Reader))
     runtime.tick(Game.Schedule(Reader))
 
-    const all = ids.map((id) => id.value)
+    const all = ids.map((id) => id)
     expect(seen).toEqual([
       { removed: [], despawned: [] },
       { removed: all, despawned: all },
@@ -175,7 +175,7 @@ describe("Runtime change detection", () => {
       despawned: { entities: Game.System.readDespawned() },
       when: [Game.Condition.inState(Flow, "On")]
     }, ({ despawned }) => {
-      seen.push(despawned.entities.all().map((id) => id.value))
+      seen.push(despawned.entities.all().map((id) => id))
     })
     const Toggle = Game.System("Lifecycle/Toggle", { machines: { flow: Game.System.machine(Flow) }, nextMachines: { flow: Game.System.nextState(Flow) } }, ({ machines, nextMachines }) => {
       nextMachines.flow.set(machines.flow.get() === "On" ? "Off" : "On")
@@ -194,6 +194,6 @@ describe("Runtime change detection", () => {
     runtime.tick(Game.Schedule(Reader))
     runtime.tick(Game.Schedule(Toggle, Game.Schedule.applyStateTransitions(), Reader))
 
-    expect(seen).toEqual([[], [ids[0]!.value]])
+    expect(seen).toEqual([[], [ids[0]!]])
   })
 })

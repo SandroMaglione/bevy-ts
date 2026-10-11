@@ -6,6 +6,7 @@
     [
       "@typeonce/bevy-ts",
       "@typeonce/bevy-ts-browser",
+      "@typeonce/bevy-ts-render",
       "@typeonce/bevy-ts-pixi",
       "@typeonce/bevy-ts-math",
       "@typeonce/bevy-ts-devtools"

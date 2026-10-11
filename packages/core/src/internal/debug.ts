@@ -121,7 +121,7 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
     Object.values(record).filter((access) => access.mode === mode).map((access) => access.descriptor.name)
   const machineName = (access: { readonly machine: Machine.StateMachine.Any }) => access.machine.name
   // A system also reads whatever its `check` conditions read.
-  const checks = checksOf(spec.when as ReadonlyArray<Machine.Condition>).map((check) => ({
+  const checks = checksOf([...(spec.when as ReadonlyArray<Machine.Condition>), ...(spec.pauseWhen as ReadonlyArray<Machine.Condition>)]).map((check) => ({
     name: check.name,
     spec: (check.projection as Inspector.InspectorDefinition).system.spec
   }))
@@ -149,7 +149,9 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
     despawned: Object.keys(spec.despawned).length > 0,
     relationFailures: names(spec.relationFailures as Record<string, { readonly relation: Relation.Relation.Any }>, (access) => access.relation.name),
     services: names(spec.services as Record<string, { readonly descriptor: Descriptor.Any }>, (access) => access.descriptor.name),
-    when: (spec.when as ReadonlyArray<Machine.Condition>).map(renderCondition)
+    when: (spec.when as ReadonlyArray<Machine.Condition>).map(renderCondition),
+    pauseWhen: (spec.pauseWhen as ReadonlyArray<Machine.Condition>).map(renderCondition),
+    local: spec.local !== undefined
   }
 }
 
@@ -225,6 +227,7 @@ export interface DescribeInput {
   readonly machines: ReadonlyArray<Machine.StateMachine.Any>
   readonly currentMachine: (machine: Machine.StateMachine.Any) => Machine.StateValue | undefined
   readonly providedServices: ReadonlyArray<string>
+  readonly externallyWrittenEvents: ReadonlySet<string>
   readonly hasResource: (descriptor: Descriptor.Any) => boolean
   readonly schedules: ReadonlyArray<readonly [string, AnySchedule]>
 }
@@ -254,6 +257,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
   const resources = new Index(resourceDescriptors.map((descriptor) => descriptor.name))
   const events = new Index(eventDescriptors.map((descriptor) => descriptor.name))
   const nextStates = new Map<string, Array<string>>()
+  for (const name of input.externallyWrittenEvents) events.write(name, "runtime.send")
   for (const system of systems) {
     for (const query of system.queries) {
       for (const name of [...query.reads, ...query.optional, ...query.with, ...query.added, ...query.changed]) {
@@ -309,7 +313,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
         })
       }
     }
-    lints.push(...readBeforeWriteLints(schedules, described))
+    lints.push(...readBeforeWriteLints(schedules, described, input.externallyWrittenEvents))
     for (const entry of components.list()) {
       if (entry.writers.length > 0 && entry.readers.every((reader) => entry.writers.includes(reader))) {
         lints.push({
@@ -374,7 +378,8 @@ const accessesOf = (system: Debug.SystemDescription): Record<"component" | "reso
  */
 const readBeforeWriteLints = (
   schedules: ReadonlyArray<readonly [string, AnySchedule]>,
-  described: ReadonlyMap<AnySystem, Debug.SystemDescription>
+  described: ReadonlyMap<AnySystem, Debug.SystemDescription>,
+  externallyWrittenEvents: ReadonlySet<string>
 ): Array<Debug.Lint> => {
   const lints: Array<Debug.Lint> = []
   for (const [name, schedule] of schedules) {
@@ -386,6 +391,7 @@ const readBeforeWriteLints = (
         for (const subject of step.accesses[kind].writes) if (!firstWriter.has(subject)) firstWriter.set(subject, index)
       })
       for (const [subject, writerIndex] of firstWriter) {
+        if (kind === "event" && externallyWrittenEvents.has(subject)) continue
         const readers = [...new Set(steps.slice(0, writerIndex)
           .filter((step) => step.accesses[kind].reads.includes(subject) && !step.accesses[kind].writes.includes(subject))
           .map((step) => step.system.name))]

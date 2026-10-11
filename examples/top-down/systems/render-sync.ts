@@ -1,5 +1,5 @@
 
-import { RenderSync } from "@typeonce/bevy-ts-pixi"
+import { RenderSync } from "@typeonce/bevy-ts-render"
 
 import { PickupRenderQuery, PlayerRenderQuery } from "../queries.ts"
 import {
@@ -100,7 +100,7 @@ export const SyncPickupPresentationSystem = Game.System(
   },
   ({ queries, resources, services }) =>
     {
-      const focusedId = resources.focused.get().current?.value ?? null
+      const focusedId: number | null = resources.focused.get().current ?? null
 
       for (const match of queries.pickups.each()) {
         const renderNode = services.host.nodes.get(match.entity.id)
@@ -108,7 +108,7 @@ export const SyncPickupPresentationSystem = Game.System(
           continue
         }
 
-        const isFocused = match.entity.id.value === focusedId
+        const isFocused = match.entity.id === focusedId
         renderNode.node.rotation += 0.01
         renderNode.node.scale.set(isFocused ? 1.12 : 1)
         renderNode.node.alpha = isFocused ? 1 : 0.86

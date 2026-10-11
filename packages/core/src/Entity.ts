@@ -82,17 +82,17 @@ export type ComponentProof = Record<string, unknown>
  * `EntityId` proves only that the id belongs to a runtime built from schema `S`.
  * It does not prove anything about the entity's current component set.
  *
- * The numeric `value` is stable for the lifetime of the runtime and can be used
- * as an external integration key, for example when mirroring ECS entities into
- * renderer-owned maps such as Pixi sprites.
+ * It is a branded number: stable for the lifetime of the runtime (ids are
+ * never reused), usable as a `Map` or `Set` key and as an external
+ * integration key (a renderer's node map), and printed as itself. The brand
+ * keeps it apart from a plain number and from a `Handle` at compile time; at
+ * runtime it is the number.
  */
 export type EntityId<S extends Schema.Any, Root = unknown> = Brand<
   typeof entityTypeId,
-  {
-    readonly schema: S
-    readonly root: Root
-    readonly kind: "EntityId"
-    readonly value: number
+  number & {
+    readonly __schema?: S
+    readonly __root?: Root
   }
 >
 
@@ -101,17 +101,21 @@ export type EntityId<S extends Schema.Any, Root = unknown> = Brand<
  *
  * Unlike `EntityId`, this is explicitly a cross-frame reference that must be
  * resolved back into current-world access through checked lookup APIs.
+ *
+ * Like an id, a handle is a branded number: it costs nothing to make in a hot
+ * loop, compares with `===`, works as a `Set` or `Map` key, and saves as a
+ * plain number in snapshots (`decodeHandle` also accepts the object form
+ * written by releases before 0.4). The intent, when given, exists only at the
+ * type level.
  */
 export type Handle<
   Root,
   Intent extends Descriptor<"component", string, any> | undefined = undefined
 > = Brand<
   typeof entityHandleTypeId,
-  {
-    readonly root: Root
-    readonly intent: Intent
-    readonly kind: "EntityHandle"
-    readonly value: number
+  number & {
+    readonly __root?: Root
+    readonly __intent?: Intent
   }
 >
 
@@ -212,19 +216,13 @@ export interface EntityMut<
 }
 
 /**
- * Creates an opaque entity id from a runtime integer id.
+ * Brands a runtime integer id as an entity id.
  *
- * This is a low-level constructor used by the runtime and command system.
- * The `value` it stores is the stable per-runtime numeric identity exposed on
- * `EntityId`.
+ * This is a low-level constructor used by the runtime and command system. It
+ * allocates nothing: the id is the number.
  */
 export const makeEntityId = <S extends Schema.Any, Root = unknown>(value: number): EntityId<S, Root> =>
-  ({
-    schema: undefined as unknown as S,
-    root: undefined as unknown as Root,
-    kind: "EntityId",
-    value
-  }) as EntityId<S, Root>
+  value as EntityId<S, Root>
 
 /**
  * Creates a durable handle from a runtime entity id.
@@ -236,12 +234,7 @@ export const makeHandle = <
   Root,
   Intent extends Descriptor<"component", string, any> | undefined = undefined
 >(value: number): Handle<Root, Intent> =>
-  ({
-    root: undefined as unknown as Root,
-    intent: undefined as unknown as Intent,
-    kind: "EntityHandle",
-    value
-  }) as Handle<Root, Intent>
+  value as Handle<Root, Intent>
 
 /**
  * Anything that identifies one current-runtime entity: an id, or a query
@@ -275,7 +268,7 @@ export const handle = <
   target: HandleTarget<S, Root>,
   _intent?: Intent
 ): Handle<Root, Intent> =>
-  makeHandle<Root, Intent>("kind" in target && target.kind === "EntityId" ? target.value : (target as { readonly id: EntityId<S, Root> }).id.value)
+  makeHandle<Root, Intent>(typeof target === "number" ? target : target.id)
 
 /**
  * Why a stored handle could not be decoded.
@@ -292,7 +285,9 @@ export interface InvalidHandle {
  *
  * A handle only names an entity; it never proves the entity exists. Resolving
  * it with `lookup.getHandle(...)` stays the checked step, so any positive
- * integer id decodes.
+ * integer id decodes. Both the plain number written since 0.4 and the
+ * `{ kind: "EntityHandle", value }` object written by earlier releases are
+ * accepted, so saves made before the change still load.
  *
  * @example
  * ```ts
@@ -314,7 +309,7 @@ export const decodeHandle = <
 ): Result.Result<Handle<Root, Intent>, InvalidHandle> => {
   const value = typeof raw === "object" && raw !== null && (raw as { readonly kind?: unknown }).kind === "EntityHandle"
     ? (raw as { readonly value?: unknown }).value
-    : undefined
+    : raw
   return typeof value === "number" && Number.isInteger(value) && value > 0
     ? Result.success(makeHandle<Root, Intent>(value))
     : Result.failure({ _tag: "InvalidHandle", value: raw })

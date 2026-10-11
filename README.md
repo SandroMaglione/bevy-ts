@@ -22,7 +22,8 @@ version from 5.9 up, and the packages build with TypeScript 7.
 | `@typeonce/bevy-ts` | The ECS runtime |
 | `@typeonce/bevy-ts-math` | Validated vectors, sizes, and bounding boxes |
 | `@typeonce/bevy-ts-browser` | Fixed-step loop, keyboard, pointer, and touch input, input capture |
-| `@typeonce/bevy-ts-pixi` | Entity to Pixi node sync |
+| `@typeonce/bevy-ts-render` | Entity to renderer node sync, for any renderer |
+| `@typeonce/bevy-ts-pixi` | Entity to Pixi node sync (re-exports `bevy-ts-render`, adds Pixi containers) |
 | `@typeonce/bevy-ts-devtools` | Headless debug sessions and trace reports ([README](./packages/devtools/README.md)) |
 
 All packages are released together with the same version.

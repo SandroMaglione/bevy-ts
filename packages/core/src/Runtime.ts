@@ -622,6 +622,15 @@ export interface Runtime<
       inspector: Selected & ValidateInspector<Selected, Services, Resources, Machines>
     ): Inspector.Inspector.Value<Selected>
   }
+  /**
+   * Publishes one event from outside any system: the host's way in (a menu
+   * request, a network message, a test's scripted input). It is published at
+   * once, stamped with a fresh tick, so every reader sees it on its next run
+   * whichever schedule it belongs to, once, like an event a system emitted.
+   * The event must belong to the schema. Calling it while a schedule is
+   * running is a defect and throws: inside a tick, emit from a system.
+   */
+  readonly send: <D extends Schema.EventDescriptor<S>>(descriptor: D, value: Descriptor.Value<D>) => void
 }
 
 /**
@@ -795,39 +804,39 @@ const makeValidatedRuntime = <
       world.spawnEntity(id, components)
     },
     destroyEntity(id) {
-      world.destroyEntity(id.value)
+      world.destroyEntity(id)
     },
     assignEntityScope(id, scope) {
-      world.assignEntityScope(id.value, scope.key)
+      world.assignEntityScope(id, scope.key)
     },
     destroyEntityScope(scope) {
       world.destroyEntityScope(scope.key)
     },
     removeComponent(id, descriptor) {
-      world.removeComponent(id.value, descriptor)
+      world.removeComponent(id, descriptor)
     },
     writeComponent(id, descriptor, value) {
-      world.writeComponent(id.value, descriptor, value)
+      world.writeComponent(id, descriptor, value)
     },
     tryRelate(id, relation, target) {
-      const result = world.tryRelate(id.value, relation, target.value)
+      const result = world.tryRelate(id, relation, target)
       if (!result.ok) {
-        appendRelationFailure(relation, "relate", id.value, target.value, result.error)
+        appendRelationFailure(relation, "relate", id, target, result.error)
       }
       return result
     },
     unrelate(id, relation) {
-      world.unrelate(id.value, relation)
+      world.unrelate(id, relation)
     },
     reorderChildren(id, relation, children) {
-      const result = world.reorderChildren(id.value, relation, children.map((child) => child.value))
+      const result = world.reorderChildren(id, relation, children.map((child) => child))
       if (!result.ok) {
         const targetId = result.error._tag === "MissingChildEntity"
           || result.error._tag === "DuplicateChild"
           || result.error._tag === "ChildNotRelatedToParent"
           ? result.error.childId
-          : id.value
-        appendRelationFailure(relation, "reorderChildren", id.value, targetId, result.error)
+          : id
+        appendRelationFailure(relation, "reorderChildren", id, targetId, result.error)
       }
       return result
     }
@@ -860,12 +869,12 @@ const makeValidatedRuntime = <
     target: Entity.EntityId<S, Root>,
     relation: Relation.Relation.Any
   ): Result.Result<Entity.EntityId<S, Root>, Relation.Relation.LookupError> => {
-    if (!world.records.has(target.value)) {
-      return Result.failure(Relation.missingEntityError(target.value))
+    if (!world.records.has(target)) {
+      return Result.failure(Relation.missingEntityError(target))
     }
-    const targetId = world.relationTarget(relation, target.value)
+    const targetId = world.relationTarget(relation, target)
     if (targetId === undefined) {
-      return Result.failure(Relation.missingRelationError(target.value, relation.name))
+      return Result.failure(Relation.missingRelationError(target, relation.name))
     }
     return Result.success(entityId(targetId))
   }
@@ -873,24 +882,24 @@ const makeValidatedRuntime = <
   const makeLookup = (reader: ReaderState): LookupApi<S, Root> => {
     const lookup: LookupApi<S, Root> = {
     get(target, query) {
-      return resolve(target.value, query, reader)
+      return resolve(target, query, reader)
     },
     getHandle(handle, query) {
-      return resolve(handle.value, query, reader)
+      return resolve(handle, query, reader)
     },
     related: relatedTarget,
     relatedSources(target, relation) {
-      if (!world.records.has(target.value)) {
-        return Result.failure(Relation.missingEntityError(target.value))
+      if (!world.records.has(target)) {
+        return Result.failure(Relation.missingEntityError(target))
       }
-      return Result.success(world.relatedSourceIds(relation, target.value).map(entityId))
+      return Result.success(world.relatedSourceIds(relation, target).map(entityId))
     },
     childMatches(target, relation, query) {
-      if (!world.records.has(target.value)) {
-        return Result.failure(Relation.missingEntityError(target.value))
+      if (!world.records.has(target)) {
+        return Result.failure(Relation.missingEntityError(target))
       }
       const matches: Array<QueryMatch<S, typeof query>> = []
-      for (const sourceId of world.relatedSourceIds(relation, target.value)) {
+      for (const sourceId of world.relatedSourceIds(relation, target)) {
         const resolved = resolve(sourceId, query, reader)
         if (resolved.ok) {
           matches.push(resolved.value)
@@ -900,11 +909,11 @@ const makeValidatedRuntime = <
     },
     parent: relatedTarget,
     ancestors(target, relation) {
-      if (!world.records.has(target.value)) {
-        return Result.failure(Relation.missingEntityError(target.value))
+      if (!world.records.has(target)) {
+        return Result.failure(Relation.missingEntityError(target))
       }
       const ancestors: Array<Entity.EntityId<S, Root>> = []
-      let current = world.relationTarget(relation, target.value)
+      let current = world.relationTarget(relation, target)
       while (current !== undefined) {
         ancestors.push(entityId(current))
         current = world.relationTarget(relation, current)
@@ -912,19 +921,19 @@ const makeValidatedRuntime = <
       return Result.success(ancestors)
     },
     descendants(target, relation, options) {
-      if (!world.records.has(target.value)) {
-        return Result.failure(Relation.missingEntityError(target.value))
+      if (!world.records.has(target)) {
+        return Result.failure(Relation.missingEntityError(target))
       }
       const descendants: Array<Entity.EntityId<S, Root>> = []
       if (options?.order === "breadth") {
-        const pending = [...world.relatedSourceIds(relation, target.value)]
+        const pending = [...world.relatedSourceIds(relation, target)]
         for (let index = 0; index < pending.length; index++) {
           const nextId = pending[index]!
           descendants.push(entityId(nextId))
           pending.push(...world.relatedSourceIds(relation, nextId))
         }
       } else {
-        const pending = [...world.relatedSourceIds(relation, target.value)].reverse()
+        const pending = [...world.relatedSourceIds(relation, target)].reverse()
         while (pending.length > 0) {
           const nextId = pending.pop()!
           descendants.push(entityId(nextId))
@@ -943,7 +952,7 @@ const makeValidatedRuntime = <
       }
       const matches: Array<QueryMatch<S, typeof query>> = []
       for (const descendantId of descendants.value) {
-        const resolved = resolve(descendantId.value, query, reader)
+        const resolved = resolve(descendantId, query, reader)
         if (resolved.ok) {
           matches.push(resolved.value)
         }
@@ -951,10 +960,10 @@ const makeValidatedRuntime = <
       return Result.success(matches)
     },
     root(target, relation) {
-      if (!world.records.has(target.value)) {
-        return Result.failure(Relation.missingEntityError(target.value))
+      if (!world.records.has(target)) {
+        return Result.failure(Relation.missingEntityError(target))
       }
-      let current = target.value
+      let current: number = target
       let parentId = world.relationTarget(relation, current)
       while (parentId !== undefined) {
         current = parentId
@@ -971,7 +980,7 @@ const makeValidatedRuntime = <
     return {
       each,
       get(target) {
-        return resolve(target.value, query, reader)
+        return resolve(target, query, reader)
       },
       single() {
         const matches = each()
@@ -1192,6 +1201,7 @@ const makeValidatedRuntime = <
   const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState): SystemContext<any> => {
     const spec = system.spec
     return {
+      local: (spec.local as (() => unknown) | undefined)?.(),
       queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, (query) => makeQueryHandle(query, reader)),
       lookup: makeLookup(reader),
       resources: mapRecord(spec.resources as Record<string, any>, (access) =>
@@ -1221,6 +1231,8 @@ const makeValidatedRuntime = <
   }
 
   const slots = new WeakMap<SystemDefinition<any, any, any>, SystemSlot>()
+  /** Slots of systems with `local` state, rebuilt on `restore`. */
+  const localSlots: Array<{ readonly slot: SystemSlot; readonly make: () => unknown }> = []
   /** Stream readers by cursor, for `debug.streams()`. */
   const streamReaders = new Map<Streams.Cursor, { readonly system: string; readonly reader: ReaderState }>()
 
@@ -1316,10 +1328,11 @@ const makeValidatedRuntime = <
   const traceSkipped = (
     system: SystemDefinition<any, any, any>,
     condition: Machine.Condition,
-    reader: ReaderState | undefined
+    reader: ReaderState | undefined,
+    held: boolean
   ): void => {
     const discarded: Array<{ readonly stream: string; readonly count: number }> = []
-    if (reader !== undefined) {
+    if (reader !== undefined && !held) {
       for (const stream of readStreamsOf(system)) {
         const count = stream.store.since(stream.key, reader.streamLastRun).length
         if (count > 0) discarded.push({ stream: stream.name, count })
@@ -1332,6 +1345,7 @@ const makeValidatedRuntime = <
       schedule: currentSchedule(),
       system: system.name,
       condition: DebugInternal.renderCondition(condition),
+      held,
       discarded
     })
   }
@@ -1371,6 +1385,8 @@ const makeValidatedRuntime = <
       slot = { context: makeContext(system, reader), reader }
       slots.set(stateKey(system), slot)
       if (holdsStreams) registerStreamReader(system, slot.reader)
+      const make = system.spec.local as (() => unknown) | undefined
+      if (make !== undefined) localSlots.push({ slot, make })
     }
     return slot
   }
@@ -1389,9 +1405,19 @@ const makeValidatedRuntime = <
       if (!evaluateCondition(condition)) {
         // A skipped system discards the messages published meanwhile, so it
         // neither holds them nor receives a backlog when it runs again.
-        const skipped = slots.get(stateKey(system))
-        if (tracing) traceSkipped(system, condition, skipped?.reader)
-        if (skipped) skipped.reader.streamLastRun = world.currentTick()
+        const skipped = slotOf(system, true)
+        if (tracing) traceSkipped(system, condition, skipped.reader, false)
+        skipped.reader.streamLastRun = world.currentTick()
+        return succeeded
+      }
+    }
+    for (const condition of system.spec.pauseWhen as ReadonlyArray<Machine.Condition>) {
+      if (!evaluateCondition(condition)) {
+        // A paused system keeps its stream cursor, so it holds the messages
+        // published meanwhile and reads them when the pause ends. The slot is
+        // made now, so entries published before its first run are held too.
+        const paused = slotOf(system, true)
+        if (tracing) traceSkipped(system, condition, paused.reader, true)
         return succeeded
       }
     }
@@ -1627,6 +1653,9 @@ const makeValidatedRuntime = <
     return succeeded
   }
 
+  /** Whether a schedule is running now: `send` is not allowed meanwhile. */
+  let ticking = false
+
   /**
    * Runs one schedule. A failing system stops the schedule; systems that
    * already succeeded stay committed, and their pending work stays pending.
@@ -1636,6 +1665,20 @@ const makeValidatedRuntime = <
     return tracing
       ? traceSchedule(scheduleName(schedule), () => runSteps(schedule.steps))
       : runSteps(schedule.steps)
+  }
+
+  const eventsByKey = new Set((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => descriptor.key))
+  const externallyWrittenEvents = new Set<string>()
+
+  const send = (descriptor: Descriptor<"event", string, any>, value: unknown): void => {
+    if (ticking) throw new Error(`runtime.send(${descriptor.name}) was called while a schedule is running: emit from a system instead`)
+    if (!eventsByKey.has(descriptor.key)) throw new Error(`runtime.send: ${descriptor.name} is not an event of this runtime's schema`)
+    const published = world.advanceTick()
+    events.append(descriptor.key, published, [value], true)
+    // Bound host traffic even when it sends repeatedly without ticking.
+    events.trim(0)
+    externallyWrittenEvents.add(descriptor.name)
+    if (tracing) emit({ type: "runtime.sent", frame: frameCount, tick: published, event: descriptor.name, value })
   }
 
   const advanceFrame = (): void => {
@@ -1648,14 +1691,18 @@ const makeValidatedRuntime = <
   }
 
   const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any>>): Result.Result<void, SystemFailure> => {
-    advanceFrame()
-    for (const schedule of schedules) {
-      const result = runScheduleUnsafe(schedule)
-      if (!result.ok) {
-        return result
+    if (ticking) throw new Error("runtime.tick cannot run inside another tick")
+    ticking = true
+    try {
+      advanceFrame()
+      for (const schedule of schedules) {
+        const result = runScheduleUnsafe(schedule)
+        if (!result.ok) return result
       }
+      return succeeded
+    } finally {
+      ticking = false
     }
-    return succeeded
   }
 
   const hasRequirement = (requirement: Requirement.RequirementValue): boolean => {
@@ -1813,6 +1860,8 @@ const makeValidatedRuntime = <
       machineValues.push([machine.key, value])
     }
 
+    const rebuiltLocals = localSlots.map(({ make }) => make())
+
     // Apply: the old world is despawned and the saved one spawned, so change
     // detection and renderer sync observe the restore like any other change.
     pendingCommands.length = 0
@@ -1832,6 +1881,8 @@ const makeValidatedRuntime = <
     }
     for (const [key, value] of validatedResources) resources.set(key, value)
     for (const [key, value] of machineValues) currentMachines.set(key, value)
+    // Locals are not saved: each system starts over from its factory.
+    localSlots.forEach(({ slot }, index) => { (slot.context as { local: unknown }).local = rebuiltLocals[index] })
     return succeeded
   }
 
@@ -1853,7 +1904,8 @@ const makeValidatedRuntime = <
     // The gate is type-only: the functions exist on every runtime.
     snapshot: snapshot as unknown as Snapshot.Gate<S, typeof snapshot>,
     restore: tracedRestore as unknown as Snapshot.Gate<S, typeof restore>,
-    inspect
+    inspect,
+    send: send as Runtime<S, Services, Resources, Root, Machines>["send"]
   }
   if (!debugEnabled) {
     return runtime
@@ -1976,6 +2028,7 @@ const makeValidatedRuntime = <
       machines: [...new Set(machinesByName.values())],
       currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
       providedServices: Object.keys(providedServices),
+      externallyWrittenEvents,
       hasResource: (descriptor) => resources.has(descriptor.key),
       schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)
     }),

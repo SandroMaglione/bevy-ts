@@ -59,6 +59,26 @@ const makeSession = (invariants: ReadonlyArray<Invariant.Invariant> = []) => {
 }
 
 describe("Session", () => {
+  it("records host sends and reports held pauses separately from discarded skips", () => {
+    const runtime = Game.Runtime.make({
+      services: Game.Runtime.services(),
+      machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
+      debug: true
+    })
+    const Read = Game.System("Dev/HeldReader", { events: { hit: Game.System.readEvent(Hit) } }, () => {})
+    const update = Game.Schedule.pauseWhen([Game.Condition.inState(Flow, "Playing")], Read)
+    const session = Session.make(runtime, { schedules: { update } })
+    session.run("update")
+    runtime.send(Hit, 7)
+    session.run("update")
+    expect(session.report().data.systems.find((system) => system.system === Read.name)).toMatchObject({ runs: 0, skips: 0, pauses: 2 })
+    expect(session.report().data.warnings).toEqual([])
+    expect(session.journal({ verbose: true }).text).toContain("sent Dev/Hit 7 (runtime.send)")
+    expect(session.journal({ verbose: true }).text).toContain("holding its stream entries")
+    runtime.send(Hit, Number.NaN)
+    expect(session.report().data.warnings.some((warning) => warning.code === "non-finite-value")).toBe(true)
+  })
+
   it("runs named schedules and reports completed runs", () => {
     const { session } = makeSession()
     expect(session.run("setup").data).toMatchObject({ ok: true, frames: 1, range: [1, 1], stop: { reason: "completed" } })
@@ -184,7 +204,7 @@ describe("Format.value", () => {
     expect(Format.value({ x: 1.23456, list: [1, 2, 3], nested: { deep: { deeper: { deepest: 1 } } } })).toBe(
       "{x:1.235,list:[1,2,3],nested:{deep:{deeper:{…}}}}"
     )
-    expect(Format.value({ kind: "EntityId", value: 4 })).toBe("e4")
+    expect(Format.value(4)).toBe("4")
     expect(Format.value(Array.from({ length: 10 }, (_, index) => index))).toBe("[0,1,2,3,4,5,6,7,…+2]")
     class Sprite {
       readonly frame = 1

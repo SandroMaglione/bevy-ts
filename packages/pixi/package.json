@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@typeonce/bevy-ts": "workspace:^",
-    "@typeonce/bevy-ts-browser": "workspace:^"
+    "@typeonce/bevy-ts-render": "workspace:^"
   },
   "engines": {
     "node": ">=20"

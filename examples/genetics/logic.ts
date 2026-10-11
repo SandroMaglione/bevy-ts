@@ -407,7 +407,7 @@ export const collectAgentSnapshots = (
 ): ReadonlyArray<AgentSnapshot> =>
   matches.map((match) => ({
     handle: Game.Entity.handle(match.entity.id, Agent),
-    entityId: match.entity.id.value,
+    entityId: match.entity.id,
     position: match.data.position.get(),
     genes: match.data.genes.get(),
     agent: match.data.agent.get(),

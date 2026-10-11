@@ -17,15 +17,21 @@ Own browser-specific infrastructure:
 
 This package must not own gameplay resources or feature flow.
 
+### `@typeonce/bevy-ts-render`
+
+Own renderer-agnostic render infrastructure:
+
+- entity-keyed render node registry lifecycle (create once, attach, detach, destroy, teardown), with attach and detach supplied by the caller
+- the generic render sync systems: create, re-apply, and destroy nodes in step with the world, and interpolate fixed-step movement between steps
+
+This package imports no renderer. It must not own what a node looks like, HUD semantics, or camera policy.
+
 ### `@typeonce/bevy-ts-pixi`
 
-Own Pixi-specific infrastructure:
+Own Pixi-specific infrastructure on top of `@typeonce/bevy-ts-render`, which it re-exports:
 
-- Pixi application and root container lifecycle
-- scene and world host setup primitives
-- entity-id render node registry lifecycle
-- teardown helpers
-- renderer-side sync helpers that remain generic across games
+- registries whose nodes are children of a Pixi container and are destroyed with their children (`NodeRegistry.inContainer`)
+- the Pixi-shaped surfaces those need (`ContainerLike`, `Destroyable`), without importing `pixi.js`
 
 This package must not own sprite conventions, HUD semantics, actor kinds, or camera policy.
 

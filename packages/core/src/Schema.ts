@@ -319,7 +319,9 @@ interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAcc
   readonly removed?: Record<string, System.RemovedRead<ComponentDescriptor<S>>>
   readonly relationFailures?: Record<string, System.RelationFailureRead<RelationDescriptor<S>>>
   readonly when?: ReadonlyArray<Machine.Condition<Root>>
+  readonly pauseWhen?: ReadonlyArray<Machine.Condition<Root>>
   readonly transitions?: Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>>
+  readonly local?: () => unknown
 }
 
 interface BoundCheckAccess<S extends Schema.Any, Root> extends Condition.CheckAccessInput {
@@ -634,6 +636,19 @@ export namespace Schema {
        * gated too; marker steps still run.
        */
       when: <
+        const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],
+        const Entries extends ReadonlyArray<BoundScheduleEntry<S, Root>>
+      >(
+        conditions: Conditions,
+        ...entries: Entries
+      ) => Schedule.ConditionalScheduleBuildFor<S, Conditions, Entries, Root>
+      /**
+       * Builds a schedule whose systems are paused while any condition
+       * fails: unlike `when`, a paused system keeps its place in the event
+       * streams it reads and sees everything published meanwhile once it
+       * runs again. For freezes whose events stay valid (hit-stop, pause).
+       */
+      pauseWhen: <
         const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],
         const Entries extends ReadonlyArray<BoundScheduleEntry<S, Root>>
       >(

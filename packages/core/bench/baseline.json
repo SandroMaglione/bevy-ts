@@ -1,73 +1,73 @@
 {
   "runtime": {
     "tolerance": 0.35,
-    "calibrationMs": 2.8866,
-    "environment": "Apple M1 / node v24.16.0 / darwin",
+    "calibrationMs": 2.6637,
+    "environment": "Apple M1 / node v26.5.0 / darwin",
     "cases": {
       "spawn/10k-3c": {
-        "minMs": 4.7652,
-        "medianMs": 4.9021,
-        "score": 1.6508
+        "minMs": 4.7196,
+        "medianMs": 5.5691,
+        "score": 1.7718
       },
       "despawn/10k": {
-        "minMs": 4.749,
-        "medianMs": 5.3695,
-        "score": 1.637
+        "minMs": 4.5393,
+        "medianMs": 5.6807,
+        "score": 1.6889
       },
       "query/iterate-read-10k-of-20k": {
-        "minMs": 0.0793,
-        "medianMs": 0.0822,
-        "score": 0.0275
+        "minMs": 0.0895,
+        "medianMs": 0.0949,
+        "score": 0.0336
       },
       "query/iterate-write-10k": {
-        "minMs": 0.3959,
-        "medianMs": 0.4132,
-        "score": 0.1365
+        "minMs": 0.3477,
+        "medianMs": 0.4073,
+        "score": 0.1294
       },
       "query/single-in-20k-x1000": {
-        "minMs": 0.2825,
-        "medianMs": 0.2875,
-        "score": 0.0979
+        "minMs": 0.2993,
+        "medianMs": 0.3125,
+        "score": 0.1114
       },
       "query/changed-100-of-10k-x20": {
-        "minMs": 0.301,
-        "medianMs": 0.3058,
-        "score": 0.1043
+        "minMs": 0.3006,
+        "medianMs": 0.3125,
+        "score": 0.1118
       },
       "structural/insert-remove-1k": {
-        "minMs": 0.1678,
-        "medianMs": 0.1776,
-        "score": 0.0581
+        "minMs": 0.1729,
+        "medianMs": 0.1993,
+        "score": 0.0643
       },
       "schedule/100-systems-x10": {
-        "minMs": 0.171,
-        "medianMs": 0.1773,
-        "score": 0.0589
+        "minMs": 0.1924,
+        "medianMs": 0.1987,
+        "score": 0.0716
       },
       "lookup/get-10k": {
-        "minMs": 0.5968,
-        "medianMs": 0.604,
-        "score": 0.2033
+        "minMs": 0.6132,
+        "medianMs": 0.6426,
+        "score": 0.2282
       },
       "events/emit-read-10k": {
-        "minMs": 0.0944,
-        "medianMs": 0.0955,
-        "score": 0.0327
+        "minMs": 0.094,
+        "medianMs": 0.0965,
+        "score": 0.035
       },
       "relations/descendants-100x100": {
-        "minMs": 0.4608,
-        "medianMs": 0.4687,
-        "score": 0.157
+        "minMs": 0.3151,
+        "medianMs": 0.3232,
+        "score": 0.1169
       },
       "snapshot/json-roundtrip-10k": {
-        "minMs": 18.9766,
-        "medianMs": 23.6672,
-        "score": 6.4654
+        "minMs": 20.4746,
+        "medianMs": 25.8538,
+        "score": 7.5947
       },
       "frame/50-systems-5k": {
-        "minMs": 2.1816,
-        "medianMs": 2.2789,
-        "score": 0.7558
+        "minMs": 2.2589,
+        "medianMs": 2.5384,
+        "score": 0.8405
       }
     }
   },
@@ -75,8 +75,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 38032,
-      "instantiations": 225603
+      "types": 40772,
+      "instantiations": 231244
     }
   }
 }

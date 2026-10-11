@@ -311,14 +311,62 @@ The source can be any service with `snapshot()`, so a game that merges
 keyboard, pointer, and gamepad input captures its own adapter the same way.
 The resource's value type must match the snapshot type exactly.
 
-## 7. Mirror entities into Pixi
+## Recipes: simulation time and seeded random
 
-`@typeonce/bevy-ts-pixi` owns the node bookkeeping; what a node looks like stays yours.
+Time is world data. Advance it from a fixed-step system so headless tests
+and snapshot replay use the same clock as gameplay. The host supplies the
+fixed step size; it does not capture elapsed time from a wall clock.
 
 ```ts
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi"
+const Time = Descriptor.ConstructedResource(Decode.struct({
+  step: Decode.integer, elapsed: Decode.number, dt: Decode.number
+}))("Recipes/Time")
 
-const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Container>>()("Game/RenderNodes")
+const AdvanceTime = Game.System("Recipes/AdvanceTime", {
+  resources: { time: Game.System.writeResource(Time) }
+}, ({ resources }) => {
+  resources.time.update((time) => ({
+    ...time, step: time.step + 1, elapsed: time.elapsed + time.dt
+  }))
+})
+// Initialize Time with { step: 0, elapsed: 0, dt: 1 / 60 }.
+// Place AdvanceTime before the systems that read it.
+```
+
+A seeded generator needs only a number resource and a pure `next` function.
+Saving the resource saves the generator's position. A failed system rolls
+back the updated seed with its other resource writes.
+
+```ts
+const Random = Descriptor.ConstructedResource(Decode.integer)("Recipes/Random")
+const next = (seed: number): { readonly seed: number; readonly value: number } => {
+  const state = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+  return { seed: state, value: state / 4294967296 }
+}
+
+const Roll = Game.System("Recipes/Roll", {
+  resources: { random: Game.System.writeResource(Random) }
+}, ({ resources }) => {
+  const rolled = next(resources.random.get())
+  resources.random.set(rolled.seed)
+  // Use rolled.value for this system's random decision.
+})
+```
+
+Include both resources in the bound schema. The complete, typechecked
+example is [examples/recipes.ts](./examples/recipes.ts); its test restores a
+snapshot and verifies that the next step produces the same time and seed.
+
+## 7. Mirror entities into a renderer
+
+`@typeonce/bevy-ts-render` owns the node bookkeeping for any renderer (Pixi,
+Three.js, the DOM); what a node looks like, and how it joins and leaves the
+scene, stays yours.
+
+```ts
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+
+const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Mesh>>()("Game/RenderNodes")
 
 const render = RenderSync.system(Game, {
   name: "Game/Render",
@@ -326,17 +374,25 @@ const render = RenderSync.system(Game, {
   transform: Position,
   registry: RenderNodes,
   create: ({ renderable }) => makeNode(renderable),
-  apply: (node, { transform }) => node.position.set(transform.x, transform.y)
+  apply: (node, { transform }) => node.position.set(transform.x, 0, transform.y)
 })
 
 const runtime = Game.Runtime.make({
   services: Game.Runtime.services(
-    Game.Runtime.service(RenderNodes, NodeRegistry.inContainer(actorLayer))
+    Game.Runtime.service(RenderNodes, NodeRegistry.make<Mesh>({
+      attach: (node) => scene.add(node),
+      detach: (node) => scene.remove(node)
+    }))
   )
 })
 
 const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render)
 ```
+
+For Pixi, `@typeonce/bevy-ts-pixi` re-exports `NodeRegistry` and `RenderSync`
+and adds `NodeRegistry.inContainer(actorLayer)`: a registry whose nodes are
+children of one Pixi container and are destroyed with their children when
+removed.
 
 The registry service is a normal requirement: ticking the render system on a
 runtime that does not provide it is a compile error. `select`, `resources`,

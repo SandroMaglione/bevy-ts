@@ -687,7 +687,25 @@ export interface SystemAccessInput {
   readonly despawned?: Record<string, DespawnedRead>
   readonly relationFailures?: Record<string, RelationFailureRead<Relation.Relation.Any>>
   readonly when?: ReadonlyArray<Machine.Condition>
+  /**
+   * Run conditions that pause the system instead of skipping it: while one
+   * fails, the system does not run but keeps its place in every event stream
+   * it reads, so it sees what was published meanwhile once it runs again.
+   * Use it for a freeze whose events stay valid (hit-stop, a pause menu);
+   * use `when` for a mode change, after which they are stale. Checked after
+   * `when`. `Schedule.pauseWhen(...)` adds them to a whole group.
+   */
+  readonly pauseWhen?: ReadonlyArray<Machine.Condition>
   readonly transitions?: Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>
+  /**
+   * Scratch state owned by the system: a broad-phase grid, a path cache, a
+   * reused buffer. The factory runs once per runtime (and again after
+   * `restore`), and the value is passed to every run as `local`. It is not
+   * world data: it is not rolled back when the system fails, not saved in
+   * snapshots, and not visible to other systems. A system and its gated
+   * copies (`Schedule.when`, `Schedule.pauseWhen`) share one value.
+   */
+  readonly local?: () => unknown
 }
 
 /**
@@ -731,7 +749,9 @@ export type SystemSpec<
   readonly despawned: AccessField<Access, "despawned", {}>
   readonly relationFailures: AccessField<Access, "relationFailures", {}>
   readonly when: AccessField<Access, "when", readonly []>
+  readonly pauseWhen: AccessField<Access, "pauseWhen", readonly []>
   readonly transitions: AccessField<Access, "transitions", {}>
+  readonly local: AccessField<Access, "local", undefined>
   readonly schema: S
   readonly __schemaRoot: Root
 }
@@ -822,6 +842,9 @@ type QueryContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["queries"]]: QueryHandle<Spec["schema"], Spec["queries"][K]>
 }
 
+/** The value of the system's `local` factory, or `undefined` when it declares none. */
+type LocalContext<Spec extends AnySystemSpec> = Spec["local"] extends () => infer Local ? Local : undefined
+
 /**
  * The implementation context derived from a system spec.
  *
@@ -842,6 +865,8 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly transitions: TransitionContext<Spec>
   readonly services: ServiceContext<Spec>
   readonly commands: CommandsApi<Spec["schema"], Spec["__schemaRoot"]>
+  /** The system's own scratch state (see `local` in the spec); `undefined` when it declares none. */
+  readonly local: LocalContext<Spec>
 }
 
 /**
@@ -866,6 +891,7 @@ export type SystemNeeds<Spec extends AnySystemSpec> =
   | Machine.MachineNeedsFromRecord<Spec["transitionEvents"]>
   | Machine.MachineNeedsFromRecord<Spec["transitions"]>
   | Machine.ConditionNeedsFromConditions<Spec["when"]>
+  | Machine.ConditionNeedsFromConditions<Spec["pauseWhen"]>
 
 type AccessRecordValue<Access, Key extends PropertyKey> =
   Key extends keyof Access
@@ -891,6 +917,11 @@ export type SystemAccessNeeds<Access extends SystemAccessInput> =
   | ("when" extends keyof Access
       ? NonNullable<Access["when"]> extends ReadonlyArray<Machine.Condition>
         ? Machine.ConditionNeedsFromConditions<NonNullable<Access["when"]>>
+        : never
+      : never)
+  | ("pauseWhen" extends keyof Access
+      ? NonNullable<Access["pauseWhen"]> extends ReadonlyArray<Machine.Condition>
+        ? Machine.ConditionNeedsFromConditions<NonNullable<Access["pauseWhen"]>>
         : never
       : never)
 
@@ -1026,7 +1057,8 @@ const collectSystemRequirements = (
   ...requirementValuesFromRecord(spec.nextMachines),
   ...requirementValuesFromRecord(spec.transitionEvents),
   ...requirementValuesFromRecord(spec.transitions),
-  ...(spec.when ?? []).flatMap(requirementValuesFromCondition)
+  ...(spec.when ?? []).flatMap(requirementValuesFromCondition),
+  ...(spec.pauseWhen ?? []).flatMap(requirementValuesFromCondition)
 ])
 
 export function System<
@@ -1063,7 +1095,9 @@ export function System(
     despawned: spec.despawned ?? {},
     relationFailures: spec.relationFailures ?? {},
     when: spec.when ?? [],
+    pauseWhen: spec.pauseWhen ?? [],
     transitions: spec.transitions ?? {},
+    local: spec.local,
     __schemaRoot: undefined
   } as Spec
 

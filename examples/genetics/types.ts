@@ -98,7 +98,7 @@ export type AgentSnapshot = {
     fullness: number
     age: number
     mateCooldown: number
-    matePartner: { value: number } | null
+    matePartner: number | null
     attackCooldown: number
     bondProgress: number
     children: number

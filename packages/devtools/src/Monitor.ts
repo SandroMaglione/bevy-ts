@@ -415,6 +415,8 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
       const error = collector?.lastError.get(system.name)
       if (error !== undefined) details.push(`<div style="color:#ff7b72">last error: ${escape(error)}</div>`)
       if (system.when.length > 0) details.push(`<div>runs when: ${escape(system.when.join(", "))}</div>`)
+      if (system.pauseWhen.length > 0) details.push(`<div>pauses when: ${escape(system.pauseWhen.join(", "))}</div>`)
+      if (system.local) details.push(`<div class="btm-dim">holds local state</div>`)
       details.push(`<div class="btm-dim">at ${escape(system.placements.join(", "))}</div>`)
       details.push(`</div>`)
     }

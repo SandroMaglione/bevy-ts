@@ -4,6 +4,6 @@
   "include": ["src"],
   "references": [
     { "path": "../core" },
-    { "path": "../browser" }
+    { "path": "../render" }
   ]
 }
