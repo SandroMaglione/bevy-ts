@@ -18,6 +18,7 @@ interface Log<T> {
   readonly ticks: Array<number>
   /** Batches are never mutated after `append`, so single-batch reads return them uncopied. */
   readonly batches: Array<ReadonlyArray<T>>
+  readonly surviveRestore: Array<boolean>
   size: number
   /** Newest tick of any dropped batch. */
   droppedThrough: number
@@ -45,7 +46,7 @@ export interface Streams<T> {
   /** Makes `cursor` hold `key`'s batches until it has read them. */
   register(key: symbol, cursor: Cursor): void
   /** Publishes `values` as one batch; the array must not be mutated afterwards. */
-  append(key: symbol, tick: number, values: ReadonlyArray<T>): void
+  append(key: symbol, tick: number, values: ReadonlyArray<T>, surviveRestore?: boolean): void
   /** Values for `key` stamped after `since`, oldest first. */
   since(key: symbol, since: number): ReadonlyArray<T>
   /**
@@ -58,6 +59,7 @@ export interface Streams<T> {
    * reader has read, then enforces the capacity.
    */
   trim(windowBoundary: number): void
+  /** Clears simulation messages; unread host messages survive world restore. */
   clear(): void
   /** Every key with retained entries or registered readers. */
   inspect(): ReadonlyArray<StreamInspection>
@@ -82,7 +84,7 @@ export const make = <T>(capacity: number): Streams<T> => {
   const logFor = (key: symbol): Log<T> => {
     let log = logs.get(key)
     if (log === undefined) {
-      log = { ticks: [], batches: [], size: 0, droppedThrough: 0 }
+      log = { ticks: [], batches: [], surviveRestore: [], size: 0, droppedThrough: 0 }
       logs.set(key, log)
     }
     return log
@@ -94,6 +96,7 @@ export const make = <T>(capacity: number): Streams<T> => {
     log.droppedThrough = Math.max(log.droppedThrough, log.ticks[count - 1]!)
     log.ticks.splice(0, count)
     log.batches.splice(0, count)
+    log.surviveRestore.splice(0, count)
   }
 
   return {
@@ -105,11 +108,12 @@ export const make = <T>(capacity: number): Streams<T> => {
       }
       set.add(cursor)
     },
-    append(key, tick, values) {
+    append(key, tick, values, surviveRestore = false) {
       if (values.length === 0) return
       const log = logFor(key)
       log.ticks.push(tick)
       log.batches.push(values)
+      log.surviveRestore.push(surviveRestore)
       log.size += values.length
     },
     since(key, since) {
@@ -148,7 +152,23 @@ export const make = <T>(capacity: number): Streams<T> => {
       }
     },
     clear() {
-      logs.clear()
+      for (const [key, log] of logs) {
+        const ticks: Array<number> = []
+        const batches: Array<ReadonlyArray<T>> = []
+        for (let index = 0; index < log.ticks.length; index++) {
+          if (!log.surviveRestore[index]) continue
+          ticks.push(log.ticks[index]!)
+          batches.push(log.batches[index]!)
+        }
+        if (ticks.length === 0) logs.delete(key)
+        else logs.set(key, {
+          ticks,
+          batches,
+          surviveRestore: ticks.map(() => true),
+          size: batches.reduce((size, batch) => size + batch.length, 0),
+          droppedThrough: log.droppedThrough
+        })
+      }
     },
     inspect() {
       const keys = new Set<symbol>([...logs.keys(), ...readers.keys()])

@@ -1,7 +1,8 @@
 import { Application, Container, Sprite, Texture } from "pixi.js";
 
 import { Descriptor, Schema } from "@typeonce/bevy-ts";
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi";
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render";
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi";
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -280,7 +281,7 @@ export const startPixiExample = async (
   const scene = new Container();
   application.stage.addChild(scene);
 
-  const sprites = NodeRegistry.inContainer<Sprite>(scene);
+  const sprites = PixiNodeRegistry.make<Sprite>(scene);
   const host = {
     application,
     scene,

@@ -1,4 +1,4 @@
-import type { NodeRegistry } from "@typeonce/bevy-ts-pixi"
+import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 import type { Application, Container, Graphics } from "pixi.js"
 
 export type GeneValue = number
@@ -98,7 +98,7 @@ export type AgentSnapshot = {
     fullness: number
     age: number
     mateCooldown: number
-    matePartner: { value: number } | null
+    matePartner: number | null
     attackCooldown: number
     bondProgress: number
     children: number

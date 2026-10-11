@@ -146,7 +146,10 @@ export interface SystemStats {
   readonly system: string
   readonly runs: number
   readonly failures: number
+  /** Runs skipped by a `when` condition (the messages published meanwhile were discarded). */
   readonly skips: number
+  /** Runs paused by a `pauseWhen` condition (the messages published meanwhile were held). */
+  readonly pauses: number
   readonly totalMs: number
   readonly maxMs: number
 }
@@ -158,6 +161,7 @@ export interface Warning {
     | "pending-next-state"
     | "transition-failed"
     | "discarded-messages"
+    | "sent-event-unread"
     | "system-failed"
     | "non-finite-value"
     | "population-growing"
@@ -254,11 +258,11 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
   let current: FrameRecord = { frame: debug.frame(), events: [] }
   history.push(current)
 
-  const stats = new Map<string, { runs: number; failures: number; skips: number; totalMs: number; maxMs: number }>()
+  const stats = new Map<string, { runs: number; failures: number; skips: number; pauses: number; totalMs: number; maxMs: number }>()
   const statsOf = (system: string) => {
     let entry = stats.get(system)
     if (!entry) {
-      entry = { runs: 0, failures: 0, skips: 0, totalMs: 0, maxMs: 0 }
+      entry = { runs: 0, failures: 0, skips: 0, pauses: 0, totalMs: 0, maxMs: 0 }
       stats.set(system, entry)
     }
     return entry
@@ -274,6 +278,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     }
   }
 
+  /** Events some system in the named schedules reads, computed on the first `runtime.send`. */
+  let readEvents: Set<string> | undefined
   /** Commands queued and not yet applied, by queuing system. */
   const pending = new Map<string, number>()
   /** Next states queued and not yet applied, by machine, with the queuing system. */
@@ -342,7 +348,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
         break
       }
       case "system.skipped": {
-        statsOf(event.system).skips += 1
+        if (event.held) statsOf(event.system).pauses += 1
+        else statsOf(event.system).skips += 1
         for (const discarded of event.discarded) {
           warn(
             "discarded-messages",
@@ -350,6 +357,15 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
             `${event.system} was skipped (${event.condition} is false) and discarded ${discarded.stream} entries published meanwhile`,
             event.frame
           )
+        }
+        break
+      }
+      case "runtime.sent": {
+        checkFinite("runtime.send", event.event, event.value, event.frame)
+        // An event the host sends that no system in the named schedules reads is a wiring mistake.
+        readEvents ??= new Set(debug.describe().systems.flatMap((system) => system.events.reads))
+        if (!readEvents.has(event.event)) {
+          warn("sent-event-unread", `unread:${event.event}`, `runtime.send(${event.event}) was called but no system in the named schedules reads ${event.event}`, event.frame)
         }
         break
       }
@@ -574,7 +590,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     const entry = data.stats
     lines.push(entry === undefined
       ? "no traced runs"
-      : `${entry.runs} runs, ${entry.failures} failures, ${entry.skips} skips, avg ${Format.value(entry.runs === 0 ? 0 : entry.totalMs / entry.runs)}ms, max ${Format.value(entry.maxMs)}ms`)
+      : `${entry.runs} runs, ${entry.failures} failures, ${entry.skips} skips, ${entry.pauses} pauses, avg ${Format.value(entry.runs === 0 ? 0 : entry.totalMs / entry.runs)}ms, max ${Format.value(entry.maxMs)}ms`)
     lines.push(`recent (${rangeText()}${hidden > 0 ? `, ${hidden} no-change lines hidden` : ""}):`)
     lines.push(...(recent.length === 0 ? ["(no changes recorded; journal({ system, verbose: true }) shows every line)"] : recent.map(Format.line)))
     return Rendered.make(data, lines.join("\n"))
@@ -593,7 +609,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     }
     const lines = [`${data.frames} frames run (${rangeText()})`, "", ...Format.lintLines(data.lints), "", "# Systems (by total time)"]
     for (const entry of systems) {
-      lines.push(`${entry.system}: ${entry.runs} runs, avg ${Format.value(entry.runs === 0 ? 0 : entry.totalMs / entry.runs)}ms, max ${Format.value(entry.maxMs)}ms${entry.failures > 0 ? `, ${entry.failures} failures` : ""}${entry.skips > 0 ? `, ${entry.skips} skips` : ""}`)
+      lines.push(`${entry.system}: ${entry.runs} runs, avg ${Format.value(entry.runs === 0 ? 0 : entry.totalMs / entry.runs)}ms, max ${Format.value(entry.maxMs)}ms${entry.failures > 0 ? `, ${entry.failures} failures` : ""}${entry.skips > 0 ? `, ${entry.skips} skips` : ""}${entry.pauses > 0 ? `, ${entry.pauses} pauses` : ""}`)
     }
     lines.push("", "# Warnings")
     if (data.warnings.length === 0) lines.push("(none)")

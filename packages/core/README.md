@@ -22,7 +22,8 @@ Related packages, released together with the same version:
 
 - [`@typeonce/bevy-ts-math`](https://www.npmjs.com/package/@typeonce/bevy-ts-math): validated vectors, sizes, and bounding boxes
 - [`@typeonce/bevy-ts-browser`](https://www.npmjs.com/package/@typeonce/bevy-ts-browser): fixed-step loop and keyboard actions
-- [`@typeonce/bevy-ts-pixi`](https://www.npmjs.com/package/@typeonce/bevy-ts-pixi): entity-to-Pixi node sync
+- [`@typeonce/bevy-ts-render`](https://www.npmjs.com/package/@typeonce/bevy-ts-render): entity-to-node sync for any renderer
+- [`@typeonce/bevy-ts-pixi`](https://www.npmjs.com/package/@typeonce/bevy-ts-pixi): Pixi container adapter for the render-node registry
 - [`@typeonce/bevy-ts-devtools`](https://www.npmjs.com/package/@typeonce/bevy-ts-devtools): headless debug sessions and trace reports
 
 Documentation: https://sandromaglione.github.io/bevy-ts/ ·

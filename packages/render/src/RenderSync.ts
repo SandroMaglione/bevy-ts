@@ -23,7 +23,7 @@
  * runtime requirements like the registry itself.
  *
  * @module RenderSync
- * @docGroup pixi
+ * @docGroup render
  *
  * @example
  * ```ts
@@ -243,12 +243,12 @@ export const system = <
     for (const { entity, data } of queries.added.each()) {
       const context = contextOf(entity, data, services, resources)
       options.apply(registry.ensure(entity.id, () => options.create(context)), context)
-      applied.add(entity.id.value)
+      applied.add(entity.id)
     }
     for (let index = 0; index < triggers.length; index++) {
       for (const { entity, data } of queries[`changed${index}`].each()) {
-        if (applied.has(entity.id.value)) continue
-        applied.add(entity.id.value)
+        if (applied.has(entity.id)) continue
+        applied.add(entity.id)
         const node = registry.get(entity.id)
         if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
       }

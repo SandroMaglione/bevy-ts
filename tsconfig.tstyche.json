@@ -16,6 +16,8 @@
       "@typeonce/bevy-ts/*": ["./packages/core/src/*"],
       "@typeonce/bevy-ts-browser": ["./packages/browser/src/index.ts"],
       "@typeonce/bevy-ts-browser/*": ["./packages/browser/src/*"],
+      "@typeonce/bevy-ts-render": ["./packages/render/src/index.ts"],
+      "@typeonce/bevy-ts-render/*": ["./packages/render/src/*"],
       "@typeonce/bevy-ts-pixi": ["./packages/pixi/src/index.ts"],
       "@typeonce/bevy-ts-pixi/*": ["./packages/pixi/src/*"],
       "@typeonce/bevy-ts-math": ["./packages/math/src/index.ts"],

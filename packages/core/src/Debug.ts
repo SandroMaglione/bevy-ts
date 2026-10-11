@@ -156,6 +156,10 @@ export interface SystemDescription {
   readonly services: ReadonlyArray<string>
   /** Run conditions, rendered, for example `stateChanged(Game/Flow)`. */
   readonly when: ReadonlyArray<string>
+  /** Pause conditions, rendered: while one fails the system waits and holds its stream entries. */
+  readonly pauseWhen: ReadonlyArray<string>
+  /** Whether the system declares `local` scratch state. */
+  readonly local: boolean
 }
 
 export type StepDescription =
@@ -395,8 +399,23 @@ export interface SystemSkippedEvent {
   readonly system: string
   /** The run condition that did not hold, rendered. */
   readonly condition: string
-  /** Stream entries published since the system's previous run, now discarded for it. */
+  /**
+   * `true` when a `pauseWhen` condition failed: the system is paused and
+   * keeps its stream entries. `false` when a `when`
+   * condition failed: the entries are discarded for it.
+   */
+  readonly held: boolean
+  /** Stream entries published since the system's previous run, now discarded for it (empty when `held`). */
   readonly discarded: ReadonlyArray<{ readonly stream: string; readonly count: number }>
+}
+
+/** An event the host published with `runtime.send(...)`, outside any system. */
+export interface SentEvent {
+  readonly type: "runtime.sent"
+  readonly frame: number
+  readonly tick: number
+  readonly event: string
+  readonly value: unknown
 }
 
 export interface DeferredEvent {
@@ -438,6 +457,7 @@ export type TraceEvent =
   | ScheduleEndEvent
   | SystemEvent
   | SystemSkippedEvent
+  | SentEvent
   | DeferredEvent
   | TransitionEvent
   | RestoreEvent

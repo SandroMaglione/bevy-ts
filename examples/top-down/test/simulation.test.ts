@@ -58,7 +58,7 @@ describe("top-down debug session", () => {
     const collected = session.journal({ system: "TopDown/CollectFocusedCollectable" })
     expect(collected.data.map((line) => line.text)).toEqual([
       "resource TopDown/CollectedCount 0 -> 1",
-      "resource TopDown/FocusedCollectable {current:&e12,label:\"Map Fragment\",distance:20.276} -> {current:null,label:null,distance:null}",
+      "resource TopDown/FocusedCollectable {current:12,label:\"Map Fragment\",distance:20.276} -> {current:null,label:null,distance:null}",
       "queued despawn",
       "applyDeferred: despawn e12"
     ])

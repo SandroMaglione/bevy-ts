@@ -310,8 +310,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S, lifecycleCapacity: nu
     relationVersions.set(key, (relationVersions.get(key) ?? 0) + 1)
   }
 
-  const entityIdOf = (id: number): Entity.EntityId<any, any> =>
-    records.get(id)?.entityId ?? Entity.makeEntityId(id)
+  const entityIdOf = (id: number): Entity.EntityId<any, any> => Entity.makeEntityId(id)
 
   const allocateEntity = (): Entity.EntityId<any, any> => {
     const id = Entity.makeEntityId(nextEntity)
@@ -326,14 +325,14 @@ export const makeWorld = <S extends Schema.Any>(schema: S, lifecycleCapacity: nu
     entityId: Entity.EntityId<any, any>,
     components: ReadonlyArray<Entity.StagedComponent>
   ): void => {
-    let record = records.get(entityId.value)
+    let record = records.get(entityId)
     if (!record) {
       const values: Array<unknown> = new Array(descriptors.length)
       values.fill(ABSENT)
       const marks: Array<number> = new Array(descriptors.length * MARK_STRIDE)
       marks.fill(NO_MARK)
       record = {
-        id: entityId.value,
+        id: entityId,
         entityId,
         values,
         marks,

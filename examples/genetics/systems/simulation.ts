@@ -253,7 +253,7 @@ export const ChooseIntentSystem = Game.System(
         let crowdRepulsion = { x: 0, y: 0 }
 
         for (const other of agents) {
-          if (other.entityId === match.entity.id.value) {
+          if (other.entityId === match.entity.id) {
             continue
           }
 
@@ -305,8 +305,8 @@ export const ChooseIntentSystem = Game.System(
           if (
             compatible &&
             vitals.mateCooldown <= 0 &&
-            (vitals.matePartner === null || vitals.matePartner.value === other.entityId) &&
-            (other.vitals.matePartner === null || other.vitals.matePartner.value === match.entity.id.value) &&
+            (vitals.matePartner === null || vitals.matePartner === other.entityId) &&
+            (other.vitals.matePartner === null || other.vitals.matePartner === match.entity.id) &&
             other.vitals.mateCooldown <= 0 &&
             vitals.energy > agent.maxEnergy * 0.74 &&
             vitals.health > agent.maxHealth * 0.68 &&
@@ -570,8 +570,8 @@ export const ResolveAgentInteractionsSystem = Game.System(
 
           const leftVitals = leftLive.value.data.vitals.get()
           const rightVitals = rightLive.value.data.vitals.get()
-          const leftLockedToRight = leftVitals.matePartner?.value === right.entityId
-          const rightLockedToLeft = rightVitals.matePartner?.value === left.entityId
+          const leftLockedToRight = leftVitals.matePartner === right.entityId
+          const rightLockedToLeft = rightVitals.matePartner === left.entityId
           const leftAvailableForMate = leftVitals.matePartner === null || leftLockedToRight
           const rightAvailableForMate = rightVitals.matePartner === null || rightLockedToLeft
 

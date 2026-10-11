@@ -5,7 +5,8 @@
  * normalized steps, systems, and nominal requirement union.
  *
  * Steps run in authored order. `when(conditions, ...entries)` gates a whole
- * group of systems on run conditions at once. Marker steps are the only way queued
+ * group of systems on run conditions at once, and `pauseWhen(...)` pauses a
+ * group without losing the events published meanwhile. Marker steps are the only way queued
  * structural work is applied, and nothing is flushed implicitly when a
  * schedule ends:
  *
@@ -302,7 +303,7 @@ export const when = <
   conditions: Conditions,
   entries: Entries
 ): ConditionalScheduleBuildFor<S, Conditions, Entries> => {
-  const steps = normalizeEntries(entries).map((step) => isSystemStep(step) ? gate(step, conditions) : step)
+  const steps = normalizeEntries(entries).map((step) => isSystemStep(step) ? gate(step, conditions, []) : step)
   validateUniqueSystemSteps(steps, "schedule")
   return {
     kind: "schedule",
@@ -313,11 +314,53 @@ export const when = <
   } as unknown as ConditionalScheduleBuildFor<S, Conditions, Entries>
 }
 
-/** A copy of `system` that also requires `conditions`, sharing runtime state with the original. */
-const gate = (system: AnySystem, conditions: ReadonlyArray<Condition>): AnySystem => ({
+/**
+ * A schedule whose systems are paused while any of `conditions` fails: like
+ * `when`, except that a paused system keeps its place in the event streams it
+ * reads (and in transition events and relation failures), so it sees
+ * everything published during the pause once it runs again. `when` discards
+ * those messages, which is right for a mode change (menu, game over) but
+ * loses the last hit of a step that started a hit-stop, or the kill that
+ * fired a passive. Use `pauseWhen` for a freeze whose events stay valid, and
+ * `when` for a mode after which they are stale; nest them to combine both.
+ * Marker steps in the group still run.
+ *
+ * A paused reader holds its stream entries, so a long pause can reach
+ * `Runtime.streamCapacity`; past it the oldest are dropped and the reader
+ * sees `lagged() === true` when it resumes.
+ *
+ * @example
+ * ```ts
+ * const gameplay = Game.Schedule.when([Game.Condition.inState(Flow, "Playing")],
+ *   Game.Schedule.pauseWhen([Game.Condition.not(frozen)], Move, Attack, ApplyHits)
+ * )
+ * ```
+ */
+export const pauseWhen = <
+  S extends Schema.Any,
+  const Conditions extends ReadonlyArray<Condition>,
+  const Entries extends ReadonlyArray<ScheduleEntry>
+>(
+  schema: S,
+  conditions: Conditions,
+  entries: Entries
+): ConditionalScheduleBuildFor<S, Conditions, Entries> => {
+  const steps = normalizeEntries(entries).map((step) => isSystemStep(step) ? gate(step, [], conditions) : step)
+  validateUniqueSystemSteps(steps, "schedule")
+  return {
+    kind: "schedule",
+    schema,
+    steps,
+    systems: collectUniqueSystems(steps),
+    requirements: collectStepRequirements(steps)
+  } as unknown as ConditionalScheduleBuildFor<S, Conditions, Entries>
+}
+
+/** A copy of `system` that also requires `when` (skipping) and `pauseWhen` (pausing) conditions, sharing runtime state with the original. */
+const gate = (system: AnySystem, when: ReadonlyArray<Condition>, pauseWhen: ReadonlyArray<Condition>): AnySystem => ({
   ...system,
-  spec: { ...system.spec, when: [...conditions, ...system.spec.when] },
-  requirements: Requirement.collect([...system.requirements, ...conditions.flatMap((condition) => condition.requirements)]),
+  spec: { ...system.spec, when: [...when, ...system.spec.when], pauseWhen: [...pauseWhen, ...system.spec.pauseWhen] },
+  requirements: Requirement.collect([...system.requirements, ...[...when, ...pauseWhen].flatMap((condition) => condition.requirements)]),
   base: system.base ?? system
 })
 

@@ -4,6 +4,7 @@
  * the API.
  */
 import { Decode, Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import type { Query } from "@typeonce/bevy-ts/Query"
 
 // 1. Descriptors name the data a world can hold. Constructed descriptors carry
 //    a validator, so values loaded from a save are checked; transient ones are
@@ -37,6 +38,8 @@ const Moving = Game.Query({
   selection: { position: Game.Query.write(Position), velocity: Game.Query.read(Velocity) }
 })
 
+const positionOf = (data: Query.Cells<typeof Moving>) => data.position.get()
+
 const Move = Game.System("Concepts/Move", {
   queries: { moving: Moving },
   resources: { dt: Game.System.readResource(DeltaTime) }
@@ -44,7 +47,8 @@ const Move = Game.System("Concepts/Move", {
   const dt = resources.dt.get()
   for (const { data } of queries.moving.each()) {
     const velocity = data.velocity.get()
-    data.position.update((position) => ({ x: position.x + velocity.x * dt, y: position.y + velocity.y * dt }))
+    const position = positionOf(data)
+    data.position.set({ x: position.x + velocity.x * dt, y: position.y + velocity.y * dt })
   }
 })
 
@@ -106,6 +110,37 @@ export const update = Game.Schedule(
   Game.Schedule.applyStateTransitions(),
   Report
 )
+
+const ReadMoving = Game.Query({
+  selection: { position: Game.Query.read(Position), velocity: Game.Query.read(Velocity) }
+})
+const movementAccess = { queries: { moving: ReadMoving } }
+const InspectPosition = Game.Inspector("Concepts/InspectPosition", {
+  ...movementAccess,
+  machines: { flow: Game.System.machine(Flow) }
+}, ({ queries, machines }) => ({
+  position: queries.moving.each().map(({ data }) => data.position.get()),
+  flow: machines.flow.get()
+}))
+
+export const runLookups = () => {
+  const made = Game.Runtime.make({
+    services: Game.Runtime.services(),
+    machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Playing"))
+  })
+  made.tick(setup)
+  let found = false
+  let only = false
+  const Lookup = Game.System("Concepts/Lookup", movementAccess, ({ queries }) => {
+    const [first] = queries.moving.each()
+    if (first === undefined) return
+    found = queries.moving.get(first.entity.id).ok
+    const result = queries.moving.singleOptional()
+    only = result.ok && result.value !== undefined
+  })
+  made.tick(Game.Schedule(Lookup))
+  return { found, only, ...made.inspect(InspectPosition) }
+}
 
 // 10. The runtime owns the world; the host drives it.
 export const runConcepts = (frames: number): { readonly log: ReadonlyArray<string>; readonly failure: string | undefined } => {

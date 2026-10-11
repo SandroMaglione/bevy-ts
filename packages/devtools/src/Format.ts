@@ -24,18 +24,10 @@ const formatNumber = (value: number): string => {
   return String(rounded === 0 ? 0 : rounded)
 }
 
-const identityOf = (value: object): string | undefined => {
-  const tagged = value as { readonly kind?: unknown; readonly value?: unknown }
-  if (typeof tagged.value !== "number") return undefined
-  if (tagged.kind === "EntityId") return `e${tagged.value}`
-  if (tagged.kind === "EntityHandle") return `&e${tagged.value}`
-  return undefined
-}
-
 /**
- * Prints a value on one line: `{x:1.5,y:2}`, `[1,2,…+8]`, `e12` for entity
- * ids, `&e12` for handles, `Container{…}` for class instances past the depth
- * limit.
+ * Prints a value on one line: `{x:1.5,y:2}`, `[1,2,…+8]`, `Container{…}` for
+ * class instances past the depth limit. Entity ids and handles are numbers
+ * and print as such.
  */
 export const value = (input: unknown, options: ValueOptions = {}): string => {
   const maxDepth = options.depth ?? 3
@@ -59,8 +51,6 @@ export const value = (input: unknown, options: ValueOptions = {}): string => {
     }
     if (current === null) return "null"
     const object = current as object
-    const identity = identityOf(object)
-    if (identity !== undefined) return identity
     if (seen.has(object)) return "[cycle]"
     const prototype = Object.getPrototypeOf(object) as object | null
     const className = prototype === null || prototype === Object.prototype || Array.isArray(object)
@@ -130,6 +120,8 @@ export const system = (input: Debug.SystemDescription): string => {
   add("reads relation failures", input.relationFailures)
   add("services", input.services)
   add("when", input.when)
+  add("pauses when", input.pauseWhen)
+  if (input.local) lines.push("  local state")
   return lines.join("\n")
 }
 
@@ -383,9 +375,22 @@ export const lines = (event: Debug.TraceEvent, options: ValueOptions = {}): Read
         entity: undefined,
         subject: undefined,
         noop: discarded.length === 0,
-        text: `skipped: ${event.condition} is false${discarded.length > 0 ? `; discarded ${discarded.join(", ")}` : ""}`
+        text: event.held
+          ? `paused: ${event.condition} is false (holding its stream entries)`
+          : `skipped: ${event.condition} is false${discarded.length > 0 ? `; discarded ${discarded.join(", ")}` : ""}`
       }]
     }
+    case "runtime.sent":
+      return [{
+        kind: "event",
+        frame: event.frame,
+        schedule: "",
+        system: undefined,
+        entity: undefined,
+        subject: event.event,
+        noop: false,
+        text: `sent ${event.event} ${value(event.value)} (runtime.send)`
+      }]
     case "deferred": {
       const result: Array<Line> = []
       for (const command of event.commands) {

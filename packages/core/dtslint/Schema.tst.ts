@@ -661,7 +661,7 @@ describe("Schema", () => {
 
             lookup.getHandle(current, WithQuery)
 
-            // @ts-expect-error Property 'schema' is missing in type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name
+            // @ts-expect-error Types of property '__brand' are incompatible.
             lookup.get(current, PositionQuery)
 
             const WrongQuery = Game.Query({
@@ -670,7 +670,7 @@ describe("Schema", () => {
               }
             })
 
-            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
+            // @ts-expect-error is not assignable to parameter of type 'never'.
             lookup.getHandle(current, WrongQuery)
 
             const OptionalOnlyQuery = Game.Query({
@@ -680,7 +680,7 @@ describe("Schema", () => {
               }
             })
 
-            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
+            // @ts-expect-error is not assignable to parameter of type 'never'.
             lookup.getHandle(current, OptionalOnlyQuery)
 
             const RelatedOnlyQuery = Game.Query({
@@ -690,7 +690,7 @@ describe("Schema", () => {
               with: [Target] as const
             })
 
-            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
+            // @ts-expect-error is not assignable to parameter of type 'never'.
             lookup.getHandle(current, RelatedOnlyQuery)
 
             const LifecycleOnlyQuery = Game.Query({
@@ -700,7 +700,7 @@ describe("Schema", () => {
               filters: [Game.Query.changed(Position)] as const
             })
 
-            // @ts-expect-error Argument of type '{ readonly root: { readonly kind: "SchemaRoot"; readonly name: "HandleRoot"; readonly
+            // @ts-expect-error is not assignable to parameter of type 'never'.
             lookup.getHandle(current, LifecycleOnlyQuery)
           }
         }

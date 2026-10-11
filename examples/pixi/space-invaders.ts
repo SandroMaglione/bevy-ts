@@ -3,7 +3,8 @@ import * as Matter from "matter-js"
 
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi"
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -302,7 +303,7 @@ const ensureMatterBody = (
   renderBody: RenderBodyValue,
   matter: MatterHostValue
 ): Matter.Body => {
-  const existing = matter.bodies.get(entityId.value)
+  const existing = matter.bodies.get(entityId)
   if (existing) {
     return existing
   }
@@ -316,7 +317,7 @@ const ensureMatterBody = (
     { isSensor: true }
   )
   Matter.World.add(matter.engine.world, body)
-  matter.bodies.set(entityId.value, body)
+  matter.bodies.set(entityId, body)
   return body
 }
 
@@ -324,13 +325,13 @@ const destroyMatterBody = (
   entityId: Entity.EntityId<typeof schema>,
   matter: MatterHostValue
 ) => {
-  const body = matter.bodies.get(entityId.value)
+  const body = matter.bodies.get(entityId)
   if (!body) {
     return
   }
 
   Matter.World.remove(matter.engine.world, body)
-  matter.bodies.delete(entityId.value)
+  matter.bodies.delete(entityId)
 }
 
 const renderBackdrop = (): Container => {
@@ -715,29 +716,29 @@ const EnemyBulletCollisionSystem = Game.System(
 
       for (const bullet of queries.bullets.each()) {
         const bulletId = bullet.entity.id
-        if (consumedBullets.has(bulletId.value)) {
+        if (consumedBullets.has(bulletId)) {
           continue
         }
 
-        const bulletBody = services.matter.bodies.get(bulletId.value)
+        const bulletBody = services.matter.bodies.get(bulletId)
         if (!bulletBody) {
           continue
         }
 
         for (const enemy of queries.enemies.each()) {
           const enemyId = enemy.entity.id
-          if (consumedEnemies.has(enemyId.value)) {
+          if (consumedEnemies.has(enemyId)) {
             continue
           }
 
-          const enemyBody = services.matter.bodies.get(enemyId.value)
+          const enemyBody = services.matter.bodies.get(enemyId)
           if (!enemyBody) {
             continue
           }
 
           if (Matter.Collision.collides(bulletBody, enemyBody)?.collided ?? false) {
-            consumedBullets.add(bulletId.value)
-            consumedEnemies.add(enemyId.value)
+            consumedBullets.add(bulletId)
+            consumedEnemies.add(enemyId)
             // The destroy event is read by a later system, so emit
             // storage-safe handles and re-resolve them there.
             events.destroyEnemy.emit({
@@ -766,15 +767,15 @@ const EnemyDestroySystem = Game.System(
         // The event is readable now, but either entity may already be stale.
         // Re-resolution keeps that failure explicit and typed.
         const bullet = lookup.getHandle(event.bullet, BulletCollisionQuery)
-        if (bullet.ok && !despawned.has(bullet.value.entity.id.value)) {
+        if (bullet.ok && !despawned.has(bullet.value.entity.id)) {
           commands.despawn(bullet.value.entity.id)
-          despawned.add(bullet.value.entity.id.value)
+          despawned.add(bullet.value.entity.id)
         }
 
         const enemy = lookup.getHandle(event.enemy, EnemyCollisionQuery)
-        if (enemy.ok && !despawned.has(enemy.value.entity.id.value)) {
+        if (enemy.ok && !despawned.has(enemy.value.entity.id)) {
           commands.despawn(enemy.value.entity.id)
-          despawned.add(enemy.value.entity.id.value)
+          despawned.add(enemy.value.entity.id)
         }
       }
     }
@@ -873,7 +874,7 @@ export const startSpaceInvadersExample = async (
     shoot: [" "]
   })
   let input = keyboard.snapshot()
-  const nodes = NodeRegistry.inContainer<Graphics>(scene)
+  const nodes = PixiNodeRegistry.make<Graphics>(scene)
 
   const pixiHost: PixiHostValue = {
     application,

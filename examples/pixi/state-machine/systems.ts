@@ -1,6 +1,6 @@
 import * as Scalar from "@typeonce/bevy-ts-math/Scalar"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
-import { RenderSync } from "@typeonce/bevy-ts-pixi"
+import { RenderSync } from "@typeonce/bevy-ts-render"
 import { PICKUP_POINTS } from "./content.ts"
 import { playerSpawn } from "./definitions.ts"
 import {

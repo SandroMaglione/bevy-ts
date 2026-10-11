@@ -20,7 +20,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = fileURLToPath(new URL("..", import.meta.url))
-const packages = ["core", "math", "browser", "pixi", "devtools"] as const
+const packages = ["core", "math", "browser", "render", "pixi", "devtools"] as const
 
 const run = (command: string, args: ReadonlyArray<string>, cwd: string): string =>
   execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] })
@@ -50,6 +50,9 @@ for (const directory of packages) {
   }
   if (listing.some((file) => file.includes("/test/") || file.includes("tsbuildinfo"))) {
     throw new Error(`${manifest.name} tarball contains test or build-info files`)
+  }
+  if (directory === "pixi" && listing.some((file) => /\/(NodeRegistry|RenderSync)\.(ts|js|d\.ts)$/.test(file))) {
+    throw new Error("Pixi tarball contains removed compatibility modules")
   }
   const packed = JSON.parse(run("tar", ["-xzOf", path.join(tarballs, created), "package/package.json"], work)) as {
     readonly exports: Record<string, unknown>
@@ -94,7 +97,9 @@ import { Descriptor, Schema } from "@typeonce/bevy-ts"
 import * as Result from "@typeonce/bevy-ts/Result"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
 import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { NodeRegistry } from "@typeonce/bevy-ts-render"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import * as Pixi from "@typeonce/bevy-ts-pixi"
 import { Session } from "@typeonce/bevy-ts-devtools"
 
 const Position = Descriptor.ConstructedComponent(Vector2)("Consumer/Position")
@@ -108,11 +113,13 @@ const session = Session.make(runtime, { schedules: { setup: Game.Schedule(Spawn,
 const ran = session.run("setup")
 const keyboard = Keyboard.scripted({ jump: [" "] }, [{ frame: 0, press: ["jump"] }])
 const registry = NodeRegistry.make<string>({ attach: () => {}, detach: () => {} })
+const sprites = PixiNodeRegistry.make<{ destroy(): void }>({ addChild: () => {}, removeChild: () => {} })
+if ("NodeRegistry" in Pixi || "RenderSync" in Pixi) throw new Error("Pixi publishes removed compatibility exports")
 console.log(JSON.stringify({
   ok: ran.data.ok && Result.isSuccess(Result.success(1)),
   entities: session.dump().data.entityCount,
   jump: keyboard.snapshot().jump.pressed,
-  nodes: registry.size
+  nodes: registry.size + sprites.size
 }))
 `
 writeFileSync(path.join(consumer, "main.ts"), program)

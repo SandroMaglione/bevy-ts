@@ -83,6 +83,9 @@ importers:
       '@typeonce/bevy-ts-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
+      '@typeonce/bevy-ts-render':
+        specifier: workspace:*
+        version: link:../../packages/render
 
   examples/pixi:
     dependencies:
@@ -98,6 +101,9 @@ importers:
       '@typeonce/bevy-ts-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
+      '@typeonce/bevy-ts-render':
+        specifier: workspace:*
+        version: link:../../packages/render
 
   examples/platformer:
     dependencies:
@@ -113,6 +119,9 @@ importers:
       '@typeonce/bevy-ts-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
+      '@typeonce/bevy-ts-render':
+        specifier: workspace:*
+        version: link:../../packages/render
 
   examples/top-down:
     dependencies:
@@ -128,9 +137,9 @@ importers:
       '@typeonce/bevy-ts-math':
         specifier: workspace:*
         version: link:../../packages/math
-      '@typeonce/bevy-ts-pixi':
+      '@typeonce/bevy-ts-render':
         specifier: workspace:*
-        version: link:../../packages/pixi
+        version: link:../../packages/render
 
   packages/browser:
     dependencies:
@@ -158,12 +167,19 @@ importers:
 
   packages/pixi:
     dependencies:
+      '@typeonce/bevy-ts-render':
+        specifier: workspace:^
+        version: link:../render
+    devDependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/render:
+    dependencies:
       '@typeonce/bevy-ts':
         specifier: workspace:^
         version: link:../core
-      '@typeonce/bevy-ts-browser':
-        specifier: workspace:^
-        version: link:../browser
 
 packages:
 

@@ -1,7 +1,7 @@
 {
   "name": "@typeonce/bevy-ts-pixi",
   "version": "0.3.0",
-  "description": "Pixi render-node registry and render sync for bevy-ts",
+  "description": "Pixi container adapter for bevy-ts render-node registries",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {
@@ -64,8 +64,10 @@
     "check": "tsc -b tsconfig.json --pretty false"
   },
   "dependencies": {
-    "@typeonce/bevy-ts": "workspace:^",
-    "@typeonce/bevy-ts-browser": "workspace:^"
+    "@typeonce/bevy-ts-render": "workspace:^"
+  },
+  "devDependencies": {
+    "@typeonce/bevy-ts": "workspace:*"
   },
   "engines": {
     "node": ">=20"

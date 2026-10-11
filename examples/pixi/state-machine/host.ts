@@ -1,5 +1,5 @@
 import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 import { Application, Container, Graphics } from "pixi.js"
 import * as InputAxis from "@typeonce/bevy-ts-math/InputAxis"
 
@@ -226,7 +226,7 @@ export const createStateMachineBrowserHost = async (mount: HTMLElement) => {
   // Start and pause are consumed once, so only one queue system reacts per press.
   let startQueued = false
   let pauseQueued = false
-  const nodes = NodeRegistry.inContainer<Graphics>(scene)
+  const nodes = PixiNodeRegistry.make<Graphics>(scene)
 
   const host: BrowserHostValue = {
     application,

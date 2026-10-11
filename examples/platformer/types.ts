@@ -1,4 +1,4 @@
-import type { NodeRegistry } from "@typeonce/bevy-ts-pixi"
+import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 import type { Application, Container } from "pixi.js"
 import type * as Scalar from "@typeonce/bevy-ts-math/Scalar"
 import type * as Size2Value from "@typeonce/bevy-ts-math/Size2"

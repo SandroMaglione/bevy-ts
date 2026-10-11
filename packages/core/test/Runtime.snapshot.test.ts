@@ -36,7 +36,7 @@ const readWorld = (runtime: ReturnType<typeof makeRuntime>) => {
     resources: { score: Game.System.readResource(Score) },
     machines: { flow: Game.System.machine(Flow) }
   }, ({ queries, resources, machines }) => ({
-    names: queries.named.each().map((match) => [match.entity.id.value, match.data.name.get()] as const),
+    names: queries.named.each().map((match) => [match.entity.id, match.data.name.get()] as const),
     score: resources.score.get(),
     flow: machines.flow.get()
   }))
@@ -61,6 +61,25 @@ const populate = (runtime: ReturnType<typeof makeRuntime>) => {
 }
 
 describe("Runtime snapshots", () => {
+  it("rejects object-shaped handles without changing the world", () => {
+    const source = makeRuntime(0)
+    populate(source)
+    const saved = source.snapshot()
+    const invalid = {
+      ...saved,
+      entities: saved.entities.map((entity) => entity.components[Target.name] === undefined ? entity : {
+        ...entity,
+        components: { ...entity.components, [Target.name]: { handle: { kind: "EntityHandle", value: 2 } } }
+      })
+    }
+    const target = makeRuntime(0)
+    const before = target.snapshot()
+    const restored = target.restore(JSON.parse(JSON.stringify(invalid)))
+    expect(restored.ok).toBe(false)
+    if (!restored.ok) expect(restored.error._tag).toBe("InvalidComponent")
+    expect(target.snapshot()).toEqual(before)
+    expect(saved.entities.find((entity) => Target.name in entity.components)?.components[Target.name]).toEqual({ handle: 2 })
+  })
   it("round-trips entities, relations, resources, and machines through JSON", () => {
     const source = makeRuntime(0)
     populate(source)
@@ -193,8 +212,8 @@ describe("Runtime snapshots", () => {
 
   it("decodes stored handles and rejects malformed ones", () => {
     const valid = Entity.decodeHandle(Root, JSON.parse(JSON.stringify(Entity.makeHandle(4))))
-    expect(valid.ok && valid.value.value).toBe(4)
-    for (const raw of [null, 4, { kind: "EntityId", value: 4 }, { kind: "EntityHandle", value: 1.5 }]) {
+    expect(valid.ok && valid.value).toBe(4)
+    for (const raw of [null, 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "4", { kind: "EntityHandle", value: 7 }, { kind: "EntityId", value: 4 }, { kind: "EntityHandle", value: 1.5 }, { value: 4 }]) {
       expect(Entity.decodeHandle(Root, raw).ok).toBe(false)
     }
   })

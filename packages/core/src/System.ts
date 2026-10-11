@@ -687,7 +687,30 @@ export interface SystemAccessInput {
   readonly despawned?: Record<string, DespawnedRead>
   readonly relationFailures?: Record<string, RelationFailureRead<Relation.Relation.Any>>
   readonly when?: ReadonlyArray<Machine.Condition>
+  /**
+   * Run conditions that pause the system instead of skipping it: while one
+   * fails, the system does not run but keeps its place in every event stream
+   * it reads, so it sees what was published meanwhile once it runs again.
+   * Use it for a freeze whose events stay valid (hit-stop, a pause menu);
+   * use `when` for a mode change, after which they are stale. Checked after
+   * `when`. `Schedule.pauseWhen(...)` adds them to a whole group.
+   */
+  readonly pauseWhen?: ReadonlyArray<Machine.Condition>
   readonly transitions?: Record<string, Machine.TransitionRead<Machine.StateMachine.Any>>
+  /**
+   * Scratch state owned by the system: a broad-phase grid, a path cache, a
+   * reused buffer. The factory runs on first encounter in each runtime,
+   * even if a gate skips that run, and again before a successful `restore`.
+   * Return fresh state using synchronous allocation without side effects.
+   * The value is passed to every run as `local`. It is not
+   * world data: it is not rolled back when the system fails, not saved in
+   * snapshots, and not visible to other systems. A system and its gated
+   * copies (`Schedule.when`, `Schedule.pauseWhen`) share one value. Mode
+   * changes do not reset it. Rebuild scratch buffers from current world
+   * data each run; keep timers, RNG state, and gameplay progress in resources.
+   * Values needing cleanup belong in host-managed services.
+   */
+  readonly local?: () => unknown
 }
 
 /**
@@ -707,6 +730,12 @@ type AccessField<
   Key extends PropertyKey,
   Fallback
 > = Key extends keyof Access ? NonNullable<Access[Key]> : Fallback
+
+// Unlike access maps, an absent factory produces an absent callback value.
+// Preserve optional factories and distribute over conditional access fragments.
+type LocalFactory<Access> = Access extends unknown
+  ? "local" extends keyof Access ? Access["local"] : undefined
+  : never
 
 /**
  * The exact access declaration normalized once at the system boundary.
@@ -731,7 +760,9 @@ export type SystemSpec<
   readonly despawned: AccessField<Access, "despawned", {}>
   readonly relationFailures: AccessField<Access, "relationFailures", {}>
   readonly when: AccessField<Access, "when", readonly []>
+  readonly pauseWhen: AccessField<Access, "pauseWhen", readonly []>
   readonly transitions: AccessField<Access, "transitions", {}>
+  readonly local: LocalFactory<Access>
   readonly schema: S
   readonly __schemaRoot: Root
 }
@@ -822,6 +853,10 @@ type QueryContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["queries"]]: QueryHandle<Spec["schema"], Spec["queries"][K]>
 }
 
+/** The value of the system's `local` factory, or `undefined` when it declares none. */
+type LocalValue<Factory> = Factory extends () => infer Local ? Local : undefined
+type LocalContext<Spec extends AnySystemSpec> = LocalValue<Spec["local"]>
+
 /**
  * The implementation context derived from a system spec.
  *
@@ -842,6 +877,8 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly transitions: TransitionContext<Spec>
   readonly services: ServiceContext<Spec>
   readonly commands: CommandsApi<Spec["schema"], Spec["__schemaRoot"]>
+  /** The system's own scratch state (see `local` in the spec); `undefined` when it declares none. */
+  readonly local: LocalContext<Spec>
 }
 
 /**
@@ -866,6 +903,7 @@ export type SystemNeeds<Spec extends AnySystemSpec> =
   | Machine.MachineNeedsFromRecord<Spec["transitionEvents"]>
   | Machine.MachineNeedsFromRecord<Spec["transitions"]>
   | Machine.ConditionNeedsFromConditions<Spec["when"]>
+  | Machine.ConditionNeedsFromConditions<Spec["pauseWhen"]>
 
 type AccessRecordValue<Access, Key extends PropertyKey> =
   Key extends keyof Access
@@ -891,6 +929,11 @@ export type SystemAccessNeeds<Access extends SystemAccessInput> =
   | ("when" extends keyof Access
       ? NonNullable<Access["when"]> extends ReadonlyArray<Machine.Condition>
         ? Machine.ConditionNeedsFromConditions<NonNullable<Access["when"]>>
+        : never
+      : never)
+  | ("pauseWhen" extends keyof Access
+      ? NonNullable<Access["pauseWhen"]> extends ReadonlyArray<Machine.Condition>
+        ? Machine.ConditionNeedsFromConditions<NonNullable<Access["pauseWhen"]>>
         : never
       : never)
 
@@ -1018,7 +1061,7 @@ const requirementValuesFromCondition = (
 ): ReadonlyArray<Requirement.RequirementValue> => condition.requirements
 
 const collectSystemRequirements = (
-  spec: SystemAccessInput
+  spec: Omit<SystemAccessInput, "local">
 ): ReadonlyArray<Requirement.RequirementValue> => Requirement.collect([
   ...requirementValuesFromRecord(spec.services),
   ...requirementValuesFromRecord(spec.resources),
@@ -1026,7 +1069,8 @@ const collectSystemRequirements = (
   ...requirementValuesFromRecord(spec.nextMachines),
   ...requirementValuesFromRecord(spec.transitionEvents),
   ...requirementValuesFromRecord(spec.transitions),
-  ...(spec.when ?? []).flatMap(requirementValuesFromCondition)
+  ...(spec.when ?? []).flatMap(requirementValuesFromCondition),
+  ...(spec.pauseWhen ?? []).flatMap(requirementValuesFromCondition)
 ])
 
 export function System<
@@ -1063,7 +1107,9 @@ export function System(
     despawned: spec.despawned ?? {},
     relationFailures: spec.relationFailures ?? {},
     when: spec.when ?? [],
+    pauseWhen: spec.pauseWhen ?? [],
     transitions: spec.transitions ?? {},
+    local: spec.local,
     __schemaRoot: undefined
   } as Spec
 
