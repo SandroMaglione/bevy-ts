@@ -240,7 +240,8 @@ export const pushOut = (center: Vec2, radius: number, boxes: ReadonlyArray<Box2>
  * Moves a circle by `delta`, stopping at walls and sliding along them (up to
  * four contacts per call). The whole path is swept, so no displacement can
  * tunnel through a wall. A circle that starts inside a wall is pushed out
- * first.
+ * first. A circle meeting a box's corner dead-on goes around it rather than
+ * stopping against it.
  *
  * @category Movement
  */
@@ -269,6 +270,14 @@ export const moveCircle = (start: Vec2, delta: Vec2, radius: number, boxes: Read
     if (into < 0) {
       rx -= into * hit.nx
       ry -= into * hit.ny
+      // Dead-on into a rounded corner (as an exact diagonal meets an
+      // axis-aligned box) nothing is left to slide along: go around the
+      // corner instead of stopping against it.
+      if (hit.nx !== 0 && hit.ny !== 0 && rx * rx + ry * ry < 1e-12 * into * into) {
+        const side = rx * -hit.ny + ry * hit.nx < 0 ? -1 : 1
+        rx = -hit.ny * -into * side
+        ry = hit.nx * -into * side
+      }
     }
   }
   return { position, blocked }

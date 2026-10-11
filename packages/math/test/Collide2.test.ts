@@ -19,6 +19,15 @@ describe("Collide2", () => {
     expect(moved.position.y).toBeCloseTo(30, 5)
   })
 
+  it("goes around a corner it meets dead-on instead of stopping against it", () => {
+    const box = Box2.around(100, -100, 30, 30)
+    let position = { x: 0, y: 0 }
+    // Exactly along the diagonal at the box's corner (70, -70).
+    for (let step = 0; step < 40; step++) position = Collide2.moveCircle(position, { x: 5, y: -5 }, 10, [box]).position
+    expect(position.x - position.y).toBeGreaterThan(200)
+    expect(Box2.overlapsCircle(box, position, 10 - 1e-6)).toBe(false)
+  })
+
   it("moves freely when nothing is in the way", () => {
     expect(Collide2.moveCircle({ x: 0, y: 0 }, { x: 50, y: 20 }, 10, [thin])).toEqual({ position: { x: 50, y: 20 }, blocked: false })
   })
