@@ -170,6 +170,10 @@ importers:
       '@typeonce/bevy-ts-render':
         specifier: workspace:^
         version: link:../render
+    devDependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:*
+        version: link:../core
 
   packages/render:
     dependencies:
