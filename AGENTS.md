@@ -3,9 +3,7 @@
 - [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard input.
 - [`packages/render`](./packages/render/): renderer-agnostic node registry and render-sync systems.
 - [`packages/pixi`](./packages/pixi/): Pixi container adapter (`PixiNodeRegistry.make`) for the render package's registry contract.
-- [`packages/math`](./packages/math/): validated math values, checked geometry, and explicit-state random sampling.
-- [`packages/spatial`](./packages/spatial/): bounded broad-phase spatial hashing.
-- [`packages/navigation`](./packages/navigation/): immutable grid snapshots and multi-goal distance fields.
+- [`packages/math`](./packages/math/): validated math values (Scalar, Vector2, Size2, Aabb, InputAxis).
 - [`packages/devtools`](./packages/devtools/): debug sessions, trace history, and text reports over the core `Debug` handle.
 - [`examples`](./examples/): workspace example apps that consume packages by package name.
 

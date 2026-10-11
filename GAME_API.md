@@ -189,8 +189,7 @@ world untouched on failure.
 Both methods only exist when every component and resource is either
 transient (never saved) or constructed with a validator that accepts
 untrusted input: a `result(raw: unknown)`, or a `decode(raw: unknown)` next to
-a typed `result` (for example, `Vector2`, `Aabb`, or `Direction2` from
-`@typeonce/bevy-ts-math`). Otherwise calling
+a typed `result` (every `@typeonce/bevy-ts-math` module exports one). Otherwise calling
 them fails to compile, and the error lists each descriptor to fix:
 
 ```ts

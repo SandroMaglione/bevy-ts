@@ -9,9 +9,7 @@
       "@typeonce/bevy-ts-render",
       "@typeonce/bevy-ts-pixi",
       "@typeonce/bevy-ts-math",
-      "@typeonce/bevy-ts-devtools",
-      "@typeonce/bevy-ts-spatial",
-      "@typeonce/bevy-ts-navigation"
+      "@typeonce/bevy-ts-devtools"
     ]
   ],
   "linked": [],

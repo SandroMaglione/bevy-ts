@@ -3,29 +3,11 @@
   "extends": "./tsconfig.base.json",
   "include": [],
   "references": [
-    {
-      "path": "packages/core"
-    },
-    {
-      "path": "packages/browser"
-    },
-    {
-      "path": "packages/render"
-    },
-    {
-      "path": "packages/pixi"
-    },
-    {
-      "path": "packages/math"
-    },
-    {
-      "path": "packages/devtools"
-    },
-    {
-      "path": "packages/spatial"
-    },
-    {
-      "path": "packages/navigation"
-    }
+    { "path": "packages/core" },
+    { "path": "packages/browser" },
+    { "path": "packages/render" },
+    { "path": "packages/pixi" },
+    { "path": "packages/math" },
+    { "path": "packages/devtools" }
   ]
 }

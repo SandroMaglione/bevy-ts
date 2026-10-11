@@ -5,11 +5,6 @@
  * a non-negative size. Geometry helpers derive edges and overlap relationships
  * without mutating the original value.
  *
- * Accessors and operations use a private canonical snapshot. Spreading a box
- * preserves that snapshot; replacing copied metadata does not transform it.
- * Use constructors or `translate` to create a different box. JSON contains
- * only position and size; `decode` restores the canonical snapshot.
- *
  * In game code this is the natural helper for collision volumes, trigger
  * regions, camera bounds, and spatial authored data that should stay validated
  * and immutable after construction.
@@ -63,7 +58,6 @@ export type Raw = {
 export type Aabb = Brand.Branded<{
   readonly position: Vector2.Vector2
   readonly size: Size2.Size2
-  readonly [internal.token]: () => void
 }, "Aabb">
 
 /**
@@ -74,7 +68,6 @@ export type Aabb = Brand.Branded<{
 export type Error =
   | { readonly tag: "Aabb/InvalidPosition"; readonly error: Vector2.Error; readonly input: Raw }
   | { readonly tag: "Aabb/InvalidSize"; readonly error: Size2.Error; readonly input: Raw }
-  | { readonly tag: "Aabb/EdgeOverflow"; readonly input: Raw }
 
 /**
  * Failure produced by `decode` when the input does not have the raw shape.
@@ -115,12 +108,11 @@ export const decode: (raw: unknown) => Result.Result<Aabb, Error | DecodeError> 
  */
 export const option: (raw: Raw) => Aabb | null = internal.option
 /**
- * Checks raw AABB invariants without constructing a reusable proof on the
- * input. Use `result`, `option`, or `decode` to obtain an AABB value.
+ * Checks whether one raw value already satisfies the AABB invariants.
  *
  * @category Construction
  */
-export const is: (raw: Raw) => boolean = internal.is
+export const is: (raw: Raw) => raw is Raw & Aabb = internal.is
 /**
  * Reads the center position of one AABB.
  *
@@ -185,4 +177,4 @@ export const overlapsVertically: (first: Aabb, second: Aabb) => boolean = intern
  *
  * @category Operations
  */
-export const translate: (aabb: Aabb, delta: Vector2.Vector2) => Result.Result<Aabb, Error | Scalar.ArithmeticError> = internal.translate
+export const translate: (aabb: Aabb, delta: Vector2.Vector2) => Aabb = internal.translate

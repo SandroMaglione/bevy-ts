@@ -20,7 +20,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = fileURLToPath(new URL("..", import.meta.url))
-const packages = ["core", "math", "spatial", "navigation", "browser", "render", "pixi", "devtools"] as const
+const packages = ["core", "math", "browser", "render", "pixi", "devtools"] as const
 
 const run = (command: string, args: ReadonlyArray<string>, cwd: string): string =>
   execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] })
@@ -101,27 +101,6 @@ import { NodeRegistry } from "@typeonce/bevy-ts-render"
 import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 import * as Pixi from "@typeonce/bevy-ts-pixi"
 import { Session } from "@typeonce/bevy-ts-devtools"
-import { Geometry2, Random, Scalar, Weighted } from "@typeonce/bevy-ts-math"
-import { SpatialHash2 } from "@typeonce/bevy-ts-spatial"
-import { Grid2, GridDistanceField } from "@typeonce/bevy-ts-navigation"
-
-const checked = <A, E>(value: Result.Result<A, E>): A => {
-  if (!value.ok) throw new Error(JSON.stringify(value.error))
-  return value.value
-}
-const circle = checked(Geometry2.Circle.result({ center: { x: 0, y: 0 }, radius: 1 }))
-const bounds = checked(Geometry2.circleBounds(circle))
-const index = checked(SpatialHash2.from([{ id: "body", bounds }], {
-  cellSize: checked(Scalar.Positive.result(2)), key: item => item.id, bounds: item => item.bounds
-}))
-const candidates: string[] = []
-checked(index.forEachCandidate(bounds, key => candidates.push(key)))
-const grid = checked(Grid2.result({ columns: 2, rows: 1, connectivity: "four", maxCells: 2,
-  walkable: () => true, cost: () => 1 }))
-const field = checked(GridDistanceField.build(grid, { goals: [{ column: 1, row: 0 }], maxVisited: 2 }))
-const table = checked(Weighted.result([{ value: "choice", weight: 1 }]))
-const random = Random.weighted(checked(Random.result(42)), table)
-if (candidates.join() !== "body" || GridDistanceField.nextCell(field, { column: 0, row: 0 }).kind !== "next" || random.value !== "choice") throw new Error("algorithm consumer failed")
 
 const Position = Descriptor.ConstructedComponent(Vector2)("Consumer/Position")
 const Game = Schema.bind(Schema.fragment({ components: { Position } }))
@@ -159,10 +138,8 @@ if (output !== expected) throw new Error(`consumer printed ${output}, expected $
 console.log(output)
 
 step("internal modules are not exported")
-for (const packageName of tarballByName.keys()) {
-  writeFileSync(path.join(consumer, "internal.mjs"), `import(${JSON.stringify(packageName + "/internal/world")}).then(() => process.exit(1), (error) => { if (error.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") process.exit(2) })\n`)
-  run("node", ["internal.mjs"], consumer)
-}
+writeFileSync(path.join(consumer, "internal.mjs"), `import("@typeonce/bevy-ts/internal/world").then(() => process.exit(1), (error) => { if (error.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") process.exit(2) })\n`)
+run("node", ["internal.mjs"], consumer)
 
 if (process.env.PACK_CHECK_KEEP) console.log(`kept ${work}`)
 else rmSync(work, { recursive: true, force: true })

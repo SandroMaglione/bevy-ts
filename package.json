@@ -26,9 +26,7 @@
     "pack:check": "node --import tsx scripts/pack-check.ts",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",
-    "release": "pnpm build && changeset publish",
-    "example:algorithms": "node --import tsx examples/algorithms/main.ts",
-    "bench:spatial": "node --import tsx packages/spatial/bench/SpatialHash2.ts"
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1",
@@ -51,8 +49,6 @@
     "typescript6": "npm:@typescript/typescript6@6.0.2",
     "vite": "^8.0.3",
     "vite-tsconfig-paths": "6.0.5",
-    "vitest": "4.0.18",
-    "@typeonce/bevy-ts-spatial": "workspace:*",
-    "@typeonce/bevy-ts-navigation": "workspace:*"
+    "vitest": "4.0.18"
   }
 }

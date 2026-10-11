@@ -1,22 +1,22 @@
 import * as Aabb from "@typeonce/bevy-ts-math/Aabb"
-import type * as Result from "@typeonce/bevy-ts/Result"
 import * as InputAxis from "@typeonce/bevy-ts-math/InputAxis"
 import * as Scalar from "@typeonce/bevy-ts-math/Scalar"
 import * as Vector2Module from "@typeonce/bevy-ts-math/Vector2"
 import { WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 import type { AnimationFrameIndex, InputStateValue, Vector2 } from "./types.ts"
 
-// Example constants and simulation values should be valid; fail visibly if
-// a change breaks that assumption instead of carrying invalid math onward.
-const checked = <A, E>(result: Result.Result<A, E>): A => {
-  if (!result.ok) throw new Error(`Invalid top-down example math: ${JSON.stringify(result.error)}`)
-  return result.value
+export const clamp = (value: number, min: number, max: number): number => {
+  const nextValue = Scalar.Finite.option(value)
+  const nextMin = Scalar.Finite.option(min)
+  const nextMax = Scalar.Finite.option(max)
+  if (!nextValue || !nextMin || !nextMax) {
+    return value
+  }
+
+  return Scalar.clamp(nextValue, nextMin, nextMax)
 }
 
-export const clamp = (value: number, min: number, max: number): number =>
-  checked(Scalar.clamp(checked(Scalar.Finite.result(value)), checked(Scalar.Finite.result(min)), checked(Scalar.Finite.result(max))))
-
-export const lengthSquared = (vector: Vector2): number => checked(Vector2Module.lengthSquared(vector))
+export const lengthSquared = (vector: Vector2): number => Vector2Module.lengthSquared(vector)
 
 export const normalizeMovement = (input: InputStateValue): Vector2 =>
   InputAxis.vectorFromAxes({

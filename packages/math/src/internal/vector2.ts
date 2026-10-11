@@ -1,6 +1,5 @@
 import * as Result from "@typeonce/bevy-ts/Result"
 import * as Scalar from "../Scalar.ts"
-import { checked, interpolate } from "./scalar.ts"
 import type * as Vector2 from "../Vector2.ts"
 
 const make = (x: Scalar.Finite, y: Scalar.Finite): Vector2.Vector2 => ({ x, y }) as Vector2.Vector2
@@ -45,65 +44,64 @@ export const y = (vector: Vector2.Vector2): Scalar.Finite => vector.y
 
 export const zero = (): Vector2.Vector2 => make(0 as Scalar.Finite, 0 as Scalar.Finite)
 
-const arithmetic = (x: number, y: number, operation: string): Result.Result<Vector2.Vector2, Scalar.ArithmeticError> => {
-  const cx = checked(x, operation)
-  const cy = checked(y, operation)
-  if (!cx.ok) return cx
-  if (!cy.ok) return cy
-  return Result.success(make(cx.value, cy.value))
-}
-export const add = (left: Vector2.Vector2, right: Vector2.Vector2) => arithmetic(left.x + right.x, left.y + right.y, "Vector2.add")
-export const subtract = (left: Vector2.Vector2, right: Vector2.Vector2) => arithmetic(left.x - right.x, left.y - right.y, "Vector2.subtract")
-export const scale = (vector: Vector2.Vector2, scalar: Scalar.Finite) => arithmetic(vector.x * scalar, vector.y * scalar, "Vector2.scale")
+export const add = (left: Vector2.Vector2, right: Vector2.Vector2): Vector2.Vector2 =>
+  make((left.x + right.x) as Scalar.Finite, (left.y + right.y) as Scalar.Finite)
 
-const nonNegative = (value: number, operation: string): Result.Result<Scalar.NonNegative, Scalar.ArithmeticError> => {
-  const checkedValue = checked(value, operation)
-  return checkedValue.ok ? Result.success(checkedValue.value as Scalar.NonNegative) : checkedValue
-}
-export const lengthSquared = (vector: Vector2.Vector2) => nonNegative(vector.x * vector.x + vector.y * vector.y, "Vector2.lengthSquared")
-export const length = (vector: Vector2.Vector2) => nonNegative(Math.hypot(vector.x, vector.y), "Vector2.length")
-export const distance = (left: Vector2.Vector2, right: Vector2.Vector2) => nonNegative(Math.hypot(left.x - right.x, left.y - right.y), "Vector2.distance")
-export const distanceSquared = (left: Vector2.Vector2, right: Vector2.Vector2) => {
-  const dx = left.x - right.x
-  const dy = left.y - right.y
-  return nonNegative(dx * dx + dy * dy, "Vector2.distanceSquared")
-}
-export const dot = (left: Vector2.Vector2, right: Vector2.Vector2) => checked(left.x * right.x + left.y * right.y, "Vector2.dot")
+export const subtract = (left: Vector2.Vector2, right: Vector2.Vector2): Vector2.Vector2 =>
+  make((left.x - right.x) as Scalar.Finite, (left.y - right.y) as Scalar.Finite)
 
-export const normalize = (vector: Vector2.Vector2): Result.Result<Vector2.Vector2, Vector2.NormalizeError> => {
-  const magnitude = Math.max(Math.abs(vector.x), Math.abs(vector.y))
-  if (magnitude === 0) return Result.failure({ tag: "Vector2/ZeroLength" })
-  // Scaling before computing length preserves subnormal and huge vectors.
-  const x = vector.x / magnitude
-  const y = vector.y / magnitude
-  const length = Math.hypot(x, y)
-  return Result.success(make((x / length) as Scalar.Finite, (y / length) as Scalar.Finite))
+export const scale = (vector: Vector2.Vector2, scalar: Scalar.Finite): Vector2.Vector2 =>
+  make((vector.x * scalar) as Scalar.Finite, (vector.y * scalar) as Scalar.Finite)
+
+export const lengthSquared = (vector: Vector2.Vector2): Scalar.NonNegative =>
+  (vector.x * vector.x + vector.y * vector.y) as Scalar.NonNegative
+
+export const length = (vector: Vector2.Vector2): Scalar.NonNegative =>
+  Math.sqrt(lengthSquared(vector)) as Scalar.NonNegative
+
+export const normalize = (
+  vector: Vector2.Vector2
+): Result.Result<Vector2.Vector2, Vector2.NormalizeError> => {
+  const magnitudeSquared = lengthSquared(vector)
+  if (magnitudeSquared === 0) {
+    return Result.failure({
+      tag: "Vector2/ZeroLength"
+    })
+  }
+
+  const magnitude = Math.sqrt(magnitudeSquared) as Scalar.NonNegative
+  return Result.success(
+    make(
+      (vector.x / magnitude) as Scalar.Finite,
+      (vector.y / magnitude) as Scalar.Finite
+    )
+  )
 }
+
 export const normalizeOrZero = (vector: Vector2.Vector2): Vector2.Vector2 => {
   const normalized = normalize(vector)
   return normalized.ok ? normalized.value : zero()
 }
-export const normalizeOr = (vector: Vector2.Vector2, fallback: Vector2.Vector2): Vector2.Vector2 => {
-  const normalized = normalize(vector)
-  return normalized.ok ? normalized.value : fallback
-}
-export const rotate = (vector: Vector2.Vector2, radians: Scalar.Finite) => {
-  const cos = Math.cos(radians)
-  const sin = Math.sin(radians)
-  return arithmetic(vector.x * cos - vector.y * sin, vector.x * sin + vector.y * cos, "Vector2.rotate")
-}
-export const lerp = (left: Vector2.Vector2, right: Vector2.Vector2, amount: Scalar.Finite) =>
-  arithmetic(interpolate(left.x, right.x, amount), interpolate(left.y, right.y, amount), "Vector2.lerp")
-export const clampLength = (vector: Vector2.Vector2, max: Scalar.NonNegative): Result.Result<Vector2.Vector2, Scalar.ArithmeticError> => {
-  if (Math.hypot(vector.x, vector.y) <= max) return Result.success(vector)
-  return scale(normalizeOrZero(vector), max)
-}
-export const moveToward = (current: Vector2.Vector2, target: Vector2.Vector2, maxDelta: Scalar.NonNegative): Result.Result<Vector2.Vector2, Scalar.ArithmeticError> => {
-  const delta = subtract(target, current)
-  if (!delta.ok) return delta
-  if (Math.hypot(delta.value.x, delta.value.y) <= maxDelta) return Result.success(target)
-  const step = scale(normalizeOrZero(delta.value), maxDelta)
-  return step.ok ? add(current, step.value) : step
+
+export const normalizeXYOrZero = (x: number, y: number): {
+  readonly x: number
+  readonly y: number
+  readonly length: number
+} => {
+  const magnitude = Math.hypot(x, y)
+  if (magnitude <= 0.0001) {
+    return {
+      x: 0,
+      y: 0,
+      length: 0
+    }
+  }
+
+  return {
+    x: x / magnitude,
+    y: y / magnitude,
+    length: magnitude
+  }
 }
 
 /**

@@ -20,9 +20,7 @@ version from 5.9 up, and the packages build with TypeScript 7.
 | Package | Contents |
 |---|---|
 | `@typeonce/bevy-ts` | The ECS runtime |
-| `@typeonce/bevy-ts-math` | Checked vectors, directions, angles, shape queries, and seeded sampling |
-| `@typeonce/bevy-ts-spatial` | Bounded uniform spatial hash with explicit rebuilds |
-| `@typeonce/bevy-ts-navigation` | Immutable grids and multi-goal weighted distance fields |
+| `@typeonce/bevy-ts-math` | Validated vectors, sizes, and bounding boxes |
 | `@typeonce/bevy-ts-browser` | Fixed-step loop, keyboard, pointer, and touch input, input capture |
 | `@typeonce/bevy-ts-render` | Entity to renderer node sync, for any renderer |
 | `@typeonce/bevy-ts-pixi` | Pixi container adapter (`PixiNodeRegistry.make`) |
@@ -85,9 +83,3 @@ pnpm bench:update   # record a new baseline
 
 CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 35%, or type-checker growth over 5%.
 
-
-## Game algorithms
-
-Math and algorithms stay independent of the ECS and the renderer. Store seeded random state in a resource, rebuild a spatial index at a declared schedule boundary, and rebuild navigation fields when the map or goals change. Collision response, clearance, and gameplay policy belong to the game.
-
-[`examples/algorithms`](./examples/algorithms/) combines all three packages in a deterministic headless ECS simulation. Run `pnpm example:algorithms`; the example shows where movement, index rebuilds, and swept collision queries belong in a schedule. Each package README documents its failure cases and work limits.
