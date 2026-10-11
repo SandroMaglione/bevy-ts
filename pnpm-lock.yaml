@@ -72,6 +72,15 @@ importers:
         specifier: 4.0.18
         version: 4.0.18(@types/node@25.5.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.1)
 
+  examples/algorithms:
+    dependencies:
+      '@typeonce/bevy-ts':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@typeonce/bevy-ts-math':
+        specifier: workspace:*
+        version: link:../../packages/math
+
   examples/genetics:
     dependencies:
       '@typeonce/bevy-ts':

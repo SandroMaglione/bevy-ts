@@ -26,7 +26,9 @@
     "pack:check": "node --import tsx scripts/pack-check.ts",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "example:algorithms": "node --import tsx examples/algorithms/main.ts",
+    "bench:math": "node --import tsx packages/math/bench/helpers.ts"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1",

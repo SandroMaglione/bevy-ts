@@ -244,7 +244,7 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 | Package | What it owns |
 |---|---|
 | `@typeonce/bevy-ts` | Schema, systems, schedules, runtime, snapshots |
-| `@typeonce/bevy-ts-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis` |
+| `@typeonce/bevy-ts-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis`; hot-path `Vec2`, `Box2`, `Collide2`, `SpatialGrid`, `FlowField`, `Random` |
 | `@typeonce/bevy-ts-browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
 | `@typeonce/bevy-ts-render` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into any renderer |
 | `@typeonce/bevy-ts-pixi` | `PixiNodeRegistry.make` for Pixi containers |

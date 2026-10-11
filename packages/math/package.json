@@ -1,7 +1,7 @@
 {
   "name": "@typeonce/bevy-ts-math",
   "version": "0.4.0",
-  "description": "Validated math values (Scalar, Vector2, Size2, Aabb, InputAxis) for bevy-ts games",
+  "description": "Validated math values and hot-path game helpers (collision, spatial grid, flow field, random) for bevy-ts games",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {
