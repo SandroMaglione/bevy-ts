@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import * as Render from "@typeonce/bevy-ts-render"
-import { NodeRegistry, RenderSync, packageTag } from "@typeonce/bevy-ts-pixi"
+import * as Pixi from "@typeonce/bevy-ts-pixi"
+import { PixiNodeRegistry, packageTag } from "@typeonce/bevy-ts-pixi"
 
 class FakeNode {
   readonly label: string
@@ -29,17 +29,13 @@ class FakeContainer {
 describe("@typeonce/bevy-ts-pixi", () => {
   it("resolves through the workspace package entrypoint", () => {
     expect(packageTag).toBe("pixi")
+    expect(Pixi).not.toHaveProperty("NodeRegistry")
+    expect(Pixi).not.toHaveProperty("RenderSync")
   })
 
-  it("re-exports the generic registry and render sync from @typeonce/bevy-ts-render", () => {
-    expect(NodeRegistry.make).toBe(Render.NodeRegistry.make)
-    expect(RenderSync.system).toBe(Render.RenderSync.system)
-    expect(RenderSync.interpolate).toBe(Render.RenderSync.interpolate)
-  })
-
-  it("inContainer keeps one attached node per entity and destroys it on removal", () => {
+  it("make keeps one attached node per entity and destroys it on removal", () => {
     const layer = new FakeContainer()
-    const registry = NodeRegistry.inContainer(layer)
+    const registry = PixiNodeRegistry.make(layer)
     const first = registry.ensure(1, () => new FakeNode("a"))
 
     expect(registry.ensure(1, () => new FakeNode("b"))).toBe(first)
@@ -51,9 +47,9 @@ describe("@typeonce/bevy-ts-pixi", () => {
     expect(layer.children).toEqual([])
   })
 
-  it("inContainer detaches and destroys every node on clear", () => {
+  it("make detaches and destroys every node on clear", () => {
     const layer = new FakeContainer()
-    const registry = NodeRegistry.inContainer(layer)
+    const registry = PixiNodeRegistry.make(layer)
     const a = registry.ensure(1, () => new FakeNode("a"))
     const b = registry.ensure(2, () => new FakeNode("b"))
 

@@ -75,7 +75,7 @@ if (enemy.ok) { /* the entity still exists and has Health */ }
 - A handle is safe to store in components, resources and events, but it doesn't prove the entity is still alive.
 - `lookup.getHandle` returns a `Result`.
 - A handle with an intent (`Health` here) can only be resolved through a query that proves that component.
-- Entity ids and handles are branded numbers. Use them directly as `Map` or `Set` keys; replace old `.value` reads with the id or handle itself. `Decode.handle` accepts numeric handles and the legacy `{ kind: "EntityHandle", value }` form for this release. New snapshots write numbers.
+- Entity ids and handles are branded numbers. Use them directly as `Map` or `Set` keys. `Decode.handle` validates positive integer handles, and snapshots write numbers.
 
 ### Lookups and reading the world
 
@@ -239,6 +239,6 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 | `@typeonce/bevy-ts-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis` |
 | `@typeonce/bevy-ts-browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
 | `@typeonce/bevy-ts-render` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into any renderer |
-| `@typeonce/bevy-ts-pixi` | `NodeRegistry.inContainer` for Pixi containers, plus everything from `@typeonce/bevy-ts-render` |
+| `@typeonce/bevy-ts-pixi` | `PixiNodeRegistry.make` for Pixi containers |
 
 Next: [GAME_API.md](./GAME_API.md) for a larger walkthrough, [ARCHITECTURE.md](./ARCHITECTURE.md) for how the types and storage work.

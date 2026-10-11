@@ -3,7 +3,8 @@ import * as Matter from "matter-js"
 
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi"
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -873,7 +874,7 @@ export const startSpaceInvadersExample = async (
     shoot: [" "]
   })
   let input = keyboard.snapshot()
-  const nodes = NodeRegistry.inContainer<Graphics>(scene)
+  const nodes = PixiNodeRegistry.make<Graphics>(scene)
 
   const pixiHost: PixiHostValue = {
     application,

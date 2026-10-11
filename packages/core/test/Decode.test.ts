@@ -32,7 +32,8 @@ describe("Decode", () => {
     const codec = Decode.struct({ target: Decode.handle(Root, Health) })
     const decoded = codec.decode(JSON.parse(JSON.stringify({ target: Entity.makeHandle(3) })))
     expect(decoded.ok && decoded.value.target).toBe(3)
-    expect(errorOf(codec.decode({ target: { kind: "EntityHandle", value: 0 } }))?.path).toBe("$.target")
+    expect(errorOf(codec.decode({ target: 0 }))?.path).toBe("$.target")
+    expect(errorOf(codec.decode({ target: { kind: "EntityHandle", value: 3 } }))?.path).toBe("$.target")
   })
 
   it("makes tags and decoded components loadable", () => {

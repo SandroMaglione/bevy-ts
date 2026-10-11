@@ -1,5 +1,5 @@
 import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 import { Application, Container } from "pixi.js"
 
 import { createHud } from "./render/hud.ts"
@@ -59,7 +59,7 @@ export const createPlatformerBrowserHost = async (
     application,
     world,
     actorLayer,
-    nodes: NodeRegistry.inContainer(actorLayer),
+    nodes: PixiNodeRegistry.make(actorLayer),
     hud: hud.refs,
     clock: {
       deltaSeconds: 1 / 60

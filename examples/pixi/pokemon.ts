@@ -12,7 +12,8 @@ import { Application, Container, Graphics } from "pixi.js"
 
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-pixi"
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>
@@ -482,7 +483,7 @@ export const startPokemonExample = async (mount: HTMLElement): Promise<BrowserEx
     right: ["ArrowRight", "d"]
   })
   const directions = ["up", "down", "left", "right"] as const
-  const nodes = NodeRegistry.inContainer<Graphics>(scene)
+  const nodes = PixiNodeRegistry.make<Graphics>(scene)
 
   const host = {
     application,

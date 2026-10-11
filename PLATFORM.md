@@ -28,12 +28,35 @@ This package imports no renderer. It must not own what a node looks like, HUD se
 
 ### `@typeonce/bevy-ts-pixi`
 
-Own Pixi-specific infrastructure on top of `@typeonce/bevy-ts-render`, which it re-exports:
+Own Pixi-specific infrastructure implementing the contracts in `@typeonce/bevy-ts-render`:
 
-- registries whose nodes are children of a Pixi container and are destroyed with their children (`NodeRegistry.inContainer`)
+- registries whose nodes are children of a Pixi container and are destroyed with their children (`PixiNodeRegistry.make`)
 - the Pixi-shaped surfaces those need (`ContainerLike`, `Destroyable`), without importing `pixi.js`
 
 This package must not own sprite conventions, HUD semantics, actor kinds, or camera policy.
+
+### Adapter names and service provision
+
+Generic contracts have generic names, such as `NodeRegistry`. Adapter modules
+include their implementation in the name, such as `PixiNodeRegistry`, so both
+can be imported together without aliases. Adapter packages export their own
+implementations; generic APIs are imported from the package that owns them.
+
+This follows Effect's separation of `FileSystem` from `NodeFileSystem`, and
+`KeyValueStore` from `BrowserKeyValueStore`. The host constructs an adapter and
+provides it through `Game.Runtime.service`; systems declare the generic service
+descriptor. Bevy-ts's synchronous services use that existing provision API.
+
+```ts
+import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+
+const Sprites = Descriptor.Service<NodeRegistry.NodeRegistry<Sprite>>()("Game/Sprites")
+const services = Game.Runtime.services(
+  Game.Runtime.service(Sprites, PixiNodeRegistry.make(actorLayer))
+)
+// RenderSync.system(Game, { ..., registry: Sprites }) uses the generic contract.
+```
 
 ### `@typeonce/bevy-ts-devtools`
 

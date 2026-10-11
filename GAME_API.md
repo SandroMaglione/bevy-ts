@@ -389,10 +389,10 @@ const runtime = Game.Runtime.make({
 const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render)
 ```
 
-For Pixi, `@typeonce/bevy-ts-pixi` re-exports `NodeRegistry` and `RenderSync`
-and adds `NodeRegistry.inContainer(actorLayer)`: a registry whose nodes are
-children of one Pixi container and are destroyed with their children when
-removed.
+For Pixi, import `PixiNodeRegistry` from `@typeonce/bevy-ts-pixi` and provide
+`PixiNodeRegistry.make(actorLayer)` as the same registry service. Nodes are
+attached to the container and destroyed with their children when removed.
+Keep `NodeRegistry` and `RenderSync` imports in `@typeonce/bevy-ts-render`.
 
 The registry service is a normal requirement: ticking the render system on a
 runtime that does not provide it is a compile error. `select`, `resources`,

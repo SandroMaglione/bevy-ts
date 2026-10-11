@@ -1,4 +1,4 @@
-import { NodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 import { Application, Container, Graphics } from "pixi.js"
 
 import { drawBoard } from "./render/board.ts"
@@ -51,7 +51,7 @@ export const createGeneticsBrowserHost = async (
   shell.appendChild(root)
   mount.replaceChildren(shell)
 
-  const nodes = NodeRegistry.inContainer<Graphics>(scene)
+  const nodes = PixiNodeRegistry.make<Graphics>(scene)
 
   return {
     nodes,

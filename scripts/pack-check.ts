@@ -51,6 +51,9 @@ for (const directory of packages) {
   if (listing.some((file) => file.includes("/test/") || file.includes("tsbuildinfo"))) {
     throw new Error(`${manifest.name} tarball contains test or build-info files`)
   }
+  if (directory === "pixi" && listing.some((file) => /\/(NodeRegistry|RenderSync)\.(ts|js|d\.ts)$/.test(file))) {
+    throw new Error("Pixi tarball contains removed compatibility modules")
+  }
   const packed = JSON.parse(run("tar", ["-xzOf", path.join(tarballs, created), "package/package.json"], work)) as {
     readonly exports: Record<string, unknown>
     readonly dependencies?: Record<string, string>
@@ -95,7 +98,8 @@ import * as Result from "@typeonce/bevy-ts/Result"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { NodeRegistry } from "@typeonce/bevy-ts-render"
-import { NodeRegistry as PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import * as Pixi from "@typeonce/bevy-ts-pixi"
 import { Session } from "@typeonce/bevy-ts-devtools"
 
 const Position = Descriptor.ConstructedComponent(Vector2)("Consumer/Position")
@@ -109,7 +113,8 @@ const session = Session.make(runtime, { schedules: { setup: Game.Schedule(Spawn,
 const ran = session.run("setup")
 const keyboard = Keyboard.scripted({ jump: [" "] }, [{ frame: 0, press: ["jump"] }])
 const registry = NodeRegistry.make<string>({ attach: () => {}, detach: () => {} })
-const sprites = PixiNodeRegistry.inContainer<{ destroy(): void }>({ addChild: () => {}, removeChild: () => {} })
+const sprites = PixiNodeRegistry.make<{ destroy(): void }>({ addChild: () => {}, removeChild: () => {} })
+if ("NodeRegistry" in Pixi || "RenderSync" in Pixi) throw new Error("Pixi publishes removed compatibility exports")
 console.log(JSON.stringify({
   ok: ran.data.ok && Result.isSuccess(Result.success(1)),
   entities: session.dump().data.entityCount,

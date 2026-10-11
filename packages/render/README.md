@@ -33,7 +33,7 @@ const runtime = Game.Runtime.make({
 })
 ```
 
-For Pixi, [`@typeonce/bevy-ts-pixi`](https://www.npmjs.com/package/@typeonce/bevy-ts-pixi) re-exports this package and adds `NodeRegistry.inContainer`, a registry whose nodes are children of one Pixi container.
+For Pixi, [`@typeonce/bevy-ts-pixi`](https://www.npmjs.com/package/@typeonce/bevy-ts-pixi) provides `PixiNodeRegistry.make(container)`, an implementation of the same registry contract. The host provides it with `Game.Runtime.service`; render systems keep depending on the generic service descriptor.
 
 Released together with [`@typeonce/bevy-ts`](https://www.npmjs.com/package/@typeonce/bevy-ts), always with the same version.
 

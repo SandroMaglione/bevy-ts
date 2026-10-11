@@ -47,7 +47,7 @@
     "packages/browser/src/Touch.ts",
     "packages/render/src/NodeRegistry.ts",
     "packages/render/src/RenderSync.ts",
-    "packages/pixi/src/NodeRegistry.ts",
+    "packages/pixi/src/PixiNodeRegistry.ts",
     "packages/devtools/src/Session.ts",
     "packages/devtools/src/Monitor.ts",
     "packages/devtools/src/Invariant.ts",

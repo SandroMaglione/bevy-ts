@@ -1,26 +1,22 @@
 /**
- * Pixi render-node registries keyed by ECS entity.
+ * Pixi container implementation of the renderer-independent node registry.
  *
- * The registry itself (`make`, `NodeRegistry`, `EntityKey`, ...) lives in
- * `@typeonce/bevy-ts-render` and is re-exported here, so this module is
- * imported as `NodeRegistry` from `@typeonce/bevy-ts-pixi` like before. It
- * adds `inContainer`: a registry whose nodes are children of one Pixi
- * container and are destroyed, with their children, when removed.
+ * Import the registry contract and render systems from `@typeonce/bevy-ts-render`.
+ * Construct this adapter in the host and provide it as a normal runtime service.
+ * Removing a node detaches it and destroys it with its children.
  *
  * @module PixiNodeRegistry
  * @docGroup pixi
  *
  * @example
  * ```ts
- * const sprites = NodeRegistry.inContainer<Sprite>(actorLayer)
+ * const sprites = PixiNodeRegistry.make(actorLayer)
  * sprites.ensure(match.entity.id, () => new Sprite(texture))
  * sprites.remove(despawnedId)
  * sprites.clear()
  * ```
  */
-import { make, type NodeRegistry } from "@typeonce/bevy-ts-render/NodeRegistry"
-
-export * from "@typeonce/bevy-ts-render/NodeRegistry"
+import * as NodeRegistry from "@typeonce/bevy-ts-render/NodeRegistry"
 
 /**
  * The container surface the registry needs; Pixi's `Container` satisfies it.
@@ -41,8 +37,8 @@ export interface Destroyable {
  * Creates a registry whose nodes are children of one container and are
  * destroyed (with their children) when removed.
  */
-export const inContainer = <Node extends Destroyable>(parent: ContainerLike<Node>): NodeRegistry<Node> =>
-  make({
+export const make = <Node extends Destroyable>(parent: ContainerLike<Node>): NodeRegistry.NodeRegistry<Node> =>
+  NodeRegistry.make({
     attach: (node) => {
       parent.addChild(node)
     },

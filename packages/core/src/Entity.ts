@@ -104,8 +104,7 @@ export type EntityId<S extends Schema.Any, Root = unknown> = Brand<
  *
  * Like an id, a handle is a branded number: it costs nothing to make in a hot
  * loop, compares with `===`, works as a `Set` or `Map` key, and saves as a
- * plain number in snapshots (`decodeHandle` also accepts the object form
- * written by releases before 0.4). The intent, when given, exists only at the
+ * plain number in snapshots. The intent, when given, exists only at the
  * type level.
  */
 export type Handle<
@@ -285,9 +284,8 @@ export interface InvalidHandle {
  *
  * A handle only names an entity; it never proves the entity exists. Resolving
  * it with `lookup.getHandle(...)` stays the checked step, so any positive
- * integer id decodes. Both the plain number written since 0.4 and the
- * `{ kind: "EntityHandle", value }` object written by earlier releases are
- * accepted, so saves made before the change still load.
+ * integer id decodes. Object-shaped handles and other non-numeric values
+ * are rejected.
  *
  * @example
  * ```ts
@@ -307,11 +305,8 @@ export const decodeHandle = <
   raw: unknown,
   _intent?: Intent
 ): Result.Result<Handle<Root, Intent>, InvalidHandle> => {
-  const value = typeof raw === "object" && raw !== null && (raw as { readonly kind?: unknown }).kind === "EntityHandle"
-    ? (raw as { readonly value?: unknown }).value
-    : raw
-  return typeof value === "number" && Number.isInteger(value) && value > 0
-    ? Result.success(makeHandle<Root, Intent>(value))
+  return typeof raw === "number" && Number.isInteger(raw) && raw > 0
+    ? Result.success(makeHandle<Root, Intent>(raw))
     : Result.failure({ _tag: "InvalidHandle", value: raw })
 }
 
