@@ -190,10 +190,11 @@ describe("@typeonce/bevy-ts-render", () => {
     // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "RenderTypes/Clock"
     withoutClock.tick(Planet.Schedule(interpolate))
 
+    // Not a 2D position: the default blend does not apply.
+    // @ts-expect-error Property 'blend' is missing
     RenderSync.interpolate(Planet, {
       name: "RenderTypes/NotPlanar",
       registry: Nodes,
-      // @ts-expect-error Type 'Descriptor<"component", "RenderTypes/Health", number>' is not assignable to type '"The previous component
       previous: Health,
       current: Planar,
       clock: Clock,
@@ -207,6 +208,65 @@ describe("@typeonce/bevy-ts-render", () => {
       current: Planar,
       // @ts-expect-error Type 'Descriptor<"service", "RenderTypes/NoAlpha", { readonly now: number; }>' is not assignable to type '"The
       clock: NoAlpha,
+      place: () => {}
+    })
+  })
+
+  it("types interpolate with blend: any values, and place receives what blend returns", () => {
+    const Spatial = Descriptor.Component<{ x: number; y: number; z: number }>()("RenderTypes/Spatial")
+    const PreviousSpatial = Descriptor.Component<{ x: number; y: number; z: number }>()("RenderTypes/PreviousSpatial")
+    const Labeled = Descriptor.Component<{ x: number; y: number; label: string }>()("RenderTypes/Labeled")
+    const Clock = Descriptor.Service<{ readonly alpha: number }>()("RenderTypes/Clock")
+    const Space = Schema.bind(Schema.fragment({ components: { Spatial, PreviousSpatial, Labeled, Health } }))
+
+    RenderSync.interpolate(Space, {
+      name: "RenderTypes/Interpolate3D",
+      registry: Nodes,
+      previous: PreviousSpatial,
+      current: Spatial,
+      clock: Clock,
+      blend: (from, to, alpha) => {
+        expect(from).type.toBe<{ x: number; y: number; z: number }>()
+        expect(alpha).type.toBe<number>()
+        return { x: from.x + (to.x - from.x) * alpha, y: from.y + (to.y - from.y) * alpha, z: from.z + (to.z - from.z) * alpha }
+      },
+      place: (_node, position) => {
+        expect(position).type.toBe<{ x: number; y: number; z: number }>()
+      }
+    })
+
+    RenderSync.interpolate(Space, {
+      name: "RenderTypes/InterpolateHealth",
+      registry: Nodes,
+      previous: Health,
+      current: Health,
+      clock: Clock,
+      blend: (from, to, alpha) => from + (to - from) * alpha,
+      place: (_node, health) => {
+        expect(health).type.toBe<number>()
+      }
+    })
+
+    // Non-numeric extra fields are not blended, so the default still applies.
+    RenderSync.interpolate(Space, {
+      name: "RenderTypes/InterpolateLabeled",
+      registry: Nodes,
+      previous: Labeled,
+      current: Labeled,
+      clock: Clock,
+      place: (_node, position) => {
+        expect(position).type.toBe<RenderSync.Planar>()
+      }
+    })
+
+    // The default blend would drop z.
+    // @ts-expect-error Property 'blend' is missing
+    RenderSync.interpolate(Space, {
+      name: "RenderTypes/DroppedZ",
+      registry: Nodes,
+      previous: PreviousSpatial,
+      current: Spatial,
+      clock: Clock,
       place: () => {}
     })
   })

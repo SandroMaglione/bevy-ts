@@ -331,4 +331,43 @@ describe("@typeonce/bevy-ts-render", () => {
     runtime.tick(Moving.Schedule(interpolate))
     expect(layer.children.map((node) => [node.x, node.y])).toEqual([[5, 10]])
   })
+
+  it("interpolates with blend, placing nodes at what blend returns", () => {
+    const Spatial = Descriptor.Component<{ x: number; y: number; z: number }>()("RenderTest/Spatial")
+    const PreviousSpatial = Descriptor.Component<{ x: number; y: number; z: number }>()("RenderTest/PreviousSpatial")
+    const Clock = Descriptor.Service<{ alpha: number }>()("RenderTest/Clock")
+    const Space = Schema.bind(Schema.fragment({ components: { Spatial, PreviousSpatial, Sprite } }))
+    const layer = new FakeLayer()
+    const placed: Array<[number, number, number]> = []
+    const sync = RenderSync.system(Space, {
+      name: "RenderTest/SyncSpatial",
+      renderable: Sprite,
+      registry: Nodes,
+      create: ({ renderable }) => new FakeNode(renderable.label),
+      apply: () => {}
+    })
+    const interpolate = RenderSync.interpolate(Space, {
+      name: "RenderTest/Interpolate3D",
+      registry: Nodes,
+      previous: PreviousSpatial,
+      current: Spatial,
+      clock: Clock,
+      blend: (from, to, alpha) => ({
+        x: from.x + (to.x - from.x) * alpha,
+        y: from.y + (to.y - from.y) * alpha,
+        z: from.z + (to.z - from.z) * alpha
+      }),
+      place: (_node, { x, y, z }) => {
+        placed.push([x, y, z])
+      }
+    })
+    const Spawn = Space.System("RenderTest/SpawnSpatial", {}, ({ commands }) => {
+      commands.spawn(Space.Command.spawn([Spatial, { x: 10, y: 20, z: 40 }], [PreviousSpatial, { x: 0, y: 0, z: 0 }], [Sprite, { label: "spatial" }]))
+    })
+    const runtime = Space.Runtime.make({
+      services: Space.Runtime.services(Space.Runtime.service(Nodes, inLayer(layer)), Space.Runtime.service(Clock, { alpha: 0.25 }))
+    })
+    runtime.tick(Space.Schedule(Spawn, Space.Schedule.applyDeferred(), sync, interpolate))
+    expect(placed).toEqual([[2.5, 5, 10]])
+  })
 })
