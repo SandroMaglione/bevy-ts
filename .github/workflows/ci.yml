@@ -77,8 +77,12 @@ jobs:
           if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             git worktree add --detach .bench/base "$BASE_SHA"
             ln -s "$PWD/node_modules" .bench/base/node_modules
-            rm -rf .bench/base/packages/core/bench
-            cp -r packages/core/bench .bench/base/packages/core/bench
+            for suite in packages/*/bench; do
+              if [ -d ".bench/base/$(dirname "$suite")" ]; then
+                rm -rf ".bench/base/$suite"
+                cp -r "$suite" ".bench/base/$suite"
+              fi
+            done
             cp scripts/bench.ts .bench/base/scripts/bench.ts
             (cd .bench/base && node --expose-gc --import tsx scripts/bench.ts --json ../base.json) \
               || echo "::warning::Base commit could not run the benchmark suite; runtime cases are not gated."

@@ -3,10 +3,11 @@
  *
  * Two suites run:
  *
- * - runtime: wall-clock medians of `packages/core/bench/runtime.bench.ts`.
- *   Every score is `minMs / calibrationMinMs`: the fastest observed run of the
- *   case divided by the fastest run of plain-JS calibration work in the same
- *   process. Minimums are far less sensitive to other load on the machine
+ * - runtime: wall-clock timings of every `packages/<name>/bench/<suite>.bench.ts` file
+ *   (each exports `cases`). Every score is `minMs / calibrationMs`: the
+ *   fastest observed sample of the case divided by the fastest run of plain-JS
+ *   calibration work, measured in the runner and briefly in every case's
+ *   process (each case runs in a fresh process). Minimums are far less sensitive to other load on the machine
  *   than medians, and the ratio normalizes most machine-speed differences.
  *   Regressions are still allowed a tolerance because wall-clock time is
  *   noisy.
@@ -26,26 +27,35 @@
  * Flags: --filter <text> limits runtime cases, --json <path> writes raw results.
  */
 import { execFileSync } from "node:child_process"
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import os from "node:os"
-import { fileURLToPath } from "node:url"
-import { measure, type BenchSample, type MeasureOptions } from "../packages/core/bench/harness.ts"
-import { cases } from "../packages/core/bench/runtime.bench.ts"
+import { fileURLToPath, pathToFileURL } from "node:url"
+import { calibration, measure, type BenchCase, type BenchSample, type MeasureOptions } from "../packages/core/bench/harness.ts"
 
 const root = fileURLToPath(new URL("..", import.meta.url))
 const baselinePath = fileURLToPath(new URL("../packages/core/bench/baseline.json", import.meta.url))
 const typesProject = fileURLToPath(new URL("../packages/core/bench/types/tsconfig.json", import.meta.url))
 
-const RUNTIME_TOLERANCE = 0.35
+const RUNTIME_TOLERANCE = 0.25
 const TYPES_TOLERANCE = 0.05
 const RETRIES = 2
 const UPDATE_RUNS = 3
 
 const measureOptions: MeasureOptions = {
   warmupMs: 150,
-  budgetMs: 600,
-  minSamples: 10,
-  maxSamples: 400
+  budgetMs: 350,
+  minSamples: 15,
+  maxSamples: 400,
+  minSampleMs: 2,
+  minPreparedSamples: 30
+}
+
+// Each case process also measures calibration briefly; the fastest across all
+// processes is far steadier than one long measurement.
+const calibrationOptions: MeasureOptions = {
+  ...measureOptions,
+  warmupMs: 50,
+  budgetMs: 100
 }
 
 interface RuntimeResult {
@@ -87,21 +97,62 @@ const mode = args.includes("--check") || comparePath !== undefined
   ? "check"
   : args.includes("--update") ? "update" : "run"
 
-const calibrationCase = cases.find((bench) => bench.name === "calibration")
-if (!calibrationCase) {
-  throw new Error("The runtime suite must define a calibration case")
+const packagesDir = fileURLToPath(new URL("../packages/", import.meta.url))
+const suiteFiles = readdirSync(packagesDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(`${packagesDir}${entry.name}/bench`))
+  .flatMap((entry) => readdirSync(`${packagesDir}${entry.name}/bench`)
+    .filter((file) => file.endsWith(".bench.ts"))
+    .map((file) => `${packagesDir}${entry.name}/bench/${file}`))
+  .sort()
+const cases: Array<BenchCase> = []
+for (const file of suiteFiles) {
+  const suite = await import(pathToFileURL(file).href) as { readonly cases: ReadonlyArray<BenchCase> }
+  for (const bench of suite.cases) {
+    if (cases.some((existing) => existing.name === bench.name)) {
+      throw new Error(`Duplicate benchmark case "${bench.name}" in ${file}`)
+    }
+    cases.push(bench)
+  }
 }
 
-const measureCalibration = (): number => measure(calibrationCase, measureOptions).minMs
+const measureCalibration = (): number => measure(calibration, calibrationOptions).minMs
+
+// Each case runs in a fresh process: cases share runtime code, and what earlier
+// cases leave in V8's optimization state otherwise shifts later timings by
+// tens of percent from one run to the next.
+const caseFlag = flagValue("--case")
+if (caseFlag !== undefined) {
+  const bench = cases.find((candidate) => candidate.name === caseFlag)
+  if (!bench) throw new Error(`Unknown benchmark case "${caseFlag}"`)
+  const sample = measure(bench, measureOptions)
+  const result: CaseRun = { sample, calibrationMs: measureCalibration() }
+  process.stdout.write(JSON.stringify(result))
+  process.exit(0)
+}
+
+interface CaseRun {
+  readonly sample: BenchSample
+  readonly calibrationMs: number
+}
+
+const measureCase = (name: string): CaseRun => JSON.parse(execFileSync(
+  process.execPath,
+  [...process.execArgv, fileURLToPath(import.meta.url), "--case", name],
+  { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }
+)) as CaseRun
 
 const runRuntime = (): { calibrationMs: number; results: Record<string, RuntimeResult & BenchSample> } => {
-  const calibrationMs = measureCalibration()
-  const results: Record<string, RuntimeResult & BenchSample> = {}
+  let calibrationMs = measureCalibration()
+  const samples: Array<BenchSample> = []
   for (const bench of cases) {
-    if (bench === calibrationCase) continue
     if (filter && !bench.name.includes(filter)) continue
-    const sample = measure(bench, measureOptions)
-    results[bench.name] = { ...sample, score: sample.minMs / calibrationMs }
+    const run = measureCase(bench.name)
+    samples.push(run.sample)
+    calibrationMs = Math.min(calibrationMs, run.calibrationMs)
+  }
+  const results: Record<string, RuntimeResult & BenchSample> = {}
+  for (const sample of samples) {
+    results[sample.name] = { ...sample, score: sample.minMs / calibrationMs }
   }
   return { calibrationMs, results }
 }
@@ -180,10 +231,8 @@ const main = (): void => {
     if (mode === "check" && base && current.score > limit) {
       // Wall-clock noise: re-measure a failing case before reporting it.
       for (let attempt = 0; attempt < RETRIES && current.score > limit; attempt++) {
-        const calibrationMs = measureCalibration()
-        const bench = cases.find((candidate) => candidate.name === name)!
-        const sample = measure(bench, measureOptions)
-        const retried = { ...sample, score: sample.minMs / calibrationMs }
+        const { sample } = measureCase(name)
+        const retried = { ...sample, score: sample.minMs / runtime.calibrationMs }
         if (retried.score < current.score) current = retried
       }
       if (current.score > limit) {

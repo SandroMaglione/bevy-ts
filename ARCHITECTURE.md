@@ -96,7 +96,7 @@ System contexts are built once per system and runtime, then reused.
 
 ## Performance baseline
 
-`pnpm bench` runs `packages/core/bench`: runtime cases timed against an in-process calibration workload, and checker metrics (types, instantiations) for the generated `bench/types/stress.ts` program. `packages/core/bench/baseline.json` is the committed reference. CI compares each pull request with its base commit on the same runner. Update the baseline with `pnpm bench:update` when a change intentionally shifts the numbers.
+`pnpm bench` runs every `packages/<name>/bench/*.bench.ts` suite (core, math, render): runtime cases, each in a fresh process, timed against a calibration workload, and checker metrics (types, instantiations) for the generated `bench/types/stress.ts` program. `packages/core/bench/baseline.json` is the committed reference. CI compares each pull request with its base commit on the same runner. Update the baseline with `pnpm bench:update` when a change intentionally shifts the numbers.
 
 ## Extension rule
 

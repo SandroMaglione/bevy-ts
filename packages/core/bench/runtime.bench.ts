@@ -4,9 +4,9 @@
  * Cases use only the public API so they keep measuring the same user-visible
  * work while the storage and scheduling internals change underneath.
  *
- * Every case is sized so one `run()` takes roughly 0.1–20 ms on a laptop. The
- * `calibration` case is plain JavaScript work used to normalize scores across
- * machines (see `scripts/bench.ts`).
+ * Every case is sized so one `run()` takes roughly 0.1–20 ms on a laptop.
+ * Scores are normalized by the `calibration` case in `harness.ts` (see
+ * `scripts/bench.ts`).
  */
 import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
 import type * as Entity from "@typeonce/bevy-ts/Entity"
@@ -84,28 +84,6 @@ const ReadMovers = Game.Query({
     velocity: Game.Query.read(Velocity)
   }
 })
-
-const calibration: BenchCase = {
-  name: "calibration",
-  description: "Plain JS map/object/array work used to normalize scores across machines",
-  setup: () => ({
-    run: () => {
-      const map = new Map<number, { value: number }>()
-      for (let index = 0; index < 50_000; index++) {
-        map.set(index, { value: index })
-      }
-      let total = 0
-      for (let index = 0; index < 50_000; index++) {
-        total += map.get(index)!.value
-      }
-      const values: Array<number> = []
-      for (const entry of map.values()) {
-        values.push(entry.value * 2)
-      }
-      if (total + values.length < 0) throw new Error("unreachable")
-    }
-  })
-}
 
 const spawn: BenchCase = {
   name: "spawn/10k-3c",
@@ -495,7 +473,6 @@ const frame: BenchCase = {
 }
 
 export const cases: ReadonlyArray<BenchCase> = [
-  calibration,
   spawn,
   despawn,
   iterateRead,

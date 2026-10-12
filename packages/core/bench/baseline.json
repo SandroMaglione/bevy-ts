@@ -1,73 +1,138 @@
 {
   "runtime": {
-    "tolerance": 0.35,
-    "calibrationMs": 2.6637,
-    "environment": "Apple M1 / node v26.5.0 / darwin",
+    "tolerance": 0.25,
+    "calibrationMs": 4.9491,
+    "environment": "Intel(R) Xeon(R) Processor @ 2.10GHz / node v22.22.0 / linux",
     "cases": {
       "spawn/10k-3c": {
-        "minMs": 4.7196,
-        "medianMs": 5.5691,
-        "score": 1.7718
+        "minMs": 9.5355,
+        "medianMs": 15.1024,
+        "score": 1.9132
       },
       "despawn/10k": {
-        "minMs": 4.5393,
-        "medianMs": 5.6807,
-        "score": 1.6889
+        "minMs": 21.4598,
+        "medianMs": 24.1183,
+        "score": 4.3068
       },
       "query/iterate-read-10k-of-20k": {
-        "minMs": 0.0895,
-        "medianMs": 0.0949,
-        "score": 0.0336
+        "minMs": 0.2722,
+        "medianMs": 0.282,
+        "score": 0.0546
       },
       "query/iterate-write-10k": {
-        "minMs": 0.3477,
-        "medianMs": 0.4073,
-        "score": 0.1294
+        "minMs": 0.5592,
+        "medianMs": 0.6223,
+        "score": 0.113
       },
       "query/single-in-20k-x1000": {
-        "minMs": 0.2993,
-        "medianMs": 0.3125,
-        "score": 0.1114
+        "minMs": 0.4293,
+        "medianMs": 0.5051,
+        "score": 0.0862
       },
       "query/changed-100-of-10k-x20": {
-        "minMs": 0.3006,
-        "medianMs": 0.3125,
-        "score": 0.1118
+        "minMs": 0.2903,
+        "medianMs": 0.3158,
+        "score": 0.0583
       },
       "structural/insert-remove-1k": {
-        "minMs": 0.1729,
-        "medianMs": 0.1993,
-        "score": 0.0643
+        "minMs": 0.2181,
+        "medianMs": 0.2661,
+        "score": 0.0438
       },
       "schedule/100-systems-x10": {
-        "minMs": 0.1924,
-        "medianMs": 0.1987,
-        "score": 0.0716
+        "minMs": 0.2455,
+        "medianMs": 0.2719,
+        "score": 0.0493
       },
       "lookup/get-10k": {
-        "minMs": 0.6132,
-        "medianMs": 0.6426,
-        "score": 0.2282
+        "minMs": 0.7685,
+        "medianMs": 1.2963,
+        "score": 0.1542
       },
       "events/emit-read-10k": {
-        "minMs": 0.094,
-        "medianMs": 0.0965,
-        "score": 0.035
+        "minMs": 0.132,
+        "medianMs": 0.1575,
+        "score": 0.0265
       },
       "relations/descendants-100x100": {
-        "minMs": 0.3151,
-        "medianMs": 0.3232,
-        "score": 0.1169
+        "minMs": 0.3733,
+        "medianMs": 0.3909,
+        "score": 0.0749
       },
       "snapshot/json-roundtrip-10k": {
-        "minMs": 20.4746,
-        "medianMs": 25.8538,
-        "score": 7.5947
+        "minMs": 34.18,
+        "medianMs": 47.0883,
+        "score": 6.8577
       },
       "frame/50-systems-5k": {
-        "minMs": 2.2589,
-        "medianMs": 2.5384,
-        "score": 0.8405
+        "minMs": 3.8521,
+        "medianMs": 4.3153,
+        "score": 0.7729
+      },
+      "math/vector2-move-10k": {
+        "minMs": 0.1932,
+        "medianMs": 0.2285,
+        "score": 0.0388
+      },
+      "math/vector2-validate-10k": {
+        "minMs": 0.1381,
+        "medianMs": 0.1519,
+        "score": 0.0277
+      },
+      "math/scalar-approach-clamp-10k": {
+        "minMs": 0.0281,
+        "medianMs": 0.0296,
+        "score": 0.0056
+      },
+      "math/aabb-intersects-200x200": {
+        "minMs": 0.1162,
+        "medianMs": 0.1206,
+        "score": 0.0233
+      },
+      "math/input-axis-10k": {
+        "minMs": 0.2039,
+        "medianMs": 0.2316,
+        "score": 0.0409
+      },
+      "math/spatial-grid-1k": {
+        "minMs": 0.5368,
+        "medianMs": 0.5642,
+        "score": 0.1077
+      },
+      "math/flow-field-search": {
+        "minMs": 0.2012,
+        "medianMs": 0.2816,
+        "score": 0.0404
+      },
+      "math/flow-field-way-1k": {
+        "minMs": 0.099,
+        "medianMs": 0.1065,
+        "score": 0.0199
+      },
+      "math/collide-move-circle-1k": {
+        "minMs": 1.0229,
+        "medianMs": 1.0891,
+        "score": 0.2053
+      },
+      "math/random-next-100k": {
+        "minMs": 0.829,
+        "medianMs": 0.8694,
+        "score": 0.1664
+      },
+      "render/sync-1k-changed-of-10k": {
+        "minMs": 0.5644,
+        "medianMs": 0.6263,
+        "score": 0.114
+      },
+      "render/sync-spawn-despawn-500": {
+        "minMs": 5.5131,
+        "medianMs": 6.0277,
+        "score": 1.114
+      },
+      "render/interpolate-10k": {
+        "minMs": 0.4664,
+        "medianMs": 0.5152,
+        "score": 0.0942
       }
     }
   },
@@ -75,8 +140,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 40772,
-      "instantiations": 231244
+      "types": 40794,
+      "instantiations": 231325
     }
   }
 }
