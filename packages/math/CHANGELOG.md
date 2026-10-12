@@ -1,5 +1,15 @@
 # @typeonce/bevy-ts-math
 
+## 0.5.0
+
+### Minor Changes
+
+- c5bd6d3: Add hot-path game helpers, lifted from a shipped top-down game: `Vec2` plain vector arithmetic (accepts validated `Vector2` values), `Box2` edge boxes, `Collide2` swept circle collision with sliding (no tunneling through thin walls, rounded corners), a `SpatialGrid` broad phase that allocates nothing per step, a `FlowField` that leads bodies around walls with clearance, and a deterministic `Random` whose whole state is one integer.
+
+### Patch Changes
+
+- @typeonce/bevy-ts@0.5.0
+
 ## 0.4.0
 
 ### Patch Changes

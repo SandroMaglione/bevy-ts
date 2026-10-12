@@ -1,5 +1,11 @@
 # @typeonce/bevy-ts-browser
 
+## 0.5.0
+
+### Patch Changes
+
+- @typeonce/bevy-ts@0.5.0
+
 ## 0.4.0
 
 ### Patch Changes

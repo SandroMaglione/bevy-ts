@@ -1,5 +1,11 @@
 # @typeonce/bevy-ts-pixi
 
+## 0.5.0
+
+### Patch Changes
+
+- @typeonce/bevy-ts-render@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
