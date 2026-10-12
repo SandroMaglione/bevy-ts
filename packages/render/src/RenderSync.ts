@@ -256,31 +256,77 @@ export const system = <
   }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | ConditionNeedsFromConditions<When>>
 }
 
-/** A 2D position, the value `interpolate` blends. */
+/** A 2D position, the value `interpolate` blends when no `blend` is given. */
 export interface Planar {
   readonly x: number
   readonly y: number
 }
 
+/**
+ * Blends the previous value into the current one at `alpha`, in [0, 1), for
+ * values beyond a 2D position (3D positions, angles, scales). Without it,
+ * `interpolate` blends `x` and `y` linearly.
+ */
+export type Blend<From, To, Blended> = (from: From, to: To, alpha: number) => Blended
+
 type ClockService = Descriptor<"service", string, { readonly alpha: number }>
 
-export interface InterpolateOptions<
+// The numeric fields the default blend would drop (anything beyond x and y).
+type Dropped<Value> = { [K in Exclude<keyof Value, "x" | "y">]: Value[K] extends number ? K : never }[Exclude<keyof Value, "x" | "y">]
+
+// Whether the default blend covers a value: `{ x, y }` and no other numbers.
+type BlendsByDefault<Value> = Value extends Planar ? [Dropped<Value>] extends [never] ? true : false : false
+
+declare const noBlend: unique symbol
+/** Stands for "no `blend` given" until `blend`'s result is inferred. */
+export interface NoBlend {
+  readonly [noBlend]: true
+}
+
+/** What `place` receives: the result of `blend`, or the blended `{ x, y }`. */
+export type Placed<Result> = [Result] extends [NoBlend] ? Planar : Result
+
+/**
+ * `blend` is optional when both values blend by default (`{ x, y }` and no
+ * other numbers), and required otherwise, so nothing (a `z`, an angle) is
+ * silently left unblended.
+ */
+export type BlendOption<From, To, Result> =
+  [BlendsByDefault<From>, BlendsByDefault<To>] extends [true, true]
+    ? { readonly blend?: Blend<From, To, Result> }
+    : { readonly blend: Blend<From, To, Result> }
+
+export type InterpolateOptions<
   S extends Schema.Any,
   Root,
   Previous extends Schema.ComponentDescriptor<S>,
   Current extends Schema.ComponentDescriptor<S>,
   Registry extends RegistryService,
   Clock extends ServiceDescriptor,
-  When extends ReadonlyArray<Condition> = readonly []
+  When extends ReadonlyArray<Condition> = readonly [],
+  Result = NoBlend
+> =
+  & InterpolateBase<S, Root, Previous, Current, Registry, Clock, When, Result>
+  & BlendOption<Descriptor.Value<Previous>, Descriptor.Value<Current>, Result>
+
+interface InterpolateBase<
+  S extends Schema.Any,
+  Root,
+  Previous extends Schema.ComponentDescriptor<S>,
+  Current extends Schema.ComponentDescriptor<S>,
+  Registry extends RegistryService,
+  Clock extends ServiceDescriptor,
+  When extends ReadonlyArray<Condition>,
+  Result
 > {
   /** The system name. */
   readonly name: string
   /** The service providing the node registry (the same one `system` fills). */
   readonly registry: Registry
-  /** The position at the start of the latest fixed step. */
-  readonly previous: Descriptor.Value<Previous> extends Planar ? Previous : "The previous component must hold { x, y }"
-  /** The position after the latest fixed step. */
-  readonly current: Descriptor.Value<Current> extends Planar ? Current : "The current component must hold { x, y }"
+  /** The value at the start of the latest fixed step. */
+  readonly previous: Previous
+  /** The value after the latest fixed step. */
+  readonly current: Current
   /**
    * A service whose `alpha` is the fraction of a fixed step elapsed since the
    * latest one, in [0, 1): `FixedLoop`'s render `alpha`.
@@ -289,10 +335,10 @@ export interface InterpolateOptions<
   /** Run conditions, like a system's `when`. */
   readonly when?: When
   /**
-   * Places a node at the blended position. Called every run for every entity
+   * Places a node at the blended value. Called every run for every entity
    * that has both components and a node, so it should set, not accumulate.
    */
-  readonly place: (node: NodeOf<Registry>, position: Planar, entity: Entity.EntityId<S, Root>) => void
+  readonly place: (node: NodeOf<Registry>, position: Placed<Result>, entity: Entity.EntityId<S, Root>) => void
 }
 
 /**
@@ -305,6 +351,10 @@ export interface InterpolateOptions<
  * loop (`FixedLoop`'s render callback). The game copies `current` into
  * `previous` at the start of each step.
  *
+ * Only `x` and `y` are blended by default, so components holding other
+ * numbers (a `z`, an angle) are rejected unless `blend` says how to blend
+ * them; `place` then receives what `blend` returns.
+ *
  * @example
  * ```ts
  * const Interpolate = RenderSync.interpolate(Game, {
@@ -316,6 +366,21 @@ export interface InterpolateOptions<
  *   place: (sprite, { x, y }) => sprite.position.set(x, y)
  * })
  * const render = Game.Schedule(Sync, Interpolate)
+ *
+ * // 3D: blend every coordinate.
+ * RenderSync.interpolate(Game, {
+ *   name: "Game/Interpolate3D",
+ *   registry: Meshes,
+ *   previous: PrevPosition3,
+ *   current: Position3,
+ *   clock: RenderClock,
+ *   blend: (from, to, alpha) => ({
+ *     x: from.x + (to.x - from.x) * alpha,
+ *     y: from.y + (to.y - from.y) * alpha,
+ *     z: from.z + (to.z - from.z) * alpha
+ *   }),
+ *   place: (mesh, { x, y, z }) => mesh.position.set(x, y, z)
+ * })
  * ```
  */
 export const interpolate = <
@@ -325,10 +390,11 @@ export const interpolate = <
   const Current extends Schema.ComponentDescriptor<S>,
   const Registry extends RegistryService,
   const Clock extends ServiceDescriptor,
-  const When extends ReadonlyArray<Condition<Root>> = readonly []
+  const When extends ReadonlyArray<Condition<Root>> = readonly [],
+  Result = NoBlend
 >(
   Game: Schema.Game<S, Root>,
-  options: InterpolateOptions<S, Root, Previous, Current, Registry, Clock, When>
+  options: InterpolateOptions<S, Root, Previous, Current, Registry, Clock, When, Result>
 ): RenderSystem<S, Root, Registry | Clock | ConditionNeedsFromConditions<When>> => {
   type Node = NodeOf<Registry>
   const System = Game.System as unknown as (name: string, spec: object, run: (context: any) => void) => unknown
@@ -349,12 +415,18 @@ export const interpolate = <
   }, ({ queries, services }) => {
     const registry = services.registry as NodeRegistry<Node>
     const alpha = (services.clock as { readonly alpha: number }).alpha
+    const blend = options.blend as Blend<unknown, unknown, Placed<Result>> | undefined
+    const place = options.place
     for (const { entity, data } of queries.entities.each()) {
       const node = registry.get(entity.id)
       if (node === undefined) continue
+      if (blend !== undefined) {
+        place(node, blend(data.previous.get(), data.current.get(), alpha), entity.id)
+        continue
+      }
       const from = data.previous.get() as Planar
       const to = data.current.get() as Planar
-      options.place(node, { x: from.x + (to.x - from.x) * alpha, y: from.y + (to.y - from.y) * alpha }, entity.id)
+      place(node, { x: from.x + (to.x - from.x) * alpha, y: from.y + (to.y - from.y) * alpha } as Placed<Result>, entity.id)
     }
   }) as RenderSystem<S, Root, Registry | Clock | ConditionNeedsFromConditions<When>>
 }

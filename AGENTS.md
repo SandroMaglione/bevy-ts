@@ -1,11 +1,16 @@
 ## Repo Structure
 - [`packages/core`](./packages/core/): strict public ECS/runtime library surface.
-- [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard input.
+- [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard, pointer, and touch input.
 - [`packages/render`](./packages/render/): renderer-agnostic node registry and render-sync systems.
 - [`packages/pixi`](./packages/pixi/): Pixi container adapter (`PixiNodeRegistry.make`) for the render package's registry contract.
 - [`packages/math`](./packages/math/): validated math values (Scalar, Vector2, Size2, Aabb, InputAxis) and hot-path game helpers (Vec2, Box2, Collide2, SpatialGrid, FlowField, Random).
 - [`packages/devtools`](./packages/devtools/): debug sessions, trace history, and text reports over the core `Debug` handle.
 - [`examples`](./examples/): workspace example apps that consume packages by package name.
+
+## Package Scope
+- Packages never draw. Drawing, particles, and effects stay in games.
+- Bridge code that hands a renderer or the platform what it needs (nodes, positions, input, timing) and glue that would otherwise repeat in every game belong in the support packages.
+- Hand the game the data it needs to draw (like `Touch`'s `view()`), never the drawing itself.
 
 ## Core Principles
 - Type safety is the first and absolute priority.
