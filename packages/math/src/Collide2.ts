@@ -168,6 +168,16 @@ export const sweepCircleBox = (origin: Vec2, delta: Vec2, radius: number, box: B
 /**
  * First contact of a moving circle with any of `boxes`, or `undefined`.
  *
+ * With a `radius` of 0 the circle is a point and the sweep is a segment, so
+ * this is also line of sight: `undefined` means nothing blocks the line from
+ * `origin` to `origin + delta`. A box that already holds `origin` is not
+ * reported, so an eye inside a wall sees out of it.
+ *
+ * @example
+ * ```ts
+ * const sees = Collide2.sweepCircleBoxes(eye, Vec2.subtract(target, eye), 0, walls) === undefined
+ * ```
+ *
  * @category Queries
  */
 export const sweepCircleBoxes = (origin: Vec2, delta: Vec2, radius: number, boxes: ReadonlyArray<Box2>): Hit | undefined => {

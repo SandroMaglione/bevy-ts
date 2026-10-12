@@ -48,6 +48,21 @@ describe("Collide2", () => {
     expect(out.x).toBe(5)
   })
 
+  it("answers line of sight with a radius of 0", () => {
+    const wall = Box2.around(0, 0, 10, 10)
+    const sees = (eye: { x: number; y: number }, target: { x: number; y: number }) =>
+      Collide2.sweepCircleBoxes(eye, { x: target.x - eye.x, y: target.y - eye.y }, 0, [wall]) === undefined
+    expect(sees({ x: -50, y: 0 }, { x: 50, y: 0 })).toBe(false)
+    expect(sees({ x: -50, y: 11 }, { x: 50, y: 11 })).toBe(true)
+    expect(sees({ x: -50, y: 0 }, { x: -20, y: 0 })).toBe(true)
+    // Diagonally past the corner (10, 10), just outside it.
+    expect(sees({ x: 0, y: 30 }, { x: 30, y: 0 })).toBe(true)
+    // Diagonally through the box, clipping its corner.
+    expect(sees({ x: 0, y: 15 }, { x: 15, y: 0 })).toBe(false)
+    // An eye inside the wall sees out of it.
+    expect(sees({ x: 0, y: 0 }, { x: 50, y: 0 })).toBe(true)
+  })
+
   it("finds the first of several walls", () => {
     const near = Box2.around(50, 0, 5, 50)
     const far = Box2.around(150, 0, 5, 50)
