@@ -96,6 +96,7 @@ const program = `
 import { Descriptor, Schema } from "@typeonce/bevy-ts"
 import * as Result from "@typeonce/bevy-ts/Result"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
+import { Collide2, FlowField, Random, Scalar, SpatialGrid } from "@typeonce/bevy-ts-math"
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { NodeRegistry } from "@typeonce/bevy-ts-render"
 import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
@@ -114,6 +115,13 @@ const ran = session.run("setup")
 const keyboard = Keyboard.scripted({ jump: [" "] }, [{ frame: 0, press: ["jump"] }])
 const registry = NodeRegistry.make<string>({ attach: () => {}, detach: () => {} })
 const sprites = PixiNodeRegistry.make<{ destroy(): void }>({ addChild: () => {}, removeChild: () => {} })
+const cell = Scalar.Positive.result(8)
+const grid = cell.ok ? SpatialGrid.make(cell.value) : undefined
+grid?.insert(0, 1, 1, 1)
+const field = cell.ok ? FlowField.make(cell.value) : undefined
+field?.setWalls([{ minX: 0, minY: 0, maxX: 16, maxY: 4 }], 1)
+const moved = Collide2.moveCircle({ x: 0, y: 10 }, { x: 0, y: -20 }, 2, [{ minX: -8, minY: 0, maxX: 8, maxY: 4 }])
+if (!moved.blocked || Random.make(42).next() !== 0.6011037519201636) throw new Error("math helpers misbehave when packed")
 if ("NodeRegistry" in Pixi || "RenderSync" in Pixi) throw new Error("Pixi publishes removed compatibility exports")
 console.log(JSON.stringify({
   ok: ran.data.ok && Result.isSuccess(Result.success(1)),

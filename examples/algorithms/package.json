@@ -1,0 +1,9 @@
+{
+  "name": "@typeonce/bevy-ts-example-algorithms",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@typeonce/bevy-ts": "workspace:*",
+    "@typeonce/bevy-ts-math": "workspace:*"
+  }
+}
