@@ -1,12 +1,13 @@
 /**
- * Runtime benchmark cases for validated math values.
+ * Runtime benchmark cases for validated math values and hot-path helpers.
  *
  * These run inside per-entity systems every frame, so each case does the work
- * of one frame over many entities. Cases use only the public API and fold
+ * of one frame over many entities. The helper cases use the scale of a busy
+ * game: 1,000 bodies and 40 walls (see `helpers.ts` for per-call timings). Cases use only the public API and fold
  * their results into a checked sum so the work cannot be optimized away.
  */
 import type { BenchCase } from "../../core/bench/harness.ts"
-import { Aabb, InputAxis, Scalar, Vector2 } from "@typeonce/bevy-ts-math"
+import { Aabb, Box2, Collide2, FlowField, InputAxis, Random, Scalar, SpatialGrid, Vector2 } from "@typeonce/bevy-ts-math"
 
 const N = 10_000
 
@@ -130,10 +131,111 @@ const inputAxis: BenchCase = {
   }
 }
 
+// A fixed world shared by the helper cases; the seed keeps it identical across runs.
+const world = () => {
+  const random = Random.make(1)
+  const bodies = Array.from({ length: 1_000 }, () => ({ x: random.range(0, 2000), y: random.range(0, 1200), r: random.range(8, 24) }))
+  const walls = Array.from({ length: 40 }, () => Box2.around(random.range(0, 2000), random.range(0, 1200), random.range(10, 80), random.range(10, 80)))
+  return { bodies, walls }
+}
+
+const spatialGrid: BenchCase = {
+  name: "math/spatial-grid-1k",
+  description: "Rebuild a spatial grid over 1,000 bodies and query a 96 × 96 box around each",
+  setup: () => {
+    const { bodies } = world()
+    const grid = SpatialGrid.make(Scalar.Positive.option(64)!)
+    let found = 0
+    const visit = () => {
+      found++
+    }
+    return {
+      run: () => {
+        grid.clear()
+        for (let index = 0; index < bodies.length; index++) grid.insert(index, bodies[index]!.x, bodies[index]!.y, bodies[index]!.r)
+        found = 0
+        for (const body of bodies) grid.forEachIn(body.x - 48, body.y - 48, body.x + 48, body.y + 48, visit)
+        check(found)
+      }
+    }
+  }
+}
+
+const flowFieldSearch: BenchCase = {
+  name: "math/flow-field-search",
+  description: "Search a 2,800-cell flow field around 40 walls after the goal moves",
+  setup: () => {
+    const { walls } = world()
+    const paths = FlowField.make(Scalar.Positive.option(30)!)
+    paths.setWalls(walls, 12)
+    let goal = 0
+    return {
+      run: () => {
+        goal++
+        paths.setGoal({ x: 200 + (goal % 40) * 40, y: 600 })
+      }
+    }
+  }
+}
+
+const flowFieldWay: BenchCase = {
+  name: "math/flow-field-way-1k",
+  description: "Read the flow field direction for 1,000 bodies",
+  setup: () => {
+    const { bodies, walls } = world()
+    const paths = FlowField.make(Scalar.Positive.option(30)!)
+    paths.setWalls(walls, 12)
+    paths.setGoal({ x: 1000, y: 600 })
+    return {
+      run: () => {
+        let total = 0
+        for (const body of bodies) total += paths.way(body)?.x ?? 0
+        check(total)
+      }
+    }
+  }
+}
+
+const moveCircle: BenchCase = {
+  name: "math/collide-move-circle-1k",
+  description: "Move 1,000 circles through 40 walls, sliding along them",
+  setup: () => {
+    const { bodies, walls } = world()
+    const delta = { x: 7, y: -5 }
+    return {
+      run: () => {
+        let total = 0
+        for (const body of bodies) total += Collide2.moveCircle(body, delta, body.r, walls).position.x
+        check(total)
+      }
+    }
+  }
+}
+
+const randomNext: BenchCase = {
+  name: "math/random-next-100k",
+  description: "Draw 100,000 random numbers",
+  setup: () => {
+    const random = Random.make(1)
+    return {
+      run: () => {
+        let total = 0
+        for (let draw = 0; draw < 100_000; draw++) total += random.next()
+        check(total)
+      }
+    }
+  }
+}
+
 export const cases: ReadonlyArray<BenchCase> = [
   vectorOps,
   vectorValidate,
   scalarOps,
   aabbOverlap,
-  inputAxis
+  inputAxis,
+  spatialGrid,
+  flowFieldSearch,
+  flowFieldWay,
+  moveCircle,
+  randomNext
 ]
