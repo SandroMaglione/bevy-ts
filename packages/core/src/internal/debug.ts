@@ -333,7 +333,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
     lints.push(...readBeforeWriteLints(schedules, described, input.externallyWrittenEvents))
     // Each named schedule is checked as one tick; `tick` checks this at compile time.
     for (const [name, schedule] of input.schedules) {
-      for (const issue of OrderInternal.tickOrderIssues(schedule.steps, input.externallyWrittenEvents)) {
+      for (const issue of OrderInternal.tickOrderIssues(schedule.steps)) {
         lints.push({ severity: "warning", code: "this-tick-order", subject: issue.data, message: `in ${name}, ${issue.message}` })
       }
     }

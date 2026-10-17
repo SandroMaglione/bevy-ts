@@ -21,13 +21,11 @@ const sameData = (left: Descriptor.Any, right: Descriptor.Any): boolean =>
   left.kind === right.kind && left.name === right.name
 
 /**
- * Checks the systems of one tick, in the order they run. Events in `sent`
- * (published with `runtime.send` before the tick) count as already written.
+ * Checks the systems of one tick, in the order they run. A read with no
+ * writer in the tick is fine (a reused reader); `event-never-written` covers
+ * a writer missing everywhere.
  */
-export const tickOrderIssues = (
-  steps: ReadonlyArray<Schedule.ScheduleStep>,
-  sent: ReadonlySet<string>
-): Array<OrderIssue> => {
+export const tickOrderIssues = (steps: ReadonlyArray<Schedule.ScheduleStep>): Array<OrderIssue> => {
   const systems = steps.filter(Schedule.isSystemStep) as ReadonlyArray<AnySystem>
   const issues: Array<OrderIssue> = []
   systems.forEach((reader, index) => {
@@ -46,15 +44,6 @@ export const tickOrderIssues = (
           data,
           writer: system.name,
           message: `${reader.name} needs ${data} from this tick, but its writer ${system.name} runs after it: move ${system.name} before ${reader.name}, or read ${data} without thisTick`
-        })
-      }
-      const sentBefore = read.descriptor.kind === "event" && sent.has(data)
-      if (writers.length === 0 && !sentBefore) {
-        issues.push({
-          kind: "missingWriter",
-          reader: reader.name,
-          data,
-          message: `${reader.name} needs ${data} from this tick, but no system in this tick writes it: add a writer before ${reader.name} in the same runtime.tick(...) call, or read ${data} without thisTick`
         })
       }
     }

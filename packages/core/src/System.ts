@@ -278,9 +278,10 @@ export interface ThisTick {
  *
  * `runtime.tick(...)` checks it at compile time over everything passed to that
  * call, in order (gated groups count by position), and rejects a writer that
- * runs after the reader, a read with no writer in the call, and a call whose
- * order is not statically known. `tryTick` checks the same at runtime, where
- * events sent with `runtime.send` before the tick count as written.
+ * runs after the reader and a call whose order is not statically known. A
+ * read with no writer in the call compiles (a reader reused in several
+ * ticks); the `event-never-written` lint reports data nobody writes.
+ * `tryTick` checks the same at runtime.
  *
  * Use it on reads whose correctness depends on running after their writers
  * (damage applied the tick it is dealt). A plain read is right when last

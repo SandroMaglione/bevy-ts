@@ -464,8 +464,7 @@ export interface MissingRuntimeRequirement {
 
 /**
  * Returned by `tryTick` when a `Game.System.thisTick` read has a writer that
- * runs after it, or no writer in the tick (events sent with `runtime.send`
- * since the previous tick count as written). Nothing ran.
+ * runs after it in the schedule. Nothing ran.
  */
 export interface TickOrderViolation {
   readonly kind: "TickOrderViolation"
@@ -1724,8 +1723,6 @@ const makeValidatedRuntime = <
 
   const eventsByKey = new Set((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => descriptor.key))
   const externallyWrittenEvents = new Set<string>()
-  /** Events sent since the previous tick began: written for `thisTick` checks in `tryTick`. */
-  const sentSinceTick = new Set<string>()
 
   const send = (descriptor: Descriptor<"event", string, any>, value: unknown): void => {
     if (ticking) throw new Error(`runtime.send(${descriptor.name}) was called while a schedule is running: emit from a system instead`)
@@ -1735,12 +1732,10 @@ const makeValidatedRuntime = <
     // Bound host traffic even when it sends repeatedly without ticking.
     events.trim(0)
     externallyWrittenEvents.add(descriptor.name)
-    sentSinceTick.add(descriptor.name)
     if (tracing) emit({ type: "runtime.sent", frame: frameCount, tick: published, event: descriptor.name, value })
   }
 
   const advanceFrame = (): void => {
-    sentSinceTick.clear()
     frameCount += 1
     const boundary = world.advanceFrame()
     if (tracing) emit({ type: "frame", frame: frameCount, tick: world.currentTick() })
@@ -1789,7 +1784,7 @@ const makeValidatedRuntime = <
       })
     }
 
-    const issues = OrderInternal.tickOrderIssues(schedule.steps, sentSinceTick)
+    const issues = OrderInternal.tickOrderIssues(schedule.steps)
     if (issues.length > 0) {
       return Result.failure({ kind: "TickOrderViolation", issues })
     }

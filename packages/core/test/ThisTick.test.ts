@@ -47,15 +47,20 @@ describe("thisTick at runtime", () => {
     expect(seen).toEqual([])
   })
 
-  it("counts events sent with runtime.send before the tick as written", () => {
+  it("runs a reader with no writer in the tick, which sees events sent with runtime.send", () => {
     const runtime = Game.Runtime.make({ services: Game.Runtime.services() })
+    seen.length = 0
     const alone = erased(Game.Schedule(Apply))
-    const missing = runtime.tryTick(alone)
-    expect(!missing.ok && missing.error.kind === "TickOrderViolation" && missing.error.issues.map((issue) => issue.kind)).toEqual(["missingWriter"])
+    expect(runtime.tryTick(alone).ok).toBe(true)
     runtime.send(Damage, 5)
     expect(runtime.tryTick(alone).ok).toBe(true)
-    // The send counted for that tick only.
-    expect(runtime.tryTick(alone).ok).toBe(false)
+    expect(seen).toEqual([[], [5]])
+  })
+
+  it("reports no this-tick-order lint when the writer runs first", () => {
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    runtime.debug.nameSchedules({ update: erased(Game.Schedule(Deal, Apply)) })
+    expect(runtime.debug.describe().lints.filter((lint) => lint.code === "this-tick-order")).toEqual([])
   })
 
   it("reports a this-tick-order lint for named schedules", () => {

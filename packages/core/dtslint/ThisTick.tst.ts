@@ -64,9 +64,17 @@ describe("Game.System.thisTick", () => {
     runtime.tick(Game.Schedule(Game.Schedule.pauseWhen([Game.Condition.inState(Flow, "Playing")], Deal), Apply))
   })
 
-  it("rejects a read with no writer in the tick call", () => {
-    // @ts-expect-error ThisTick/Apply needs ThisTick/Damage from this tick, but no system in this tick writes it
+  it("accepts a read with no writer in the tick call (a reused reader)", () => {
     runtime.tick(Game.Schedule(Apply))
+    runtime.tick(Game.Schedule(Show))
+  })
+
+  it("does not count a writer ticked in a separate call", () => {
+    runtime.tick(Game.Schedule(Apply))
+    runtime.tick(Game.Schedule(Deal))
+    // In one call, the same order is an error.
+    // @ts-expect-error ThisTick/Apply needs ThisTick/Damage from this tick, but its writer ThisTick/Deal runs after it
+    runtime.tick(Game.Schedule(Apply), Game.Schedule(Deal))
   })
 
   it("rejects a tick whose order is not statically known", () => {

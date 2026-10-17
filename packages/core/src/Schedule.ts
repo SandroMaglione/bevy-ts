@@ -77,12 +77,12 @@ export type AnyScheduleOrder = ScheduleOrder<ReadonlyArray<unknown>, boolean>
  * the same text `runtime.tick(...)` reports at compile time.
  */
 export interface OrderIssue {
-  readonly kind: "lateWriter" | "missingWriter"
+  readonly kind: "lateWriter"
   readonly reader: string
   /** The event or resource name. */
   readonly data: string
-  /** The writer that runs after the reader (`lateWriter` only). */
-  readonly writer?: string
+  /** The writer that runs after the reader. */
+  readonly writer: string
   readonly message: string
 }
 
@@ -202,9 +202,6 @@ type LateWriterError<Reader extends string, Key extends string, Writer> =
     ? `${Reader} needs ${Key} from this tick, but its writer ${Writer} runs after it: move ${Writer} before ${Reader}, or read ${Key} without thisTick`
     : never
 
-type MissingWriterError<Reader extends string, Key extends string> =
-  `${Reader} needs ${Key} from this tick, but no system in this tick writes it: add a writer before ${Reader} in the same runtime.tick(...) call, or read ${Key} without thisTick`
-
 /** Writers of the read's data that run after its reader, at this level and inside the reader's own entry. */
 type LateWriters<Entries, Kind, Key extends string, Reader extends string> =
   // Distributes over a union of schedules (a tick of one of several), then over each place the reader runs.
@@ -218,22 +215,19 @@ type LateWritersAt<Entries extends ReadonlyArray<unknown>, Index, Kind, Key exte
       : never
     : never
 
-type ReadErrors<Entries extends ReadonlyArray<unknown>, All, Reads> =
+type ReadErrors<Entries extends ReadonlyArray<unknown>, Reads> =
   Reads extends Read<infer Kind, infer Key extends string, infer Reader extends string>
-    ? | LateWriters<Entries, Kind, Key, Reader>
-      | ([WritersOf<All, Kind, Key, Reader>] extends [never] ? MissingWriterError<Reader, Key> : never)
+    ? LateWriters<Entries, Kind, Key, Reader>
     : never
 
 type CheckTick<Schedules extends ReadonlyArray<unknown>> =
   [UnknownIn<Schedules>] extends [never]
-    ? SystemsIn<Schedules[number]> extends infer All
-      ? ReadErrors<Schedules, All, SystemReads<All>>
-      : never
+    ? ReadErrors<Schedules, SystemReads<SystemsIn<Schedules[number]>>>
     : UnknownOrderError
 
 /**
  * Every `thisTick` error of one `runtime.tick(...)` call over its arguments
- * in order: writers that run after their reader, reads with no writer, and a
+ * in order: writers that run after their reader, and a
  * call whose order is not statically known. Free when nothing has a read.
  */
 export type TickOrderErrors<Schedules extends ReadonlyArray<unknown>> =
