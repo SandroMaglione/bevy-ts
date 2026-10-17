@@ -25,11 +25,19 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
   const definedMachines: Array<Machine.StateMachine.Any> = []
   const definedMachineNames = new Set<string>()
 
-  const defineMachine = (name: string, values: readonly [Machine.StateValue, ...Machine.StateValue[]]) => {
+  const defineMachine = (
+    name: string,
+    values: readonly [Machine.StateValue, ...Machine.StateValue[]],
+    options?: { readonly within: readonly [Machine.StateMachine.Any, Machine.StateValue] }
+  ) => {
     if (definedMachineNames.has(name)) {
       throw new Error(`Duplicate state machine name: ${name}`)
     }
-    const machine = Machine.StateMachine(name, values)
+    const machine = Machine.StateMachine(
+      name,
+      values,
+      options === undefined ? undefined : { machine: options.within[0], state: options.within[1] }
+    )
     definedMachines.push(machine)
     definedMachineNames.add(name)
     return machine

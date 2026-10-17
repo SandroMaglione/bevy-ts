@@ -519,8 +519,9 @@ export namespace Schema {
   export type BoundStateMachine<
     Root,
     Name extends string = string,
-    Values extends readonly [Machine.StateValue, ...Machine.StateValue[]] = readonly [Machine.StateValue, ...Machine.StateValue[]]
-  > = Machine.StateMachineDefinition<Name, Values, Root>
+    Values extends readonly [Machine.StateValue, ...Machine.StateValue[]] = readonly [Machine.StateValue, ...Machine.StateValue[]],
+    Parent = unknown
+  > = Machine.StateMachineDefinition<Name, Values, Root, Parent>
 
   export type BoundTransitionSchedule<
     S extends Any,
@@ -683,6 +684,33 @@ export namespace Schema {
         const Name extends string,
         const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
       >(name: Name, values: Values): Schema.BoundStateMachine<Root, Name, Values>
+      /**
+       * Declares a sub-state: a machine that exists only while `within[0]` is
+       * in state `within[1]` (a battle phase that only means something while
+       * playing). Whenever the parent enters that state, the sub-state enters
+       * the value given to `Game.Runtime.machine(...)`; when the parent leaves
+       * it, the sub-state exits and has no value: `get()` is `undefined`,
+       * `Game.Condition.inState(Sub, x)` is false, and `nextMachines.sub.set(...)`
+       * returns a `SubStateInactive` failure. So `inState(Sub, x)` alone
+       * implies the parent's state.
+       *
+       * Use a second top-level machine instead when the two modes are
+       * independent (each keeps its value whatever the other does).
+       *
+       * @example
+       * ```ts
+       * const Phase = Game.StateMachine("Phase", ["Setup", "Battle"], { within: [Session, "Playing"] })
+       * ```
+       */
+      <
+        const Name extends string,
+        const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]],
+        Parent extends Machine.StateMachine.Any
+      >(
+        name: Name,
+        values: Values,
+        options: { readonly within: readonly [Parent & Machine.SameGame<Parent, Root>, Machine.StateMachine.Value<Parent>] }
+      ): Schema.BoundStateMachine<Root, Name, Values, Parent>
     }
     readonly Condition: {
       inState: typeof Machine.inState

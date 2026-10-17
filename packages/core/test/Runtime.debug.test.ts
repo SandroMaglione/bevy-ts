@@ -98,7 +98,8 @@ describe("Runtime debug handle", () => {
       { name: "Debug/Tagged", storage: "plain", immutable: false, requires: [] },
       { name: "Debug/Sprite", storage: "transient", immutable: false, requires: [] }
     ])
-    expect(description.machines).toEqual([{ name: "Debug/Flow", states: ["Menu", "Playing"], current: "Menu" }])
+    expect(description.machines).toEqual([{ name: "Debug/Flow", states: ["Menu", "Playing"], current: "Menu", provided: true, within: undefined }])
+    expect(description.scopes).toEqual([])
     expect(description.services).toEqual([{ name: "Debug/Clock", provided: true }])
     expect(description.schedules).toEqual([{
       name: "update",

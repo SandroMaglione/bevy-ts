@@ -39,6 +39,7 @@
  */
 import type { AnyScheduleOrder, Schedule } from "./Schedule.ts"
 import * as Requirement from "./Requirement.ts"
+import type * as Result from "./Result.ts"
 import type { Schema } from "./Schema.ts"
 import type { SystemFailure } from "./System.ts"
 
@@ -56,21 +57,71 @@ export type StateValue = string | number
 export interface StateMachineDefinition<
   out Name extends string = string,
   out Values extends readonly [StateValue, ...StateValue[]] = readonly [StateValue, ...StateValue[]],
-  out Root = unknown
+  out Root = unknown,
+  out Parent = unknown
 > {
   readonly kind: "stateMachine"
   readonly name: Name
   readonly key: symbol
   readonly values: Values
+  /** For a sub-state: the machine and the state it exists in. */
+  readonly within?: SubStateParent | undefined
   readonly __schemaRoot?: Root | undefined
+  /** The machine a sub-state exists within; `unknown` for a top-level machine. */
+  readonly __parent?: (_: never) => Parent
+}
+
+/** Where a sub-state exists: while `machine` is in `state`. */
+export interface SubStateParent {
+  readonly machine: StateMachine.Any
+  readonly state: StateValue
 }
 
 /**
- * The runtime-visible transition payload for one machine.
+ * Whether `M` is a sub-state (declared with `within`): it has no value while
+ * its parent machine is in another state.
+ */
+export type IsSubState<M> =
+  M extends { readonly __parent?: (_: never) => infer Parent } ? unknown extends Parent ? false : true : false
+
+/**
+ * The committed value of `M`. A sub-state has none (`undefined`) while its
+ * parent machine is not in the state it exists in; a top-level machine
+ * always has one.
+ */
+export type CurrentValue<M extends StateMachine.Any> =
+  IsSubState<M> extends true ? StateMachine.Value<M> | undefined : StateMachine.Value<M>
+
+/**
+ * Why queuing a sub-state's next value failed: its parent machine is not in
+ * the state the sub-state exists in, so there is nothing to change.
+ */
+export interface SubStateInactive {
+  readonly _tag: "SubStateInactive"
+  /** The sub-state's name. */
+  readonly machine: string
+  /** The parent machine's name. */
+  readonly parent: string
+  /** The parent state the sub-state exists in. */
+  readonly requires: StateValue
+}
+
+/**
+ * What `nextMachines.x.set(...)` returns: nothing for a top-level machine,
+ * and for a sub-state a `Result` that fails with `SubStateInactive` when its
+ * parent is in another state.
+ */
+export type SetResult<M extends StateMachine.Any> =
+  IsSubState<M> extends true ? Result.Result<void, SubStateInactive> : void
+
+/**
+ * The runtime-visible transition payload for one machine. For a sub-state,
+ * `from` is `undefined` when it starts existing (its parent entered its
+ * state) and `to` is `undefined` when it stops.
  */
 export interface TransitionSnapshot<M extends StateMachineDefinition = StateMachineDefinition> {
-  readonly from: StateMachine.Value<M>
-  readonly to: StateMachine.Value<M>
+  readonly from: CurrentValue<M>
+  readonly to: CurrentValue<M>
 }
 
 /**
@@ -263,7 +314,7 @@ export interface TransitionScheduleDefinition<
  * Type-level and value-level helpers for finite-state machines.
  */
 export namespace StateMachine {
-  export type Any = StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], unknown>
+  export type Any = StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], unknown, unknown>
   export type Value<M extends Any> = M["values"][number]
   export type Root<M extends Any> = M extends StateMachineDefinition<string, readonly [StateValue, ...StateValue[]], infer R> ? R : never
   export type AnyCondition<Root = unknown> = Condition<Root>
@@ -331,6 +382,9 @@ export type MachineNeedsFromConditions<C extends ReadonlyArray<Condition>> =
  *
  * Use `Descriptor.EntityState(...)` instead when every entity carries its own
  * state (per-entity, written immediately, no enter/exit schedules).
+ *
+ * Pass `within` for a sub-state: a machine that exists only while another
+ * machine is in one state (`Game.StateMachine(name, values, { within })`).
  */
 export const StateMachine = <
   const Name extends string,
@@ -338,12 +392,14 @@ export const StateMachine = <
   Root = unknown
 >(
   name: Name,
-  values: Values
+  values: Values,
+  within?: SubStateParent
 ): StateMachineDefinition<Name, Values, Root> => ({
   kind: "stateMachine",
   name,
   key: Symbol.for(`ritmo/stateMachine/${name}`),
-  values
+  values,
+  ...(within === undefined ? {} : { within })
 }) as StateMachineDefinition<Name, Values, Root>
 
 /**

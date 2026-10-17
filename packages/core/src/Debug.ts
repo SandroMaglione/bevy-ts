@@ -140,8 +140,15 @@ export interface RelationDescription {
 export interface MachineDescription {
   readonly name: string
   readonly states: ReadonlyArray<Machine.StateValue>
-  /** The committed value, or `undefined` when the runtime does not provide the machine. */
+  /**
+   * The committed value, or `undefined` when the runtime does not provide the
+   * machine, or when it is a sub-state whose parent is in another state.
+   */
   readonly current: Machine.StateValue | undefined
+  /** Whether the runtime was given an initial value for the machine. */
+  readonly provided: boolean
+  /** For a sub-state, where it exists, as `Parent=state`. */
+  readonly within: string | undefined
 }
 
 /** An entity scope and the state changes that despawn it (`Game.EntityScope(name, { despawnOnExit, despawnOnEnter })`). */

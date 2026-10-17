@@ -499,7 +499,9 @@ export const describe = (input: DescribeInput): Debug.Description => {
     machines: input.machines.map((machine) => ({
       name: machine.name,
       states: machine.values,
-      current: input.currentMachine(machine)
+      current: input.currentMachine(machine),
+      provided: input.providesMachine(machine),
+      within: machine.within === undefined ? undefined : `${machine.within.machine.name}=${String(machine.within.state)}`
     })),
     scopes: input.scopes.map((scope) => ({ name: scope.name, despawnOn: scope.despawnOn.map(triggerName) })),
     services: describeServices(input.providedServices, systems),
@@ -514,9 +516,16 @@ export const describe = (input: DescribeInput): Debug.Description => {
   }
 }
 
-/** Whether a described system queues a next state of `machine`. */
-const queuedWithParents = (machine: Machine.StateMachine.Any, nextStates: ReadonlyMap<string, unknown>): boolean =>
-  nextStates.has(machine.name)
+/**
+ * Whether a described system queues a next state of `machine`, or of a
+ * machine it exists within: a parent leaving its state changes a sub-state too.
+ */
+const queuedWithParents = (machine: Machine.StateMachine.Any, nextStates: ReadonlyMap<string, unknown>): boolean => {
+  for (let current: Machine.StateMachine.Any | undefined = machine; current !== undefined; current = current.within?.machine) {
+    if (nextStates.has(current.name)) return true
+  }
+  return false
+}
 
 /** The fix each lint names, by code. */
 const fixFor = (code: Debug.Lint["code"], subject: string): string => {

@@ -170,7 +170,8 @@ export const description = (input: Debug.Description): string => {
   if (input.machines.length > 0) {
     lines.push("", "# Machines")
     for (const machine of input.machines) {
-      lines.push(`${machine.name} = ${machine.current === undefined ? "(not provided)" : String(machine.current)}  [${machine.states.join(" | ")}]`)
+      const current = !machine.provided ? "(not provided)" : machine.current === undefined ? "(inactive)" : String(machine.current)
+      lines.push(`${machine.name} = ${current}  [${machine.states.join(" | ")}]${machine.within === undefined ? "" : `  within ${machine.within}`}`)
     }
   }
   if (input.scopes.length > 0) {

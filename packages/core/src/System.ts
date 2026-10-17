@@ -468,7 +468,8 @@ export interface EventWriteView<T> {
  * A read-only view over one committed finite-state-machine value.
  */
 export interface MachineReadView<M extends Machine.StateMachine.Any = Machine.StateMachine.Any> {
-  get(): Machine.StateMachine.Value<M>
+  /** The committed value; `undefined` only for a sub-state whose parent is in another state. */
+  get(): Machine.CurrentValue<M>
   is(value: Machine.StateMachine.Value<M>): boolean
 }
 
@@ -477,8 +478,14 @@ export interface MachineReadView<M extends Machine.StateMachine.Any = Machine.St
  */
 export interface NextMachineWriteView<M extends Machine.StateMachine.Any = Machine.StateMachine.Any> {
   getPending(): Machine.StateMachine.Value<M> | undefined
-  set(value: Machine.StateMachine.Value<M>): void
-  setIfChanged(value: Machine.StateMachine.Value<M>): void
+  /**
+   * Queues `value`, committed at the next `applyStateTransitions(...)`. For a
+   * sub-state it returns a `Result` that fails with `SubStateInactive` (and
+   * queues nothing) while the parent is in another state.
+   */
+  set(value: Machine.StateMachine.Value<M>): Machine.SetResult<M>
+  /** Like `set`, but committing the current value again is skipped (no exit or enter schedules). */
+  setIfChanged(value: Machine.StateMachine.Value<M>): Machine.SetResult<M>
   reset(): void
 }
 
