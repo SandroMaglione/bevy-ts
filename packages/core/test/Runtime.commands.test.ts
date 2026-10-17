@@ -9,11 +9,16 @@ const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
 const Count = Descriptor.Resource<number>()("Count")
 const LastX = Descriptor.Resource<number>()("LastX")
 const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
+const SafeVelocity = Descriptor.ConstructedComponent({
+  result: (raw: { x: number; y: number }) =>
+    Number.isFinite(raw.x) && Number.isFinite(raw.y) ? Result.success(raw) : Result.failure("bad-velocity" as const)
+})("SafeVelocity")
 
 const Game = Schema.bind(Schema.fragment({
   components: {
     Position,
-    Velocity
+    Velocity,
+    SafeVelocity
   },
   resources: {
     Count,
@@ -259,7 +264,7 @@ describe("Runtime commands", () => {
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })
 
-  it("spawnWithResult returns tuple-shaped failures and applies successful drafts", () => {
+  it("spawn with raw entries returns tuple-shaped failures and applies successful drafts", () => {
     const spawn = Game.System(
       "RuntimeCommands/SpawnWithResult",
       {
@@ -271,15 +276,15 @@ describe("Runtime commands", () => {
       ({ commands, resources }) =>
         {
           const invalidDraft = Game.Command.spawn(
-            Game.Command.entryResult(Position, Result.success({ x: 1, y: 2 })),
-            Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
+            Game.Command.entry(Position, { x: 1, y: 2 }),
+            Game.Command.entryRaw(SafeVelocity, { x: Number.NaN, y: 0 })
           )
 
           expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
 
           const validDraft = Game.Command.spawn(
-            Game.Command.entryResult(Position, Result.success({ x: 4, y: 5 })),
-            Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
+            Game.Command.entry(Position, { x: 4, y: 5 }),
+            Game.Command.entryRaw(SafeVelocity, { x: 6, y: 7 })
           )
 
           if (!validDraft.ok) {
@@ -300,7 +305,7 @@ describe("Runtime commands", () => {
           moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
-              velocity: Game.Query.read(Velocity)
+              velocity: Game.Query.read(SafeVelocity)
             }
           })
         },
@@ -327,7 +332,7 @@ describe("Runtime commands", () => {
     expect(readResourceValue(runtime, schema, LastX)).toBe(4)
   })
 
-  it("spawnWithMixed accepts plain and validated entries together", () => {
+  it("spawn accepts plain and raw entries together", () => {
     const spawn = Game.System(
       "RuntimeCommands/SpawnWithMixed",
       {
@@ -340,14 +345,14 @@ describe("Runtime commands", () => {
         {
           const invalidDraft = Game.Command.spawn(
             Game.Command.entry(Position, { x: 1, y: 2 }),
-            Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
+            Game.Command.entryRaw(SafeVelocity, { x: Number.NaN, y: 0 })
           )
 
           expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
 
           const validDraft = Game.Command.spawn(
             Game.Command.entry(Position, { x: 4, y: 5 }),
-            Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
+            Game.Command.entryRaw(SafeVelocity, { x: 6, y: 7 })
           )
 
           if (!validDraft.ok) {
@@ -368,7 +373,7 @@ describe("Runtime commands", () => {
           moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
-              velocity: Game.Query.read(Velocity)
+              velocity: Game.Query.read(SafeVelocity)
             }
           })
         },

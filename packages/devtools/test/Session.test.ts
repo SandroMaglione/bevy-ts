@@ -1,6 +1,6 @@
 import { inspect } from "node:util"
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 import { Format, Invariant, Session } from "@typeonce/bevy-ts-devtools"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Dev/Position")
@@ -44,17 +44,27 @@ const Play = Game.System("Dev/Play", { nextMachines: { flow: Game.System.nextSta
   nextMachines.flow.set("Playing")
 })
 
-const makeSession = (invariants: ReadonlyArray<Invariant.Invariant> = []) => {
-  const runtime = Game.Runtime.make({
-    services: Game.Runtime.services(),
-    resources: { Score: 0 },
-    machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
-    debug: true
-  })
-  // The reader runs once while paused, then is skipped while playing.
-  const setup = Game.Schedule(Spawn, ReadHitsWhenPaused, Play, Game.Schedule.applyStateTransitions())
-  const update = Game.Schedule(Move, Idle, Damage, ReadHitsWhenPaused)
-  const session = Session.make(runtime, { schedules: { setup, update }, invariants })
+const NearOrigin = Invariant.fromInspector(Game.Inspector("near origin", {
+  queries: { movers: Game.Query({ selection: { position: Game.Query.read(Position) } }) }
+}, ({ queries }) => {
+  const far = queries.movers.each().map((match) => match.data.position.get().x).find((x) => x > 2)
+  return far === undefined ? undefined : `x=${far}`
+}))
+
+// The reader runs once while paused, then is skipped while playing.
+const setup = Game.Schedule(Spawn, ReadHitsWhenPaused, Play, Game.Schedule.applyStateTransitions())
+const update = Game.Schedule(Move, Idle, Damage, ReadHitsWhenPaused)
+
+const makeRuntime = () => Game.Runtime.make({
+  services: Game.Runtime.services(),
+  resources: { Score: 0 },
+  machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
+  debug: true
+})
+
+const makeSession = () => {
+  const runtime = makeRuntime()
+  const session = Session.make(runtime, { schedules: { setup, update } })
   return { runtime, session }
 }
 
@@ -99,23 +109,16 @@ describe("Session", () => {
   })
 
   it("stops at the first violated invariant with its message", () => {
-    let world: ReturnType<typeof makeSession> | undefined
-    const Positions = Game.Inspector("Dev/Positions", { queries: { movers: Game.Query({ selection: { position: Game.Query.read(Position) } }) } }, ({ queries }) =>
-      queries.movers.each().map((match) => match.data.position.get().x))
-    const NearOrigin = Invariant.make("near origin", () => {
-      const far = world!.runtime.inspect(Positions).find((x) => x > 2)
-      return far === undefined ? undefined : `x=${far}`
-    })
-    world = makeSession([NearOrigin])
-    world.session.run("setup")
-    const run = world.session.run("update", { frames: 10 })
+    const session = Session.make(makeRuntime(), { schedules: { setup, update }, invariants: [NearOrigin] })
+    session.run("setup")
+    const run = session.run("update", { frames: 10 })
     expect(run.data).toMatchObject({ ok: false, frames: 3, stop: { reason: "invariant", frame: 4, invariant: "near origin", message: "x=3" } })
     expect(run.text).toContain(`INVARIANT "near origin" violated at f4: x=3`)
   })
 
   it("reports expected failures and thrown defects as stops", () => {
     const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
-    const Fail = Game.System("Dev/Fail", {}, () => Fx.fail("Broken" as const))
+    const Fail = Game.System("Dev/Fail", {}, () => Result.failure("Broken" as const))
     const Throw = Game.System("Dev/Throw", {}, () => {
       throw new Error("kaboom")
     })

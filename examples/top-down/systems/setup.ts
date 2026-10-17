@@ -1,6 +1,6 @@
 
 import { pickupLayout, wallLayout } from "../content.ts"
-import { makePickupDraft, makePlayerDraft, makeWallDraft } from "../drafts.ts"
+import { makePickupDraft, playerDraft, makeWallDraft } from "../drafts.ts"
 import { Game } from "../schema.ts"
 
 export const SetupWorldSystem = Game.System(
@@ -8,7 +8,6 @@ export const SetupWorldSystem = Game.System(
   {},
   ({ commands }) =>
     {
-      const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawn(playerDraft.value)
       }

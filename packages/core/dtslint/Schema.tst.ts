@@ -94,7 +94,7 @@ describe("Schema", () => {
     })
 
     // @ts-expect-error __schemaConflicts__: "resources key \"DeltaTime\""
-    Schema.merge(left, right)
+    Schema.bind(left, right)
   })
 
   it("bind closes the schema over systems, schedules, and runtimes", () => {
@@ -316,6 +316,8 @@ describe("Schema", () => {
 
           expect(removed.positions.all()).type.toBe<ReadonlyArray<EntityId<typeof schema, typeof schema>>>()
           expect(despawned.entities.all()).type.toBe<ReadonlyArray<EntityId<typeof schema, typeof schema>>>()
+          expect(removed.positions.lagged()).type.toBe<boolean>()
+          expect(despawned.entities.lagged()).type.toBe<boolean>()
         }
     )
 
@@ -707,123 +709,5 @@ describe("Schema", () => {
     )
 
     expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
-  })
-
-  it("supports pre-bind typed feature composition with structural dependencies", () => {
-    const Root = Schema.defineRoot("FeatureRoot")
-    const Health = Descriptor.Component<{ current: number }>()("Health")
-    const Damage = Descriptor.Event<{ amount: number }>()("Damage")
-
-    const Core = Schema.Feature.define("Core", {
-      schema: Schema.fragment({
-        resources: {
-          DeltaTime: Time
-        }
-      }),
-      build: (Game) => {
-        const Tick = Game.System(
-          "Feature/CoreTick",
-          {
-            resources: {
-              time: Game.System.readResource(Time)
-            }
-          },
-          ({ resources }) =>
-            {
-              resources.time.get()
-            }
-        )
-
-        return {
-          update: [Game.Schedule(Tick)]
-        }
-      }
-    })
-
-    const Combat = Schema.Feature.define("Combat", {
-      schema: Schema.fragment({
-        components: {
-          Health
-        },
-        events: {
-          Damage
-        }
-      }),
-      requires: [Core] as const,
-      build: (Game) => {
-        const ApplyDamage = Game.System(
-          "Feature/ApplyDamage",
-          {
-            queries: {
-              units: Game.Query({
-                selection: {
-                  health: Game.Query.write(Health)
-                }
-              })
-            },
-            resources: {
-              time: Game.System.readResource(Time)
-            },
-            events: {
-              damage: Game.System.readEvent(Damage)
-            }
-          },
-          ({ queries, resources, events }) =>
-            {
-              resources.time.get()
-              events.damage.all()
-              for (const match of queries.units.each()) {
-                match.data.health.get()
-              }
-            }
-        )
-
-        return {
-          update: [Game.Schedule(ApplyDamage)]
-        }
-      }
-    })
-
-    const project = Schema.Feature.compose({
-      root: Root,
-      features: [Core, Combat] as const
-    })
-
-    expect(project.Game).type.toBe<SchemaTypes.Schema.Game<typeof project.schema, typeof Root>>()
-    expect(project.features.Core.update).type.toBeAssignableTo<ReadonlyArray<SchemaTypes.Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
-    expect(project.features.Combat.update).type.toBeAssignableTo<ReadonlyArray<SchemaTypes.Schema.BoundSchedule<typeof project.schema, typeof Root, any>>>()
-
-    project.Game.Runtime.make({
-      services: project.Game.Runtime.services(),
-      resources: {
-        DeltaTime: 1
-      }
-    }).tick(...project.schedules.update)
-
-    Schema.Feature.define("InvalidCombat", {
-      schema: Schema.fragment({}),
-      requires: [Core] as const,
-      build: (Game) => {
-        // @ts-expect-error Argument of type 'Descriptor<"component", "Velocity", { dx: number; dy: number; }>' is not assignable to
-        Game.Query.read(Velocity)
-        // @ts-expect-error Type '"Phase"' is not assignable to type '"Time"'.
-        Game.System.readResource(Phase)
-        // @ts-expect-error Argument of type 'Descriptor<"event", "TickEvent", { dt: number; }>' is not assignable to parameter of type
-        Game.System.writeEvent(TickEvent)
-        return {}
-      }
-    })
-
-    // @ts-expect-error __fixFeatureDependencies__: "Core"
-    Schema.Feature.compose({
-      root: Root,
-      features: [Combat] as const
-    })
-
-    // @ts-expect-error __fixFeatureSelection__: "Core"
-    Schema.Feature.compose({
-      root: Root,
-      features: [Core, Core] as const
-    })
   })
 })

@@ -6,6 +6,12 @@
  * They run on demand through `runtime.inspect(...)` and return a value without
  * advancing schedule visibility.
  *
+ * An inspector is the one typed read-only view of the world: tests, saves, UI,
+ * `Game.Condition.check(...)` projections, and devtools invariants
+ * (`Invariant.fromInspector(...)`) are all built from it. `runtime.inspect`
+ * rejects at compile time an inspector that reads a resource, service, or
+ * machine the runtime was not given.
+ *
  * @module Inspector
  * @docGroup runtime
  */

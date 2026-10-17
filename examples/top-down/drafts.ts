@@ -1,5 +1,4 @@
 import { PLAYER_INTERACT_RADIUS, PLAYER_SIZE } from "./constants.ts"
-import { pickupCollider, playerCollider, playerSpawn, playerZeroVelocity } from "./definitions.ts"
 import {
   Collider,
   Collectable,
@@ -29,7 +28,7 @@ export const makeWallDraft = (x: number, y: number, width: number, height: numbe
 export const makePickupDraft = (x: number, y: number, label: string) => {
   return Game.Command.spawn(
     Game.Command.entryRaw(Position, { x, y }),
-    Game.Command.entryResult(Collider, pickupCollider),
+    Game.Command.entryRaw(Collider, { width: 28, height: 28 }),
     Game.Command.entry(Renderable, {
       kind: "pickup",
       width: 28,
@@ -44,18 +43,20 @@ export const makePickupDraft = (x: number, y: number, label: string) => {
   )
 }
 
-export const makePlayerDraft = () => {
-  return Game.Command.spawn(
-    Game.Command.entryResult(Position, playerSpawn),
-    Game.Command.entryResult(Velocity, playerZeroVelocity),
-    Game.Command.entryResult(Collider, playerCollider),
-    Game.Command.entry(Renderable, {
-      kind: "player",
-      width: PLAYER_SIZE,
-      height: PLAYER_SIZE,
-      color: 0x4ecdc4,
-      accent: 0xd9fffb
-    }),
-    Game.Command.entry(Player, {})
-  )
-}
+/**
+ * The player draft, validated once at module load through the constructed
+ * descriptors. Drafts are plain values, so every spawn reuses it.
+ */
+export const playerDraft = Game.Command.spawn(
+  Game.Command.entryRaw(Position, { x: 640, y: 260 }),
+  Game.Command.entryRaw(Velocity, { x: 0, y: 0 }),
+  Game.Command.entryRaw(Collider, { width: PLAYER_SIZE, height: PLAYER_SIZE }),
+  Game.Command.entry(Renderable, {
+    kind: "player",
+    width: PLAYER_SIZE,
+    height: PLAYER_SIZE,
+    color: 0x4ecdc4,
+    accent: 0xd9fffb
+  }),
+  Game.Command.entry(Player, {})
+)

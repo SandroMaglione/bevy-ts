@@ -85,8 +85,10 @@ describe("System", () => {
           }))).type.toBe<Result.Result<void, Size2.Error>>()
           expect(services.logger).type.toBe<{ log: (message: string) => void }>()
           expect(events.tick.emit).type.toBe<(value: { dt: number }) => void>()
-          expect(resources.phase.setResult(Result.success("Running"))).type.toBe<Result.Result<void, unknown>>()
-          expect(resources.phase.updateResult(() => Result.success("Paused" as const))).type.toBe<Result.Result<void, unknown>>()
+          // Plain write cells take valid values only; validation belongs to constructed descriptors.
+          expect(resources.phase).type.not.toHaveProperty("setResult")
+          expect(resources.phase).type.not.toHaveProperty("updateResult")
+          expect(resources.phase).type.not.toHaveProperty("setRaw")
           expect(resources.camera.setRaw({ x: 0, y: 0 })).type.toBe<Result.Result<void, Vector2.Error>>()
           expect(resources.camera.updateRaw((camera) => ({
             x: camera.x + 1,

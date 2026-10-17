@@ -1,6 +1,5 @@
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from "./constants.ts"
-import { playerCollider, playerSpawn, playerZeroVelocity } from "./definitions.ts"
-import type { LevelSolidLayout } from "./content.ts"
+import { playerSpawn, type LevelSolidLayout } from "./content.ts"
 import { Collider, Game, Player, Position, Renderable, Solid, Velocity } from "./schema.ts"
 
 const renderableForSolid = (
@@ -40,21 +39,23 @@ const renderableForSolid = (
   }
 }
 
-export const makePlayerDraft = () => {
-  return Game.Command.spawn(
-    Game.Command.entryResult(Position, playerSpawn),
-    Game.Command.entryResult(Velocity, playerZeroVelocity),
-    Game.Command.entryResult(Collider, playerCollider),
-    Game.Command.entry(Renderable, {
-      kind: "player",
-      width: PLAYER_WIDTH,
-      height: PLAYER_HEIGHT,
-      color: 0xd94841,
-      accent: 0xfff2d5
-    }),
-    Game.Command.entry(Player, {})
-  )
-}
+/**
+ * The player draft, validated once at module load through the constructed
+ * descriptors. Drafts are plain values, so every spawn reuses it.
+ */
+export const playerDraft = Game.Command.spawn(
+  Game.Command.entryRaw(Position, playerSpawn),
+  Game.Command.entryRaw(Velocity, { x: 0, y: 0 }),
+  Game.Command.entryRaw(Collider, { width: PLAYER_WIDTH, height: PLAYER_HEIGHT }),
+  Game.Command.entry(Renderable, {
+    kind: "player",
+    width: PLAYER_WIDTH,
+    height: PLAYER_HEIGHT,
+    color: 0xd94841,
+    accent: 0xfff2d5
+  }),
+  Game.Command.entry(Player, {})
+)
 
 export const makeSolidDraft = (layout: LevelSolidLayout) => {
   return Game.Command.spawn(

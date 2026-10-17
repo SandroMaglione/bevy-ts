@@ -125,7 +125,7 @@ export type SchemaEntry<S extends Schema.Any> = EntryOf<SchemaComponentDescripto
 
 /**
  * One entry accepted by `spawn(...)` and `insert(...)`: a plain descriptor/value
- * pair, or a `Result` of one (from `entryRaw(...)` or `entryResult(...)`).
+ * pair, or a `Result` of one (from `entryRaw(...)`).
  */
 export type SpawnEntry<S extends Schema.Any> = SchemaEntry<S> | Result.Result<SchemaEntry<S>, any>
 
@@ -262,20 +262,15 @@ export const entry = <D extends Descriptor<"component", string, any>>(
 ): Entry<D> => [descriptor, value]
 
 /**
- * Lifts an already validated value into an entry result, keeping the failure
- * visible to `spawn(...)` / `insert(...)`.
- */
-export const entryResult = <D extends Descriptor<"component", string, any>, Error>(
-  descriptor: D,
-  result: Result.Result<Descriptor.Value<D>, Error>
-): Result.Result<Entry<D>, Error> =>
-  result.ok
-    ? Result.success([descriptor, result.value] as Entry<D>)
-    : Result.failure(result.error)
-
-/**
- * Validates raw input through a constructed descriptor and returns an entry
- * result.
+ * Validates raw input through a constructed descriptor's own validator and
+ * returns an entry result for `spawn(...)` / `insert(...)`.
+ *
+ * This is the one way to put unvalidated data on an entity: the descriptor
+ * owns its validator (`Descriptor.ConstructedComponent(...)`, built with
+ * `Decode` or `Descriptor.fromStandardSchema`). Values that are already
+ * valid use a plain `[Descriptor, value]` entry instead. To validate authored
+ * constants once at module load, call the constructor (`Vector2.result(...)`)
+ * and keep the carried value.
  *
  * @example
  * ```ts
@@ -290,8 +285,12 @@ export const entryResult = <D extends Descriptor<"component", string, any>, Erro
 export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"component", string, any, any, any>>(
   descriptor: D,
   raw: Descriptor.Raw<D>
-): Result.Result<Entry<D>, Descriptor.ConstructionError<D>> =>
-  entryResult(descriptor, DescriptorModule.constructorOf(descriptor).result(raw) as Result.Result<Descriptor.Value<D>, Descriptor.ConstructionError<D>>)
+): Result.Result<Entry<D>, Descriptor.ConstructionError<D>> => {
+  const validated = DescriptorModule.constructorOf(descriptor).result(raw) as Result.Result<Descriptor.Value<D>, Descriptor.ConstructionError<D>>
+  return validated.ok
+    ? Result.success([descriptor, validated.value] as Entry<D>)
+    : Result.failure(validated.error)
+}
 
 /**
  * Adds entries to a draft. Plain entries return the new draft; if any entry is

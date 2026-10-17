@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Debug, Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Debug, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Debug/Position")
 const Tagged = Descriptor.Component<{}>()("Debug/Tagged")
@@ -117,6 +117,29 @@ describe("Runtime debug handle", () => {
     ])
   })
 
+  it("lints relations that commands relate when no described system reads their failures", () => {
+    const runtime = makeRuntime()
+    const setup = Game.Schedule(Spawn, Game.Schedule.applyDeferred())
+    runtime.debug.nameSchedules({ setup })
+    const relationLints = () => runtime.debug.describe().lints.filter((lint) => lint.code === "relation-failure-never-read")
+    // Nothing has been related yet: the lint is based on applied commands.
+    expect(relationLints()).toEqual([])
+
+    runtime.tick(setup)
+    expect(relationLints()).toEqual([{
+      severity: "warning",
+      code: "relation-failure-never-read",
+      subject: "Debug/ChildOf",
+      message: "Debug/ChildOf is related by commands from Debug/Spawn, but no described system reads its failures (Game.System.readRelationFailures(Debug/ChildOf)), so a failed relate or reorder is dropped silently"
+    }])
+
+    const ReadFailures = Game.System("Debug/ReadChildOfFailures", {
+      relationFailures: { childOf: Game.System.readRelationFailures(ChildOf) }
+    }, () => {})
+    runtime.debug.nameSchedules({ setup, failures: Game.Schedule(ReadFailures) })
+    expect(relationLints()).toEqual([])
+  })
+
   it("traces system writes with before and after values, and commands with their effects", () => {
     const runtime = makeRuntime()
     const setup = Game.Schedule(Spawn, Game.Schedule.applyDeferred())
@@ -174,7 +197,7 @@ describe("Runtime debug handle", () => {
     }, ({ queries, commands }) => {
       for (const match of queries.moving.each()) match.data.position.set({ x: 99 })
       commands.spawn(Game.Command.spawn([Tagged, {}]))
-      return Fx.fail("Nope" as const)
+      return Result.failure("Nope" as const)
     })
     const { events } = collect(runtime)
     expect(runtime.tick(Game.Schedule(Failing)).ok).toBe(false)

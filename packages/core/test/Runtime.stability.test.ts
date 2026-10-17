@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 
 describe("Runtime stabilization APIs", () => {
   it("rolls back ECS writes and commands from an expected system failure", () => {
@@ -32,20 +32,17 @@ describe("Runtime stabilization APIs", () => {
         events: { signal: Game.System.writeEvent(Signal) },
         nextMachines: { mode: Game.System.nextState(Mode) }
       },
-      ({ queries, resources, events, nextMachines, commands }) =>
-        Fx.flatMap(
-          Fx.sync(() => {
-            const position = queries.positions.single()
-            if (position.ok) {
-              position.value.data.position.set({ x: 99 })
-            }
-            resources.count.set(99)
-            events.signal.emit(99)
-            nextMachines.mode.set("Broken")
-            commands.spawn(Game.Command.spawn([Position, { x: 99 }]))
-          }),
-          () => Fx.fail("Rejected" as const)
-        )
+      ({ queries, resources, events, nextMachines, commands }) => {
+        const position = queries.positions.single()
+        if (position.ok) {
+          position.value.data.position.set({ x: 99 })
+        }
+        resources.count.set(99)
+        events.signal.emit(99)
+        nextMachines.mode.set("Broken")
+        commands.spawn(Game.Command.spawn([Position, { x: 99 }]))
+        return Result.failure("Rejected" as const)
+      }
     )
 
     let observedPosition = -1
@@ -174,7 +171,7 @@ describe("Runtime stabilization APIs", () => {
     const load = Game.System(
       "TransitionFailure/Load",
       {},
-      () => Fx.fail("LoadFailed" as const)
+      () => Result.failure("LoadFailed" as const)
     )
     const transitions = Game.Schedule.transitions(
       Game.Schedule.onEnter(Mode, "Playing", [load])

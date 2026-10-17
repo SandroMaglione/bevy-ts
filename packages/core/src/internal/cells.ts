@@ -18,7 +18,8 @@ abstract class WriteCellBase<T> {
   abstract get(): T
   abstract set(value: T): void
 
-  setResult<E>(result: Result.Result<T, E>): Result.Result<void, E> {
+  /** Writes a validated candidate only on success. Backs `setRaw` / `updateRaw`. */
+  writeResult<E>(result: Result.Result<T, E>): Result.Result<void, E> {
     if (!result.ok) {
       return Result.failure(result.error)
     }
@@ -30,9 +31,6 @@ abstract class WriteCellBase<T> {
     this.set(f(this.get()))
   }
 
-  updateResult<E>(f: (current: T) => Result.Result<T, E>): Result.Result<void, E> {
-    return this.setResult(f(this.get()))
-  }
 }
 
 /**
@@ -43,22 +41,22 @@ const withConstructor = <T, Raw, Error>(
   constructor: ResultConstructor<T, Raw, Error>
 ) => Object.assign(cell, {
   setRaw(raw: Raw): Result.Result<void, Error> {
-    return cell.setResult(constructor.result(raw))
+    return cell.writeResult(constructor.result(raw))
   },
   updateRaw(f: (current: T) => Raw): Result.Result<void, Error> {
-    return cell.setResult(constructor.result(f(cell.get())))
+    return cell.writeResult(constructor.result(f(cell.get())))
   }
 })
 
 /**
- * Adds `transition` to the write cell of a state component: a compare-and-set
+ * Adds `transition` to the write cell of an entity state component: a compare-and-set
  * that writes `to` only while the current state is still `from`.
  */
-const withTransition = (cell: WriteCellBase<unknown>, state: string) => Object.assign(cell, {
-  transition(from: unknown, to: unknown): Result.Result<void, { readonly _tag: "StateMismatch"; readonly state: string; readonly expected: unknown; readonly actual: unknown }> {
+const withTransition = (cell: WriteCellBase<unknown>, component: string) => Object.assign(cell, {
+  transition(from: unknown, to: unknown): Result.Result<void, { readonly _tag: "EntityStateMismatch"; readonly component: string; readonly expected: unknown; readonly actual: unknown }> {
     const actual = cell.get()
     if (actual !== from) {
-      return Result.failure({ _tag: "StateMismatch", state, expected: from, actual })
+      return Result.failure({ _tag: "EntityStateMismatch", component, expected: from, actual })
     }
     cell.set(to)
     return Result.success(undefined)
@@ -162,11 +160,11 @@ export const componentWrite = (
   ordinal: number,
   world: World,
   constructor: ResultConstructor<unknown, unknown, unknown> | undefined,
-  state: string | undefined
+  entityState: string | undefined
 ): WriteCellBase<unknown> => {
   const cell = new ComponentWriteCell(record, ordinal, world)
   const constructed = constructor === undefined ? cell : withConstructor(cell, constructor)
-  return state === undefined ? constructed : withTransition(constructed, state)
+  return entityState === undefined ? constructed : withTransition(constructed, entityState)
 }
 
 export const componentOptional = (record: EntityRecord, ordinal: number): { readonly present: boolean; get(): unknown } =>

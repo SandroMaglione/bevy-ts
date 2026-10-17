@@ -7,7 +7,7 @@ runtime. Browser timing and rendering stay outside the ECS.
 ## 1. Define the world
 
 ```ts
-import { Descriptor, Fx, Result, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Game/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Game/Velocity")
@@ -76,12 +76,12 @@ const SpendHealth = Game.System(
   ({ queries }) => {
     const target = queries.target.single()
     if (!target.ok) {
-      return Fx.fail("TargetMissing" as const)
+      return Result.failure("TargetMissing" as const)
     }
 
     const health = target.value.data.health.get()
     if (health <= 0) {
-      return Fx.fail("AlreadyDead" as const)
+      return Result.failure("AlreadyDead" as const)
     }
 
     target.value.data.health.set(health - 1)
@@ -108,7 +108,7 @@ systems remain committed. External service effects, such as network or audio
 calls, cannot be rolled back by the ECS.
 
 Thrown exceptions remain defects and are rethrown after ECS writes from that
-system are rolled back. `Fx.fail` is for expected game outcomes.
+system are rolled back. `Result.failure` is for expected game outcomes.
 
 ## 4. Own scene entities as a group
 

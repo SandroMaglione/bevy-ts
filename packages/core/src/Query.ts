@@ -69,7 +69,7 @@
  * Query authoring helpers for selecting components and declaring explicit filters.
  */
 import type { DecodeError } from "./Decode.ts"
-import type { Descriptor, StateValue } from "./Descriptor.ts"
+import type { Descriptor, EntityStateValue } from "./Descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./Entity.ts"
 import type * as Result from "./Result.ts"
 import type * as Relation from "./Relation.ts"
@@ -488,6 +488,10 @@ export interface ReadCell<T> {
  * A mutable cell returned from query or resource access.
  *
  * This gives a narrow mutation surface instead of exposing raw storage objects.
+ * Values written here are already valid. Data that still needs validation
+ * goes through its descriptor's own validator: declare the descriptor with
+ * `Descriptor.ConstructedComponent` / `ConstructedResource` and write with
+ * `setRaw` / `updateRaw` on its {@link ConstructedWriteCell}.
  */
 export interface WriteCell<T> extends ReadCell<T> {
   /**
@@ -495,17 +499,9 @@ export interface WriteCell<T> extends ReadCell<T> {
    */
   set(value: T): void
   /**
-   * Replaces the current value from an explicit result.
-   */
-  setResult<E>(result: Result.Result<T, E>): Result.Result<void, E>
-  /**
    * Updates the current value based on the previous one.
    */
   update(f: (current: ReadonlyValue<T>) => T): void
-  /**
-   * Updates the current value from an explicit result-producing callback.
-   */
-  updateResult<E>(f: (current: ReadonlyValue<T>) => Result.Result<T, E>): Result.Result<void, E>
 }
 
 /**
@@ -540,13 +536,13 @@ export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
 }
 
 /**
- * A `transition(from, to)` found the state component in another state, so
+ * A `transition(from, to)` found the entity state in another state, so
  * nothing was written.
  */
-export interface StateMismatchError<T> {
-  readonly _tag: "StateMismatch"
-  /** Name of the state component. */
-  readonly state: string
+export interface EntityStateMismatchError<T> {
+  readonly _tag: "EntityStateMismatch"
+  /** Name of the `Descriptor.EntityState` component. */
+  readonly component: string
   /** The `from` state the transition expected. */
   readonly expected: T
   /** The state the component was actually in. */
@@ -554,20 +550,20 @@ export interface StateMismatchError<T> {
 }
 
 /**
- * Writable cell for a state component (`Descriptor.State`).
+ * Writable cell for an entity state component (`Descriptor.EntityState`).
  *
  * `transition(from, to)` is a compare-and-set: it writes `to` only while the
- * current state is `from`, and otherwise returns `StateMismatch` without
+ * current state is `from`, and otherwise returns `EntityStateMismatch` without
  * writing. With a transition graph, `to` must be one of the moves the graph
  * allows from `from`; without one, any pair of states is accepted.
  */
-export interface StateWriteCell<T, Transitions> extends ConstructedWriteCell<T, T, DecodeError> {
+export interface EntityStateWriteCell<T, Transitions> extends ConstructedWriteCell<T, T, DecodeError> {
   /**
    * Moves from `from` to `to` if the component is still in `from`.
    *
    * @example
    * ```ts
-   * const moved = data.phase.transition("windup", "active")
+   * const moved = data.attack.transition("windup", "active")
    * if (!moved.ok) {
    *   // moved.error.actual is the state some earlier write left
    * }
@@ -575,19 +571,19 @@ export interface StateWriteCell<T, Transitions> extends ConstructedWriteCell<T, 
    */
   transition<const From extends T & keyof Transitions>(
     from: From,
-    to: StateTarget<T, Transitions, From>
-  ): Result.Result<void, StateMismatchError<T>>
+    to: EntityStateTarget<T, Transitions, From>
+  ): Result.Result<void, EntityStateMismatchError<T>>
 }
 
-type StateTarget<T, Transitions, From extends keyof Transitions> =
+type EntityStateTarget<T, Transitions, From extends keyof Transitions> =
   Transitions[From] extends ReadonlyArray<infer To> ? To & T : never
 
 /**
  * Write-cell surface produced for one queried component descriptor.
  */
 export type WriteCellForDescriptor<D extends ComponentDescriptor> =
-  D extends import("./Descriptor.ts").StateDescriptor<string, infer States extends readonly [StateValue, ...Array<StateValue>], any>
-    ? StateWriteCell<States[number], D["transitions"] extends undefined ? { readonly [K in States[number]]: States } : D["transitions"]>
+  D extends import("./Descriptor.ts").EntityStateDescriptor<string, infer States extends readonly [EntityStateValue, ...Array<EntityStateValue>], any>
+    ? EntityStateWriteCell<States[number], D["transitions"] extends undefined ? { readonly [K in States[number]]: States } : D["transitions"]>
     : D extends import("./Descriptor.ts").ConstructedDescriptor<"component", string, infer Value, infer Raw, infer Error>
     ? ConstructedWriteCell<Value, Raw, Error>
     : WriteCell<Descriptor.Value<D>>

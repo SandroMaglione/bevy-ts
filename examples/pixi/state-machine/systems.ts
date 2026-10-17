@@ -2,7 +2,6 @@ import * as Scalar from "@typeonce/bevy-ts-math/Scalar"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
 import { RenderSync } from "@typeonce/bevy-ts-render"
 import { PICKUP_POINTS } from "./content.ts"
-import { playerSpawn } from "./definitions.ts"
 import {
   COUNTDOWN_DURATION_SECONDS,
   NOTICE_DURATION_SECONDS,
@@ -65,16 +64,21 @@ const makePickupDraft = (position: { readonly x: number; readonly y: number }) =
   )
 }
 
+/**
+ * The player draft, validated once at module load through the constructed
+ * `Position` descriptor.
+ */
+const playerDraft = Game.Command.spawn(
+  Game.Command.entryRaw(Position, { x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 }),
+  Game.Command.entry(Actor, { kind: "player" }),
+  Game.Command.entry(Player, {})
+)
+
 export const SpawnPlayerSystem = Game.System(
   "StateMachineExample/SpawnPlayer",
   {},
   ({ commands }) =>
     {
-      const playerDraft = Game.Command.spawn(
-        Game.Command.entryResult(Position, playerSpawn),
-        Game.Command.entry(Actor, { kind: "player" }),
-        Game.Command.entry(Player, {})
-      )
       if (!playerDraft.ok) {
         return
       }
@@ -335,7 +339,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
     {
       const player = queries.player.singleOptional()
       if (player.ok && player.value) {
-        player.value.data.position.setResult(playerSpawn)
+        player.value.data.position.setRaw({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })
       }
 
       for (const pickup of queries.pickups.each()) {

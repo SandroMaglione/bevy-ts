@@ -287,6 +287,11 @@ export const make = <S extends Schema.Any, const Entries extends ReadonlyArray<S
  * system's `when`, for gating many systems on one mode (playing, paused,
  * a hit-stop) without repeating it on each.
  *
+ * Use this when the gated systems should drop the events published while
+ * they were gated (a mode change makes them stale). Use `pauseWhen` instead
+ * when they must read that backlog on resume (hit-stop, pause menu). For one
+ * system, put the same conditions in its spec's `when` / `pauseWhen`.
+ *
  * Conditions gate every system in `entries`, nested schedules included.
  * Marker steps (`applyDeferred`, `applyStateTransitions`) in the group still
  * run. A gated system is the same system as far as the runtime is concerned:

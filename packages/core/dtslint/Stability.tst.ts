@@ -1,4 +1,5 @@
-import { Descriptor, EntityScope, Fx, Result, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, EntityScope, Result, Schema } from "@typeonce/bevy-ts"
+import type * as Query from "@typeonce/bevy-ts/Query"
 import type * as System from "@typeonce/bevy-ts/System"
 import { describe, expect, it } from "tstyche"
 
@@ -10,10 +11,10 @@ const OtherGame = Schema.bind(Schema.fragment({ resources: { Value } }), Schema.
 const Failing = Game.System(
   "StabilityTypes/Failing",
   { resources: { value: Game.System.writeResource(Value) } },
-  ({ resources }) => Fx.flatMap(
-    Fx.sync(() => resources.value.set(1)),
-    () => Fx.fail("Rejected" as const)
-  )
+  ({ resources }) => {
+    resources.value.set(1)
+    return Result.failure("Rejected" as const)
+  }
 )
 
 const schedule = Game.Schedule(Failing)
@@ -29,17 +30,17 @@ describe("stability types", () => {
     >()
   })
 
-  it("infers the failure union from early Fx.fail returns in an otherwise plain system", () => {
+  it("infers the failure union from early Result.failure returns in an otherwise plain system", () => {
     const Spend = Game.System(
       "StabilityTypes/Spend",
       { resources: { value: Game.System.writeResource(Value) } },
       ({ resources }) => {
         const value = resources.value.get()
         if (value < 0) {
-          return Fx.fail("Negative" as const)
+          return Result.failure("Negative" as const)
         }
         if (value === 0) {
-          return Fx.fail("Empty" as const)
+          return Result.failure("Empty" as const)
         }
         resources.value.set(value - 1)
       }
@@ -47,6 +48,32 @@ describe("stability types", () => {
     expect(runtime.tick(Game.Schedule(Spend))).type.toBe<
       Result.Result<void, System.SystemFailure<"StabilityTypes/Spend", "Negative" | "Empty">>
     >()
+  })
+
+  it("infers the failure from a returned Result, such as a lookup result", () => {
+    const Single = Game.System(
+      "StabilityTypes/Single",
+      { queries: { positions: Game.Query({ selection: { position: Game.Query.read(Position) } }) } },
+      ({ queries }) => {
+        const position = queries.positions.single()
+        if (!position.ok) return position
+      }
+    )
+    expect(runtime.tick(Game.Schedule(Single))).type.toBe<
+      Result.Result<void, System.SystemFailure<"StabilityTypes/Single", Query.Query.SingleError>>
+    >()
+  })
+
+  it("treats a system that returns only successes as infallible", () => {
+    const Succeeds = Game.System("StabilityTypes/Succeeds", {}, () => Result.success(1))
+    expect(runtime.tick(Game.Schedule(Succeeds))).type.toBe<Result.Result<void, never>>()
+  })
+
+  it("rejects return values that are neither nothing nor a Result", () => {
+    // @ts-expect-error Type 'number' is not assignable to type
+    Game.System("StabilityTypes/ReturnsNumber", {}, () => 1)
+    // @ts-expect-error Type 'string' is not assignable to type
+    Game.System("StabilityTypes/ReturnsError", {}, () => "Failed")
   })
 
   it("treats a system that returns nothing as infallible", () => {
@@ -118,7 +145,7 @@ describe("stability types", () => {
     const load = Game.System(
       "StabilityTypes/LoadLevel",
       {},
-      () => Fx.fail("LoadFailed" as const)
+      () => Result.failure("LoadFailed" as const)
     )
     const transitions = Game.Schedule.transitions(
       Game.Schedule.onEnter(Mode, "Playing", [load])

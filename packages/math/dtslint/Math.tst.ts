@@ -1,4 +1,4 @@
-import { Definition, Result } from "@typeonce/bevy-ts"
+import { Result } from "@typeonce/bevy-ts"
 import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@typeonce/bevy-ts-math"
 import { describe, expect, it } from "tstyche"
 
@@ -58,21 +58,6 @@ describe("helpers", () => {
     expect(Scalar.remap(value.value, start.value, end.value, start.value, end.value)).type.toBe<
       Result.Result<Scalar.Finite, Scalar.InterpolationError>
     >()
-  })
-
-  it("definition helpers preserve keyed success and failure shapes", () => {
-    const definitions = Definition.all({
-      position: Definition.entry(Vector2, { x: 1, y: 2 }),
-      size: Definition.entry(Size2, { width: 3, height: 4 })
-    })
-
-    expect(definitions).type.toBe<Result.Result<{
-      readonly position: Vector2.Vector2
-      readonly size: Size2.Size2
-    }, {
-      readonly position: Vector2.Error | null
-      readonly size: Size2.Error | null
-    }>>()
   })
 
   it("non-constructor helpers require branded values", () => {

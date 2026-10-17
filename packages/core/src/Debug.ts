@@ -175,11 +175,18 @@ export interface ScheduleDescription {
 /**
  * A finding about the described schedules. `warning` is almost certainly a
  * bug; `info` is worth a look but can be intentional.
+ *
+ * Most lints read declarations only. Two also use what the runtime has seen
+ * so far: events sent with `runtime.send(...)` count as written, and
+ * `relation-failure-never-read` fires for a relation that applied commands
+ * have tried to relate or reorder (which can fail) while no described system
+ * reads its failures, so describe after the game has run for a while.
  */
 export interface Lint {
   readonly severity: "warning" | "info"
   readonly code:
     | "event-never-read"
+    | "relation-failure-never-read"
     | "event-never-written"
     | "next-state-never-applied"
     | "component-never-read"

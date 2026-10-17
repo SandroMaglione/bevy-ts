@@ -35,8 +35,10 @@
  * ```
  */
 import type * as Debug from "@typeonce/bevy-ts/Debug"
+import type * as Inspector from "@typeonce/bevy-ts/Inspector"
 import type * as Machine from "@typeonce/bevy-ts/Machine"
 import type * as Result from "@typeonce/bevy-ts/Result"
+import type * as Runtime from "@typeonce/bevy-ts/Runtime"
 import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
 
@@ -46,15 +48,56 @@ import * as Rendered from "./Rendered.ts"
 import { nonFinitePath } from "./internal/values.ts"
 
 /**
- * What a session needs from a runtime: its debug handle and the dynamic
- * `tryTick`, which reports missing requirements as data.
+ * What a session needs from a runtime: its debug handle, the dynamic
+ * `tryTick`, which reports missing requirements as data, `inspect` for
+ * invariants, and what it was provided with, which invariants are checked
+ * against.
  */
-export interface Target<S extends Schema.Any, Root> {
+export interface Target<
+  S extends Schema.Any,
+  Root,
+  Services extends Record<string, unknown> = Record<string, unknown>,
+  Resources extends object = object,
+  Machines extends Record<string, unknown> = Record<string, unknown>
+> {
   readonly debug: Debug.Handle<S, Root>
   readonly tryTick: (schedule: ExecutableScheduleDefinition<S, any, any, any, any>) => Result.Result<void, unknown>
+  readonly inspect: (inspector: never) => unknown
+  readonly services: Services
+  readonly resourceValues: Resources
+  readonly machineValues: Machines
 }
 
-export interface Options<S extends Schema.Any, Root, Names extends string> {
+type InvariantRequirementErrors<
+  Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Machines extends Record<string, unknown>
+> = Runtime.ValidateInspector<Invariants[number]["inspector"], Services, Resources, Machines> extends {
+  readonly __fixRuntimeRequirements__: infer Errors
+}
+  ? Errors
+  : never
+
+/**
+ * Rejects invariants whose inspectors read a resource, service, or machine
+ * the runtime does not provide, naming each one.
+ */
+export type ValidateInvariants<
+  Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Machines extends Record<string, unknown>
+> = [InvariantRequirementErrors<Invariants, Services, Resources, Machines>] extends [never]
+  ? unknown
+  : { readonly __fixInvariantRequirements__: InvariantRequirementErrors<Invariants, Services, Resources, Machines> }
+
+export interface Options<
+  S extends Schema.Any,
+  Root,
+  Names extends string,
+  Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>> = readonly []
+> {
   /** The schedules `run` can drive, by name. Also names them in traces. */
   readonly schedules: Readonly<Record<Names, ExecutableScheduleDefinition<S, any, Root, any, any>>>
   /**
@@ -65,8 +108,11 @@ export interface Options<S extends Schema.Any, Root, Names extends string> {
    * Their services show as not provided, which is not a lint.
    */
   readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
-  /** Checked after every frame of every run. */
-  readonly invariants?: ReadonlyArray<Invariant>
+  /**
+   * Checked after every frame of every run, in order; the first violation
+   * stops the run. Built with `Invariant.fromInspector(Game.Inspector(...))`.
+   */
+  readonly invariants?: Invariants
   /** Frames of trace history kept for `journal` and `why`. Defaults to 600. */
   readonly history?: number
   /** Value formatting for all text output. */
@@ -240,10 +286,19 @@ const growsSteadily = (samples: ReadonlyArray<number>): boolean => {
 const describeError = (error: unknown): { readonly kind?: unknown; readonly system?: unknown; readonly error?: unknown; readonly requirements?: unknown } =>
   typeof error === "object" && error !== null ? error : {}
 
-export const make = <S extends Schema.Any, Root, const Names extends string>(
-  runtime: Target<S, Root>,
-  options: Options<S, Root, Names>
+export const make = <
+  S extends Schema.Any,
+  Root,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Machines extends Record<string, unknown>,
+  const Names extends string,
+  const Invariants extends ReadonlyArray<Invariant<Inspector.InspectorDefinition<any, string | undefined, Root, any, any>>> = readonly []
+>(
+  runtime: Target<S, Root, Services, Resources, Machines>,
+  options: Options<S, Root, Names, Invariants> & ValidateInvariants<Invariants, Services, Resources, Machines>
 ): Session<S, Names> => {
+  const inspect = runtime.inspect as (inspector: Inspector.Inspector.Any) => string | undefined
   const debug = runtime.debug
   const capacity = options.history ?? 600
   const format = options.format ?? {}
@@ -443,7 +498,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       const violation = (options.invariants ?? []).reduce<{ readonly invariant: string; readonly message: string } | undefined>(
         (found, invariant) => {
           if (found) return found
-          const message = invariant.check()
+          const message = inspect(invariant.inspector)
           return message === undefined ? undefined : { invariant: invariant.name, message }
         },
         undefined

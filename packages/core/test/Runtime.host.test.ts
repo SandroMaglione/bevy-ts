@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, Entity, Fx, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, Entity, Result, Schema } from "@typeonce/bevy-ts"
 import * as Runtime from "@typeonce/bevy-ts/Runtime"
 
 const Ping = Descriptor.Event<number>()("Host/Ping")
@@ -193,7 +193,7 @@ describe("system local state", () => {
     }, ({ local, resources }) => {
       seen.push(++local.runs)
       resources.count.set(99)
-      return Fx.fail("retry" as const)
+      return Result.failure("retry" as const)
     })
     const first = make()
     const second = make()

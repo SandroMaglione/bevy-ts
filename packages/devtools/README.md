@@ -19,8 +19,8 @@ with `debug: true`. Production runtimes carry no handle and pay nothing.
    is the reference; its [`debug.ts`](../../examples/top-down/debug.ts) is a
    script to copy.
 2. **Read the lints, then orient.** `session.describe()` starts with lints
-   (events nobody reads, next states no marker applies, ...); a warning there
-   is often the whole answer. Then it lists every schedule step, each
+   (events nobody reads, next states no marker applies, relations whose
+   failures nobody reads, ...); a warning there is often the whole answer. Then it lists every schedule step, each
    system's declared reads and writes, and who reads and writes each
    component, resource, and event. `run()` also prints the lint warning count.
    Info-level `read-before-write` lints list systems that run before the
@@ -28,8 +28,9 @@ with `debug: true`. Production runtimes carry no handle and pay nothing.
    value. That is often intended (input before movement), but it is a
    one-frame lag worth checking when a reaction looks late.
 3. **Reproduce.** Script the input with `Keyboard.scripted(bindings, timeline)`
-   (or replay a recorded browser session), add an `Invariant` that encodes the
-   bug, and `session.run("update", { frames: 600 })`. The run stops at the
+   (or replay a recorded browser session), add an invariant that encodes the
+   bug (`Invariant.fromInspector(Game.Inspector(...))`, returning a message
+   when violated), and `session.run("update", { frames: 600 })`. The run stops at the
    first frame the invariant fails, a system fails, or a system throws.
 4. **Explain.** `session.why(entity, Component)` and
    `session.whyResource(Resource)` show the latest changes and which system
@@ -56,18 +57,16 @@ const keyboard = Keyboard.scripted(bindings, [
   { frame: 32, press: ["jump"], release: ["jump"] } // a tap within one frame
 ])
 const runtime = Game.Runtime.make({ services, resources, machines, debug: true })
-// Invariants read the world through a typed, read-only Inspector.
-const PlayerHealth = Game.Inspector("Debug/PlayerHealth", {
-  queries: { player: Game.Query({ selection: { health: Game.Query.read(Health) }, with: [Player] }) },
-  resources: { score: Game.System.readResource(Score) }
-}, ({ queries, resources }) => ({
-  health: queries.player.each().map((match) => match.data.health.get()),
-  score: resources.score.get()
+// An invariant is a typed, read-only Inspector that returns a violation
+// message, or undefined while it holds. It declares its reads like a system:
+// Session.make rejects at compile time one that reads a resource, service,
+// or machine the runtime does not provide.
+const HealthNeverNegative = Invariant.fromInspector(Game.Inspector("health >= 0", {
+  queries: { player: Game.Query({ selection: { health: Game.Query.read(Health) }, with: [Player] }) }
+}, ({ queries }) => {
+  const health = queries.player.each().map((match) => match.data.health.get())
+  return health.some((value) => value < 0) ? `health ${health.join(", ")}` : undefined
 }))
-const HealthNeverNegative = Invariant.make("health >= 0", () => {
-  const { health } = runtime.inspect(PlayerHealth)
-  return health.some((value) => value < 0) ? `health ${health.join(", ")}` : undefined // message, or undefined when it holds
-})
 
 const session = Session.make(runtime, {
   schedules: { setup, update },           // names used by run() and in traces

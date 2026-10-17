@@ -1,6 +1,6 @@
 
 import { levelSolids } from "../content.ts"
-import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
+import { playerDraft, makeSolidDraft } from "../drafts.ts"
 import { Game, LevelScope, LoseMessage, PlayerContacts } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
@@ -17,7 +17,6 @@ export const SetupWorldSystem = Game.System(
       resources.contacts.set(makeInitialPlayerContacts())
       resources.loseMessage.set("You fell into a hole.")
 
-      const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawnIn(LevelScope, playerDraft.value)
       }

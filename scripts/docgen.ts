@@ -149,7 +149,6 @@ const EXAMPLES_DIRECTORY_PATH = "examples"
 
 const DIRECT_NAMESPACE_TO_MODULE_SLUG: Record<string, string> = {
   App: "app",
-  Definition: "definition",
   Descriptor: "descriptor",
   Entity: "entity",
   Result: "result",
@@ -982,7 +981,7 @@ export const extractExampleApiUsages = (content: string): ReadonlyArray<string> 
     usages.push(`${moduleSlug}.${namespace}`)
   }
 
-  for (const match of content.matchAll(/\b(App|Definition|Descriptor|Entity|Result|Schema)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
+  for (const match of content.matchAll(/\b(App|Descriptor|Entity|Result|Schema)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
     const namespace = match[1]
     const member = match[2]
     if (!namespace || !member) {

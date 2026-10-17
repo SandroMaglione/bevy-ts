@@ -431,7 +431,13 @@ type RequirementErrorsOfInspector<
   ? RequirementErrorsFor<Needs, Spec["schema"], Services, Resources, Machines>
   : never
 
-type ValidateInspector<
+/**
+ * Resolves to `unknown` when the runtime provides every resource, service,
+ * and machine the inspector reads, otherwise to an object naming each
+ * missing or incompatible one. `runtime.inspect(...)` uses it; tools that
+ * run inspectors on a runtime they receive (devtools invariants) reuse it.
+ */
+export type ValidateInspector<
   Selected extends Inspector.Inspector.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
@@ -588,8 +594,9 @@ export interface Runtime<
     ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
   /**
-   * Runs a schedule whose exact requirements are not statically known, for
-   * example one loaded through a plugin boundary.
+   * Runs a schedule whose exact requirements are not statically known: for
+   * tools that hold schedules with erased types, such as devtools sessions.
+   * Games use `tick(...)`, which rejects missing requirements at compile time.
    *
    * Requirements are checked against current provisioning first and missing
    * ones are returned as data.
@@ -797,6 +804,23 @@ const makeValidatedRuntime = <
   }
 
   /**
+   * With `debug: true`, the relations commands have tried to relate or
+   * reorder, with the systems that queued those commands, for the
+   * `relation-failure-never-read` lint. `commandOrigin` names the system whose
+   * command is being applied.
+   */
+  const relationMutations = new Map<string, Set<string>>()
+  let commandOrigin = "(unknown)"
+  const noteRelationMutation = (relation: Relation.Relation.Any): void => {
+    let systems = relationMutations.get(relation.name)
+    if (systems === undefined) {
+      systems = new Set()
+      relationMutations.set(relation.name, systems)
+    }
+    systems.add(commandOrigin)
+  }
+
+  /**
    * World adapter used by deferred commands.
    */
   const commandWorld: Command.InternalWorld<S> = {
@@ -819,6 +843,7 @@ const makeValidatedRuntime = <
       world.writeComponent(id, descriptor, value)
     },
     tryRelate(id, relation, target) {
+      if (debugEnabled) noteRelationMutation(relation)
       const result = world.tryRelate(id, relation, target)
       if (!result.ok) {
         appendRelationFailure(relation, "relate", id, target, result.error)
@@ -829,6 +854,7 @@ const makeValidatedRuntime = <
       world.unrelate(id, relation)
     },
     reorderChildren(id, relation, children) {
+      if (debugEnabled) noteRelationMutation(relation)
       const result = world.reorderChildren(id, relation, children.map((child) => child))
       if (!result.ok) {
         const targetId = result.error._tag === "MissingChildEntity"
@@ -1114,6 +1140,9 @@ const makeValidatedRuntime = <
     return {
       all() {
         return world.removedSince(ordinal, reader.since).map(entityId)
+      },
+      lagged() {
+        return world.removedLagged(ordinal, reader.since, reader.registeredAt)
       }
     }
   }
@@ -1121,6 +1150,9 @@ const makeValidatedRuntime = <
   const makeDespawnedReadView = (reader: ReaderState): DespawnedReadView<S, Root> => ({
     all() {
       return world.despawnedSince(reader.since).map(entityId)
+    },
+    lagged() {
+      return world.despawnedLagged(reader.since, reader.registeredAt)
     }
   })
 
@@ -1430,10 +1462,8 @@ const makeValidatedRuntime = <
     beginSystemTransaction()
     let outcome: Result.Result<unknown, unknown>
     try {
-      // A system that returns nothing cannot fail. Otherwise run its effect,
-      // equivalent to `Fx.runSync(Fx.provide(effect, services))` without the wrapper allocations.
-      const effect = system.run(context)
-      outcome = effect === undefined ? succeeded : effect.run(context.services)
+      // A system that returns nothing cannot fail; otherwise it returned a `Result`.
+      outcome = system.run(context) ?? succeeded
     } catch (defect) {
       if (tracing) emit(traceSystem(system, reader, thisRun, started, "defect", defect, context.commands.flush()))
       rollbackSystemTransaction()
@@ -1468,8 +1498,15 @@ const makeValidatedRuntime = <
     const origins = pendingOrigins.splice(0, pendingOrigins.length)
     world.advanceTick()
     if (!tracing) {
-      for (const command of commands) {
-        command.apply(commandWorld)
+      if (!debugEnabled) {
+        for (const command of commands) {
+          command.apply(commandWorld)
+        }
+        return
+      }
+      for (let index = 0; index < commands.length; index++) {
+        commandOrigin = origins[index] ?? "(unknown)"
+        commands[index]!.apply(commandWorld)
       }
       return
     }
@@ -1478,6 +1515,7 @@ const makeValidatedRuntime = <
       const command = commands[index]!
       const effects: Array<Debug.Effect> = []
       commandEffects = effects
+      commandOrigin = origins[index] ?? "(unknown)"
       try {
         command.apply(commandWorld)
       } finally {
@@ -2029,6 +2067,7 @@ const makeValidatedRuntime = <
       currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
       providedServices: Object.keys(providedServices),
       externallyWrittenEvents,
+      relationMutations,
       hasResource: (descriptor) => resources.has(descriptor.key),
       schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)
     }),

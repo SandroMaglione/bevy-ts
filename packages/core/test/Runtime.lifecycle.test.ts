@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 import type * as Entity from "@typeonce/bevy-ts/Entity"
 
 const Position = Descriptor.Component<{ x: number }>()("Lifecycle/Position")
@@ -90,7 +90,7 @@ describe("Runtime change detection", () => {
       for (const { data } of queries.positions.each()) {
         data.position.set({ x: 100 })
       }
-      return Fx.fail("Rejected" as const)
+      return Result.failure("Rejected" as const)
     })
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(spawner([1]), Game.Schedule.applyDeferred(), reader.system))
@@ -195,5 +195,45 @@ describe("Runtime change detection", () => {
     runtime.tick(Game.Schedule(Toggle, Game.Schedule.applyStateTransitions(), Reader))
 
     expect(seen).toEqual([[], [ids[0]!]])
+  })
+
+  it("reports lagged() on removed and despawned reads after their logs drop records at capacity", () => {
+    const runtime = makeRuntime()
+    const seen: Array<{ readonly removed: boolean; readonly despawned: boolean }> = []
+    const Reader = Game.System("Lifecycle/LaggedReader", {
+      removed: { tags: Game.System.readRemoved(Tag) },
+      despawned: { entities: Game.System.readDespawned() }
+    }, ({ removed, despawned }) => {
+      seen.push({ removed: removed.tags.lagged(), despawned: despawned.entities.lagged() })
+    })
+    const SpawnMany = Game.System("Lifecycle/SpawnMany", {}, ({ commands }) => {
+      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn([Tag, {}]))
+    })
+    const Untag = Game.System("Lifecycle/UntagAll", {
+      queries: { tagged: Game.Query({ selection: { tag: Game.Query.read(Tag) } }) }
+    }, ({ queries, commands }) => {
+      for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tag)
+    })
+    const DespawnAll = Game.System("Lifecycle/DespawnAll", {
+      queries: { all: Game.Query({ selection: {} }) }
+    }, ({ queries, commands }) => {
+      for (const match of queries.all.each()) commands.despawn(match.entity.id)
+    })
+    const read = Game.Schedule(Reader)
+    const churn = Game.Schedule(
+      SpawnMany, Game.Schedule.applyDeferred(),
+      Untag, Game.Schedule.applyDeferred(),
+      DespawnAll, Game.Schedule.applyDeferred()
+    )
+    runtime.tick(read)
+    runtime.tick(churn)
+    runtime.tick(churn)
+    runtime.tick(read)
+    runtime.tick(read)
+    expect(seen).toEqual([
+      { removed: false, despawned: false },
+      { removed: true, despawned: true },
+      { removed: false, despawned: false }
+    ])
   })
 })

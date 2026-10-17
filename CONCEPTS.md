@@ -134,12 +134,12 @@ without changing it or parsing a debug dump.
 
 ```ts
 if (total > 100) {
-  return Fx.fail("ImpossibleDamage" as const)
+  return Result.failure("ImpossibleDamage" as const)
 }
 resources.score.update((score) => score + total)
 ```
 
-- A system that can't fail returns nothing. A system that returns `Fx.fail(...)` has its ECS writes rolled back and its commands dropped.
+- A system that can't fail returns nothing. A system that returns `Result.failure(error)` has its ECS writes rolled back and its commands and events dropped. There is no effect type: a system returns nothing or a `Result`.
 - `runtime.tick(...)` returns `Result<void, SystemFailure<"Concepts/ApplyHits", "ImpossibleDamage">>`, a union built from every system in the schedule.
 - Thrown exceptions are treated as bugs: the system's writes are rolled back and the exception is rethrown.
 
@@ -193,20 +193,20 @@ the next one. Caches must validate all inputs against the current world. Timers,
 RNG state, and progress that changes gameplay belong in resources. GPU objects,
 listeners, and other values needing cleanup belong in host-managed services.
 
-Per-entity modes (an enemy's attack phase, a door's open/closed) are components, not machines. `Descriptor.State` makes one from a closed set of states and an optional graph of allowed moves:
+A state each entity has on its own (an enemy's attack windup, a door's open/closed) is an entity state, a component, not a machine. Use `Game.StateMachine` for one game-wide mode (menu, playing, paused); use `Descriptor.EntityState` for per-entity states. It is built from a closed set of states and an optional graph of allowed moves:
 
 ```ts
-const Phase = Descriptor.State("Phase", ["ready", "windup", "active"] as const, {
+const Attack = Descriptor.EntityState("Attack", ["ready", "windup", "active"] as const, {
   transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }
 })
-Game.Command.spawn([Phase, "ready"])
-// write slot `phase`:
-const moved = data.phase.transition("windup", "active") // "ready" -> "active" does not compile
-if (!moved.ok) moved.error.actual // some earlier write already changed the phase
+Game.Command.spawn([Attack, "ready"])
+// write slot `attack`:
+const moved = data.attack.transition("windup", "active") // "ready" -> "active" does not compile
+if (!moved.ok) moved.error.actual // some earlier write already changed the state
 ```
 
 - It is an ordinary component: queried, change-detected, rolled back, and validated on restore (unknown states are rejected).
-- `transition(from, to)` writes immediately, and only while the state is still `from`. Otherwise it returns `StateMismatch` and writes nothing. The graph lists every state (`[]` for one with no way out), and it is checked at compile time only. `set` still writes any state.
+- `transition(from, to)` writes immediately, and only while the state is still `from`. Otherwise it returns `EntityStateMismatch` and writes nothing. The graph lists every state (`[]` for one with no way out), and it is checked at compile time only. `set` still writes any state.
 - There are no per-state schedules or filters. Branch on `get()` in the system that owns the component, and emit an event on a transition that other systems react to.
 
 ## 10. Schedules make every boundary visible
@@ -234,7 +234,7 @@ runtime.inspect(SomeInspector)       // read-only projection for UI, tests, debu
 runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 ```
 
-- Ticking a schedule whose systems need a resource, service or machine the runtime wasn't given is a compile error. `tryTick` is the checked-at-runtime path for schedules whose types were lost.
+- Ticking a schedule whose systems need a resource, service or machine the runtime wasn't given is a compile error. `tryTick` is the checked-at-runtime path for tools (devtools sessions) that hold schedules whose types were erased; games use `tick`.
 - Resources with constructed descriptors take raw input, and `make` then returns a `Result`.
 - Snapshots are plain data. `restore` validates untrusted input and leaves the world unchanged on failure.
 - `snapshot` and `restore` only compile when every component and resource is transient or constructed with a validator that accepts untrusted input (`result(raw: unknown)`, or a `decode` such as `Vector2.decode`), so nothing unvalidated can load. Stored handles are validated with `Decode.handle(Root, Intent)`.

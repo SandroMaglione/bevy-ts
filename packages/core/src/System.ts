@@ -57,7 +57,6 @@
  */
 import type { Descriptor } from "./Descriptor.ts"
 import type * as Entity from "./Entity.ts"
-import type { Fx } from "./Fx.ts"
 import * as Machine from "./Machine.ts"
 import type * as Relation from "./Relation.ts"
 import type { Query, QueryMatch } from "./Query.ts"
@@ -307,7 +306,7 @@ export const transition = <M extends Machine.StateMachine.Any>(
  * normal events: each run sees those published since its previous run.
  *
  * This is one of the clearest signs that the modeled value should be a machine
- * rather than a plain state descriptor.
+ * rather than a resource or a `Descriptor.EntityState` component.
  */
 export const readTransitionEvent = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -430,8 +429,9 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  * ticked less often than the one that removes (rendering after several fixed
  * updates) still sees every removal. A system skipped by its run conditions
  * keeps its position, like `added`/`changed`, and sees the removals when it
- * runs again. Each log is capped at `Runtime.streamCapacity` entries; drops
- * show up as `missed` reads in the debug trace. Systems usually pair this
+ * runs again. Each log is capped at `Runtime.streamCapacity` entries; a
+ * reader that missed dropped ones sees `lagged() === true` (and a `missed`
+ * read in the debug trace). Systems usually pair this
  * with host cleanup such as removing renderer-owned nodes. {@link readDespawned}
  * complements this for whole-entity teardown.
  *
@@ -493,6 +493,14 @@ export const readDespawned = (): DespawnedRead => ({
  */
 export interface RemovedReadView<S extends Schema.Any, Root = unknown> {
   all(): ReadonlyArray<import("./Entity.ts").EntityId<S, Root>>
+  /**
+   * Whether records published since this system's previous run were dropped
+   * before it read them. Records wait for every reading system, so this only
+   * happens when a reader has not run for so long that the log exceeded its
+   * capacity (see `Runtime.streamCapacity`). Check it where a missed record
+   * would leak host state (a renderer node never destroyed).
+   */
+  lagged(): boolean
 }
 
 /**
@@ -500,6 +508,14 @@ export interface RemovedReadView<S extends Schema.Any, Root = unknown> {
  */
 export interface DespawnedReadView<S extends Schema.Any, Root = unknown> {
   all(): ReadonlyArray<import("./Entity.ts").EntityId<S, Root>>
+  /**
+   * Whether records published since this system's previous run were dropped
+   * before it read them. Records wait for every reading system, so this only
+   * happens when a reader has not run for so long that the log exceeded its
+   * capacity (see `Runtime.streamCapacity`). Check it where a missed record
+   * would leak host state (a renderer node never destroyed).
+   */
+  lagged(): boolean
 }
 
 /**
@@ -686,6 +702,19 @@ export interface SystemAccessInput {
   readonly removed?: Record<string, RemovedRead<Descriptor<"component", string, any>>>
   readonly despawned?: Record<string, DespawnedRead>
   readonly relationFailures?: Record<string, RelationFailureRead<Relation.Relation.Any>>
+  /**
+   * Run conditions that skip the system: while one fails, the system does not
+   * run and the events, transition events, and relation failures published
+   * meanwhile are dropped for it. Use it for a mode change after which those
+   * messages are stale (menu, game over); use `pauseWhen` instead for a freeze
+   * whose messages stay valid. `Schedule.when(...)` adds conditions to a whole
+   * group.
+   *
+   * Four gating forms, one rule: `when` drops the events published while
+   * gated (the system resumes on fresh messages), `pauseWhen` keeps them (the
+   * system resumes and reads the backlog). Put them on one system's spec, or
+   * on a group with `Schedule.when(...)` / `Schedule.pauseWhen(...)`.
+   */
   readonly when?: ReadonlyArray<Machine.Condition>
   /**
    * Run conditions that pause the system instead of skipping it: while one
@@ -881,11 +910,6 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly local: LocalContext<Spec>
 }
 
-/**
- * The service environment required by a system.
- */
-export type SystemDependencies<Spec extends AnySystemSpec> = ServiceContext<Spec>
-
 type DescriptorFromAccess<Access> =
   Access extends { readonly descriptor: infer D extends Requirement.Requirement } ? D : never
 
@@ -1004,19 +1028,33 @@ export interface SystemDefinition<
 /**
  * A system implementation.
  *
- * Return nothing for a system that cannot fail. Return an `Fx` when the system
- * has an expected failure (`Fx.fail(...)`) or wants to compose effects; the
- * failure type becomes part of every schedule that contains the system.
+ * Return nothing for a system that cannot fail. Return
+ * `Result.failure(error)` for an expected failure: the system's ECS writes
+ * are rolled back, its commands and events are dropped, and the tick stops
+ * with a typed `SystemFailure` whose `error` is inferred from every
+ * `Result.failure(...)` the body returns. A returned success
+ * (`Result.success(...)`) behaves like returning nothing. Exceptions are
+ * defects, not failures: they roll back the same way and are rethrown.
+ *
+ * @example
+ * ```ts
+ * const Spend = Game.System("Spend", {
+ *   resources: { gold: Game.System.writeResource(Gold) }
+ * }, ({ resources }) => {
+ *   if (resources.gold.get() < 10) return Result.failure("NotEnoughGold" as const)
+ *   resources.gold.update((gold) => gold - 10)
+ * })
+ * ```
  */
 export type SystemRun<Spec extends AnySystemSpec, A = void, E = never> =
-  (context: SystemContext<Spec>) => Fx<A, E, SystemDependencies<Spec>> | void
+  (context: SystemContext<Spec>) => Result.Result<A, E> | void
 
 /**
  * Defines a system from an explicit spec and a typed implementation.
  *
  * This is the public entrypoint for authoring systems. The implementation only
- * receives the capabilities declared in the spec, and the returned effect keeps
- * service dependencies tracked in the type system.
+ * receives the capabilities declared in the spec; return
+ * `Result.failure(error)` for an expected failure (see {@link SystemRun}).
  *
  * Use the string-name overload in normal code. The name is turned into an
  * internal ordering token automatically, so the system can participate in
@@ -1090,7 +1128,7 @@ export function System<
 export function System(
   name: string,
   spec: { readonly schema: Schema.Any } & SystemAccessInput,
-  run: (context: any) => Fx<any, any, any> | void
+  run: (context: any) => Result.Result<any, any> | void
 ): SystemDefinition<any, any, any, any, any, any> {
   type Spec = SystemSpec<Schema.Any, SystemAccessInput, unknown>
 

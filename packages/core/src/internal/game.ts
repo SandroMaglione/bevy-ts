@@ -59,7 +59,6 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
       spawn: Command.spawn,
       insert: Command.insert,
       entry: Command.entry,
-      entryResult: Command.entryResult,
       entryRaw: Command.entryRaw,
       relate: Command.relate
     },

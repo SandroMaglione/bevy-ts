@@ -16,8 +16,9 @@
  * 3. bind one `Game` with `Schema.bind(...)`
  *
  * Reach for this module first whenever you introduce a new component,
- * resource, event, or service to the game. Discrete modes whose transitions
- * matter are state machines (`Game.StateMachine(...)`), not descriptors.
+ * resource, event, or service to the game. A game-wide mode whose transitions
+ * matter is a state machine (`Game.StateMachine(...)`); a state each entity
+ * has on its own is a component (`Descriptor.EntityState(...)`).
  *
  * @module Descriptor
  * @docGroup core
@@ -311,70 +312,77 @@ export const Tag = <const Name extends string>(
 ): DecodableDescriptor<"component", Name, {}, {}, DecodeModule.DecodeError> =>
   ConstructedComponent(DecodeModule.struct({}))(name)
 
-/** One state of a {@link State} component: a string or number literal. */
-export type StateValue = string | number
+/** One state of a {@link EntityState} component: a string or number literal. */
+export type EntityStateValue = string | number
 
 /**
- * The allowed moves of a {@link State} component: for every state, the
+ * The allowed moves of a {@link EntityState} component: for every state, the
  * states it may move to (`[]` for a state with no way out).
  */
-export type StateTransitions<States extends readonly [StateValue, ...Array<StateValue>]> = {
+export type EntityStateTransitions<States extends readonly [EntityStateValue, ...Array<EntityStateValue>]> = {
   readonly [From in States[number]]: ReadonlyArray<States[number]>
 }
 
 /**
  * A component whose value is one of a closed set of states, with an optional
- * graph of allowed moves. Built with {@link State}.
+ * graph of allowed moves. Built with {@link EntityState}.
  */
-export interface StateDescriptor<
+export interface EntityStateDescriptor<
   out Name extends string,
-  in out States extends readonly [StateValue, ...Array<StateValue>],
-  in out Transitions extends StateTransitions<States> | undefined
+  in out States extends readonly [EntityStateValue, ...Array<EntityStateValue>],
+  in out Transitions extends EntityStateTransitions<States> | undefined
 > extends DecodableDescriptor<"component", Name, States[number], States[number], DecodeModule.DecodeError> {
   readonly states: States
   readonly transitions: Transitions
 }
 
 /**
- * Defines a state component: its value is one of `states`, validated (so
- * snapshots reject unknown states), and it behaves like any other component
- * (storage, change detection, rollback, traces).
+ * Defines a per-entity state: a component whose value is one of `states`,
+ * validated (so snapshots reject unknown states), that behaves like any other
+ * component (storage, change detection, rollback, traces).
+ *
+ * Use this when each entity has its own state: an enemy's attack windup, a
+ * door's open/closed, a unit's AI mode. Use `Game.StateMachine(...)` instead
+ * for one game-wide mode (menu, playing, paused, game over): machines change
+ * only at `applyStateTransitions(...)`, run `onEnter`/`onExit` schedules, and
+ * gate systems with `Game.Condition.inState(...)`. An entity state does none
+ * of that; it is data on an entity.
  *
  * With `transitions`, its write cell gains `transition(from, to)`: the pair
  * is checked against the graph at compile time, and at runtime the move
- * happens only if the current state is still `from`, otherwise it returns a
- * `StateMismatch` failure. Transitions are ordinary component writes:
+ * happens only if the current state is still `from`, otherwise it returns an
+ * `EntityStateMismatch` failure. Transitions are ordinary component writes:
  * immediate, visible to later systems, rolled back with a failed system.
  *
  * @example
  * ```ts
- * const Phase = Descriptor.State("Phase", ["ready", "windup", "active"] as const, {
+ * const Attack = Descriptor.EntityState("Attack", ["ready", "windup", "active"] as const, {
  *   transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }
  * })
- * // in a system with a write slot `phase`:
- * const moved = data.phase.transition("windup", "active")   // "ready" -> "active" does not compile
+ * // in a system with a write slot `attack`:
+ * const moved = data.attack.transition("windup", "active")   // "ready" -> "active" does not compile
  * ```
  */
-export const State = <
+export const EntityState = <
   const Name extends string,
-  const States extends readonly [StateValue, ...Array<StateValue>],
-  const Transitions extends StateTransitions<States> | undefined = undefined
+  const States extends readonly [EntityStateValue, ...Array<EntityStateValue>],
+  const Transitions extends EntityStateTransitions<States> | undefined = undefined
 >(
   name: Name,
   states: States,
   options?: {
     readonly transitions: Transitions & { readonly [Key in Exclude<keyof Transitions, States[number]>]: never }
   }
-): StateDescriptor<Name, States, Transitions> => ({
+): EntityStateDescriptor<Name, States, Transitions> => ({
   ...makeConstructedDescriptor("component", name, DecodeModule.literal(...states)),
   states,
   transitions: options?.transitions
-}) as unknown as StateDescriptor<Name, States, Transitions>
+}) as unknown as EntityStateDescriptor<Name, States, Transitions>
 
-/** Whether a descriptor was built with {@link State}. */
-export const isState = (
+/** Whether a descriptor was built with {@link EntityState}. */
+export const isEntityState = (
   descriptor: Descriptor.Any
-): descriptor is StateDescriptor<string, readonly [StateValue, ...Array<StateValue>], StateTransitions<readonly [StateValue, ...Array<StateValue>]> | undefined> =>
+): descriptor is EntityStateDescriptor<string, readonly [EntityStateValue, ...Array<EntityStateValue>], EntityStateTransitions<readonly [EntityStateValue, ...Array<EntityStateValue>]> | undefined> =>
   "states" in descriptor
 
 /**
@@ -568,7 +576,9 @@ export function constructorOf<D extends Descriptor.Any>(
  * `related` is the reverse collection maintained by the runtime.
  *
  * Use hierarchy when the relationship must support ordered children,
- * ancestor/descendant traversal, and linked recursive despawn.
+ * ancestor/descendant traversal, and linked recursive despawn. Use
+ * `Game.EntityScope(...)` instead when entities only share a lifetime (a
+ * level, a menu) and need no tree, order, or traversal.
  */
 export const Hierarchy = RelationModule.Hierarchy
 

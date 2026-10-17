@@ -1,6 +1,6 @@
 
 import { levelBounds, levelSolids } from "../content.ts"
-import { makePlayerDraft, makeSolidDraft } from "../drafts.ts"
+import { playerDraft, makeSolidDraft } from "../drafts.ts"
 import { PlayerReadQuery } from "../queries.ts"
 import { Game, InputState, LevelScope, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
@@ -84,7 +84,6 @@ export const SpawnWorldOnPlayingEnterSystem = Game.System(
   {},
   ({ commands }) =>
     {
-      const playerDraft = makePlayerDraft()
       if (playerDraft.ok) {
         commands.spawnIn(LevelScope, playerDraft.value)
       }

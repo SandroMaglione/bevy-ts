@@ -13,8 +13,11 @@
  * 3. bind one `Game` with `Schema.bind(...)`
  * 4. build a runtime from that bound `Game`
  *
- * `Schema.Feature` composes fragments and their schedules before binding; see
- * the `feature` module.
+ * There is no plugin or feature object. A reusable slice of a game is a
+ * fragment (its descriptors) plus plain functions `(Game, options) => System |
+ * Schedule` that build its systems from the bound `Game`, like
+ * `RenderSync.system(Game, ...)` and `InputCapture.system(Game, ...)`. List
+ * every fragment in one `Schema.bind(...)` call.
  *
  * @module Schema
  * @docGroup core
@@ -64,8 +67,6 @@ import type * as Debug from "./Debug.ts"
 import type * as Runtime from "./Runtime.ts"
 import type * as Schedule from "./Schedule.ts"
 import type * as System from "./System.ts"
-
-export { Feature } from "./Feature.ts"
 
 /**
  * A mapping from schema keys to nominal descriptors.
@@ -245,20 +246,6 @@ export const fragment = <
     events: definition.events ?? {},
     relations: definition.relations ?? {}
   }) as SchemaDefinition<Components, Resources, Events, Relations>
-
-/**
- * Merges two schema fragments into a larger closed schema.
- *
- * Duplicate keys and descriptor names are rejected at the type level and at
- * runtime.
- */
-export const merge = <
-  A extends Schema.Any,
-  B extends Schema.Any
->(
-  left: A,
-  right: B & ValidateFragments<[A, B]>
-): MergeSchemaDefinitions<A, B> => mergeSchemas(left, right) as MergeSchemaDefinitions<A, B>
 
 /**
  * Composes one or more fragments and returns one bound `Game` surface.
@@ -480,7 +467,12 @@ export namespace Schema {
    */
   export interface Game<S extends Any, Root = S> {
     readonly schema: S
-    /** Creates a typed ownership scope for scene or level entities. */
+    /**
+     * Creates a typed ownership scope for scene or level entities: a flat
+     * group despawned together with `commands.despawnScope(...)`. Use
+     * `Descriptor.Hierarchy` instead for a parent-child tree with ordered
+     * children, traversal, and recursive despawn.
+     */
     readonly EntityScope: <const Name extends string>(name: Name) => EntityScope.EntityScope<Name, Root>
     /** Declares a reusable, requirement-checked read-only world projection. */
     readonly Inspector: <
@@ -543,10 +535,6 @@ export namespace Schema {
         ...entries: Entries
       ) => Command.DraftFor<S, Entries, P, Root>
       entry: <D extends ComponentDescriptor<S>>(descriptor: D, value: Descriptor.Value<D>) => Command.Entry<D>
-      entryResult: <D extends ComponentDescriptor<S>, E>(
-        descriptor: D,
-        result: Result.Result<Descriptor.Value<D>, E>
-      ) => Result.Result<Command.Entry<D>, E>
       entryRaw: <D extends Extract<ComponentDescriptor<S>, ConstructedDescriptor<"component", string, any, any, any>>>(
         descriptor: D,
         raw: Descriptor.Raw<D>
@@ -557,6 +545,12 @@ export namespace Schema {
         target: Entity.EntityId<S, Root>
       ) => Entity.EntityDraft<S, P, Root>
     }
+    /**
+     * Declares one game-wide mode (menu, playing, paused): queued with
+     * `nextState`, committed at `applyStateTransitions(...)`, gating systems
+     * with `Game.Condition.inState(...)`. Use `Descriptor.EntityState(...)`
+     * instead for a state each entity has on its own.
+     */
     readonly StateMachine: {
       <
         const Name extends string,
@@ -633,7 +627,9 @@ export namespace Schema {
       /**
        * Builds a schedule whose systems run only while every condition
        * passes (in addition to their own `when`). Nested schedules are
-       * gated too; marker steps still run.
+       * gated too; marker steps still run. Gated systems drop the events
+       * published while gated; use `pauseWhen` to keep them. For one system,
+       * use `when` in its spec.
        */
       when: <
         const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],
@@ -647,6 +643,7 @@ export namespace Schema {
        * fails: unlike `when`, a paused system keeps its place in the event
        * streams it reads and sees everything published meanwhile once it
        * runs again. For freezes whose events stay valid (hit-stop, pause).
+       * For one system, use `pauseWhen` in its spec.
        */
       pauseWhen: <
         const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],

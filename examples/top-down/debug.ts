@@ -31,17 +31,18 @@ const simulation = createTopDownSimulation({ keyboard })
 if (!simulation.ok) throw new Error(simulation.error.message)
 const { runtime, setup, update } = simulation.value
 
-const PlayerPositions = Game.Inspector("Debug/PlayerPositions", { queries: { player: PlayerCameraQuery } }, ({ queries }) =>
-  queries.player.each().map((match) => match.data.position.get()))
-
-const PlayerInsideWorld = Invariant.make("player inside world", () => {
-  for (const position of runtime.inspect(PlayerPositions)) {
+// An invariant is an inspector that returns a violation message, or
+// `undefined` while it holds. It declares its reads like a system, so
+// `Session.make` rejects one that reads what the runtime does not provide.
+const PlayerInsideWorld = Invariant.fromInspector(Game.Inspector("player inside world", { queries: { player: PlayerCameraQuery } }, ({ queries }) => {
+  for (const match of queries.player.each()) {
+    const position = match.data.position.get()
     if (position.x < 0 || position.x > WORLD_WIDTH || position.y < 0 || position.y > WORLD_HEIGHT) {
       return `player at (${position.x}, ${position.y})`
     }
   }
   return undefined
-})
+}))
 
 const session = Session.make(runtime, { schedules: { setup, update }, invariants: [PlayerInsideWorld] })
 

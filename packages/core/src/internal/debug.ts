@@ -228,6 +228,8 @@ export interface DescribeInput {
   readonly currentMachine: (machine: Machine.StateMachine.Any) => Machine.StateValue | undefined
   readonly providedServices: ReadonlyArray<string>
   readonly externallyWrittenEvents: ReadonlySet<string>
+  /** Relations commands have tried to relate or reorder, by the queuing systems. */
+  readonly relationMutations: ReadonlyMap<string, ReadonlySet<string>>
   readonly hasResource: (descriptor: Descriptor.Any) => boolean
   readonly schedules: ReadonlyArray<readonly [string, AnySchedule]>
 }
@@ -312,6 +314,16 @@ export const describe = (input: DescribeInput): Debug.Description => {
           message: `next states of ${name} are queued by ${queuers.join("; ")}, but no described schedule has an applyStateTransitions() marker, so they never take effect`
         })
       }
+    }
+    const failureReaders = new Set(systems.flatMap((system) => system.relationFailures))
+    for (const [name, queuers] of input.relationMutations) {
+      if (failureReaders.has(name)) continue
+      lints.push({
+        severity: "warning",
+        code: "relation-failure-never-read",
+        subject: name,
+        message: `${name} is related by commands from ${[...queuers].sort().join(", ")}, but no described system reads its failures (Game.System.readRelationFailures(${name})), so a failed relate or reorder is dropped silently`
+      })
     }
     lints.push(...readBeforeWriteLints(schedules, described, input.externallyWrittenEvents))
     for (const entry of components.list()) {

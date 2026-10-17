@@ -1,4 +1,4 @@
-import { Decode, Descriptor, Fx, Result, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 import type { Handle } from "@typeonce/bevy-ts/Entity"
 import { describe, expect, it } from "tstyche"
 
@@ -12,16 +12,6 @@ describe("Result", () => {
     const name = Result.success("a") as Result.Result<string, "Empty">
     expect(Result.all([parsed, name])).type.toBe<Result.Result<readonly [number, string], "NaN" | "Empty">>()
     expect(Result.all({ parsed, name })).type.toBe<Result.Result<{ readonly parsed: number; readonly name: string }, "NaN" | "Empty">>()
-  })
-})
-
-describe("Fx", () => {
-  it("accumulates errors and requirements through flatMap", () => {
-    const load = Fx.fail("Missing" as const)
-    const parse = (_: never) => Fx.fail("Invalid" as const)
-    expect(Fx.flatMap(load, parse)).type.toBe<Fx.Fx<never, "Missing" | "Invalid", unknown>>()
-    expect(Fx.map(Fx.succeed(1), (value) => String(value))).type.toBe<Fx.Fx<string, never, unknown>>()
-    expect(Fx.runSync(Fx.fail("Nope" as const))).type.toBe<Result.Result<never, "Nope">>()
   })
 })
 

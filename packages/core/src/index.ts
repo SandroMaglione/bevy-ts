@@ -5,7 +5,8 @@
  * small number of stable namespaces instead of many deep internal paths.
  */
 /**
- * Branding helpers for validated values.
+ * Branding helpers for packages that author validated value types (like
+ * `@typeonce/bevy-ts-math`). Game code validates through descriptors instead.
  */
 export * as Brand from "./Brand.ts"
 /**
@@ -21,10 +22,6 @@ export * as Debug from "./Debug.ts"
  */
 export * as Descriptor from "./Descriptor.ts"
 /**
- * Reusable validated authored definitions.
- */
-export * as Definition from "./Definition.ts"
-/**
  * Entity identity and proof helpers.
  */
 export * as Entity from "./Entity.ts"
@@ -32,10 +29,6 @@ export * as Entity from "./Entity.ts"
  * Entity lifetime scopes used by scene and level ownership patterns.
  */
 export * as EntityScope from "./EntityScope.ts"
-/**
- * Minimal effect-style computation type.
- */
-export * as Fx from "./Fx.ts"
 /**
  * Read-only typed world projections.
  */

@@ -3,7 +3,7 @@
  * run by `packages/core/test/Concepts.test.ts`, so the guide cannot drift from
  * the API.
  */
-import { Decode, Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
 import type { Query } from "@typeonce/bevy-ts/Query"
 
 // 1. Descriptors name the data a world can hold. Constructed descriptors carry
@@ -84,7 +84,7 @@ const ApplyHits = Game.System("Concepts/ApplyHits", {
 }, ({ events, resources, nextMachines }) => {
   const total = events.hit.all().reduce((sum, hit) => sum + hit.amount, 0)
   if (total > 100) {
-    return Fx.fail("ImpossibleDamage" as const)
+    return Result.failure("ImpossibleDamage" as const)
   }
   resources.score.update((score) => score + total)
   if (resources.score.get() >= 3) {

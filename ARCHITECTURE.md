@@ -37,10 +37,12 @@ A schedule contains normalized `steps`, the systems in those steps, and a dedupl
 
 Composition is a union operation. Adding a system adds its requirement tokens to the carried union. It does not intersect object maps or recursively fold the full system specification.
 
-Expected failures use the same derive-once, carry-later rule. Nested schedules,
-phases, fragments, transition plans, and feature output arrays carry a union of
-named system failures. The runtime returns that union; it does not recalculate
-it from nested system specs.
+Expected failures use the same derive-once, carry-later rule. A system signals
+one by returning `Result.failure(error)`; the error type is inferred from its
+return type once and normalized into `SystemFailure<Name, Error>`. Nested
+schedules, gated groups, transition plans, and transition bundles carry a union
+of named system failures. The runtime returns that union; it does not
+recalculate it from nested system specs.
 
 Structural work is applied only at explicit markers:
 
@@ -55,7 +57,11 @@ Nothing is flushed when a schedule ends. Queued work stays in the runtime, acros
 
 `tick` is the static path. TypeScript compares the schedule's token union with the services, resources, and machines supplied to the runtime. Missing or incompatible provisions fail compilation.
 
-`tryTick` is the dynamic path for schedules whose exact type has been erased, such as schedules loaded through a plugin boundary. It checks the real tokens before execution and returns `MissingRuntimeRequirements` as data. It does not throw for missing provisions.
+`tryTick` is the dynamic path for tools that hold schedules whose exact type has been erased, such as devtools sessions. It checks the real tokens before execution and returns `MissingRuntimeRequirements` as data. It does not throw for missing provisions. Games use `tick`.
+
+## Plugins
+
+There is no plugin or feature object. A plugin is a function `(Game, options) => System | Schedule`: it receives the bound `Game` and returns systems or schedules built from it, like `RenderSync.system(Game, ...)` and `InputCapture.system(Game, ...)`. Its descriptors are a `Schema.fragment(...)` the game lists in its one `Schema.bind(...)` call. The result is an ordinary system or schedule, so it composes, carries requirements, and is checked by `tick` like any other; nothing needs a second composition step.
 
 Runtime-dependent entity lookups stay fallible. An entity handle is safe to store, but it is not proof that the entity still exists.
 
