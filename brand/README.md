@@ -16,6 +16,10 @@ node brand/generate.mjs --png   # SVGs, PNGs (needs rsvg-convert), and sheet.htm
 
 Open [`sheet.html`](./sheet.html) in a browser for every variation on one page.
 
+Open [`motion.html`](./motion.html) for three animation studies with play, pause,
+scrubbing, speed, and background controls. Regenerate it with `node brand/motion.mjs`.
+It uses the same geometry as the SVGs and works offline.
+
 ## The idea
 
 **Ritmo** is rhythm as discipline, not mood: a beat that never drifts. Every tick lands on

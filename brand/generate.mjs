@@ -28,6 +28,10 @@ const M = T + 18 + GAP
 const O = M + 50 + GAP
 const WIDTH = O + 50
 
+/** Shared accent geometry for static marks and the motion studies. */
+export const iconDot = { x: 62, y: 62, size: 24, radius: 4 }
+export const wordmarkDot = { x: I - 9, y: 14, size: 18, radius: 2.5 }
+
 /** The wordmark's viewBox, with or without the tick ruler. */
 export const wordmarkBox = (ruler) => ({ x: -3, y: 12, width: WIDTH + 6, height: (ruler ? 132 : 100) - 14 + 4 })
 
@@ -49,7 +53,7 @@ export const wordmarkShapes = ({ color, dot, ruler }) => {
     }
   }
   return `<g fill="none" stroke="${color}" stroke-width="12">${strokes}</g>` +
-    `<rect x="${I - 9}" y="14" width="18" height="18" rx="2.5" fill="${dot}"/>` +
+    `<rect x="${wordmarkDot.x}" y="${wordmarkDot.y}" width="${wordmarkDot.size}" height="${wordmarkDot.size}" rx="${wordmarkDot.radius}" fill="${dot}"/>` +
     (ticks === "" ? "" : `<g fill="${color}">${ticks}</g>`)
 }
 
@@ -58,7 +62,7 @@ export const iconShapes = ({ color, dot }) =>
   `<rect x="6" y="6" width="40" height="40" rx="6" fill="${color}"/>` +
   `<rect x="54" y="6" width="40" height="40" rx="6" fill="${color}"/>` +
   `<rect x="6" y="54" width="40" height="40" rx="6" fill="${color}"/>` +
-  `<rect x="62" y="62" width="24" height="24" rx="4" fill="${dot}"/>`
+  `<rect x="${iconDot.x}" y="${iconDot.y}" width="${iconDot.size}" height="${iconDot.size}" rx="${iconDot.radius}" fill="${dot}"/>`
 
 const round = (n) => Math.round(n * 100) / 100
 const svg = (width, height, body, viewBox = `0 0 ${width} ${height}`) =>
@@ -127,7 +131,7 @@ const sheet = () => {
     ["Line", palette.line, "Borders and dividers on paper."]
   ]
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Ritmo brand sheet</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ritmo brand sheet</title>
 <link rel="icon" href="assets/favicon.svg">
 <style>
   body { margin: 0; padding: clamp(16px, 4vw, 40px); background: #16181c; color: ${palette.paper}; font: 14px/1.5 system-ui, sans-serif; }
