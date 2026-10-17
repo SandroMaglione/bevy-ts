@@ -1,4 +1,29 @@
-# @typeonce/bevy-ts-math
+# @typeonce/ritmo-math
+
+## 0.6.0
+
+### Minor Changes
+
+- 130cb6e: Rename the package family from `@typeonce/bevy-ts*` to `@typeonce/ritmo*`.
+  Update imports, workspace dependencies, type identity markers, examples, and
+  documentation together. There are no compatibility aliases; use the matching
+  Ritmo package for each previous Bevy TS package. The separate release preparation
+  change coordinates the repository rename and retirement of the generated
+  documentation site.
+  Use "The agent-first type safe ECS runtime" in package metadata,
+  documentation, and brand assets.
+
+### Patch Changes
+
+- c20bbc0: Document line of sight with `Collide2.sweepCircleBoxes` and a radius of 0.
+- a8e0473: Retire the generated documentation site and point package homepages, source links,
+  and issue links to the Ritmo repository in the Typeonce GitHub organization.
+  Keep source JSDoc and repository guides, including the Pixi walkthrough in its
+  example README.
+- Updated dependencies [a8e0473]
+- Updated dependencies [130cb6e]
+- Updated dependencies [a1f18a8]
+  - @typeonce/ritmo@0.6.0
 
 ## 0.5.0
 
