@@ -189,6 +189,7 @@ export const system = <
   // above carries the exact requirements (the registry and extra services).
   const System = Game.System as unknown as (name: string, spec: object, run: (context: any) => void) => unknown
   const Query = Game.Query as unknown as (spec: object) => object
+  const anyOf = Game.Query.anyOf as unknown as (...filters: ReadonlyArray<object>) => object
   const transform = options.transform as Schema.ComponentDescriptor<S> | undefined
   const selection = {
     ...options.select,
@@ -241,11 +242,8 @@ export const system = <
     ...additions.map((descriptor) => Game.Query.added(descriptor)),
     ...triggers.map((trigger) => Game.Query.changed(trigger))
   ]
-  // Never empty: `additions` and `triggers` together cover `required`.
-  queries["sync"] = Query({
-    selection,
-    filters: [filters.length === 1 ? filters[0] : (Game.Query.anyOf as (...filters: ReadonlyArray<unknown>) => unknown)(...filters)]
-  })
+  // Never empty: `required` always holds the renderable.
+  queries["sync"] = Query({ selection, filters: [filters.length === 1 ? filters[0] : anyOf(...filters)] })
 
   return System(options.name, {
     queries,
