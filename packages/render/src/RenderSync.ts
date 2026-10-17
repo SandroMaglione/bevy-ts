@@ -1,10 +1,11 @@
 /**
  * A system that mirrors ECS entities into renderer nodes.
  *
- * Every renderer integration does the same bookkeeping: create a node when an
- * entity gains its renderable component, re-apply it when its transform
- * changes, and destroy it when the renderable is removed or the entity
- * despawns. `RenderSync.system(...)` builds one system that does all three,
+ * Every renderer integration does the same bookkeeping: keep one node for
+ * every entity that has the renderable, the transform, and every required
+ * `select` slot; re-apply it when its transform changes; destroy it when the
+ * entity loses any of them or despawns. A node appears whichever of those
+ * components arrives last, and goes as soon as one leaves. `RenderSync.system(...)` builds one system that does all three,
  * in a safe order (destroy, create, update), for one bound `Game`. What a
  * node looks like and how state is applied stay caller-defined.
  *
@@ -217,40 +218,60 @@ export const system = <
     services: provided
   }) as unknown as Context
 
-  // One `changed` query per trigger; filters within one query must all match.
-  const triggers = [...(transform === undefined ? [] : [transform]), ...(options.redrawOn ?? [])]
-  const queries: Record<string, object> = {
-    added: Query({ selection, filters: [Game.Query.added(options.renderable)] })
-  }
+  // The components an entity needs to have a node: the query's required slots.
+  const required = [
+    options.renderable,
+    ...(transform === undefined ? [] : [transform]),
+    ...Object.values(options.select ?? {}).flatMap((access) => access.mode === "read" ? [access.descriptor] : [])
+  ].filter((descriptor, index, all) => all.indexOf(descriptor) === index)
+
+  // A changed query also sees additions. Reuse it for membership rather
+  // than querying a moving transform twice on every frame.
+  const triggers = [...new Set([...(transform === undefined ? [] : [transform]), ...(options.redrawOn ?? [])])]
+  const additions = required.filter((descriptor) => !triggers.includes(descriptor))
+  const queries: Record<string, object> = {}
+  const removedReads: Record<string, unknown> = {}
+  required.forEach((descriptor, index) => {
+    // Despawns are recorded as removals of every component, so these cover them too.
+    removedReads[`removed${index}`] = Game.System.readRemoved(descriptor)
+  })
+  additions.forEach((descriptor, index) => {
+    queries[`added${index}`] = Query({ selection, filters: [Game.Query.added(descriptor)] })
+  })
   triggers.forEach((trigger, index) => {
     queries[`changed${index}`] = Query({ selection, filters: [Game.Query.changed(trigger)] })
   })
 
   return System(options.name, {
     queries,
-    removed: { renderables: Game.System.readRemoved(options.renderable) },
-    despawned: { entities: Game.System.readDespawned() },
+    removed: removedReads,
     resources,
     services,
     when: options.when ?? []
-  }, ({ queries, removed, despawned, resources, services }) => {
+  }, ({ queries, removed, resources, services }) => {
     const registry = services.__registry as NodeRegistry<Node>
-    // Destroy first, so an entity that lost and regained its renderable gets a fresh node.
-    for (const entity of removed.renderables.all()) registry.remove(entity)
-    for (const entity of despawned.entities.all()) registry.remove(entity)
+    // Destroy first: an entity that lost a required component has no node,
+    // and one that lost it and got it back since the last run gets a fresh one.
+    for (let index = 0; index < required.length; index++) {
+      for (const entity of removed[`removed${index}`].all()) registry.remove(entity)
+    }
 
     const applied = new Set<number>()
-    for (const { entity, data } of queries.added.each()) {
-      const context = contextOf(entity, data, services, resources)
-      options.apply(registry.ensure(entity.id, () => options.create(context)), context)
-      applied.add(entity.id)
+    for (let index = 0; index < additions.length; index++) {
+      for (const { entity, data } of queries[`added${index}`].each()) {
+        if (applied.has(entity.id)) continue
+        const context = contextOf(entity, data, services, resources)
+        options.apply(registry.ensure(entity.id, () => options.create(context)), context)
+        applied.add(entity.id)
+      }
     }
     for (let index = 0; index < triggers.length; index++) {
       for (const { entity, data } of queries[`changed${index}`].each()) {
         if (applied.has(entity.id)) continue
         applied.add(entity.id)
-        const node = registry.get(entity.id)
-        if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
+        const context = contextOf(entity, data, services, resources)
+        const node = registry.get(entity.id) ?? registry.ensure(entity.id, () => options.create(context))
+        options.apply(node, context)
       }
     }
   }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | ConditionNeedsFromConditions<When>>
