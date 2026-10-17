@@ -94,9 +94,9 @@ describe("Runtime debug handle", () => {
 
     const description = runtime.debug.describe()
     expect(description.components).toEqual([
-      { name: "Debug/Position", storage: "plain" },
-      { name: "Debug/Tagged", storage: "plain" },
-      { name: "Debug/Sprite", storage: "transient" }
+      { name: "Debug/Position", storage: "plain", immutable: false, requires: [] },
+      { name: "Debug/Tagged", storage: "plain", immutable: false, requires: [] },
+      { name: "Debug/Sprite", storage: "transient", immutable: false, requires: [] }
     ])
     expect(description.machines).toEqual([{ name: "Debug/Flow", states: ["Menu", "Playing"], current: "Menu" }])
     expect(description.services).toEqual([{ name: "Debug/Clock", provided: true }])
@@ -368,7 +368,7 @@ describe("Runtime debug handle", () => {
       queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) },
       commands: Game.System.commands(Game.System.removes(Tagged))
     }, ({ queries, commands }) => {
-      for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tagged)
+      for (const match of queries.tagged.each()) commands.remove(match.entity, Tagged)
     })
     const read = Game.Schedule(ReadRemoved)
     runtime.tick(read)

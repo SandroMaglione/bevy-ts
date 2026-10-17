@@ -147,7 +147,10 @@ export const lintLines = (lints: ReadonlyArray<Debug.Lint>): Array<string> => [
 export const description = (input: Debug.Description): string => {
   const lines: Array<string> = []
   lines.push("# Components")
-  for (const component of input.components) lines.push(`${component.name} (${component.storage})`)
+  for (const component of input.components) {
+    const notes = [component.storage, ...(component.immutable ? ["immutable"] : []), ...(component.requires.length > 0 ? [`requires ${component.requires.join(", ")}`] : [])]
+    lines.push(`${component.name} (${notes.join(", ")})`)
+  }
   lines.push("", "# Resources")
   for (const resource of input.resources) {
     lines.push(`${resource.name} (${resource.storage}${resource.present ? "" : ", no value"})`)
@@ -265,6 +268,8 @@ const effect = (input: Debug.Effect, options: ValueOptions): string => {
       return `unrelate e${input.entity} ${input.relation}`
     case "relationFailure":
       return `relation failure e${input.entity} ${input.relation}: ${input.error}`
+    case "requirementViolated":
+      return `skipped ${input.command} e${input.entity}: ${input.component} requires ${input.missing}`
   }
 }
 

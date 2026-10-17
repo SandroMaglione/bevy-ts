@@ -99,6 +99,10 @@ export const Game = Schema.bind(
       Renderable,
       Food
     },
+    requires: [
+      Schema.requires(Agent, Position, Velocity, Genes, Vitals, Behavior, Intent, Renderable),
+      Schema.requires(Food, Position, Velocity, Renderable)
+    ],
     resources: {
       DeltaTime,
       Arena,

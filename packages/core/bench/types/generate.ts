@@ -2,8 +2,9 @@
  * Generates `stress.ts`, the fixed program used by the type-level benchmark.
  *
  * The program models a mid-sized game: many components/resources/events,
- * machines, systems with mixed access, schedule composition, and runtime
- * requirement checking. Its checker metrics (types, instantiations) are
+ * machines, systems with mixed access, schedule composition, component
+ * requirements (`Schema.requires`) on spawns, inserts, and removes, and
+ * runtime requirement checking. Its checker metrics (types, instantiations) are
  * deterministic for a given TypeScript version, which makes them a stable CI
  * regression signal for the type architecture.
  *
@@ -43,7 +44,9 @@ const componentKeys = Array.from({ length: COMPONENTS }, (_, index) => `C${pad(i
 const resourceKeys = Array.from({ length: RESOURCES }, (_, index) => `R${pad(index)}`)
 const eventKeys = Array.from({ length: EVENTS }, (_, index) => `E${pad(index)}`)
 emit(`  Schema.fragment({ components: { ${componentKeys.slice(0, COMPONENTS / 2).join(", ")} }, resources: { ${resourceKeys.slice(0, RESOURCES / 2).join(", ")} }, events: { ${eventKeys.slice(0, EVENTS / 2).join(", ")} } }),`)
-emit(`  Schema.fragment({ components: { ${componentKeys.slice(COMPONENTS / 2).join(", ")} }, resources: { ${resourceKeys.slice(RESOURCES / 2).join(", ")} }, events: { ${eventKeys.slice(EVENTS / 2).join(", ")} }, relations: { ChildOf } })`)
+emit(`  Schema.fragment({ components: { ${componentKeys.slice(COMPONENTS / 2).join(", ")} }, resources: { ${resourceKeys.slice(RESOURCES / 2).join(", ")} }, events: { ${eventKeys.slice(EVENTS / 2).join(", ")} }, relations: { ChildOf } }),`)
+// Requirements (a chain across fragments) on components no other section spawns: C28..C31.
+emit("  Schema.fragment({ requires: [Schema.requires(C28, C29, C30), Schema.requires(C29, C31), Schema.requires(C30, C31)] })")
 emit(")")
 emit()
 emit("const Flow = Game.StateMachine(\"Stress/Flow\", [\"Menu\", \"Playing\", \"Paused\"])")
@@ -161,6 +164,28 @@ emit(`const Long = Game.Schedule(${long.join(", ")})`)
 emit("runtime.tick(Long)")
 emit("// @ts-expect-error a command writer with no applyDeferred() before a thisTick query reader is a compile error")
 emit(`runtime.tick(Game.Schedule(${long.filter((entry) => !entry.startsWith("Game.Schedule")).join(", ")}))`)
+emit()
+// Commands checked against Schema.requires: satisfied spawns, inserts proven
+// by a query plus their entries, and removes of requirers with what they require.
+const REQUIRE_SYSTEMS = 16
+const requireSystems: Array<string> = []
+for (let index = 0; index < REQUIRE_SYSTEMS; index++) {
+  const name = `Rq${pad(index)}`
+  emit(`const ${name} = Game.System("Stress/${name}", {`)
+  emit("  queries: {")
+  emit("    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),")
+  emit("    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })")
+  emit("  },")
+  emit("  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))")
+  emit("}, ({ queries, commands }) => {")
+  emit(`  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: ${index} }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))`)
+  emit("  commands.remove(spawned, C28)")
+  emit("  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])")
+  emit("  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)")
+  emit("})")
+  requireSystems.push(name)
+}
+emit(`runtime.tick(Game.Schedule(${requireSystems.join(", ")}, Game.Schedule.applyDeferred()))`)
 emit()
 emit("const incomplete = Game.Runtime.make({ services: Game.Runtime.services() })")
 emit("// @ts-expect-error missing services, resources and machines are compile errors")

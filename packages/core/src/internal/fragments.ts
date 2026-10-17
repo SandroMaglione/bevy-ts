@@ -14,7 +14,8 @@ export const emptySchema = (): SchemaDefinition => ({
   components: {},
   resources: {},
   events: {},
-  relations: {}
+  relations: {},
+  requires: []
 })
 
 /**
@@ -35,10 +36,11 @@ const mergeRegistry = (left: NamedRegistry, right: NamedRegistry): NamedRegistry
 }
 
 export const mergeSchemas = (left: Schema.Any, right: Schema.Any): Schema.Any => {
-  const merged: Record<string, NamedRegistry> = {}
+  const merged: Record<string, unknown> = {}
   for (const kind of kinds) {
     merged[kind] = mergeRegistry(left[kind], right[kind])
   }
+  merged["requires"] = [...left.requires, ...right.requires]
   return merged as unknown as Schema.Any
 }
 
@@ -46,6 +48,14 @@ export const buildSchema = (fragments: ReadonlyArray<Schema.Any>): Schema.Any =>
   let current: Schema.Any = emptySchema()
   for (const fragment of fragments) {
     current = mergeSchemas(current, fragment)
+  }
+  const registered = new Set(Object.values(current.components).map((descriptor) => descriptor.name))
+  for (const requirement of current.requires) {
+    for (const descriptor of [requirement.component, ...requirement.required]) {
+      if (!registered.has(descriptor.name)) {
+        throw new Error(`${descriptor.name} is named in Schema.requires(...) but no fragment registers it: add it to a fragment's components`)
+      }
+    }
   }
   return current
 }

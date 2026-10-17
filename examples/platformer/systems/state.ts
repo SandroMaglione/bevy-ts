@@ -1,8 +1,8 @@
 
 import { levelBounds, levelSolids } from "../content.ts"
-import { PlayerParts, SolidParts, playerDraft, makeSolidDraft } from "../drafts.ts"
+import { playerDraft, makeSolidDraft } from "../drafts.ts"
 import { PlayerReadQuery } from "../queries.ts"
-import { Game, InputState, LevelScope, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
+import { Game, InputState, LevelScope, LoseMessage, Player, PlayerContacts, SessionState, Solid } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
 export const QueueLossSystem = Game.System(
@@ -84,7 +84,7 @@ export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
 export const SpawnWorldOnPlayingEnterSystem = Game.System(
   "Platformer/SpawnWorldOnPlayingEnter",
   {
-    commands: Game.System.commands(Game.System.spawns(...PlayerParts, ...SolidParts))
+    commands: Game.System.commands(Game.System.spawns(Player, Solid))
   },
   ({ commands }) =>
     {

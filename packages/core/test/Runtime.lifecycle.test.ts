@@ -122,7 +122,8 @@ describe("Runtime change detection", () => {
       queries: { positions: Positions },
       commands: Game.System.commands(Game.System.removes(Position), Game.System.despawns(Position))
     }, ({ queries, commands }) => {
-      commands.remove(ids[0]!, Position)
+      const first = queries.positions.get(ids[0]!)
+      if (first.ok) commands.remove(first.value.entity, Position)
       const second = queries.positions.get(ids[1]!)
       if (second.ok) commands.despawn(second.value.entity)
     })
@@ -234,7 +235,7 @@ describe("Runtime change detection", () => {
       queries: { tagged: Game.Query({ selection: { tag: Game.Query.read(Tag) } }) },
       commands: Game.System.commands(Game.System.removes(Tag))
     }, ({ queries, commands }) => {
-      for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tag)
+      for (const match of queries.tagged.each()) commands.remove(match.entity, Tag)
     })
     const DespawnAll = Game.System("Lifecycle/DespawnAll", {
       queries: { all: Game.Query({ selection: {}, with: [Position] }) },

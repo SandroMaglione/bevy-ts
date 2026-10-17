@@ -280,7 +280,7 @@ const churn: BenchCase = {
         commands.insert(match.entity.id, [Marker, {}])
       }
       for (const match of queries.marked.each()) {
-        commands.remove(match.entity.id, Marker)
+        commands.remove(match.entity, Marker)
       }
     })
     const schedule = Game.Schedule(Toggle, Game.Schedule.applyDeferred())

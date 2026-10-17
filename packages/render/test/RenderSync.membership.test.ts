@@ -67,8 +67,10 @@ describe("RenderSync keeps one node per entity its query matches", () => {
       ids.push(commands.spawn(Game.Command.spawn([Sprite, { label: "hero" }], [Position, { x: 1 }])))
     })
     const first = registry.get(ids[0]!)!
-    step(({ commands }) => {
-      commands.remove(ids[0]!, Position)
+    step(({ commands, queries }) => {
+      const found = queries.sprites.get(ids[0]!)
+      if (!found.ok) throw new Error("sprite must still be alive")
+      commands.remove(found.value.entity, Position)
     })
     expect(registry.size).toBe(0)
     expect(first.destroyed).toBe(true)
@@ -88,8 +90,10 @@ describe("RenderSync keeps one node per entity its query matches", () => {
       commands.insert(ids[0]!, [Visible, {}])
     })
     expect(registry.size).toBe(1)
-    step(({ commands }) => {
-      commands.remove(ids[0]!, Visible)
+    step(({ commands, queries }) => {
+      const found = queries.sprites.get(ids[0]!)
+      if (!found.ok) throw new Error("sprite must still be alive")
+      commands.remove(found.value.entity, Visible)
     })
     expect(registry.size).toBe(0)
   })

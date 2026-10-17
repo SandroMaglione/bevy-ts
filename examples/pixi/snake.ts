@@ -72,6 +72,11 @@ const Game = Schema.bind(
       SnakeBody,
       Food
     },
+    requires: [
+      Schema.requires(SnakeHead, Position, PreviousPosition, Velocity),
+      Schema.requires(SnakeBody, Position, PreviousPosition),
+      Schema.requires(Food, Position, PreviousPosition)
+    ],
     resources: {
       Score,
       PendingGrowth,
@@ -139,9 +144,6 @@ const randomSeedFromNow = (): number => {
   return seed === 0 ? 1 : seed
 }
 
-/** The components of the snake's head (`makeHeadDraft`). */
-const HeadParts = [Position, PreviousPosition, Velocity, SnakeHead] as const
-
 const makeHeadDraft = () =>
   Game.Command.spawn(
     [Position, INITIAL_HEAD_POSITION],
@@ -149,9 +151,6 @@ const makeHeadDraft = () =>
     [Velocity, INITIAL_VELOCITY],
     [SnakeHead, {}]
   )
-
-/** The components of a body segment (`makeTailDraft`). */
-const TailParts = [Position, PreviousPosition, SnakeBody] as const
 
 const makeTailDraft = (
   parent: Entity.EntityId<typeof schema, typeof Root>,
@@ -168,9 +167,6 @@ const makeTailDraft = (
     ChildOf,
     parent
   )
-
-/** The components of a food pellet (`makeFoodDraft`). */
-const FoodParts = [Position, PreviousPosition, Food] as const
 
 const makeFoodDraft = (position: GridPosition) =>
   Game.Command.spawn(
@@ -365,7 +361,7 @@ const ResetGameSystem = Game.System(
     },
     commands: Game.System.commands(
       Game.System.despawns(SnakeHead, SnakeBody, Food),
-      Game.System.spawns(...HeadParts, ...TailParts)
+      Game.System.spawns(SnakeHead, SnakeBody)
     )
   },
   ({ queries, resources, commands }) =>
@@ -605,7 +601,7 @@ const GrowSnakeSystem = Game.System(
     resources: {
       pendingGrowth: Game.System.writeResource(PendingGrowth)
     },
-    commands: Game.System.commands(Game.System.spawns(...TailParts))
+    commands: Game.System.commands(Game.System.spawns(SnakeBody))
   },
   ({ queries, resources, commands }) =>
     {
@@ -699,7 +695,7 @@ const EnsureFoodSystem = Game.System(
     nextMachines: {
       phase: Game.System.nextState(GamePhase)
     },
-    commands: Game.System.commands(Game.System.spawns(...FoodParts))
+    commands: Game.System.commands(Game.System.spawns(Food))
   },
   ({ queries, resources, nextMachines, commands }) =>
     {

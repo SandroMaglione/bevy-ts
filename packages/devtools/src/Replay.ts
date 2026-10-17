@@ -212,7 +212,7 @@ const fingerprint = (text: string): string => {
 export const schemaHash = <S extends Schema.Any, Root>(debug: Debug.Handle<S, Root>): string => {
   const description = debug.describe()
   return fingerprint(JSON.stringify({
-    components: description.components,
+    components: description.components.map(({ name, storage }) => ({ name, storage })),
     resources: description.resources.map(({ name, storage }) => ({ name, storage })),
     events: description.events,
     relations: description.relations,

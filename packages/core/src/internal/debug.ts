@@ -275,6 +275,8 @@ export interface DescribeInput {
   readonly commandUses: ReadonlyMap<string, ReadonlySet<string>>
   /** Systems that ran in this session. */
   readonly ranSystems: ReadonlySet<string>
+  /** Commands skipped because they would have broken a `Schema.requires` requirement. */
+  readonly requirementViolations: ReadonlyArray<Debug.RequirementViolation>
   readonly hasResource: (descriptor: Descriptor.Any) => boolean
   readonly schedules: ReadonlyArray<readonly [string, AnySchedule]>
 }
@@ -413,6 +415,15 @@ export const describe = (input: DescribeInput): Debug.Description => {
         })
       }
     }
+    for (const violation of input.requirementViolations) {
+      const times = violation.count === 1 ? "once" : `${violation.count} times`
+      lints.push({
+        severity: "warning",
+        code: "requirement-violated",
+        subject: violation.system,
+        message: `${violation.system} queued ${violation.command === "insert" ? "an" : "a"} ${violation.command} that would have left ${violation.component} without ${violation.missing} (last on entity ${violation.entity}), so it was skipped ${times}`
+      })
+    }
     for (const entry of components.list()) {
       if (entry.writers.length > 0 && entry.readers.every((reader) => entry.writers.includes(reader))) {
         lints.push({
@@ -427,7 +438,14 @@ export const describe = (input: DescribeInput): Debug.Description => {
 
   return {
     version: 1,
-    components: componentDescriptors.map((descriptor) => ({ name: descriptor.name, storage: storageOf(descriptor) })),
+    components: componentDescriptors.map((descriptor) => ({
+      name: descriptor.name,
+      storage: storageOf(descriptor),
+      immutable: DescriptorModule.isImmutable(descriptor),
+      requires: [...new Set(input.schema.requires
+        .filter((requirement) => requirement.component.name === descriptor.name)
+        .flatMap((requirement) => requirement.required.map((required) => required.name)))]
+    })),
     resources: resourceDescriptors.map((descriptor) => ({
       name: descriptor.name,
       storage: storageOf(descriptor),
@@ -475,6 +493,8 @@ const fixFor = (code: Debug.Lint["code"], subject: string): string => {
       return "move the writer before the reader in the schedule (the message names both), or read without Game.System.thisTick"
     case "component-never-read":
       return `fine if ${subject} is read outside the described schedules (rendering, inspectors); otherwise stop writing it`
+    case "requirement-violated":
+      return `keep what ${subject} spawns or inserts complete (every component its components require), and remove a required component only together with its requirers; a query proof can go stale when another system's command is applied first in the same applyDeferred()`
     case "command-permission-unused":
       return `fine if the session did not reach the case where ${subject} uses it; otherwise drop the permission from its Game.System.commands(...)`
     case "read-before-write":
