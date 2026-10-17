@@ -76,7 +76,7 @@ const runtime = Game.Runtime.make({
 runtime.tick(Game.Schedule(Move))
 ```
 
-Start with the [Pixi walkthrough](./scripts/homepage.md) for the full step-by-step example.
+Start with the [Pixi walkthrough](./examples/pixi/README.md) for the full step-by-step example.
 
 ## Runtime semantics
 
@@ -101,9 +101,10 @@ CI measures every pull request against its base commit on the same runner and fa
 
 ## Naming note
 
-Ritmo was previously named `bevy-ts`. The [hosted documentation](https://sandromaglione.github.io/bevy-ts/)
-still uses the existing repository address. The package names here are prepared for
-the separate npm publication and GitHub rename.
+Ritmo was previously named `bevy-ts`. See the [migration guide](./MIGRATION.md)
+for package replacements and the [release checklist](./RELEASING.md) for the
+remaining registry and repository setup. Documentation lives in this repository
+and in the source JSDoc.
 
 <sub>[Brand assets and palette](./brand/README.md)</sub>
 

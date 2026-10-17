@@ -17,6 +17,9 @@ permissions:
 jobs:
   release:
     name: Version or publish
+    # Enable after the organization transfer, rename, first publication, and npm trust setup.
+    # See RELEASING.md. An unset variable leaves release automation paused.
+    if: github.repository == 'typeonce-dev/ritmo' && vars.RITMO_RELEASES_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: npm
     steps:
