@@ -88,6 +88,10 @@ export const value = (input: unknown, options: ValueOptions = {}): string => {
 
 const list = (items: ReadonlyArray<string>): string => items.length === 0 ? "-" : items.join(", ")
 
+/** One transition as `Machine from -> to`; a sub-state without a value prints `(inactive)`. */
+export const transition = (event: Pick<Debug.TransitionEvent, "machine" | "from" | "to">): string =>
+  `${event.machine} ${event.from === undefined ? "(inactive)" : String(event.from)} -> ${event.to === undefined ? "(inactive)" : String(event.to)}`
+
 /** One system's placements and declared access, indented under its name. */
 export const system = (input: Debug.SystemDescription): string => {
   const lines: Array<string> = [`${input.name}  @ ${input.placements.join(", ")}`]
@@ -405,7 +409,7 @@ export const lines = (event: Debug.TraceEvent, options: ValueOptions = {}): Read
         entity: undefined,
         subject: event.machine,
         noop: event.outcome === "unchanged",
-        text: `transition ${event.machine} ${String(event.from)} -> ${String(event.to)} ${event.outcome}`
+        text: `transition ${transition(event)} ${event.outcome}`
       }]
     case "system.skipped": {
       const discarded = event.discarded.map((entry) => `${entry.count} ${entry.stream}`)

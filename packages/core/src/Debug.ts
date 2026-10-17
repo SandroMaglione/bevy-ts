@@ -541,8 +541,10 @@ export interface TransitionEvent {
   readonly tick: number
   readonly schedule: string
   readonly machine: string
-  readonly from: Machine.StateValue
-  readonly to: Machine.StateValue
+  /** `undefined` when a sub-state starts existing (its parent entered its state). */
+  readonly from: Machine.StateValue | undefined
+  /** `undefined` when a sub-state stops existing (its parent left its state). */
+  readonly to: Machine.StateValue | undefined
   /**
    * `applied` committed the new value; `unchanged` was a `setIfChanged` to the
    * current value; `failed` stopped in an exit or transition schedule and was

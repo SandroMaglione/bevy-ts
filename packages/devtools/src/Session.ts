@@ -477,7 +477,7 @@ export const make = <
       case "transition":
         if (event.outcome !== "failed") pendingStates.delete(event.machine)
         if (event.outcome === "failed" || event.outcome === "enterFailed") {
-          warn("transition-failed", `transition:${event.machine}:${String(event.from)}:${String(event.to)}`, `transition ${event.machine} ${String(event.from)} -> ${String(event.to)} ${event.outcome}`, event.frame)
+          warn("transition-failed", `transition:${event.machine}:${String(event.from)}:${String(event.to)}`, `transition ${Format.transition(event)} ${event.outcome}`, event.frame)
         }
         break
     }

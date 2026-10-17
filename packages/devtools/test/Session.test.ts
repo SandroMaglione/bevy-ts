@@ -259,6 +259,14 @@ describe("Format.value", () => {
   })
 })
 
+describe("Format.transition", () => {
+  it("prints a sub-state without a value as (inactive)", () => {
+    expect(Format.transition({ machine: "Dev/Phase", from: undefined, to: "Setup" })).toBe("Dev/Phase (inactive) -> Setup")
+    expect(Format.transition({ machine: "Dev/Phase", from: "Battle", to: undefined })).toBe("Dev/Phase Battle -> (inactive)")
+    expect(Format.transition({ machine: "Dev/Flow", from: "Menu", to: "Playing" })).toBe("Dev/Flow Menu -> Playing")
+  })
+})
+
 describe("Session report streams", () => {
   it("lists streams held past the frame window by a reader", () => {
     const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: { hostClock } })

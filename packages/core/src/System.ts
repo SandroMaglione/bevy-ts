@@ -491,13 +491,18 @@ export interface NextMachineWriteView<M extends Machine.StateMachine.Any = Machi
 
 /**
  * A read-only view over the last applied transition payload for one machine.
+ *
+ * Only meaningful inside transition schedules, so it is only given to
+ * systems that declare `transitions: { x: Game.System.transition(M) }`.
  */
 export interface TransitionReadView<M extends Machine.StateMachine.Any = Machine.StateMachine.Any> {
   get(): Machine.TransitionSnapshot<M>
 }
 
 /**
- * A read-only event stream of committed machine transitions.
+ * A read-only event stream of committed machine transitions, published by
+ * `applyStateTransitions(...)`. Like events, each reader sees the
+ * transitions published since its own previous run.
  */
 export interface TransitionEventReadView<M extends Machine.StateMachine.Any = Machine.StateMachine.Any> {
   all(): ReadonlyArray<Machine.TransitionSnapshot<M>>

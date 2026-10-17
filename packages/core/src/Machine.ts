@@ -125,45 +125,6 @@ export interface TransitionSnapshot<M extends StateMachineDefinition = StateMach
 }
 
 /**
- * A typed read-only view over the current committed state.
- */
-export interface MachineView<M extends StateMachineDefinition = StateMachineDefinition> {
-  get(): StateMachine.Value<M>
-  is(value: StateMachine.Value<M>): boolean
-}
-
-/**
- * A typed queued-write view over the next state.
- */
-export interface NextMachineView<M extends StateMachineDefinition = StateMachineDefinition> {
-  getPending(): StateMachine.Value<M> | undefined
-  set(value: StateMachine.Value<M>): void
-  setIfChanged(value: StateMachine.Value<M>): void
-  reset(): void
-}
-
-/**
- * A typed read-only view over the last applied transition.
- *
- * This view is only meaningful inside transition schedules and is therefore
- * only exposed to systems that explicitly declare transition access.
- */
-export interface TransitionView<M extends StateMachineDefinition = StateMachineDefinition> {
-  get(): TransitionSnapshot<M>
-}
-
-/**
- * A typed read-only stream of committed machine transition events.
- *
- * These snapshots are published by `applyStateTransitions(...)` when a
- * transition commits. Like events, each reader sees the transitions published
- * since its own previous run.
- */
-export interface TransitionEventView<M extends StateMachineDefinition = StateMachineDefinition> {
-  all(): ReadonlyArray<TransitionSnapshot<M>>
-}
-
-/**
  * Read access to the current committed state in a system spec.
  */
 export interface MachineRead<M extends StateMachineDefinition = StateMachineDefinition> {

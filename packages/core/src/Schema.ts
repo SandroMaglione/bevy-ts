@@ -713,8 +713,17 @@ export namespace Schema {
       ): Schema.BoundStateMachine<Root, Name, Values, Parent>
     }
     readonly Condition: {
-      inState: typeof Machine.inState
-      stateChanged: typeof Machine.stateChanged
+      /**
+       * Passes while the machine's committed value is `value`. For a
+       * sub-state it fails while the parent is in another state. A machine
+       * of another game fails to compile with a message naming the fix.
+       */
+      inState: <M extends Machine.StateMachine.Any>(
+        machine: M & Machine.SameGame<M, Root>,
+        value: Machine.StateMachine.Value<M>
+      ) => Machine.InStateCondition<M>
+      /** Passes in the schedule run where `applyStateTransitions(...)` changed the machine. */
+      stateChanged: <M extends Machine.StateMachine.Any>(machine: M & Machine.SameGame<M, Root>) => Machine.StateChangedCondition<M>
       not: typeof Machine.not
       and: typeof Machine.and
       or: typeof Machine.or
