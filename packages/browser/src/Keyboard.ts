@@ -53,7 +53,7 @@
  * }
  * ```
  */
-import * as Result from "@typeonce/bevy-ts/Result"
+import * as Result from "@typeonce/ritmo/Result"
 
 /**
  * The subset of `KeyboardEvent` the module reads. `code` (the physical key)

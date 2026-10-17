@@ -1,4 +1,4 @@
-import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
+import * as Vector2 from "@typeonce/ritmo-math/Vector2"
 
 import { PLAYER_SPEED } from "../constants.ts"
 import { normalizeMovement, resolveHorizontalMovement, resolveVerticalMovement } from "../math.ts"

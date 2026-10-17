@@ -1,5 +1,5 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import * as Runtime from "@typeonce/ritmo/Runtime"
 import { describe, it } from "tstyche"
 
 const R01 = Descriptor.Resource<number>()("Architecture/R01")

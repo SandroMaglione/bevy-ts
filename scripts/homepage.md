@@ -2,7 +2,7 @@
 
 This walkthrough rebuilds [`examples/pixi/main.ts`](../examples/pixi/main.ts) from zero to a complete app.
 
-The goal is to show the normal `bevy-ts` flow in order:
+The goal is to show the normal `ritmo` flow in order:
 
 1. define descriptors
 2. build one closed schema and bind `Game`
@@ -17,9 +17,9 @@ The goal is to show the normal `bevy-ts` flow in order:
 Start by defining the ECS data you want to store. Components hold per-entity data. Resources hold singleton world values. Services expose host-owned capabilities, such as a renderer or clock.
 
 ```ts
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
 import { Application, Container, Sprite, Texture } from "pixi.js"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
@@ -36,7 +36,7 @@ const PixiHost = Descriptor.Service<{
   readonly clock: { deltaSeconds: number }
 }>()("PixiHost")
 
-// One Pixi sprite per rendered entity, mirrored by @typeonce/bevy-ts-render.
+// One Pixi sprite per rendered entity, mirrored by @typeonce/ritmo-render.
 const Sprites = Descriptor.Service<NodeRegistry.NodeRegistry<Sprite>>()("Sprites")
 ```
 
@@ -180,7 +180,7 @@ The full example adds a `BounceWithinViewportSystem` as the next simulation step
 
 ## 5. Bridge ECS changes back into Pixi
 
-`RenderSync` from `@typeonce/bevy-ts-render` builds the one system every renderer bridge needs: it creates a sprite when an entity gains `Renderable`, moves it when `Position` changes, and destroys it when the entity loses `Renderable` or despawns.
+`RenderSync` from `@typeonce/ritmo-render` builds the one system every renderer bridge needs: it creates a sprite when an entity gains `Renderable`, moves it when `Position` changes, and destroys it when the entity loses `Renderable` or despawns.
 
 ```ts
 const render = RenderSync.system(Game, {
@@ -270,7 +270,7 @@ const tick = (ticker: { readonly deltaMS: number }) => {
 application.ticker.add(tick)
 ```
 
-That is the core `bevy-ts` shape:
+That is the core `ritmo` shape:
 
 - host loop outside the ECS
 - runtime values injected explicitly

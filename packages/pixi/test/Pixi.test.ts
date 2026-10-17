@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import * as Pixi from "@typeonce/bevy-ts-pixi"
-import { PixiNodeRegistry, packageTag } from "@typeonce/bevy-ts-pixi"
+import * as Pixi from "@typeonce/ritmo-pixi"
+import { PixiNodeRegistry, packageTag } from "@typeonce/ritmo-pixi"
 
 class FakeNode {
   readonly label: string
@@ -26,7 +26,7 @@ class FakeContainer {
   }
 }
 
-describe("@typeonce/bevy-ts-pixi", () => {
+describe("@typeonce/ritmo-pixi", () => {
   it("resolves through the workspace package entrypoint", () => {
     expect(packageTag).toBe("pixi")
     expect(Pixi).not.toHaveProperty("NodeRegistry")

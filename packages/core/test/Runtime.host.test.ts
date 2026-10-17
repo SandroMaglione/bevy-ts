@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, Entity, Fx, Schema } from "@typeonce/bevy-ts"
-import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import { Decode, Descriptor, Entity, Fx, Schema } from "@typeonce/ritmo"
+import * as Runtime from "@typeonce/ritmo/Runtime"
 
 const Ping = Descriptor.Event<number>()("Host/Ping")
 const Ready = Descriptor.TransientResource<boolean>()("Host/Ready")

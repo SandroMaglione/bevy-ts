@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Box2 } from "@typeonce/bevy-ts-math"
+import { Box2 } from "@typeonce/ritmo-math"
 import { makeSimulation, ReadWorld, room } from "../simulation.ts"
 
 const run = (seed: number, steps: number) => {

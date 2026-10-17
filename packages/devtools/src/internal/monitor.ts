@@ -7,7 +7,7 @@
  * every event is reduced to counts and dropped, so a long session costs no
  * memory.
  */
-import type * as Debug from "@typeonce/bevy-ts/Debug"
+import type * as Debug from "@typeonce/ritmo/Debug"
 
 import * as Format from "../Format.ts"
 import { nonFinitePath } from "./values.ts"

@@ -1,6 +1,6 @@
 {
-  "siteTitle": "bevy-ts",
-  "siteDescription": "A type-safe, game-loop-agnostic ECS runtime for TypeScript.",
+  "siteTitle": "Ritmo",
+  "siteDescription": "The typed ECS runtime for agent-built games.",
   "basePath": "/bevy-ts/",
   "outDir": "docs",
   "sourceBaseUrl": "https://github.com/SandroMaglione/bevy-ts/blob/main",

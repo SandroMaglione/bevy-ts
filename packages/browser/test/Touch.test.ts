@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Pointer, Touch } from "@typeonce/bevy-ts-browser"
+import { Pointer, Touch } from "@typeonce/ritmo-browser"
 
 const size = { width: 800, height: 400 }
 

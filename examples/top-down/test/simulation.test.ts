@@ -1,5 +1,5 @@
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { Session } from "@typeonce/bevy-ts-devtools"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { Session } from "@typeonce/ritmo-devtools"
 import { describe, expect, it } from "vitest"
 
 import { createTopDownSimulation } from "../simulation.ts"

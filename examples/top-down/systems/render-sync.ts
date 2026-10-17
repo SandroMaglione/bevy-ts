@@ -1,5 +1,5 @@
 
-import { RenderSync } from "@typeonce/bevy-ts-render"
+import { RenderSync } from "@typeonce/ritmo-render"
 
 import { PickupRenderQuery, PlayerRenderQuery } from "../queries.ts"
 import {

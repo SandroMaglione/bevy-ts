@@ -1,7 +1,7 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import * as Query from "@typeonce/bevy-ts/Query"
-import * as Schedule from "@typeonce/bevy-ts/Schedule"
-import * as System from "@typeonce/bevy-ts/System"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import * as Query from "@typeonce/ritmo/Query"
+import * as Schedule from "@typeonce/ritmo/Schedule"
+import * as System from "@typeonce/ritmo/System"
 import { describe, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

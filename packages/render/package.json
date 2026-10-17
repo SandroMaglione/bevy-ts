@@ -1,7 +1,7 @@
 {
-  "name": "@typeonce/bevy-ts-render",
+  "name": "@typeonce/ritmo-render",
   "version": "0.5.0",
-  "description": "Renderer-agnostic entity-to-node mirroring for bevy-ts",
+  "description": "Renderer-agnostic entity-to-node mirroring for Ritmo",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {
@@ -16,7 +16,7 @@
   "keywords": [
     "ecs",
     "gamedev",
-    "bevy",
+    "ritmo",
     "rendering"
   ],
   "type": "module",
@@ -62,7 +62,7 @@
     "check": "tsc -b tsconfig.json --pretty false"
   },
   "dependencies": {
-    "@typeonce/bevy-ts": "workspace:^"
+    "@typeonce/ritmo": "workspace:^"
   },
   "engines": {
     "node": ">=20"

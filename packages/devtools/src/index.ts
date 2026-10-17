@@ -1,4 +1,4 @@
-/** Debug sessions, trace history, text reports, and a live browser monitor for bevy-ts runtimes. */
+/** Debug sessions, trace history, text reports, and a live browser monitor for ritmo runtimes. */
 export * as Format from "./Format.ts"
 export * as Invariant from "./Invariant.ts"
 export * as Monitor from "./Monitor.ts"

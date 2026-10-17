@@ -50,8 +50,8 @@ export interface Codec<T> {
  */
 export type Type<C extends Codec<any>> = C extends Codec<infer T> ? T : never
 
-const invalid: unique symbol = Symbol("bevy-ts/Decode/invalid")
-const internals: unique symbol = Symbol("bevy-ts/Decode/internals")
+const invalid: unique symbol = Symbol("ritmo/Decode/invalid")
+const internals: unique symbol = Symbol("ritmo/Decode/internals")
 
 /**
  * The fast path (`parse`, no allocation on success beyond the value itself)

@@ -9,7 +9,7 @@ export const createHud = (): {
 
   const badge = document.createElement("div")
   badge.className = "top-down-hud__badge"
-  badge.textContent = "bevy-ts proof of concept"
+  badge.textContent = "ritmo proof of concept"
 
   const title = document.createElement("h1")
   title.className = "top-down-hud__title"

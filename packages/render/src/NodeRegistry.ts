@@ -65,7 +65,7 @@ export interface RegistryOptions<Node> {
  * Creates a registry with explicit attach/detach behavior: `attach` adds a
  * newly created node to the scene, `detach` removes and releases it. Renderer
  * packages build on this (for example `PixiNodeRegistry.make` in
- * `@typeonce/bevy-ts-pixi`).
+ * `@typeonce/ritmo-pixi`).
  */
 export const make = <Node>(options: RegistryOptions<Node>): NodeRegistry<Node> => {
   const nodes = new Map<number, Node>()

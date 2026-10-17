@@ -1,4 +1,4 @@
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
 import { Application, Container, Graphics } from "pixi.js"
 
 import { drawBoard } from "./render/board.ts"

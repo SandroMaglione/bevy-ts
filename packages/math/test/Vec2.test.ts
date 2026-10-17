@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Vec2, Vector2 } from "@typeonce/bevy-ts-math"
+import { Vec2, Vector2 } from "@typeonce/ritmo-math"
 
 describe("Vec2", () => {
   it("does plain arithmetic, accepting validated vectors", () => {

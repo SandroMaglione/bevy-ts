@@ -7,7 +7,7 @@
  * their results into a checked sum so the work cannot be optimized away.
  */
 import type { BenchCase } from "../../core/bench/harness.ts"
-import { Aabb, Box2, Collide2, FlowField, InputAxis, Random, Scalar, SpatialGrid, Vector2 } from "@typeonce/bevy-ts-math"
+import { Aabb, Box2, Collide2, FlowField, InputAxis, Random, Scalar, SpatialGrid, Vector2 } from "@typeonce/ritmo-math"
 
 const N = 10_000
 
