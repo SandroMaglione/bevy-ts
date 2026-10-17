@@ -57,3 +57,39 @@ describe("Schema.requires", () => {
     expect(Game.System.spawns(A)).type.toBe<Command.Permission<"spawns", typeof A | typeof B>>()
   })
 })
+
+describe("commands.spawn with requirements", () => {
+  it("checks drafts at commands.spawn, not while they are built", () => {
+    Game.System("Req/Spawn", { commands: Game.System.commands(Game.System.spawns(Player, Noise, A)) }, ({ commands }) => {
+      // A partial draft is a legal value.
+      const partial = Game.Command.spawn([Player, {}])
+      commands.spawn(Game.Command.extend(partial, [Body, {}], [Velocity, { x: 0 }], [Position, { x: 0 }]))
+      // @ts-expect-error Req/Player requires Req/Velocity: add the missing entries to the draft
+      commands.spawn(Game.Command.spawn([Player, {}], [Body, {}], [Position, { x: 0 }]))
+      // transitive: Body is present but its own requirement is not
+      // @ts-expect-error Req/Body requires Req/Position
+      commands.spawnIn(Game.EntityScope("Req/Level"), Game.Command.spawn([Player, {}], [Body, {}], [Velocity, { x: 0 }]))
+      // a cycle means both or neither
+      commands.spawn(Game.Command.spawn([A, {}], [B, {}]))
+      // @ts-expect-error Req/A requires Req/B
+      commands.spawn(Game.Command.spawn([A, {}]))
+      // components without requirements spawn alone
+      commands.spawn(Game.Command.spawn([Noise, 1]))
+    })
+  })
+
+  it("treats a conditional required entry as missing", () => {
+    Game.System("Req/SpawnMaybe", { commands: Game.System.commands(Game.System.spawns(Player, Noise)) }, ({ commands }) => {
+      const maybe = Math.random() > 0.5
+      // @ts-expect-error Req/Player requires Req/Velocity
+      commands.spawn(Game.Command.spawn([Player, {}], [Body, {}], [Position, { x: 0 }], maybe ? [Velocity, { x: 0 }] : [Noise, 1]))
+    })
+  })
+
+  it("returns the id with what the draft holds", () => {
+    Game.System("Req/SpawnId", { commands: Game.System.commands(Game.System.spawns(Player)) }, ({ commands }) => {
+      const id = commands.spawn(Game.Command.spawn([Player, {}], [Body, {}], [Velocity, { x: 0 }], [Position, { x: 0 }]))
+      expect(id).type.toBe<Command.SpawnedId<typeof Game.schema, typeof Game.schema, "Req/Player" | "Req/Body" | "Req/Velocity" | "Req/Position">>()
+    })
+  })
+})

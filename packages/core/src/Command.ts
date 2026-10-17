@@ -542,6 +542,27 @@ declare const spawnedTypeId: unique symbol
 export type SpawnedId<S extends Schema.Any, Root, Components extends string> =
   Entity.EntityId<S, Root> & { readonly [spawnedTypeId]: (_: never) => Components }
 
+/** The requirements (`[requirer, required]`) of the components in `Held` that `Held` lacks. */
+type MissingPairs<S extends Schema.Any, Held extends string> =
+  Extract<Schema.Requires<S>, readonly [Held, string]> extends infer Pair
+    ? Pair extends readonly [string, infer To extends string]
+      ? To extends Held ? never : Pair
+      : never
+    : never
+
+/** One message per missing requirement: `"Player requires Velocity"`. */
+type MissingMessages<Pairs> = Pairs extends readonly [infer From extends string, infer To extends string] ? `${From} requires ${To}` : never
+
+/**
+ * Accepts a draft holding every requirement of every component it holds.
+ * Direct requirements are enough: each required component must be held
+ * too, with its own requirements.
+ */
+type DraftRequirementsMet<S extends Schema.Any, Held extends string> =
+  [MissingPairs<S, Held>] extends [never]
+    ? unknown
+    : Fix<`${MissingMessages<MissingPairs<S, Held>>}: add the missing entries to the draft`>
+
 /** The transitive closure of the names `N` require (cycles stop). */
 type RequiredClosure<Pairs extends RequirementPair, N extends string, Seen extends string = never> =
   [Exclude<N, Seen>] extends [never]
@@ -589,19 +610,23 @@ export interface CommandsApi<
 > {
   /**
    * Queues a staged entity for spawning and returns its stable runtime id.
+   *
+   * The draft must hold every component its components require
+   * (`Schema.requires`); drafts are checked here, so a partial draft built
+   * with `Game.Command.spawn(...)` and completed with `extend(...)` is fine.
    */
   readonly spawn: [Spawns] extends [never]
     ? MethodNotDeclared<"spawn", "spawns">
-    : <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root> & DraftAllowed<P, Spawns>) => SpawnedId<S, Root, HeldNames<P>>
+    : <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root> & DraftAllowed<P, Spawns> & DraftRequirementsMet<S, HeldNames<P>>) => SpawnedId<S, Root, HeldNames<P>>
   /**
    * Queues an entity spawn owned by one lifetime scope (removed together
-   * with `despawnScope(...)`).
+   * with `despawnScope(...)`). The draft is checked like `spawn(...)`.
    */
   readonly spawnIn: [Spawns] extends [never]
     ? MethodNotDeclared<"spawnIn", "spawns">
     : <P extends Entity.ComponentProof>(
         scope: EntityScope.EntityScope<string, Root>,
-        draft: Entity.EntityDraft<S, P, Root> & DraftAllowed<P, Spawns>
+        draft: Entity.EntityDraft<S, P, Root> & DraftAllowed<P, Spawns> & DraftRequirementsMet<S, HeldNames<P>>
       ) => SpawnedId<S, Root, HeldNames<P>>
   /**
    * Queues component inserts (or replacements) on an existing entity, applied
