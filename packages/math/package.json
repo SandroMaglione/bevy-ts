@@ -6,13 +6,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SandroMaglione/bevy-ts.git",
+    "url": "git+https://github.com/SandroMaglione/ritmo.git",
     "directory": "packages/math"
   },
   "bugs": {
-    "url": "https://github.com/SandroMaglione/bevy-ts/issues"
+    "url": "https://github.com/SandroMaglione/ritmo/issues"
   },
-  "homepage": "https://sandromaglione.github.io/bevy-ts/",
+  "homepage": "https://github.com/SandroMaglione/ritmo#readme",
   "keywords": [
     "ecs",
     "gamedev",

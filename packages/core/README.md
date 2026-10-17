@@ -26,5 +26,4 @@ Related packages, released together with the same version:
 - [`@typeonce/ritmo-pixi`](https://www.npmjs.com/package/@typeonce/ritmo-pixi): Pixi container adapter for the render-node registry
 - [`@typeonce/ritmo-devtools`](https://www.npmjs.com/package/@typeonce/ritmo-devtools): headless debug sessions and trace reports
 
-Documentation: https://sandromaglione.github.io/bevy-ts/ ·
-Source: https://github.com/SandroMaglione/bevy-ts
+Source: https://github.com/SandroMaglione/ritmo

@@ -1,6 +1,6 @@
 # Build The Pixi Example
 
-This walkthrough rebuilds [`examples/pixi/main.ts`](../examples/pixi/main.ts) from zero to a complete app.
+This walkthrough rebuilds [`examples/pixi/main.ts`](./main.ts) from zero to a complete app.
 
 The goal is to show the normal `ritmo` flow in order:
 
@@ -279,7 +279,7 @@ That is the core `ritmo` shape:
 
 ## Read the full source
 
-The complete version, including sprite creation and viewport bounce logic, is in [`examples/pixi/main.ts`](../examples/pixi/main.ts).
+The complete version, including sprite creation and viewport bounce logic, is in [`examples/pixi/main.ts`](./main.ts).
 
 From here, the API reference pages are the next step if you want exact definitions for the surfaces used above:
 
