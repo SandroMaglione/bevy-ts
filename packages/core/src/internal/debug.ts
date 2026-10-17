@@ -11,6 +11,7 @@ import type * as Machine from "../Machine.ts"
 import type * as Query from "../Query.ts"
 import type * as Relation from "../Relation.ts"
 import * as Schedule from "../Schedule.ts"
+import * as OrderInternal from "./order.ts"
 import type { Schema } from "../Schema.ts"
 import type { SystemDefinition } from "../System.ts"
 
@@ -114,6 +115,7 @@ const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDe
 }
 
 type Mode = { readonly mode: "read" | "write"; readonly descriptor: Descriptor.Any }
+type ThisTickAccess = Mode & { readonly thisTick?: true }
 
 export const describeSystem = (system: AnySystem, placements: ReadonlyArray<string>): Debug.SystemDescription => {
   const spec = system.spec
@@ -148,6 +150,9 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
     removed: names(spec.removed as Record<string, { readonly descriptor: Descriptor.Any }>, (access) => access.descriptor.name),
     despawned: Object.keys(spec.despawned).length > 0,
     relationFailures: names(spec.relationFailures as Record<string, { readonly relation: Relation.Relation.Any }>, (access) => access.relation.name),
+    thisTick: [...Object.values(spec.events as Record<string, ThisTickAccess>), ...Object.values(spec.resources as Record<string, ThisTickAccess>)]
+      .filter((access) => access.thisTick === true)
+      .map((access) => access.descriptor.name),
     services: names(spec.services as Record<string, { readonly descriptor: Descriptor.Any }>, (access) => access.descriptor.name),
     when: (spec.when as ReadonlyArray<Machine.Condition>).map(renderCondition),
     pauseWhen: (spec.pauseWhen as ReadonlyArray<Machine.Condition>).map(renderCondition),
@@ -326,6 +331,12 @@ export const describe = (input: DescribeInput): Debug.Description => {
       })
     }
     lints.push(...readBeforeWriteLints(schedules, described, input.externallyWrittenEvents))
+    // Each named schedule is checked as one tick; `tick` checks this at compile time.
+    for (const [name, schedule] of input.schedules) {
+      for (const issue of OrderInternal.tickOrderIssues(schedule.steps, input.externallyWrittenEvents)) {
+        lints.push({ severity: "warning", code: "this-tick-order", subject: issue.data, message: `in ${name}, ${issue.message}` })
+      }
+    }
     for (const entry of components.list()) {
       if (entry.writers.length > 0 && entry.readers.every((reader) => entry.writers.includes(reader))) {
         lints.push({

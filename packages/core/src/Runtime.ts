@@ -74,8 +74,9 @@ import * as Relation from "./Relation.ts"
 import type * as Requirement from "./Requirement.ts"
 import * as Result from "./Result.ts"
 import * as Schedule from "./Schedule.ts"
+import * as OrderInternal from "./internal/order.ts"
 import * as Snapshot from "./Snapshot.ts"
-import type { ExecutableScheduleDefinition } from "./Schedule.ts"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "./Schedule.ts"
 import type { Registry, Schema } from "./Schema.ts"
 import type {
   DespawnedReadView,
@@ -366,7 +367,7 @@ type RequirementErrorsFor<
   : never
 
 type RequirementErrorsOfSchedule<
-  Selected extends ExecutableScheduleDefinition<any, any, any, any, any>,
+  Selected extends ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
@@ -375,14 +376,14 @@ type RequirementErrorsOfSchedule<
   : never
 
 export type ValidateSchedules<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
 > = {
   readonly [K in keyof Schedules]:
     Schedules[K] & ValidateSchedule<
-      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any, any>>,
+      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
       Services,
       Resources,
       Machines
@@ -390,7 +391,7 @@ export type ValidateSchedules<
 }
 
 export type ValidateScheduleArray<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
@@ -401,18 +402,23 @@ export type ValidateScheduleArray<
     }
 
 type ValidateScheduleArgs<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
 > = [RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, Machines>] extends [never]
-  ? Schedules
+  ? [Schedule.TickOrderErrors<NoInfer<Schedules>>] extends [never]
+    ? Schedules
+    : Schedules & {
+        /** `Game.System.thisTick` reads whose writers do not all run earlier in this call. */
+        readonly __fixTickOrder__: Schedule.TickOrderErrors<NoInfer<Schedules>>
+      }
   : Schedules & {
       readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, Machines>
     }
 
 type ValidateSchedule<
-  Schedule extends ExecutableScheduleDefinition<any, any, any, any, any>,
+  Schedule extends ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
@@ -454,6 +460,16 @@ export type AnyRequirements = Requirement.Requirement
 export interface MissingRuntimeRequirement {
   readonly kind: Requirement.RequirementValue["kind"]
   readonly name: string
+}
+
+/**
+ * Returned by `tryTick` when a `Game.System.thisTick` read has a writer that
+ * runs after it, or no writer in the tick (events sent with `runtime.send`
+ * since the previous tick count as written). Nothing ran.
+ */
+export interface TickOrderViolation {
+  readonly kind: "TickOrderViolation"
+  readonly issues: ReadonlyArray<Schedule.OrderIssue>
 }
 
 /** Explicit failure returned by the dynamic schedule execution path. */
@@ -589,7 +605,7 @@ export interface Runtime<
    * system's ECS writes are rolled back and earlier systems stay committed.
    */
   readonly tick: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any>>>(
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>(
       ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, Machines>
     ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
@@ -599,11 +615,12 @@ export interface Runtime<
    * Games use `tick(...)`, which rejects missing requirements at compile time.
    *
    * Requirements are checked against current provisioning first and missing
-   * ones are returned as data.
+   * ones are returned as data, then `Game.System.thisTick` reads are checked
+   * against the schedule's order (`TickOrderViolation`).
    */
-  readonly tryTick: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
+  readonly tryTick: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>(
     schedule: Selected
-  ) => Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>>
+  ) => Result.Result<void, MissingRuntimeRequirements | TickOrderViolation | Schedule.FailureOf<Selected>>
   /**
    * Captures the world as plain data: entities with their ids, components,
    * relation edges, resources, and committed machine values.
@@ -1698,7 +1715,7 @@ const makeValidatedRuntime = <
    * Runs one schedule. A failing system stops the schedule; systems that
    * already succeeded stay committed, and their pending work stays pending.
    */
-  const runScheduleUnsafe = (schedule: ExecutableScheduleDefinition<S, any, any, any, any>): Result.Result<void, SystemFailure> => {
+  const runScheduleUnsafe = (schedule: ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>): Result.Result<void, SystemFailure> => {
     changedMachines = new Set()
     return tracing
       ? traceSchedule(scheduleName(schedule), () => runSteps(schedule.steps))
@@ -1707,6 +1724,8 @@ const makeValidatedRuntime = <
 
   const eventsByKey = new Set((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => descriptor.key))
   const externallyWrittenEvents = new Set<string>()
+  /** Events sent since the previous tick began: written for `thisTick` checks in `tryTick`. */
+  const sentSinceTick = new Set<string>()
 
   const send = (descriptor: Descriptor<"event", string, any>, value: unknown): void => {
     if (ticking) throw new Error(`runtime.send(${descriptor.name}) was called while a schedule is running: emit from a system instead`)
@@ -1716,10 +1735,12 @@ const makeValidatedRuntime = <
     // Bound host traffic even when it sends repeatedly without ticking.
     events.trim(0)
     externallyWrittenEvents.add(descriptor.name)
+    sentSinceTick.add(descriptor.name)
     if (tracing) emit({ type: "runtime.sent", frame: frameCount, tick: published, event: descriptor.name, value })
   }
 
   const advanceFrame = (): void => {
+    sentSinceTick.clear()
     frameCount += 1
     const boundary = world.advanceFrame()
     if (tracing) emit({ type: "frame", frame: frameCount, tick: world.currentTick() })
@@ -1728,7 +1749,7 @@ const makeValidatedRuntime = <
     relationFailures.trim(boundary)
   }
 
-  const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any>>): Result.Result<void, SystemFailure> => {
+  const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>): Result.Result<void, SystemFailure> => {
     if (ticking) throw new Error("runtime.tick cannot run inside another tick")
     ticking = true
     try {
@@ -1754,9 +1775,9 @@ const makeValidatedRuntime = <
     }
   }
 
-  const tryRunSchedule = <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
+  const tryRunSchedule = <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>(
     schedule: Selected
-  ): Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>> => {
+  ): Result.Result<void, MissingRuntimeRequirements | TickOrderViolation | Schedule.FailureOf<Selected>> => {
     const missing = schedule.requirements
       .filter((requirement) => !hasRequirement(requirement))
       .map(({ kind, name }) => ({ kind, name }))
@@ -1766,6 +1787,11 @@ const makeValidatedRuntime = <
         kind: "MissingRuntimeRequirements",
         requirements: missing
       })
+    }
+
+    const issues = OrderInternal.tickOrderIssues(schedule.steps, sentSinceTick)
+    if (issues.length > 0) {
+      return Result.failure({ kind: "TickOrderViolation", issues })
     }
 
     advanceFrame()

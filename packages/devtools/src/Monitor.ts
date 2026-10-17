@@ -30,7 +30,7 @@
  * ```
  */
 import type * as Debug from "@typeonce/bevy-ts/Debug"
-import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 import * as Format from "./Format.ts"
@@ -57,7 +57,7 @@ export interface Options<S extends Schema.Any, Root> {
    * panel and make up the system map. Name the schedule objects actually
    * passed to `tick`: nested schedules are flattened into them.
    */
-  readonly schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  readonly schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   /** Where the panel is added. Defaults to `document.body`. */
   readonly mount?: HTMLElement
   /** `KeyboardEvent.code` that toggles the panel. Defaults to `Backslash`. */

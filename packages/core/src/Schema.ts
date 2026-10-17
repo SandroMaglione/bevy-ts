@@ -331,7 +331,7 @@ type BoundScheduleEntry<S extends Schema.Any, Root> =
   | Schema.BoundSystem<S, Root, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
-  | Schema.BoundSchedule<S, Root, any, any>
+  | Schedule.ScheduleDefinition<S, any, Root, any, any, Schedule.AnyScheduleOrder>
 
 type BoundTransitionEntry<S extends Schema.Any, Root> =
   Exclude<BoundScheduleEntry<S, Root>, Schedule.ApplyStateTransitionsStep<any, Root>>
@@ -587,6 +587,14 @@ export namespace Schema {
       writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
       readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>
       writeEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventWrite<D>
+      /**
+       * Requires every writer of this event or resource to run earlier in the
+       * same `runtime.tick(...)` call; checked at compile time by `tick`.
+       * Accepts `readEvent(...)` or `readResource(...)`.
+       */
+      thisTick: <const Read extends System.EventRead<EventDescriptor<S>> | System.ResourceRead<ResourceDescriptor<S>>>(
+        read: Read
+      ) => Read & System.ThisTick
       service: typeof System.service
       machine: <M extends BoundStateMachine<Root>>(machine: M) => Machine.MachineRead<M>
       nextState: <M extends BoundStateMachine<Root>>(machine: M) => Machine.NextMachineWrite<M>

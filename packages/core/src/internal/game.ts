@@ -80,6 +80,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         writeResource: System.writeResource,
         readEvent: System.readEvent,
         writeEvent: System.writeEvent,
+        thisTick: System.thisTick,
         service: System.service,
         machine: System.machine,
         nextState: System.nextState,

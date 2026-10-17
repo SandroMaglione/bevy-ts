@@ -27,7 +27,7 @@
 import type { Condition, ConditionNeedsFromConditions, StateMachine } from "./Machine.ts"
 import * as Requirement from "./Requirement.ts"
 import type { Schema } from "./Schema.ts"
-import type { FailureOf as SystemFailureOf, SystemDefinition, SystemFailure } from "./System.ts"
+import type { FailureOf as SystemFailureOf, SystemDefinition, SystemFailure, ThisTick } from "./System.ts"
 
 export interface ApplyDeferredStep {
   readonly kind: "applyDeferred"
@@ -50,6 +50,195 @@ type AnySystem = SystemDefinition<any, any, any, any, any>
 
 export type ScheduleStep = AnySystem | ScheduleMarkerStep
 
+/**
+ * What a schedule carries for `thisTick` checks: its entries in order, and
+ * whether any of them has a `Game.System.thisTick` read. Building a schedule
+ * computes only the flag; `runtime.tick(...)` walks the entries, and only
+ * when some read exists. Schedules never report order errors themselves.
+ *
+ * The default (used by annotations such as `Schema.BoundSchedule`) has no
+ * `thisTick` reads, so a schedule with one cannot be widened into it and
+ * lose its check.
+ */
+export interface ScheduleOrder<
+  out Entries extends ReadonlyArray<unknown> = ReadonlyArray<unknown>,
+  out Reads extends boolean = false
+> {
+  readonly entries: Entries
+  readonly reads: Reads
+}
+
+/** Accepts a schedule with any order summary (constraint positions only). */
+export type AnyScheduleOrder = ScheduleOrder<ReadonlyArray<unknown>, boolean>
+
+/**
+ * One `thisTick` read whose writers do not all run earlier in the tick, as
+ * found at runtime by `tryTick` and the `this-tick-order` lint. `message` is
+ * the same text `runtime.tick(...)` reports at compile time.
+ */
+export interface OrderIssue {
+  readonly kind: "lateWriter" | "missingWriter"
+  readonly reader: string
+  /** The event or resource name. */
+  readonly data: string
+  /** The writer that runs after the reader (`lateWriter` only). */
+  readonly writer?: string
+  readonly message: string
+}
+
+/** The message reported when the order of a tick cannot be known statically. */
+export type UnknownOrderError =
+  "the order of this tick is not statically known (a schedule or tick argument spread from a widened array) and it contains Game.System.thisTick reads: list the systems and schedules as literal arguments or an `as const` tuple"
+
+/** Plugin systems with an erased spec (`any`) take part in no order check. */
+type IsErased<T> = 0 extends 1 & T ? true : false
+
+type SpecAccessValues<Spec> =
+  Spec extends { readonly events: infer Events; readonly resources: infer Resources }
+    ? Events[keyof Events] | Resources[keyof Resources]
+    : never
+
+type CarriedOrder<Entry> =
+  "__order" extends keyof Entry
+    ? Entry extends { readonly __order?: (_: never) => infer Order extends AnyScheduleOrder } ? Order : never
+    : never
+
+/**
+ * Whether one entry has a `thisTick` read: a cheap flag, computed once per
+ * schedule. `"unknown"` is a nested schedule whose type was widened.
+ */
+type EntryHasReads<Entry> =
+  Entry extends AnySystem
+    ? IsErased<Entry["spec"]> extends true ? "no"
+      : [Extract<SpecAccessValues<Entry["spec"]>, ThisTick>] extends [never] ? "no" : "yes"
+    : CarriedOrder<Entry>["reads"] extends infer Reads
+      ? boolean extends Reads ? "unknown" : Reads extends true ? "yes" : "no"
+      : "no"
+
+/** `true` when some entry reads `thisTick`, `boolean` when that cannot be known. */
+type HasReads<Entries extends ReadonlyArray<unknown>> =
+  EntryHasReads<Entries[number]> extends infer Flags
+    ? "unknown" extends Flags ? boolean : "yes" extends Flags ? true : false
+    : false
+
+/** The order summary of entries run in this order. */
+export type CompositionOrder<Entries extends ReadonlyArray<unknown>> = ScheduleOrder<Entries, HasReads<Entries>>
+
+// The detailed check below runs only from `TickOrderErrors`, for ticks with a
+// read. It never walks a tuple element by element: per read it finds the
+// reader's position at each nesting level, slices the entries after it once,
+// and looks for writers in the union of the systems there.
+
+interface Read<Kind, Key, Reader> {
+  readonly kind: Kind
+  readonly key: Key
+  readonly reader: Reader
+}
+
+type DescriptorKind<D> = D extends { readonly kind: infer Kind } ? Kind : never
+
+/** Every system an entry runs, nested schedules included, as a union. */
+type SystemsIn<Entry> =
+  Entry extends AnySystem ? Entry
+  : CarriedOrder<Entry> extends infer Order extends AnyScheduleOrder
+    ? [Order] extends [never] ? never : SystemsIn<Order["entries"][number]>
+    : never
+
+type SystemReads<Sys> =
+  Sys extends AnySystem
+    ? IsErased<Sys["spec"]> extends true ? never
+      : Extract<SpecAccessValues<Sys["spec"]>, ThisTick> extends infer Access
+        ? Access extends { readonly descriptor: infer D extends { readonly name: string } }
+          ? Read<DescriptorKind<D>, D["name"], Sys["name"]>
+          : never
+        : never
+    : never
+
+/** Names of the systems among `Systems` that write `Key` (other than `Reader`). */
+type WritersOf<Systems, Kind, Key, Reader> =
+  Systems extends AnySystem
+    ? IsErased<Systems["spec"]> extends true ? never
+      : Systems["name"] extends Reader ? never
+      : [Extract<SpecAccessValues<Systems["spec"]>, { readonly mode: "write"; readonly descriptor: { readonly kind: Kind; readonly name: Key } }>] extends [never]
+        ? never
+        : Systems["name"]
+    : never
+
+/** Some level of the entries is a widened array that contains a read. */
+type UnknownIn<Entries extends ReadonlyArray<unknown>> =
+  Entries extends unknown ? UnknownInOne<Entries> : never
+
+type UnknownInOne<Entries extends ReadonlyArray<unknown>> =
+  number extends Entries["length"]
+    ? HasReads<Entries> extends false ? never : UnknownOrderError
+    : NestedEntries<Entries[number]> extends infer Nested
+      ? Nested extends ReadonlyArray<unknown> ? UnknownIn<Nested> : never
+      : never
+
+type NestedEntries<Entry> =
+  Entry extends AnySystem ? never
+  : CarriedOrder<Entry> extends infer Order extends AnyScheduleOrder
+    ? [Order] extends [never] ? never : Order["entries"]
+    : never
+
+type TupleOf<Length extends number, Out extends Array<unknown> = []> =
+  Out["length"] extends Length ? Out : TupleOf<Length, [...Out, unknown]>
+
+/** Literal names of the systems an entry runs; erased (`string`) names identify no one. */
+type NamesIn<Entry> =
+  SystemsIn<Entry> extends infer Sys
+    ? Sys extends AnySystem ? (string extends Sys["name"] ? never : Sys["name"]) : never
+    : never
+
+/** Indices (as numbers) of the entries that run the reader. */
+type ReaderIndices<Entries extends ReadonlyArray<unknown>, Reader> = {
+  readonly [I in keyof Entries]: Reader extends NamesIn<Entries[I]> ? I : never
+}[number] extends infer Index
+  ? Index extends `${infer N extends number}` ? N : never
+  : never
+
+type LateWriterError<Reader extends string, Key extends string, Writer> =
+  Writer extends string
+    ? `${Reader} needs ${Key} from this tick, but its writer ${Writer} runs after it: move ${Writer} before ${Reader}, or read ${Key} without thisTick`
+    : never
+
+type MissingWriterError<Reader extends string, Key extends string> =
+  `${Reader} needs ${Key} from this tick, but no system in this tick writes it: add a writer before ${Reader} in the same runtime.tick(...) call, or read ${Key} without thisTick`
+
+/** Writers of the read's data that run after its reader, at this level and inside the reader's own entry. */
+type LateWriters<Entries, Kind, Key extends string, Reader extends string> =
+  // Distributes over a union of schedules (a tick of one of several), then over each place the reader runs.
+  Entries extends ReadonlyArray<unknown> ? LateWritersAt<Entries, ReaderIndices<Entries, Reader>, Kind, Key, Reader> : never
+
+type LateWritersAt<Entries extends ReadonlyArray<unknown>, Index, Kind, Key extends string, Reader extends string> =
+  Index extends number
+    ? Entries extends readonly [...TupleOf<Index>, infer At, ...infer Rest]
+      ? | LateWriterError<Reader, Key, WritersOf<SystemsIn<Rest[number]>, Kind, Key, Reader>>
+        | LateWriters<NestedEntries<At>, Kind, Key, Reader>
+      : never
+    : never
+
+type ReadErrors<Entries extends ReadonlyArray<unknown>, All, Reads> =
+  Reads extends Read<infer Kind, infer Key extends string, infer Reader extends string>
+    ? | LateWriters<Entries, Kind, Key, Reader>
+      | ([WritersOf<All, Kind, Key, Reader>] extends [never] ? MissingWriterError<Reader, Key> : never)
+    : never
+
+type CheckTick<Schedules extends ReadonlyArray<unknown>> =
+  [UnknownIn<Schedules>] extends [never]
+    ? SystemsIn<Schedules[number]> extends infer All
+      ? ReadErrors<Schedules, All, SystemReads<All>>
+      : never
+    : UnknownOrderError
+
+/**
+ * Every `thisTick` error of one `runtime.tick(...)` call over its arguments
+ * in order: writers that run after their reader, reads with no writer, and a
+ * call whose order is not statically known. Free when nothing has a read.
+ */
+export type TickOrderErrors<Schedules extends ReadonlyArray<unknown>> =
+  HasReads<Schedules> extends false ? never : CheckTick<Schedules>
+
 export interface TransitionBundleDefinition<
   S extends Schema.Any = Schema.Any,
   out Entries extends ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>> = ReadonlyArray<StateMachine.AnyTransitionSchedule<S, any>>,
@@ -70,7 +259,8 @@ export interface ExecutableScheduleDefinition<
   out Needs extends Requirement.Requirement = Requirement.Requirement,
   out Root = unknown,
   out CarriedNeeds extends Requirement.Requirement = Needs,
-  out Failure extends SystemFailure = never
+  out Failure extends SystemFailure = never,
+  out Order extends AnyScheduleOrder = ScheduleOrder
 > {
   readonly kind: "schedule"
   readonly steps: ReadonlyArray<ScheduleStep>
@@ -78,6 +268,8 @@ export interface ExecutableScheduleDefinition<
   readonly schema: S
   readonly requirements: ReadonlyArray<CarriedNeeds>
   readonly __failure?: (_: never) => Failure
+  /** Writes, `thisTick` reads, and order errors, checked by `runtime.tick(...)`. */
+  readonly __order?: (_: never) => Order
   readonly __schemaRoot?: Root | undefined
 }
 
@@ -86,8 +278,9 @@ export type ScheduleDefinition<
   Needs extends Requirement.Requirement = Requirement.Requirement,
   Root = unknown,
   CarriedNeeds extends Requirement.Requirement = Needs,
-  Failure extends SystemFailure = never
-> = ExecutableScheduleDefinition<S, Needs, Root, CarriedNeeds, Failure>
+  Failure extends SystemFailure = never,
+  Order extends AnyScheduleOrder = ScheduleOrder
+> = ExecutableScheduleDefinition<S, Needs, Root, CarriedNeeds, Failure, Order>
 
 export namespace Schedule {
   export type Definition<
@@ -114,7 +307,7 @@ export namespace Schedule {
  */
 export type ScheduleEntry =
   | ScheduleStep
-  | ScheduleDefinition<any, any, any, any, any>
+  | ScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>
 
 type EntrySchema<Entry> =
   Entry extends { readonly schema: infer S extends Schema.Any } ? S
@@ -164,7 +357,8 @@ export type AnonymousScheduleBuildFor<
   CompositionExactRequirements<Entries>,
   Root,
   CompositionExactRequirements<Entries>,
-  CompositionFailure<Entries>
+  CompositionFailure<Entries>,
+  CompositionOrder<Entries>
 >
 
 /**
@@ -181,7 +375,8 @@ export type ConditionalScheduleBuildFor<
   CompositionExactRequirements<Entries> | ConditionNeedsFromConditions<Conditions>,
   Root,
   CompositionExactRequirements<Entries> | ConditionNeedsFromConditions<Conditions>,
-  CompositionFailure<Entries>
+  CompositionFailure<Entries>,
+  CompositionOrder<Entries>
 >
 
 export type TransitionBundleInput<S extends Schema.Any = Schema.Any, Root = unknown> =
@@ -372,7 +567,7 @@ const gate = (system: AnySystem, when: ReadonlyArray<Condition>, pauseWhen: Read
 export const isSystemStep = (step: ScheduleStep | ScheduleEntry): step is AnySystem =>
   typeof step === "object" && step !== null && "spec" in step
 
-const isScheduleEntry = (entry: ScheduleEntry): entry is ScheduleDefinition<any, any, any, any, any> =>
+const isScheduleEntry = (entry: ScheduleEntry): entry is ScheduleDefinition<any, any, any, any, any, AnyScheduleOrder> =>
   typeof entry === "object" && entry !== null && "kind" in entry && entry.kind === "schedule"
 
 const describeValue = (value: unknown): string =>

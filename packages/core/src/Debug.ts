@@ -47,7 +47,7 @@
  * ```
  */
 import type * as Machine from "./Machine.ts"
-import type { ExecutableScheduleDefinition } from "./Schedule.ts"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "./Schedule.ts"
 import type { Schema } from "./Schema.ts"
 
 /** Version of the description, dump, and trace formats. */
@@ -64,7 +64,7 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
    * `onEnter(Game/Flow=Playing)`. Naming again replaces earlier names.
    */
   readonly nameSchedules: (
-    schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+    schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   ) => void
   /** The static description of the schema and the named schedules. */
   readonly describe: () => Description
@@ -153,6 +153,8 @@ export interface SystemDescription {
   readonly removed: ReadonlyArray<string>
   readonly despawned: boolean
   readonly relationFailures: ReadonlyArray<string>
+  /** Events and resources read with `Game.System.thisTick`. */
+  readonly thisTick: ReadonlyArray<string>
   readonly services: ReadonlyArray<string>
   /** Run conditions, rendered, for example `stateChanged(Game/Flow)`. */
   readonly when: ReadonlyArray<string>
@@ -191,6 +193,7 @@ export interface Lint {
     | "next-state-never-applied"
     | "component-never-read"
     | "read-before-write"
+    | "this-tick-order"
   readonly message: string
   readonly subject: string
 }

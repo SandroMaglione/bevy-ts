@@ -100,6 +100,27 @@ emit("})")
 emit()
 emit("runtime.tick(Update)")
 emit()
+// A long schedule with thisTick reads: runtime.tick checks the order of every
+// read against every writer that follows it.
+const ORDER_WRITERS = 48
+const ORDER_READERS = 8
+for (let index = 0; index < ORDER_WRITERS; index++) {
+  emit(`const W${pad(index)} = Game.System("Stress/W${pad(index)}", { events: { out: Game.System.writeEvent(E${pad(index % EVENTS)}) } }, ({ events }) => {`)
+  emit(`  events.out.emit({ e${index % EVENTS}: ${index} })`)
+  emit("})")
+}
+for (let index = 0; index < ORDER_READERS; index++) {
+  emit(`const T${pad(index)} = Game.System("Stress/T${pad(index)}", { events: { in: Game.System.thisTick(Game.System.readEvent(E${pad(index % EVENTS)})) } }, ({ events }) => {`)
+  emit("  void events.in.all()")
+  emit("})")
+}
+const writers = Array.from({ length: ORDER_WRITERS }, (_, index) => `W${pad(index)}`)
+const readers = Array.from({ length: ORDER_READERS }, (_, index) => `T${pad(index)}`)
+emit(`const Ordered = Game.Schedule(${writers.join(", ")}, ${readers.join(", ")})`)
+emit("runtime.tick(Ordered)")
+emit(`// @ts-expect-error a writer after a thisTick reader is a compile error`)
+emit(`runtime.tick(Game.Schedule(${readers.join(", ")}, ${writers.join(", ")}))`)
+emit()
 emit("const incomplete = Game.Runtime.make({ services: Game.Runtime.services() })")
 emit("// @ts-expect-error missing services, resources and machines are compile errors")
 emit("incomplete.tick(Update)")

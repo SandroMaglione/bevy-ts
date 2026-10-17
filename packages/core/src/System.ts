@@ -265,6 +265,41 @@ export const writeEvent = <D extends Descriptor<"event", string, any>>(
   descriptor
 })
 
+/** The marker `thisTick(...)` adds to a read. */
+export interface ThisTick {
+  readonly thisTick: true
+}
+
+/**
+ * Requires that every system writing this event or resource runs earlier in
+ * the same `runtime.tick(...)` call than the reading system: the reader then
+ * sees this tick's data, never last tick's. The library never reorders
+ * anything; it only checks.
+ *
+ * `runtime.tick(...)` checks it at compile time over everything passed to that
+ * call, in order (gated groups count by position), and rejects a writer that
+ * runs after the reader, a read with no writer in the call, and a call whose
+ * order is not statically known. `tryTick` checks the same at runtime, where
+ * events sent with `runtime.send` before the tick count as written.
+ *
+ * Use it on reads whose correctness depends on running after their writers
+ * (damage applied the tick it is dealt). A plain read is right when last
+ * tick's data is acceptable.
+ *
+ * @example
+ * ```ts
+ * const ApplyDamage = Game.System("ApplyDamage", {
+ *   events: { damage: Game.System.thisTick(Game.System.readEvent(Damage)) }
+ * }, ({ events }) => { ... })
+ *
+ * runtime.tick(Game.Schedule(DealDamage, ApplyDamage)) // compiles
+ * runtime.tick(Game.Schedule(ApplyDamage, DealDamage)) // "ApplyDamage needs Damage from this tick, but its writer DealDamage runs after it"
+ * ```
+ */
+export const thisTick = <
+  const Read extends EventRead<Descriptor<"event", string, any>> | ResourceRead<Descriptor<"resource", string, any>>
+>(read: Read): Read & ThisTick => ({ ...read, thisTick: true })
+
 /**
  * Declares read access to the current committed value of a finite-state machine.
  *

@@ -1168,6 +1168,179 @@ const runtime = Game.Runtime.make({
 
 runtime.tick(Update)
 
+const W00 = Game.System("Stress/W00", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 0 })
+})
+const W01 = Game.System("Stress/W01", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 1 })
+})
+const W02 = Game.System("Stress/W02", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 2 })
+})
+const W03 = Game.System("Stress/W03", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 3 })
+})
+const W04 = Game.System("Stress/W04", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 4 })
+})
+const W05 = Game.System("Stress/W05", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 5 })
+})
+const W06 = Game.System("Stress/W06", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 6 })
+})
+const W07 = Game.System("Stress/W07", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 7 })
+})
+const W08 = Game.System("Stress/W08", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 8 })
+})
+const W09 = Game.System("Stress/W09", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 9 })
+})
+const W10 = Game.System("Stress/W10", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 10 })
+})
+const W11 = Game.System("Stress/W11", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 11 })
+})
+const W12 = Game.System("Stress/W12", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 12 })
+})
+const W13 = Game.System("Stress/W13", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 13 })
+})
+const W14 = Game.System("Stress/W14", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 14 })
+})
+const W15 = Game.System("Stress/W15", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 15 })
+})
+const W16 = Game.System("Stress/W16", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 16 })
+})
+const W17 = Game.System("Stress/W17", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 17 })
+})
+const W18 = Game.System("Stress/W18", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 18 })
+})
+const W19 = Game.System("Stress/W19", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 19 })
+})
+const W20 = Game.System("Stress/W20", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 20 })
+})
+const W21 = Game.System("Stress/W21", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 21 })
+})
+const W22 = Game.System("Stress/W22", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 22 })
+})
+const W23 = Game.System("Stress/W23", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 23 })
+})
+const W24 = Game.System("Stress/W24", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 24 })
+})
+const W25 = Game.System("Stress/W25", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 25 })
+})
+const W26 = Game.System("Stress/W26", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 26 })
+})
+const W27 = Game.System("Stress/W27", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 27 })
+})
+const W28 = Game.System("Stress/W28", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 28 })
+})
+const W29 = Game.System("Stress/W29", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 29 })
+})
+const W30 = Game.System("Stress/W30", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 30 })
+})
+const W31 = Game.System("Stress/W31", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 31 })
+})
+const W32 = Game.System("Stress/W32", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 32 })
+})
+const W33 = Game.System("Stress/W33", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 33 })
+})
+const W34 = Game.System("Stress/W34", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 34 })
+})
+const W35 = Game.System("Stress/W35", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 35 })
+})
+const W36 = Game.System("Stress/W36", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 36 })
+})
+const W37 = Game.System("Stress/W37", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 37 })
+})
+const W38 = Game.System("Stress/W38", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 38 })
+})
+const W39 = Game.System("Stress/W39", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 39 })
+})
+const W40 = Game.System("Stress/W40", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 40 })
+})
+const W41 = Game.System("Stress/W41", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 41 })
+})
+const W42 = Game.System("Stress/W42", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 42 })
+})
+const W43 = Game.System("Stress/W43", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 43 })
+})
+const W44 = Game.System("Stress/W44", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 44 })
+})
+const W45 = Game.System("Stress/W45", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 45 })
+})
+const W46 = Game.System("Stress/W46", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 46 })
+})
+const W47 = Game.System("Stress/W47", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 47 })
+})
+const T00 = Game.System("Stress/T00", { events: { in: Game.System.thisTick(Game.System.readEvent(E00)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T01 = Game.System("Stress/T01", { events: { in: Game.System.thisTick(Game.System.readEvent(E01)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T02 = Game.System("Stress/T02", { events: { in: Game.System.thisTick(Game.System.readEvent(E02)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T03 = Game.System("Stress/T03", { events: { in: Game.System.thisTick(Game.System.readEvent(E03)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T04 = Game.System("Stress/T04", { events: { in: Game.System.thisTick(Game.System.readEvent(E04)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T05 = Game.System("Stress/T05", { events: { in: Game.System.thisTick(Game.System.readEvent(E05)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T06 = Game.System("Stress/T06", { events: { in: Game.System.thisTick(Game.System.readEvent(E06)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T07 = Game.System("Stress/T07", { events: { in: Game.System.thisTick(Game.System.readEvent(E07)) } }, ({ events }) => {
+  void events.in.all()
+})
+const Ordered = Game.Schedule(W00, W01, W02, W03, W04, W05, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20, W21, W22, W23, W24, W25, W26, W27, W28, W29, W30, W31, W32, W33, W34, W35, W36, W37, W38, W39, W40, W41, W42, W43, W44, W45, W46, W47, T00, T01, T02, T03, T04, T05, T06, T07)
+runtime.tick(Ordered)
+// @ts-expect-error a writer after a thisTick reader is a compile error
+runtime.tick(Game.Schedule(T00, T01, T02, T03, T04, T05, T06, T07, W00, W01, W02, W03, W04, W05, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20, W21, W22, W23, W24, W25, W26, W27, W28, W29, W30, W31, W32, W33, W34, W35, W36, W37, W38, W39, W40, W41, W42, W43, W44, W45, W46, W47))
+
 const incomplete = Game.Runtime.make({ services: Game.Runtime.services() })
 // @ts-expect-error missing services, resources and machines are compile errors
 incomplete.tick(Update)

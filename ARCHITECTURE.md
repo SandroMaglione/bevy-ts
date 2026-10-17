@@ -44,6 +44,8 @@ schedules, gated groups, transition plans, and transition bundles carry a union
 of named system failures. The runtime returns that union; it does not
 recalculate it from nested system specs.
 
+`thisTick` reads follow the same rule. A schedule carries its entries as a phantom (no computation) and one flag: whether any entry has a `Game.System.thisTick` read. Only `runtime.tick(...)` with a read walks the entries: per read it finds the reader's position at each nesting level, slices the entries after it once, and looks for writers in the union of the systems there. It never folds over a tuple element by element, which was several times more expensive on a 150-system tick.
+
 Structural work is applied only at explicit markers:
 
 - `applyDeferred()` applies queued world commands.

@@ -79,7 +79,7 @@ session.run("setup")
 const run = session.run("update", { frames: 300, until: (frame) => frame === 120 })
 run.data.ok                               // true when completed or `until` returned true
 run.data.stop                             // { reason: "completed" | "until" | "failure" | "defect"
-                                          //   | "invariant" | "missingRequirements", frame, ... }
+                                          //   | "invariant" | "missingRequirements" | "tickOrder", frame, ... }
 
 session.describe()                        // schema, schedules, access, lints
 session.dump({ with: [Player], limit: 5 })// entities, resources, machines, pending commands

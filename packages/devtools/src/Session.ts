@@ -39,7 +39,7 @@ import type * as Inspector from "@typeonce/bevy-ts/Inspector"
 import type * as Machine from "@typeonce/bevy-ts/Machine"
 import type * as Result from "@typeonce/bevy-ts/Result"
 import type * as Runtime from "@typeonce/bevy-ts/Runtime"
-import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
 import type { Schema } from "@typeonce/bevy-ts/Schema"
 
 import * as Format from "./Format.ts"
@@ -61,7 +61,7 @@ export interface Target<
   Machines extends Record<string, unknown> = Record<string, unknown>
 > {
   readonly debug: Debug.Handle<S, Root>
-  readonly tryTick: (schedule: ExecutableScheduleDefinition<S, any, any, any, any>) => Result.Result<void, unknown>
+  readonly tryTick: (schedule: ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>) => Result.Result<void, unknown>
   readonly inspect: (inspector: never) => unknown
   readonly services: Services
   readonly resourceValues: Resources
@@ -99,7 +99,7 @@ export interface Options<
   Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>> = readonly []
 > {
   /** The schedules `run` can drive, by name. Also names them in traces. */
-  readonly schedules: Readonly<Record<Names, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  readonly schedules: Readonly<Record<Names, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   /**
    * More schedules to include in `describe()`, its lints, and the access
    * maps, without making them runnable: typically a render schedule that
@@ -107,7 +107,7 @@ export interface Options<
    * and components only those schedules read are reported as never read.
    * Their services show as not provided, which is not a lint.
    */
-  readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   /**
    * Checked after every frame of every run, in order; the first violation
    * stops the run. Built with `Invariant.fromInspector(Game.Inspector(...))`.
@@ -132,6 +132,8 @@ export type Stop =
   | { readonly reason: "until"; readonly frame: number }
   | { readonly reason: "failure"; readonly frame: number; readonly system: string; readonly error: unknown }
   | { readonly reason: "missingRequirements"; readonly frame: number; readonly requirements: unknown }
+  /** A `Game.System.thisTick` read whose writer runs after it, or that has none; nothing ran. */
+  | { readonly reason: "tickOrder"; readonly frame: number; readonly issues: ReadonlyArray<string> }
   | { readonly reason: "defect"; readonly frame: number; readonly error: unknown }
   | { readonly reason: "invariant"; readonly frame: number; readonly invariant: string; readonly message: string }
 
@@ -283,7 +285,7 @@ const growsSteadily = (samples: ReadonlyArray<number>): boolean => {
   return true
 }
 
-const describeError = (error: unknown): { readonly kind?: unknown; readonly system?: unknown; readonly error?: unknown; readonly requirements?: unknown } =>
+const describeError = (error: unknown): { readonly kind?: unknown; readonly system?: unknown; readonly error?: unknown; readonly requirements?: unknown; readonly issues?: ReadonlyArray<{ readonly message: string }> } =>
   typeof error === "object" && error !== null ? error : {}
 
 export const make = <
@@ -302,7 +304,7 @@ export const make = <
   const debug = runtime.debug
   const capacity = options.history ?? 600
   const format = options.format ?? {}
-  const schedules = options.schedules as Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  const schedules = options.schedules as Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   const described = options.describe ?? {}
   for (const name of Object.keys(described)) {
     if (name in schedules) throw new Error(`Session: "${name}" is both a runnable and a described-only schedule`)
@@ -492,7 +494,9 @@ export const make = <
         const error = describeError(result.error)
         stop = error.kind === "MissingRuntimeRequirements"
           ? { reason: "missingRequirements", frame, requirements: error.requirements }
-          : { reason: "failure", frame, system: typeof error.system === "string" ? error.system : "(unknown)", error: error.error }
+          : error.kind === "TickOrderViolation"
+            ? { reason: "tickOrder", frame, issues: (error.issues ?? []).map((issue) => issue.message) }
+            : { reason: "failure", frame, system: typeof error.system === "string" ? error.system : "(unknown)", error: error.error }
         break
       }
       const violation = (options.invariants ?? []).reduce<{ readonly invariant: string; readonly message: string } | undefined>(
@@ -720,5 +724,7 @@ const renderRun = (result: RunResult, format: Format.ValueOptions): string => {
       return `${head}, DEFECT at f${stop.frame}: ${stop.error instanceof Error ? stop.error.stack ?? stop.error.message : Format.value(stop.error, format)}`
     case "invariant":
       return `${head}, INVARIANT "${stop.invariant}" violated at f${stop.frame}: ${stop.message}`
+    case "tickOrder":
+      return `${head}, NOT RUN after f${stop.frame}: ${stop.issues.join("; ")}`
   }
 }
