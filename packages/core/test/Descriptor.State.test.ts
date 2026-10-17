@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Fx, Schema } from "@typeonce/ritmo"
 
 const Phase = Descriptor.State("State/Phase", ["ready", "windup", "active"] as const, {
   transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }

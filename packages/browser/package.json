@@ -1,7 +1,7 @@
 {
-  "name": "@typeonce/bevy-ts-browser",
+  "name": "@typeonce/ritmo-browser",
   "version": "0.5.0",
-  "description": "Browser fixed-step loop, keyboard actions, and input capture for bevy-ts",
+  "description": "Browser fixed-step loop, keyboard actions, and input capture for Ritmo",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {
@@ -16,7 +16,7 @@
   "keywords": [
     "ecs",
     "gamedev",
-    "bevy",
+    "ritmo",
     "browser",
     "keyboard",
     "game-loop"
@@ -64,7 +64,7 @@
     "check": "tsc -b tsconfig.json --pretty false"
   },
   "dependencies": {
-    "@typeonce/bevy-ts": "workspace:^"
+    "@typeonce/ritmo": "workspace:^"
   },
   "engines": {
     "node": ">=20"

@@ -26,7 +26,7 @@ import type { Schema } from "../Schema.ts"
 /**
  * Marks a component slot that the entity does not currently have.
  */
-export const ABSENT: unique symbol = Symbol("bevy-ts/absent")
+export const ABSENT: unique symbol = Symbol("ritmo/absent")
 
 export interface EntityRecord {
   readonly id: number

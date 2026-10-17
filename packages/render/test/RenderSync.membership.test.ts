@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type * as Entity from "@typeonce/bevy-ts/Entity"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type * as Entity from "@typeonce/ritmo/Entity"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
 
 class FakeNode {
   x = 0

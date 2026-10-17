@@ -30,7 +30,7 @@ const step = (message: string) => console.log(`\n> ${message}`)
 step("build")
 run("pnpm", ["build"], root)
 
-const work = mkdtempSync(path.join(os.tmpdir(), "bevy-ts-pack-"))
+const work = mkdtempSync(path.join(os.tmpdir(), "ritmo-pack-"))
 const tarballs = path.join(work, "tarballs")
 mkdirSync(tarballs)
 
@@ -70,7 +70,7 @@ const consumer = path.join(work, "consumer")
 mkdirSync(consumer)
 const fileSpec = (name: string) => `file:${tarballByName.get(name)!}`
 writeFileSync(path.join(consumer, "package.json"), JSON.stringify({
-  name: "bevy-ts-consumer",
+  name: "ritmo-consumer",
   private: true,
   type: "module",
   dependencies: Object.fromEntries([...tarballByName.keys()].map((name) => [name, fileSpec(name)])),
@@ -93,15 +93,15 @@ writeFileSync(path.join(consumer, "tsconfig.json"), JSON.stringify({
 }, null, 2))
 
 const program = `
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import * as Result from "@typeonce/bevy-ts/Result"
-import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
-import { Collide2, FlowField, Random, Scalar, SpatialGrid } from "@typeonce/bevy-ts-math"
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { NodeRegistry } from "@typeonce/bevy-ts-render"
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
-import * as Pixi from "@typeonce/bevy-ts-pixi"
-import { Session } from "@typeonce/bevy-ts-devtools"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import * as Result from "@typeonce/ritmo/Result"
+import * as Vector2 from "@typeonce/ritmo-math/Vector2"
+import { Collide2, FlowField, Random, Scalar, SpatialGrid } from "@typeonce/ritmo-math"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { NodeRegistry } from "@typeonce/ritmo-render"
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
+import * as Pixi from "@typeonce/ritmo-pixi"
+import { Session } from "@typeonce/ritmo-devtools"
 
 const Position = Descriptor.ConstructedComponent(Vector2)("Consumer/Position")
 const Game = Schema.bind(Schema.fragment({ components: { Position } }))
@@ -146,7 +146,7 @@ if (output !== expected) throw new Error(`consumer printed ${output}, expected $
 console.log(output)
 
 step("internal modules are not exported")
-writeFileSync(path.join(consumer, "internal.mjs"), `import("@typeonce/bevy-ts/internal/world").then(() => process.exit(1), (error) => { if (error.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") process.exit(2) })\n`)
+writeFileSync(path.join(consumer, "internal.mjs"), `import("@typeonce/ritmo/internal/world").then(() => process.exit(1), (error) => { if (error.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") process.exit(2) })\n`)
 run("node", ["internal.mjs"], consumer)
 
 if (process.env.PACK_CHECK_KEEP) console.log(`kept ${work}`)

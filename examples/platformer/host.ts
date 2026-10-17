@@ -1,5 +1,5 @@
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
 import { Application, Container } from "pixi.js"
 
 import { createHud } from "./render/hud.ts"

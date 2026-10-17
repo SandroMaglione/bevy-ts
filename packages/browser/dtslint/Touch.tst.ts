@@ -1,4 +1,4 @@
-import { Touch } from "@typeonce/bevy-ts-browser"
+import { Touch } from "@typeonce/ritmo-browser"
 import { describe, expect, it } from "tstyche"
 
 declare const target: Touch.TouchTarget

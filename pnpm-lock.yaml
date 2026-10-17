@@ -14,7 +14,7 @@ importers:
       '@effect/platform-node':
         specifier: 4.0.0-beta.43
         version: 4.0.0-beta.43(effect@4.0.0-beta.43)(ioredis@5.10.1)
-      '@typeonce/bevy-ts-math':
+      '@typeonce/ritmo-math':
         specifier: workspace:*
         version: link:packages/math
       '@types/markdown-it':
@@ -74,85 +74,85 @@ importers:
 
   examples/algorithms:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:*
         version: link:../../packages/core
-      '@typeonce/bevy-ts-math':
+      '@typeonce/ritmo-math':
         specifier: workspace:*
         version: link:../../packages/math
 
   examples/genetics:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:*
         version: link:../../packages/core
-      '@typeonce/bevy-ts-browser':
+      '@typeonce/ritmo-browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@typeonce/bevy-ts-pixi':
+      '@typeonce/ritmo-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
-      '@typeonce/bevy-ts-render':
+      '@typeonce/ritmo-render':
         specifier: workspace:*
         version: link:../../packages/render
 
   examples/pixi:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:*
         version: link:../../packages/core
-      '@typeonce/bevy-ts-browser':
+      '@typeonce/ritmo-browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@typeonce/bevy-ts-math':
+      '@typeonce/ritmo-math':
         specifier: workspace:*
         version: link:../../packages/math
-      '@typeonce/bevy-ts-pixi':
+      '@typeonce/ritmo-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
-      '@typeonce/bevy-ts-render':
+      '@typeonce/ritmo-render':
         specifier: workspace:*
         version: link:../../packages/render
 
   examples/platformer:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:*
         version: link:../../packages/core
-      '@typeonce/bevy-ts-browser':
+      '@typeonce/ritmo-browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@typeonce/bevy-ts-math':
+      '@typeonce/ritmo-math':
         specifier: workspace:*
         version: link:../../packages/math
-      '@typeonce/bevy-ts-pixi':
+      '@typeonce/ritmo-pixi':
         specifier: workspace:*
         version: link:../../packages/pixi
-      '@typeonce/bevy-ts-render':
+      '@typeonce/ritmo-render':
         specifier: workspace:*
         version: link:../../packages/render
 
   examples/top-down:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:*
         version: link:../../packages/core
-      '@typeonce/bevy-ts-browser':
+      '@typeonce/ritmo-browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@typeonce/bevy-ts-devtools':
+      '@typeonce/ritmo-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@typeonce/bevy-ts-math':
+      '@typeonce/ritmo-math':
         specifier: workspace:*
         version: link:../../packages/math
-      '@typeonce/bevy-ts-render':
+      '@typeonce/ritmo-render':
         specifier: workspace:*
         version: link:../../packages/render
 
   packages/browser:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:^
         version: link:../core
 
@@ -164,29 +164,29 @@ importers:
 
   packages/devtools:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:^
         version: link:../core
 
   packages/math:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:^
         version: link:../core
 
   packages/pixi:
     dependencies:
-      '@typeonce/bevy-ts-render':
+      '@typeonce/ritmo-render':
         specifier: workspace:^
         version: link:../render
     devDependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:*
         version: link:../core
 
   packages/render:
     dependencies:
-      '@typeonce/bevy-ts':
+      '@typeonce/ritmo':
         specifier: workspace:^
         version: link:../core
 

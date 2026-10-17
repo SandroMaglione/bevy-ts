@@ -1,7 +1,7 @@
-import { Decode, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
-import type { EntityId } from "@typeonce/bevy-ts/Entity"
-import type { Query } from "@typeonce/bevy-ts/Query"
-import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
+import { Decode, Descriptor, Result, Schema } from "@typeonce/ritmo"
+import type { EntityId } from "@typeonce/ritmo/Entity"
+import type { Query } from "@typeonce/ritmo/Query"
+import * as Vector2 from "@typeonce/ritmo-math/Vector2"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Cells/Position")

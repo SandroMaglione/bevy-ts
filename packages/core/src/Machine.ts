@@ -315,7 +315,7 @@ export const StateMachine = <
 ): StateMachineDefinition<Name, Values, Root> => ({
   kind: "stateMachine",
   name,
-  key: Symbol.for(`bevy-ts/stateMachine/${name}`),
+  key: Symbol.for(`ritmo/stateMachine/${name}`),
   values
 }) as StateMachineDefinition<Name, Values, Root>
 

@@ -1,5 +1,5 @@
-import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync, packageTag } from "@typeonce/bevy-ts-render"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
+import { NodeRegistry, RenderSync, packageTag } from "@typeonce/ritmo-render"
 import { describe, expect, it } from "tstyche"
 
 interface Node {
@@ -13,7 +13,7 @@ const Health = Descriptor.Component<number>()("RenderTypes/Health")
 const Nodes = Descriptor.Service<NodeRegistry.NodeRegistry<Node>>()("RenderTypes/Nodes")
 const Game = Schema.bind(Schema.fragment({ components: { Position, Sprite } }))
 
-describe("@typeonce/bevy-ts-render", () => {
+describe("@typeonce/ritmo-render", () => {
   it("exposes the package entrypoint type through the workspace", () => {
     expect(packageTag).type.toBe<"render">()
   })

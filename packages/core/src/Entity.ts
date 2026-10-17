@@ -60,13 +60,13 @@ import * as Result from "./Result.ts"
  * if (!resolved.ok) return
  * ```
  */
-export type EntityTypeId = "~bevy-ts/Entity"
+export type EntityTypeId = "~ritmo/Entity"
 
 /**
  * Runtime value for the entity type id.
  */
-const entityTypeId: EntityTypeId = "~bevy-ts/Entity"
-const entityHandleTypeId = "~bevy-ts/EntityHandle" as const
+const entityTypeId: EntityTypeId = "~ritmo/Entity"
+const entityHandleTypeId = "~ritmo/EntityHandle" as const
 
 /**
  * A structural proof describing which components are known to be present.

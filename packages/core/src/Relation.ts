@@ -38,9 +38,9 @@ import type { Schema } from "./Schema.ts"
 /**
  * String-literal type id used to brand paired relationship definitions.
  */
-export type RelationTypeId = "~bevy-ts/Relation"
+export type RelationTypeId = "~ritmo/Relation"
 
-const relationTypeId: RelationTypeId = "~bevy-ts/Relation"
+const relationTypeId: RelationTypeId = "~ritmo/Relation"
 
 export type RelationKind = "hierarchy" | "relation"
 
@@ -298,7 +298,7 @@ const makePair = <
     kind: "related",
     relatedName,
     relationName: name,
-    key: Symbol.for(`bevy-ts/related/${name}`),
+    key: Symbol.for(`ritmo/related/${name}`),
     relationKind: kind,
     [relationTypeId]: {
       _Pair: (_: never) => undefined as unknown as Pair
@@ -309,7 +309,7 @@ const makePair = <
     kind: "relation",
     name,
     relatedName,
-    key: Symbol.for(`bevy-ts/relation/${name}`),
+    key: Symbol.for(`ritmo/relation/${name}`),
     relationKind: kind,
     linkedDespawn: kind === "hierarchy",
     allowSelf: false,

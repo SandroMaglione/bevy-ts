@@ -1,5 +1,5 @@
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import * as Result from "@typeonce/bevy-ts/Result"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import * as Result from "@typeonce/ritmo/Result"
 import {
   Facing,
   FrameContext,

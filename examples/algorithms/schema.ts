@@ -1,5 +1,5 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { Box2, Vec2 } from "@typeonce/bevy-ts-math"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type { Box2, Vec2 } from "@typeonce/ritmo-math"
 
 export const Position = Descriptor.Component<Vec2.Vec2>()("Algorithms/Position")
 export const Body = Descriptor.Component<{ readonly radius: number; readonly speed: number }>()("Algorithms/Body")

@@ -43,7 +43,7 @@ export const make = <const Name extends string, Root = unknown>(
   key: keyOf(name)
 })
 
-const keyPrefix = "bevy-ts/entityScope/"
+const keyPrefix = "ritmo/entityScope/"
 
 /** The storage key of the scope named `name`: the same for every scope value of that name. */
 export const keyOf = (name: string): symbol => Symbol.for(`${keyPrefix}${name}`)

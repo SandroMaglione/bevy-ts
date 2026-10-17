@@ -1,5 +1,5 @@
-import { InputCapture, Keyboard } from "@typeonce/bevy-ts-browser"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { InputCapture, Keyboard } from "@typeonce/ritmo-browser"
+import { Descriptor, Schema } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 const bindings = { jump: [" "] } as const

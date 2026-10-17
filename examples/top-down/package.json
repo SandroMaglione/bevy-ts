@@ -1,12 +1,12 @@
 {
-  "name": "@typeonce/bevy-ts-example-top-down",
+  "name": "@typeonce/ritmo-example-top-down",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@typeonce/bevy-ts": "workspace:*",
-    "@typeonce/bevy-ts-browser": "workspace:*",
-    "@typeonce/bevy-ts-render": "workspace:*",
-    "@typeonce/bevy-ts-math": "workspace:*",
-    "@typeonce/bevy-ts-devtools": "workspace:*"
+    "@typeonce/ritmo": "workspace:*",
+    "@typeonce/ritmo-browser": "workspace:*",
+    "@typeonce/ritmo-render": "workspace:*",
+    "@typeonce/ritmo-math": "workspace:*",
+    "@typeonce/ritmo-devtools": "workspace:*"
   }
 }

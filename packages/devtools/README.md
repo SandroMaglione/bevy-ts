@@ -1,11 +1,11 @@
-# `@typeonce/bevy-ts-devtools`
+# `@typeonce/ritmo-devtools`
 
-Debug sessions for `bevy-ts` runtimes: run schedules headless, keep a trace
+Debug sessions for `ritmo` runtimes: run schedules headless, keep a trace
 history, and ask what happened as text. Built for coding agents first; the
 same data will back human-facing tools.
 
 ```sh
-pnpm add -D @typeonce/bevy-ts-devtools
+pnpm add -D @typeonce/ritmo-devtools
 ```
 
 The package reads the core `Debug` handle, which exists only on runtimes made
@@ -47,8 +47,8 @@ node --import tsx examples/top-down/debug.ts
 ## Cheat sheet
 
 ```ts
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { Invariant, Session } from "@typeonce/bevy-ts-devtools"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { Invariant, Session } from "@typeonce/ritmo-devtools"
 
 const keyboard = Keyboard.scripted(bindings, [
   { frame: 0, press: ["left"] },          // frame = index of the input snapshot

@@ -52,17 +52,17 @@
  * const Logger = Descriptor.Service<{ log: (message: string) => void }>()("Logger")
  * ```
  */
-export type DescriptorTypeId = "~bevy-ts/Descriptor"
-export type DescriptorConstructionTypeId = "~bevy-ts/DescriptorConstruction"
-export type DescriptorDecodeTypeId = "~bevy-ts/DescriptorDecode"
+export type DescriptorTypeId = "~ritmo/Descriptor"
+export type DescriptorConstructionTypeId = "~ritmo/DescriptorConstruction"
+export type DescriptorDecodeTypeId = "~ritmo/DescriptorDecode"
 
 /**
  * Runtime value for the descriptor type id.
  */
-const descriptorTypeId: DescriptorTypeId = "~bevy-ts/Descriptor"
-const descriptorConstructionTypeId: DescriptorConstructionTypeId = "~bevy-ts/DescriptorConstruction"
-const descriptorDecodeTypeId: DescriptorDecodeTypeId = "~bevy-ts/DescriptorDecode"
-const descriptorConstruction = Symbol("bevy-ts/DescriptorConstruction")
+const descriptorTypeId: DescriptorTypeId = "~ritmo/Descriptor"
+const descriptorConstructionTypeId: DescriptorConstructionTypeId = "~ritmo/DescriptorConstruction"
+const descriptorDecodeTypeId: DescriptorDecodeTypeId = "~ritmo/DescriptorDecode"
+const descriptorConstruction = Symbol("ritmo/DescriptorConstruction")
 
 /**
  * The public categories of nominal descriptors used by the engine.
@@ -103,7 +103,7 @@ export interface ResultConstructor<Value, Raw, Error> {
  *
  * Constructors whose `result` takes a specific raw shape (for example
  * `Vector2.result({ x, y })`) also export `decode` so snapshots can load
- * them safely. `@typeonce/bevy-ts-math` modules do.
+ * them safely. `@typeonce/ritmo-math` modules do.
  */
 export interface Decoder<Value> {
   readonly decode: (raw: unknown) => import("./Result.ts").Result<Value, unknown>
@@ -209,7 +209,7 @@ const makeDescriptor = <Kind extends DescriptorKind, Name extends string, Value>
   ({
     kind,
     name,
-    key: Symbol.for(`bevy-ts/${kind}/${name}`)
+    key: Symbol.for(`ritmo/${kind}/${name}`)
   }) as Descriptor<Kind, Name, Value>
 
 const makeTransientDescriptor = <Kind extends "component" | "resource", Name extends string, Value>(
@@ -219,7 +219,7 @@ const makeTransientDescriptor = <Kind extends "component" | "resource", Name ext
   ({
     kind,
     name,
-    key: Symbol.for(`bevy-ts/${kind}/${name}`),
+    key: Symbol.for(`ritmo/${kind}/${name}`),
     transient: true
   }) as TransientDescriptor<Kind, Name, Value>
 
@@ -237,7 +237,7 @@ const makeConstructedDescriptor = <
   ({
     kind,
     name,
-    key: Symbol.for(`bevy-ts/${kind}/${name}`),
+    key: Symbol.for(`ritmo/${kind}/${name}`),
     [descriptorConstruction]: constructor
   }) as ConstructedDescriptor<Kind, Name, Value, Raw, Error>
 

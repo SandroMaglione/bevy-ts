@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { type Box2, FlowField, Scalar, type Vec2 } from "@typeonce/bevy-ts-math"
+import { type Box2, FlowField, Scalar, type Vec2 } from "@typeonce/ritmo-math"
 
 const cellSize = (value: number): Scalar.Positive => {
   const size = Scalar.Positive.result(value)

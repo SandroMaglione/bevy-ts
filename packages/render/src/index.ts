@@ -5,7 +5,7 @@
  * Nothing here imports or assumes a renderer (Pixi, Three.js, the DOM, a
  * canvas): how a node is attached, released, and drawn stays caller-defined,
  * so the same bookkeeping serves every renderer. Renderer packages such as
- * `@typeonce/bevy-ts-pixi` build on it.
+ * `@typeonce/ritmo-pixi` build on it.
  */
 export * as NodeRegistry from "./NodeRegistry.ts"
 export * as RenderSync from "./RenderSync.ts"

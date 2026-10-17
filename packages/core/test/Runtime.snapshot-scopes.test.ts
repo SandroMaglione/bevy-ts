@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, Schema } from "@typeonce/ritmo"
 
 const Name = Descriptor.ConstructedComponent(Decode.string)("SnapshotScopes/Name")
 const { relation: ChildOf } = Descriptor.Hierarchy("SnapshotScopes/ChildOf", "SnapshotScopes/Children")

@@ -1,6 +1,6 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { StateMismatchError } from "@typeonce/bevy-ts/Query"
-import type * as Result from "@typeonce/bevy-ts/Result"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type { StateMismatchError } from "@typeonce/ritmo/Query"
+import type * as Result from "@typeonce/ritmo/Result"
 import { describe, expect, it } from "tstyche"
 
 const Phase = Descriptor.State("StateTypes/Phase", ["ready", "windup", "active"] as const, {

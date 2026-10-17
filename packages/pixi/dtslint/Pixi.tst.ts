@@ -1,7 +1,7 @@
-import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
-import * as Pixi from "@typeonce/bevy-ts-pixi"
-import { PixiNodeRegistry, packageTag } from "@typeonce/bevy-ts-pixi"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
+import * as Pixi from "@typeonce/ritmo-pixi"
+import { PixiNodeRegistry, packageTag } from "@typeonce/ritmo-pixi"
 import { Container, Graphics } from "pixi.js"
 import { describe, expect, it } from "tstyche"
 
@@ -10,7 +10,7 @@ interface Node {
   x: number
 }
 
-describe("@typeonce/bevy-ts-pixi", () => {
+describe("@typeonce/ritmo-pixi", () => {
   it("exposes the package entrypoint type through the workspace", () => {
     expect(packageTag).type.toBe<"pixi">()
     expect<keyof typeof Pixi>().type.toBe<"PixiNodeRegistry" | "packageTag">()

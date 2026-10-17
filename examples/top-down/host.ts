@@ -1,5 +1,5 @@
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { NodeRegistry } from "@typeonce/bevy-ts-render"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { NodeRegistry } from "@typeonce/ritmo-render"
 import { Application, Assets, Container, Texture } from "pixi.js"
 
 import { PLAYER_SHEET_URL } from "./constants.ts"

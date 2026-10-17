@@ -1,6 +1,6 @@
 ---
-"@typeonce/bevy-ts": minor
-"@typeonce/bevy-ts-render": patch
+"@typeonce/ritmo": minor
+"@typeonce/ritmo-render": patch
 ---
 
 Two fixes:

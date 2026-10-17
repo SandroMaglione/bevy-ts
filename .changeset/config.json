@@ -4,12 +4,12 @@
   "commit": false,
   "fixed": [
     [
-      "@typeonce/bevy-ts",
-      "@typeonce/bevy-ts-browser",
-      "@typeonce/bevy-ts-render",
-      "@typeonce/bevy-ts-pixi",
-      "@typeonce/bevy-ts-math",
-      "@typeonce/bevy-ts-devtools"
+      "@typeonce/ritmo",
+      "@typeonce/ritmo-browser",
+      "@typeonce/ritmo-render",
+      "@typeonce/ritmo-pixi",
+      "@typeonce/ritmo-math",
+      "@typeonce/ritmo-devtools"
     ]
   ],
   "linked": [],
