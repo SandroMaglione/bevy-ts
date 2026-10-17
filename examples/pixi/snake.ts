@@ -763,18 +763,23 @@ const SyncHudSystem = Game.System(
   "Snake/SyncHud",
   {
     resources: {
-      score: Game.System.readResource(Score),
-      reason: Game.System.readResource(GameOverReason)
+      score: Game.System.changedResource(Score),
+      reason: Game.System.changedResource(GameOverReason)
     },
     machines: {
       phase: Game.System.machine(GamePhase)
+    },
+    transitionEvents: {
+      phase: Game.System.readTransitionEvent(GamePhase)
     },
     services: {
       pixi: Game.System.service(PixiHost)
     }
   },
-  ({ resources, machines, services }) =>
+  ({ resources, machines, transitionEvents, services }) =>
     {
+      // Rewrite the HUD only when the score, the reason, or the phase moved since the previous run.
+      if (!resources.score.changed() && !resources.reason.changed() && transitionEvents.phase.all().length === 0) return
       const hud = services.pixi.ui
       const score = resources.score.get()
       const reason = resources.reason.get()

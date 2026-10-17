@@ -440,8 +440,8 @@ export const SyncHudSystem = Game.System(
   "StateMachineExample/SyncHud",
   {
     resources: {
-      score: Game.System.readResource(Score),
-      goal: Game.System.readResource(PickupGoal),
+      score: Game.System.changedResource(Score),
+      goal: Game.System.changedResource(PickupGoal),
       roundTime: Game.System.readResource(RoundTimeRemaining),
       countdown: Game.System.readResource(CountdownRemaining),
       notice: Game.System.readResource(TransitionNotice)
@@ -465,7 +465,8 @@ export const SyncHudSystem = Game.System(
       const notice = resources.notice.get()
       const hud = services.host.ui
 
-      hud.score.textContent = `Score ${score}/${goal}`
+      // The timer and countdown move every frame; the score label only when the score or goal changed.
+      if (resources.score.changed() || resources.goal.changed()) hud.score.textContent = `Score ${score}/${goal}`
       hud.timer.textContent = `Time ${Math.max(0, roundTime).toFixed(1)}s`
       hud.notice.textContent = notice.ttl > 0 ? notice.text : ""
       hud.notice.style.opacity = notice.ttl > 0 ? String(clamp(notice.ttl / NOTICE_DURATION_SECONDS, 0, 1)) : "0"
