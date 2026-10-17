@@ -1,6 +1,6 @@
 # `@typeonce/ritmo`
 
-Ritmo is the agent-first typed ECS runtime for games.
+Ritmo is the agent-first typed ECS runtime.
 
 Closed schemas, declared system access, explicit schedule boundaries, typed
 services, and no user-facing casts for normal usage.

@@ -1,27 +1,10 @@
 /** A whole-icon jump, stamp, and return using the production SVG geometry. */
 import { writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { palette, tagline, iconDot, wordmarkDot, iconShapes, wordmarkLetterShapes, wordmarkBox } from "./generate.mjs"
+import { palette, tagline } from "./generate.mjs"
+import { timing, scene, browserModel } from "./motion-model.mjs"
 
-const timing = { launch: 500, stamp: 1200, rebound: 1360, land: 2080, rest: 2400, duration: 4400, reduced: 3000 }
-
-const box = wordmarkBox(false)
-const scale = 100 / box.height
-const target = {
-  x: 130 + (wordmarkDot.x + wordmarkDot.size / 2 - box.x) * scale,
-  y: (wordmarkDot.y + wordmarkDot.size / 2 - box.y) * scale
-}
-const dotSize = wordmarkDot.size * scale
-// At contact, the icon's orange cell is centred exactly on the painted dot.
-const contact = { x: target.x - (iconDot.x + iconDot.size / 2 - 50), y: target.y + (94 - iconDot.y - iconDot.size / 2) }
-const letters = wordmarkLetterShapes()
-const drawing = `<svg viewBox="-35 -220 490 370" role="img" aria-label="The whole Ritmo icon jumps onto the r and i, stamps the orange dot, and bounces home">
-  <g transform="translate(130 0) scale(${scale}) translate(${-box.x} ${-box.y})" fill="none" stroke="currentColor" stroke-width="12">
-    <g class="ri">${letters.slice(0, 2).join("")}</g>${letters.slice(2).join("")}
-  </g>
-  <g class="paint" transform="translate(${target.x} ${target.y})"><rect x="${-dotSize / 2}" y="${-dotSize / 2}" width="${dotSize}" height="${dotSize}" rx="${wordmarkDot.radius * scale}" fill="${palette.tick}"/></g>
-  <g class="jumper">${iconShapes({ color: "currentColor", dot: palette.tick })}</g>
-</svg>`
+const drawing = scene(0)
 
 export const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -59,21 +42,8 @@ export const html = `<!doctype html>
 <footer>The icon stays square in flight and squashes only at takeoff and contact. The dot stays painted after the bounce. Reduced-motion preferences start paused at the finished lockup.</footer>
 </main><script>
 (() => {
-  const contact = ${JSON.stringify(contact)};
-  const target = ${JSON.stringify(target)};
-  const timing = ${JSON.stringify(timing)};
+${browserModel}
   const duration = timing.duration;
-  const clamp = n => Math.max(0, Math.min(1, n));
-  const ease = n => { n = clamp(n); return n * n * (3 - 2 * n); };
-  const mix = (a, b, n) => a + (b - a) * n;
-  // Constant downward acceleration. Shorter flights at the same height land harder.
-  const flight = (a, b, elapsedMs, durationMs, height) => {
-    const seconds = elapsedMs / 1000, durationSeconds = durationMs / 1000;
-    const gravity = 8 * height / (durationSeconds * durationSeconds);
-    const velocityY = (b.y - a.y) / durationSeconds - gravity * durationSeconds / 2;
-    return { x: mix(a.x, b.x, elapsedMs / durationMs), y: a.y + velocityY * seconds + gravity * seconds * seconds / 2 };
-  };
-  const home = { x: 50, y: 94 };
   const jumper = document.querySelector('.jumper');
   const paint = document.querySelector('.paint');
   const ri = document.querySelector('.ri');
@@ -88,40 +58,13 @@ export const html = `<!doctype html>
   let last = null;
   let raf = null;
 
-  function pose(t) {
-    let point = home, angle = 0, sx = 1, sy = 1, dip = 0, name = 'Ready';
-    if (t >= 220 && t < timing.launch) {
-      const compression = Math.sin((t - 220) / (timing.launch - 220) * Math.PI);
-      sx = 1 + .45 * compression; sy = 1 - .38 * compression; angle = -10 * compression; name = 'Windup';
-    } else if (t >= timing.launch && t < timing.stamp) {
-      const n = (t - timing.launch) / (timing.stamp - timing.launch);
-      point = flight(home, contact, t - timing.launch, timing.stamp - timing.launch, 135);
-      angle = 360 * ease(n); name = 'Jump';
-    } else if (t >= timing.stamp && t < timing.rebound) {
-      const compression = Math.sin((t - timing.stamp) / (timing.rebound - timing.stamp) * Math.PI);
-      sx = 1 + .5 * compression; sy = 1 - .42 * compression;
-      dip = 7 * compression;
-      point = { x: contact.x, y: contact.y + dip };
-      angle = 360; name = 'Stamp';
-    } else if (t >= timing.rebound && t < timing.land) {
-      const n = (t - timing.rebound) / (timing.land - timing.rebound);
-      point = flight(contact, home, t - timing.rebound, timing.land - timing.rebound, 120);
-      angle = 360 * (1 - ease(n)); name = 'Return';
-    } else if (t >= timing.land && t < timing.rest) {
-      const n = (t - timing.land) / (timing.rest - timing.land);
-      const compression = Math.abs(Math.sin(n * Math.PI * 3)) * Math.pow(1 - n, 2);
-      sx = 1 + .55 * compression; sy = 1 - .42 * compression;
-      angle = -5 * compression; name = 'Land';
-    } else if (t >= timing.rest) name = 'Rest';
-    return { x: point.x, y: point.y, angle, sx, sy, dip, paint: ease((t - timing.stamp) / 65), phase: name };
-  }
-
   function draw(t) {
     const p = pose(t);
-    jumper.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ') scale(' + p.sx + ' ' + p.sy + ') translate(0 -44) rotate(' + p.angle + ') translate(-50 -50)');
-    ri.setAttribute('transform', 'translate(0 ' + p.dip / ${scale} + ')');
-    paint.setAttribute('opacity', String(p.paint));
-    paint.setAttribute('transform', 'translate(' + target.x + ' ' + target.y + ') scale(' + mix(.72, 1, p.paint) + ')');
+    const a = attributes(p);
+    jumper.setAttribute('transform', a.jumper);
+    ri.setAttribute('transform', a.ri);
+    paint.setAttribute('opacity', a.opacity);
+    paint.setAttribute('transform', a.paint);
     time.value = String(Math.round(t));
     readout.value = (t / 1000).toFixed(2) + ' s';
     phase.textContent = p.phase;

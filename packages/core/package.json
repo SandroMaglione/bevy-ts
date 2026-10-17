@@ -1,7 +1,7 @@
 {
   "name": "@typeonce/ritmo",
   "version": "0.5.0",
-  "description": "The agent-first typed ECS runtime for games",
+  "description": "The agent-first typed ECS runtime",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {

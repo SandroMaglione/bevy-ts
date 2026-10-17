@@ -1,6 +1,6 @@
 {
   "siteTitle": "Ritmo",
-  "siteDescription": "The agent-first typed ECS runtime for games.",
+  "siteDescription": "The agent-first typed ECS runtime.",
   "basePath": "/bevy-ts/",
   "outDir": "docs",
   "sourceBaseUrl": "https://github.com/SandroMaglione/bevy-ts/blob/main",
