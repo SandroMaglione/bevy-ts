@@ -66,6 +66,13 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
   readonly nameSchedules: (
     schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   ) => void
+  /**
+   * Declares the events the host publishes with `runtime.send`, so
+   * `describe()` counts them as written (`event-never-written`) before the
+   * first send happens. Events actually sent count as well. Declaring again
+   * replaces the list.
+   */
+  readonly declareHostEvents: (events: ReadonlyArray<Schema.EventDescriptor<S>>) => void
   /** The static description of the schema and the named schedules. */
   readonly describe: () => Description
   /** The current world as plain data. */

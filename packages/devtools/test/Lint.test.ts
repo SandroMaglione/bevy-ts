@@ -44,6 +44,14 @@ describe("Lint.run", () => {
     expect(report.data.lints.map((lint) => lint.code)).toEqual(["component-never-read"])
   })
 
+  it("counts declared host events as written", () => {
+    const loud = Lint.run({ runtime: runtime(), schedules: { update: Game.Schedule(Read) } })
+    expect(loud.data.lints.map((lint) => lint.code)).toEqual(["event-never-written"])
+    expect(loud.text).toContain("declare it (debug.declareHostEvents, or hostEvents in a Session or lint target)")
+    const quiet = Lint.run({ runtime: runtime(), schedules: { update: Game.Schedule(Read) }, hostEvents: [Ping] })
+    expect(quiet.data.ok).toBe(true)
+  })
+
   it("counts describe-only schedules as readers", () => {
     const report = Lint.run({ runtime: runtime(), schedules: { update: Game.Schedule(Emit) }, describe: { render: Game.Schedule(Read) } })
     expect(report.data.ok).toBe(true)

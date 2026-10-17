@@ -108,6 +108,8 @@ export interface Options<
    * Their services show as not provided, which is not a lint.
    */
   readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
+  /** Events the host publishes with `runtime.send`: written, for the lints (see `Debug.Handle.declareHostEvents`). */
+  readonly hostEvents?: ReadonlyArray<Schema.EventDescriptor<S>>
   /**
    * Checked after every frame of every run, in order; the first violation
    * stops the run. Built with `Invariant.fromInspector(Game.Inspector(...))`.
@@ -310,6 +312,7 @@ export const make = <
     if (name in schedules) throw new Error(`Session: "${name}" is both a runnable and a described-only schedule`)
   }
   debug.nameSchedules({ ...described, ...schedules })
+  debug.declareHostEvents(options.hostEvents ?? [])
 
   const history: Array<FrameRecord> = []
   let current: FrameRecord = { frame: debug.frame(), events: [] }

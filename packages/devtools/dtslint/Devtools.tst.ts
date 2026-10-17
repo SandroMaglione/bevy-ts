@@ -1,11 +1,13 @@
 import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { Invariant, Session } from "@typeonce/bevy-ts-devtools"
+import { Invariant, Lint, Session } from "@typeonce/bevy-ts-devtools"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DevtoolsTypes/Position")
 const Other = Descriptor.Component<{ readonly y: number }>()("DevtoolsTypes/Other")
 const Limit = Descriptor.Resource<number>()("DevtoolsTypes/Limit")
-const Game = Schema.bind(Schema.fragment({ components: { Position }, resources: { Limit } }))
+const Request = Descriptor.Event<string>()("DevtoolsTypes/Request")
+const Foreign = Descriptor.Event<string>()("DevtoolsTypes/ForeignRequest")
+const Game = Schema.bind(Schema.fragment({ components: { Position }, resources: { Limit }, events: { Request } }))
 const OtherGame = Schema.bind(Schema.fragment({ components: { Other } }))
 const update = Game.Schedule(Game.System("DevtoolsTypes/Noop", {}, () => {}))
 
@@ -80,5 +82,20 @@ describe("Invariant.fromInspector", () => {
     const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
     expect(Session.make).type.not.toBeCallableWith(debugged, { schedules: { update }, invariants: [Foreign] })
     expect(Session.make).type.toBeCallableWith(debugged, { schedules: { update }, invariants: [Invariant.fromInspector(Game.Inspector("DevtoolsTypes/Own", {}, () => undefined))] })
+  })
+})
+
+describe("Lint.run", () => {
+  it("returns a report and takes host events of the runtime's schema only", () => {
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 1 }, debug: true })
+    expect(Lint.run({ runtime, schedules: { update }, hostEvents: [Request] }).data).type.toBe<Lint.Report>()
+    expect(Lint.run).type.not.toBeCallableWith({ runtime, schedules: { update }, hostEvents: [Foreign] })
+    expect(runtime.debug.declareHostEvents).type.not.toBeCallableWith([Foreign])
+    expect(runtime.debug.declareHostEvents).type.toBeCallableWith([Request])
+  })
+
+  it("requires a runtime made with debug: true", () => {
+    const plain = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 1 } })
+    expect(Lint.run).type.not.toBeCallableWith({ runtime: plain, schedules: { update } })
   })
 })

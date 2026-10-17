@@ -45,6 +45,8 @@ export interface Target<S extends Schema.Any, Root> {
   readonly schedules: Readonly<Record<string, AnySchedule<S, Root>>>
   /** Schedules to describe without running (a render schedule needing a renderer). */
   readonly describe?: Readonly<Record<string, AnySchedule<S, Root>>>
+  /** Events the host publishes with `runtime.send` (UI requests, network messages): written, for the lints. */
+  readonly hostEvents?: ReadonlyArray<Schema.EventDescriptor<S>>
 }
 
 export interface Report {
@@ -58,6 +60,7 @@ export interface Report {
 /** Lints the target's schedules. */
 export const run = <S extends Schema.Any, Root>(target: Target<S, Root>): Rendered.Rendered<Report> => {
   target.runtime.debug.nameSchedules({ ...target.describe, ...target.schedules })
+  target.runtime.debug.declareHostEvents(target.hostEvents ?? [])
   const lints = target.runtime.debug.describe().lints
   const warnings = lints.filter((lint) => lint.severity === "warning").length
   const report: Report = { lints, warnings, infos: lints.length - warnings, ok: warnings === 0 }

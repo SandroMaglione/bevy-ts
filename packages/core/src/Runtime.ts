@@ -1723,6 +1723,8 @@ const makeValidatedRuntime = <
 
   const eventsByKey = new Set((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => descriptor.key))
   const externallyWrittenEvents = new Set<string>()
+  /** Events declared as sent by the host (`debug.declareHostEvents`). */
+  let hostEvents = new Set<string>()
 
   const send = (descriptor: Descriptor<"event", string, any>, value: unknown): void => {
     if (ticking) throw new Error(`runtime.send(${descriptor.name}) was called while a schedule is running: emit from a system instead`)
@@ -2082,12 +2084,15 @@ const makeValidatedRuntime = <
       scheduleNames.clear()
       for (const [name, schedule] of Object.entries(named)) scheduleNames.set(schedule, name)
     },
+    declareHostEvents(declared) {
+      hostEvents = new Set(declared.map((descriptor) => descriptor.name))
+    },
     describe: () => DebugInternal.describe({
       schema: options.schema,
       machines: [...new Set(machinesByName.values())],
       currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
       providedServices: Object.keys(providedServices),
-      externallyWrittenEvents,
+      externallyWrittenEvents: new Set([...externallyWrittenEvents, ...hostEvents]),
       relationMutations,
       hasResource: (descriptor) => resources.has(descriptor.key),
       schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)

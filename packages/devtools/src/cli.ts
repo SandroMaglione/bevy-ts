@@ -16,7 +16,7 @@ import { pathToFileURL } from "node:url"
 
 import * as Lint from "./Lint.ts"
 
-const usage = "usage: bevy-ts-devtools lint <entry>\n  <entry> exports lintTarget: () => { runtime, schedules, describe? } (see the Lint module)"
+const usage = "usage: bevy-ts-devtools lint <entry>\n  <entry> exports lintTarget: () => { runtime, schedules, describe?, hostEvents? } (see the Lint module)"
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 
@@ -28,6 +28,7 @@ const isTarget = (value: unknown): value is Lint.Target<any, any> =>
   && typeof value["runtime"]["debug"]["describe"] === "function"
   && isRecord(value["schedules"])
   && (value["describe"] === undefined || isRecord(value["describe"]))
+  && (value["hostEvents"] === undefined || Array.isArray(value["hostEvents"]))
 
 const main = async (args: ReadonlyArray<string>): Promise<number> => {
   const [command, entry] = args

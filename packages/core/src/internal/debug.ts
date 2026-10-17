@@ -388,7 +388,7 @@ const fixFor = (code: Debug.Lint["code"], subject: string): string => {
     case "event-never-read":
       return `read ${subject} in a system with Game.System.readEvent, or stop emitting it; if only a render schedule reads it, pass that schedule as describe-only`
     case "event-never-written":
-      return `emit ${subject} from a system with Game.System.writeEvent (or runtime.send from the host), or stop reading it`
+      return `emit ${subject} from a system with Game.System.writeEvent, or stop reading it; if the host sends it with runtime.send, declare it (debug.declareHostEvents, or hostEvents in a Session or lint target)`
     case "next-state-never-applied":
       return `add Game.Schedule.applyStateTransitions(...) to a schedule that runs after the system that queues ${subject}`
     case "relation-failure-never-read":
