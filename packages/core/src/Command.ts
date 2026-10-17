@@ -724,7 +724,7 @@ export interface CommandsApi<
    */
   readonly despawn: [Despawns] extends [never]
     ? MethodNotDeclared<"despawn", "despawns">
-    : <const E>(entity: E & DespawnAllowed<E, Despawns>) => void
+    : <const E>(entity: unknown extends DespawnAllowed<E, Despawns> ? E : DespawnAllowed<E, Despawns>) => void
   /**
    * Queues removal of every entity owned by one lifetime scope.
    */
@@ -746,7 +746,7 @@ export interface CommandsApi<
         const E,
         const Ds extends readonly [SchemaComponent<S>, ...Array<SchemaComponent<S>>]
       >(
-        entity: E & RemoveTargetAllowed<S, Root, E>,
+        entity: unknown extends RemoveTargetAllowed<S, Root, E> ? E : RemoveTargetAllowed<S, Root, E>,
         ...descriptors: Ds & RemoveAllowed<Ds[number], Removes> & RemoveRequirementsMet<S, E, Names<Ds[number]>>
       ) => Entity.EntityId<S, Root>
   /**
