@@ -25,14 +25,53 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
   const definedMachines: Array<Machine.StateMachine.Any> = []
   const definedMachineNames = new Set<string>()
 
-  const defineMachine = (name: string, values: readonly [Machine.StateValue, ...Machine.StateValue[]]) => {
+  const defineMachine = (
+    name: string,
+    values: readonly [Machine.StateValue, ...Machine.StateValue[]],
+    options?: { readonly within: readonly [Machine.StateMachine.Any, Machine.StateValue] }
+  ) => {
     if (definedMachineNames.has(name)) {
       throw new Error(`Duplicate state machine name: ${name}`)
     }
-    const machine = Machine.StateMachine(name, values)
+    const machine = Machine.StateMachine(
+      name,
+      values,
+      options === undefined ? undefined : { machine: options.within[0], state: options.within[1] }
+    )
     definedMachines.push(machine)
     definedMachineNames.add(name)
     return machine
+  }
+
+  /**
+   * Every scope defined through this game, in definition order. The runtime
+   * reads their triggers at `Runtime.make`, so a scope only ever used with
+   * `spawnIn` is still despawned by its state change.
+   */
+  const definedScopes: Array<EntityScope.EntityScope.Any> = []
+  const definedScopeNames = new Set<string>()
+
+  const defineScope = (
+    name: string,
+    options?: {
+      readonly despawnOnEnter?: readonly [Machine.StateMachine.Any, Machine.StateValue]
+      readonly despawnOnExit?: readonly [Machine.StateMachine.Any, Machine.StateValue]
+    }
+  ) => {
+    if (definedScopeNames.has(name)) {
+      throw new Error(`Duplicate entity scope name: ${name}`)
+    }
+    const triggers: Array<EntityScope.Trigger> = []
+    if (options?.despawnOnExit !== undefined) {
+      triggers.push({ phase: "exit", machine: options.despawnOnExit[0], state: options.despawnOnExit[1] })
+    }
+    if (options?.despawnOnEnter !== undefined) {
+      triggers.push({ phase: "enter", machine: options.despawnOnEnter[0], state: options.despawnOnEnter[1] })
+    }
+    const scope = EntityScope.make(name, triggers)
+    definedScopes.push(scope)
+    definedScopeNames.add(name)
+    return scope
   }
 
   const transitionSchedule = (
@@ -42,7 +81,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
 
   const game = {
     schema,
-    EntityScope: (name: string) => EntityScope.make(name),
+    EntityScope: defineScope,
     Inspector: (name: string, spec: object, read: (context: any) => unknown) =>
       Inspector.make(name, { schema, ...spec } as never, read),
     Entity: {
@@ -133,7 +172,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         readonly resources?: object
         readonly machines?: Runtime.RuntimeMachines<any>
         readonly debug?: Debug.Option
-      }) => Runtime.make({ schema, ...options, machineDefinitions: definedMachines } as never),
+      }) => Runtime.make({ schema, ...options, machineDefinitions: definedMachines, scopeDefinitions: definedScopes } as never),
       service: Runtime.service,
       services: Runtime.services,
       machine: Runtime.machine,

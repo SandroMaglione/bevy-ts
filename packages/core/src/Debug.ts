@@ -140,8 +140,22 @@ export interface RelationDescription {
 export interface MachineDescription {
   readonly name: string
   readonly states: ReadonlyArray<Machine.StateValue>
-  /** The committed value, or `undefined` when the runtime does not provide the machine. */
+  /**
+   * The committed value, or `undefined` when the runtime does not provide the
+   * machine, or when it is a sub-state whose parent is in another state.
+   */
   readonly current: Machine.StateValue | undefined
+  /** Whether the runtime was given an initial value for the machine. */
+  readonly provided: boolean
+  /** For a sub-state, where it exists, as `Parent=state`. */
+  readonly within: string | undefined
+}
+
+/** An entity scope and the state changes that despawn it (`Game.EntityScope(name, { despawnOnExit, despawnOnEnter })`). */
+export interface ScopeDescription {
+  readonly name: string
+  /** Triggers as `onExit(Flow=Playing)` / `onEnter(Flow=Menu)`; empty when only `commands.despawnScope` ends it. */
+  readonly despawnOn: ReadonlyArray<string>
 }
 
 export interface ServiceDescription {
@@ -230,7 +244,8 @@ export interface ScheduleDescription {
  * have tried to relate or reorder (which can fail) while no described system
  * reads its failures, and `requirement-violated` lists commands skipped
  * because they would have broken a `Schema.requires` requirement, so
- * describe after the game has run for a while.
+ * describe after the game has run for a while. `scope-trigger-never-applied`
+ * also reads which machines the runtime provides.
  */
 export interface Lint {
   readonly severity: "warning" | "info"
@@ -245,6 +260,7 @@ export interface Lint {
     | "this-tick-order"
     | "command-permission-unused"
     | "requirement-violated"
+    | "scope-trigger-never-applied"
   readonly message: string
   readonly subject: string
   /** What to change to resolve it (or, for `info`, when it is fine as it is). */
@@ -265,6 +281,8 @@ export interface Description {
   readonly events: ReadonlyArray<{ readonly name: string }>
   readonly relations: ReadonlyArray<RelationDescription>
   readonly machines: ReadonlyArray<MachineDescription>
+  /** Scopes defined through the game, in definition order. */
+  readonly scopes: ReadonlyArray<ScopeDescription>
   readonly services: ReadonlyArray<ServiceDescription>
   readonly schedules: ReadonlyArray<ScheduleDescription>
   readonly systems: ReadonlyArray<SystemDescription>
@@ -523,8 +541,10 @@ export interface TransitionEvent {
   readonly tick: number
   readonly schedule: string
   readonly machine: string
-  readonly from: Machine.StateValue
-  readonly to: Machine.StateValue
+  /** `undefined` when a sub-state starts existing (its parent entered its state). */
+  readonly from: Machine.StateValue | undefined
+  /** `undefined` when a sub-state stops existing (its parent left its state). */
+  readonly to: Machine.StateValue | undefined
   /**
    * `applied` committed the new value; `unchanged` was a `setIfChanged` to the
    * current value; `failed` stopped in an exit or transition schedule and was

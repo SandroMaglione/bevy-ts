@@ -519,8 +519,9 @@ export namespace Schema {
   export type BoundStateMachine<
     Root,
     Name extends string = string,
-    Values extends readonly [Machine.StateValue, ...Machine.StateValue[]] = readonly [Machine.StateValue, ...Machine.StateValue[]]
-  > = Machine.StateMachineDefinition<Name, Values, Root>
+    Values extends readonly [Machine.StateValue, ...Machine.StateValue[]] = readonly [Machine.StateValue, ...Machine.StateValue[]],
+    Parent = unknown
+  > = Machine.StateMachineDefinition<Name, Values, Root, Parent>
 
   export type BoundTransitionSchedule<
     S extends Any,
@@ -558,11 +559,38 @@ export namespace Schema {
     readonly schema: S
     /**
      * Creates a typed ownership scope for scene or level entities: a flat
-     * group despawned together with `commands.despawnScope(...)`. Use
-     * `Descriptor.Hierarchy` instead for a parent-child tree with ordered
-     * children, traversal, and recursive despawn.
+     * group whose members are spawned with `commands.spawnIn(...)` and
+     * despawned together. Use `Descriptor.Hierarchy` instead for a
+     * parent-child tree with ordered children, traversal, and recursive
+     * despawn.
+     *
+     * When the group lives exactly as long as a state, name the state change
+     * that ends it: `despawnOnExit: [Flow, "Playing"]` despawns every member
+     * when `applyStateTransitions(...)` commits leaving `Playing` (after its
+     * `onExit` schedules, which still see the members), and
+     * `despawnOnEnter: [Flow, "Playing"]` when it commits entering it (before
+     * its `onEnter` schedules, so what they spawn survives). Use
+     * `commands.despawnScope(...)` instead when the wipe is not tied to a
+     * state change. Scope names are unique per game.
+     *
+     * @example
+     * ```ts
+     * const RunScope = Game.EntityScope("Shooter/Run", { despawnOnExit: [Flow, "Playing"] })
+     * ```
      */
-    readonly EntityScope: <const Name extends string>(name: Name) => EntityScope.EntityScope<Name, Root>
+    readonly EntityScope: <
+      const Name extends string,
+      Enter extends Machine.StateMachine.Any = never,
+      Exit extends Machine.StateMachine.Any = never
+    >(
+      name: Name,
+      options?: {
+        /** Despawns every member when the machine enters this state, before its `onEnter` schedules run. */
+        readonly despawnOnEnter?: readonly [Enter & Machine.SameGame<Enter, Root>, Machine.StateMachine.Value<Enter>]
+        /** Despawns every member when the machine leaves this state, after its `onExit` schedules run. */
+        readonly despawnOnExit?: readonly [Exit & Machine.SameGame<Exit, Root>, Machine.StateMachine.Value<Exit>]
+      }
+    ) => EntityScope.EntityScope<Name, Root>
     /** Declares a reusable, requirement-checked read-only world projection. */
     readonly Inspector: <
       const Name extends string,
@@ -656,10 +684,46 @@ export namespace Schema {
         const Name extends string,
         const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]]
       >(name: Name, values: Values): Schema.BoundStateMachine<Root, Name, Values>
+      /**
+       * Declares a sub-state: a machine that exists only while `within[0]` is
+       * in state `within[1]` (a battle phase that only means something while
+       * playing). Whenever the parent enters that state, the sub-state enters
+       * the value given to `Game.Runtime.machine(...)`; when the parent leaves
+       * it, the sub-state exits and has no value: `get()` is `undefined`,
+       * `Game.Condition.inState(Sub, x)` is false, and `nextMachines.sub.set(...)`
+       * returns a `SubStateInactive` failure. So `inState(Sub, x)` alone
+       * implies the parent's state.
+       *
+       * Use a second top-level machine instead when the two modes are
+       * independent (each keeps its value whatever the other does).
+       *
+       * @example
+       * ```ts
+       * const Phase = Game.StateMachine("Phase", ["Setup", "Battle"], { within: [Session, "Playing"] })
+       * ```
+       */
+      <
+        const Name extends string,
+        const Values extends readonly [Machine.StateValue, ...Machine.StateValue[]],
+        Parent extends Machine.StateMachine.Any
+      >(
+        name: Name,
+        values: Values,
+        options: { readonly within: readonly [Parent & Machine.SameGame<Parent, Root>, Machine.StateMachine.Value<Parent>] }
+      ): Schema.BoundStateMachine<Root, Name, Values, Parent>
     }
     readonly Condition: {
-      inState: typeof Machine.inState
-      stateChanged: typeof Machine.stateChanged
+      /**
+       * Passes while the machine's committed value is `value`. For a
+       * sub-state it fails while the parent is in another state. A machine
+       * of another game fails to compile with a message naming the fix.
+       */
+      inState: <M extends Machine.StateMachine.Any>(
+        machine: M & Machine.SameGame<M, Root>,
+        value: Machine.StateMachine.Value<M>
+      ) => Machine.InStateCondition<M>
+      /** Passes in the schedule run where `applyStateTransitions(...)` changed the machine. */
+      stateChanged: <M extends Machine.StateMachine.Any>(machine: M & Machine.SameGame<M, Root>) => Machine.StateChangedCondition<M>
       not: typeof Machine.not
       and: typeof Machine.and
       or: typeof Machine.or

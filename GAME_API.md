@@ -208,6 +208,28 @@ Persistent entities can still use `commands.spawn(...)`. Scope cleanup uses the
 normal deferred-command boundary, so removal readers and renderer cleanup
 systems see the same despawns as any other entity removal.
 
+When the group lives exactly as long as a state, name the state change on the
+scope instead of writing an unload system:
+
+```ts
+const Flow = Game.StateMachine("Game/Flow", ["Menu", "Playing", "GameOver"])
+const Run = Game.EntityScope("Game/Run", { despawnOnExit: [Flow, "Playing"] })
+
+// No despawn system, no despawnsScope permission, no marker between despawn and respawn.
+const transitions = Game.Schedule.transitions(
+  Game.Schedule.onEnter(Flow, "Playing", [SpawnRun])
+)
+```
+
+`applyStateTransitions(...)` despawns every member right after it commits the
+change: after the `onExit` schedules (which still see the members) and before
+the `onEnter` schedules (whose spawns survive). `despawnOnEnter: [Flow, "Playing"]`
+wipes on entering instead, for a restart that should keep the last round on
+screen until the next one starts. A state or machine that does not belong to
+the game fails to compile, and the `scope-trigger-never-applied` lint names a
+trigger that can never fire. Keep `commands.despawnScope(...)` for wipes not
+tied to a state change.
+
 ## 5. Read the world without making a diagnostic system
 
 Inspectors are reusable read-only projections for tests, saves, debugging, UI

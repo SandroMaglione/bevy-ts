@@ -7,15 +7,14 @@ import {
   Arena,
   BrowserHost,
   DeltaTime,
-  DespawnableQuery,
   Food,
   FoodQuery,
   Game,
   GenerationClock,
   GenerationIndex,
+  GenerationScope,
   NextGeneration,
   PopulationStats,
-  Renderable,
   RngSeed,
   SimulationPhase,
   Summary
@@ -77,7 +76,7 @@ export const SetupWorldSystem = Game.System(
         seed = xDraw.seed
         const yDraw = randomBetween(seed, dynamicFoodMargin, arena.height - dynamicFoodMargin)
         seed = yDraw.seed
-        commands.spawn(spawnFoodDraft({ x: xDraw.value, y: yDraw.value }))
+        commands.spawnIn(GenerationScope, spawnFoodDraft({ x: xDraw.value, y: yDraw.value }))
       }
 
       const founders = resources.nextGeneration.get().founders
@@ -88,7 +87,8 @@ export const SetupWorldSystem = Game.System(
         seed = yDraw.seed
         const angleDraw = randomBetween(seed, 0, Math.PI * 2)
         seed = angleDraw.seed
-        commands.spawn(
+        commands.spawnIn(
+          GenerationScope,
           spawnAgentDraft(
             founder,
             { x: xDraw.value, y: yDraw.value },
@@ -107,27 +107,20 @@ export const SetupWorldSystem = Game.System(
 export const ResetGenerationOnRunningEnterSystem = Game.System(
   "GeneticsArena/ResetGenerationOnRunningEnter",
   {
-    queries: {
-      despawnable: DespawnableQuery
-    },
     resources: {
       generationClock: Game.System.writeResource(GenerationClock),
       summary: Game.System.writeResource(Summary)
-    },
-    commands: Game.System.commands(Game.System.despawns(Renderable))
+    }
   },
-  ({ queries, commands, resources }) =>
+  ({ resources }) =>
     {
+      // The previous generation was despawned with GenerationScope on entering Running.
       resources.generationClock.set({
         elapsed: 0,
         limit: GENERATION_DURATION_SECONDS,
         transitionTimer: 0
       })
       resources.summary.set(makeRunningSummary())
-
-      for (const match of queries.despawnable.each()) {
-        commands.despawn(match.entity)
-      }
     }
 )
 
@@ -647,7 +640,8 @@ export const ResolveAgentInteractionsSystem = Game.System(
               seed = offsetY.seed
               const wanderAngle = randomBetween(seed, 0, Math.PI * 2)
               seed = wanderAngle.seed
-              commands.spawn(
+              commands.spawnIn(
+                GenerationScope,
                 spawnAgentDraft(
                   founder,
                   {
@@ -804,7 +798,7 @@ export const MaintainFoodSystem = Game.System(
         seed = xDraw.seed
         const yDraw = randomBetween(seed, dynamicFoodMargin, arena.height - dynamicFoodMargin)
         seed = yDraw.seed
-        commands.spawn(spawnFoodDraft({ x: xDraw.value, y: yDraw.value }))
+        commands.spawnIn(GenerationScope, spawnFoodDraft({ x: xDraw.value, y: yDraw.value }))
       }
       resources.rngSeed.set(seed)
     }

@@ -708,6 +708,7 @@ const makeValidatedRuntime = <
   readonly resources: Partial<Record<string, unknown>>
   readonly machines: RuntimeMachines<any> | undefined
   readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
+  readonly scopeDefinitions: ReadonlyArray<EntityScopeModule.EntityScope.Any>
   readonly debug: Debug.Option | undefined
 }): Runtime<S, Services, Resources, Root, Machines> => {
   const world = makeWorld(options.schema, streamCapacity)
@@ -804,8 +805,48 @@ const makeValidatedRuntime = <
     options.machineDefinitions.map((machine, index) => [machine.key, index] as const)
   )
 
+  /** Machines the runtime was given an initial value for. */
+  const providedMachineKeys = new Set<symbol>()
   for (const provision of machineEntries) {
     currentMachines.set(provision.machine.key, provision.initial)
+    providedMachineKeys.add(provision.machine.key)
+  }
+
+  /**
+   * Sub-states by parent machine key, in definition order, and the value
+   * each enters whenever its parent enters the state it exists in (its
+   * runtime-provided value). A sub-state has no current value while its
+   * parent is elsewhere, and never one when the runtime does not provide it.
+   */
+  const subStates = new Map<symbol, Array<Machine.StateMachine.Any>>()
+  const subStateEntry = new Map<symbol, unknown>()
+  for (const machine of options.machineDefinitions) {
+    if (machine.within === undefined) continue
+    const siblings = subStates.get(machine.within.machine.key)
+    if (siblings === undefined) subStates.set(machine.within.machine.key, [machine])
+    else siblings.push(machine)
+    if (!currentMachines.has(machine.key)) continue
+    subStateEntry.set(machine.key, currentMachines.get(machine.key))
+  }
+  // Definition order puts a parent before its sub-states, so a sub-state of
+  // an inactive sub-state is cleared too.
+  for (const machine of options.machineDefinitions) {
+    if (machine.within !== undefined && currentMachines.get(machine.within.machine.key) !== machine.within.state) {
+      currentMachines.delete(machine.key)
+    }
+  }
+
+  /**
+   * Scope despawn triggers by machine key, in scope definition order
+   * (`Game.EntityScope(name, { despawnOnExit, despawnOnEnter })`).
+   */
+  const scopeTriggers = new Map<symbol, Array<{ readonly trigger: EntityScopeModule.Trigger; readonly scope: EntityScopeModule.EntityScope.Any }>>()
+  for (const scope of options.scopeDefinitions) {
+    for (const trigger of scope.despawnOn) {
+      const triggers = scopeTriggers.get(trigger.machine.key)
+      if (triggers === undefined) scopeTriggers.set(trigger.machine.key, [{ trigger, scope }])
+      else triggers.push({ trigger, scope })
+    }
   }
 
   const appendRelationFailure = (
@@ -1314,19 +1355,33 @@ const makeValidatedRuntime = <
   })
 
   const makeMachineReadView = <M extends Machine.StateMachine.Any>(stateMachine: M): MachineReadView<M> => ({
-    get: () => currentMachines.get(stateMachine.key) as Machine.StateMachine.Value<M>,
+    get: () => currentMachines.get(stateMachine.key) as Machine.CurrentValue<M>,
     is: (value) => currentMachines.get(stateMachine.key) === value
   })
+
+  /** Queues a next value; a sub-state whose parent is in another state queues nothing and fails. */
+  const queueMachine = <M extends Machine.StateMachine.Any>(stateMachine: M, value: unknown, skipIfSame: boolean): Machine.SetResult<M> => {
+    const within = stateMachine.within
+    if (within !== undefined && !currentMachines.has(stateMachine.key)) {
+      return Result.failure({
+        _tag: "SubStateInactive",
+        machine: stateMachine.name,
+        parent: within.machine.name,
+        requires: within.state
+      } satisfies Machine.SubStateInactive) as Machine.SetResult<M>
+    }
+    journalMachine(stateMachine.key)
+    pendingMachines.set(stateMachine.key, { value, skipIfSame })
+    return (within === undefined ? undefined : succeeded) as Machine.SetResult<M>
+  }
 
   const makeNextMachineWriteView = <M extends Machine.StateMachine.Any>(stateMachine: M): NextMachineWriteView<M> => ({
     getPending: () => pendingMachines.get(stateMachine.key)?.value as Machine.StateMachine.Value<M> | undefined,
     set(value) {
-      journalMachine(stateMachine.key)
-      pendingMachines.set(stateMachine.key, { value, skipIfSame: false })
+      return queueMachine(stateMachine, value, false)
     },
     setIfChanged(value) {
-      journalMachine(stateMachine.key)
-      pendingMachines.set(stateMachine.key, { value, skipIfSame: true })
+      return queueMachine(stateMachine, value, true)
     },
     reset() {
       journalMachine(stateMachine.key)
@@ -1732,6 +1787,36 @@ const makeValidatedRuntime = <
   }
 
   /**
+   * Despawns the scopes whose trigger matches a committed transition: leaving
+   * `snapshot.from` or entering `snapshot.to`. It runs right after the
+   * commit, so `onExit` systems still saw the members and entities spawned by
+   * `onEnter` survive. Members are the entities in the scope at that moment:
+   * commands queued by `onExit` systems and not yet applied are not.
+   */
+  const despawnTriggeredScopes = (machineKey: symbol, snapshot: Machine.TransitionSnapshot): void => {
+    const triggers = scopeTriggers.get(machineKey)
+    if (triggers === undefined) return
+    const applied: Array<Debug.AppliedCommand> = []
+    for (const { trigger, scope } of triggers) {
+      const matches = trigger.phase === "exit" ? trigger.state === snapshot.from : trigger.state === snapshot.to
+      if (!matches) continue
+      const origin = `${trigger.phase === "exit" ? "onExit" : "onEnter"}(${trigger.machine.name}=${String(trigger.state)})`
+      const effects: Array<Debug.Effect> = []
+      commandEffects = tracing ? effects : undefined
+      commandOrigin = origin
+      try {
+        commandWorld.destroyEntityScope(scope)
+      } finally {
+        commandEffects = undefined
+      }
+      if (tracing) applied.push({ tag: `despawnScope ${scope.name}`, system: origin, effects })
+    }
+    if (applied.length > 0) {
+      emit({ type: "deferred", frame: frameCount, tick: world.currentTick(), schedule: currentSchedule(), marker: "applyStateTransitions", commands: applied })
+    }
+  }
+
+  /**
    * Applies queued commands, then queued machine transitions, running the
    * matching exit, transition, and enter schedules from the bundle.
    */
@@ -1748,6 +1833,10 @@ const makeValidatedRuntime = <
 
     const schedules = bundle?.entries ?? []
     for (const [machineKey, pending] of scheduledTransitions) {
+      if (pendingMachines.get(machineKey) !== pending) {
+        // Discarded earlier in this marker: its parent left the state it exists in.
+        continue
+      }
       pendingMachines.delete(machineKey)
       const current = currentMachines.get(machineKey)
       if (current === undefined) {
@@ -1758,10 +1847,23 @@ const makeValidatedRuntime = <
         continue
       }
 
-      previousMachines.set(machineKey, current)
       const snapshot = {
         from: current as Machine.StateValue,
         to: pending.value as Machine.StateValue
+      }
+
+      // Sub-states that exist in the state being left exit first, deepest
+      // first: their exit schedules run before the parent's, while they
+      // still have their values, and they lose them at the parent's commit.
+      const leaving = activeSubStatesIn(machineKey, snapshot.from)
+      for (const sub of leaving) {
+        const value = currentMachines.get(sub.key)
+        const result = runPhase(sub.key, "exit", value, { from: value, to: undefined } as unknown as Machine.TransitionSnapshot, schedules)
+        if (!result.ok) {
+          pendingMachines.set(machineKey, pending)
+          if (tracing) traceTransition(machineKey, snapshot, "failed")
+          return result
+        }
       }
 
       for (const schedule of schedules) {
@@ -1793,10 +1895,8 @@ const makeValidatedRuntime = <
         }
       }
 
-      currentMachines.set(machineKey, pending.value)
-      changedMachines.add(machineKey)
-      transitionEvents.append(machineKey, world.advanceTick(), [snapshot])
-      if (tracing) traceTransition(machineKey, snapshot, "applied")
+      for (const sub of leaving) commitMachine(sub.key, currentMachines.get(sub.key), undefined)
+      commitMachine(machineKey, current, pending.value)
 
       for (const schedule of schedules) {
         const transition = schedule.transition
@@ -1808,6 +1908,82 @@ const makeValidatedRuntime = <
           }
         }
       }
+      // Sub-states that exist in the entered state enter their value, parents first.
+      const entered = enterSubStates(machineKey, snapshot.to, schedules)
+      if (!entered.ok) return entered
+    }
+    return succeeded
+  }
+
+  /**
+   * Commits one machine's value (`undefined` for a sub-state that stops
+   * existing): records the change and its transition event, traces it, and
+   * despawns the scopes it triggers.
+   */
+  const commitMachine = (machineKey: symbol, from: unknown, to: unknown): void => {
+    const snapshot = { from, to } as unknown as Machine.TransitionSnapshot
+    if (from !== undefined) previousMachines.set(machineKey, from)
+    if (to === undefined) {
+      currentMachines.delete(machineKey)
+      pendingMachines.delete(machineKey)
+    } else {
+      currentMachines.set(machineKey, to)
+    }
+    changedMachines.add(machineKey)
+    transitionEvents.append(machineKey, world.advanceTick(), [snapshot])
+    if (tracing) traceTransition(machineKey, snapshot, "applied")
+    despawnTriggeredScopes(machineKey, snapshot)
+  }
+
+  type TransitionSchedules = ReadonlyArray<Machine.StateMachine.AnyTransitionSchedule<S, Root>>
+
+  /** Runs every schedule of `phase` for `machineKey` in `state`, in bundle order. */
+  const runPhase = (
+    machineKey: symbol,
+    phase: "enter" | "exit",
+    state: unknown,
+    snapshot: Machine.TransitionSnapshot,
+    schedules: TransitionSchedules
+  ): Result.Result<void, SystemFailure> => {
+    for (const schedule of schedules) {
+      const transition = schedule.transition
+      if (transition.phase === phase && transition.machine.key === machineKey && transition.state === state) {
+        const result = runTransitionSchedule(schedule, snapshot)
+        if (!result.ok) return result
+      }
+    }
+    return succeeded
+  }
+
+  /** The sub-states with a value that exist in `state` of `parentKey`, and theirs, deepest first. */
+  const activeSubStatesIn = (parentKey: symbol, state: unknown): Array<Machine.StateMachine.Any> => {
+    const result: Array<Machine.StateMachine.Any> = []
+    for (const sub of subStates.get(parentKey) ?? []) {
+      const value = currentMachines.get(sub.key)
+      if (sub.within!.state !== state || value === undefined) continue
+      result.push(...activeSubStatesIn(sub.key, value), sub)
+    }
+    return result
+  }
+
+  /**
+   * Gives the sub-states of `parentKey` that exist in `state` their entry
+   * value, then runs their `onEnter` schedules and enters their own
+   * sub-states.
+   */
+  const enterSubStates = (parentKey: symbol, state: unknown, schedules: TransitionSchedules): Result.Result<void, SystemFailure> => {
+    for (const sub of subStates.get(parentKey) ?? []) {
+      if (sub.within!.state !== state || currentMachines.has(sub.key) || !subStateEntry.has(sub.key)) continue
+      const value = subStateEntry.get(sub.key)
+      commitMachine(sub.key, undefined, value)
+      const snapshot = { from: undefined, to: value } as unknown as Machine.TransitionSnapshot
+      const result = runPhase(sub.key, "enter", value, snapshot, schedules)
+      if (!result.ok) {
+        if (tracing) traceTransition(sub.key, snapshot, "enterFailed")
+        return result
+      }
+      const nested = enterSubStates(sub.key, value, schedules)
+      if (!nested.ok) return nested
     }
     return succeeded
   }
@@ -1981,7 +2157,8 @@ const makeValidatedRuntime = <
       case "resource":
         return resources.has(requirement.key)
       case "stateMachine":
-        return currentMachines.has(requirement.key)
+        // An inactive sub-state has no value but is provided.
+        return providedMachineKeys.has(requirement.key) || currentMachines.has(requirement.key)
     }
   }
 
@@ -2138,12 +2315,29 @@ const makeValidatedRuntime = <
         }
       }
     }
-    const machineValues: Array<readonly [symbol, Machine.StateValue]> = []
+    const restoredMachines = new Map(currentMachines)
     for (const [name, value] of Object.entries(saved.machines)) {
       const machine = machinesByName.get(name)
       if (!machine) return Result.failure({ _tag: "UnknownMachine", name })
       if (!machine.values.includes(value)) return Result.failure({ _tag: "InvalidMachineState", name, value })
-      machineValues.push([machine.key, value])
+      restoredMachines.set(machine.key, value)
+    }
+    // A save has no value for a sub-state whose parent is elsewhere; one that
+    // has a value must have its parent in the state it exists in. A sub-state
+    // missing while its parent is there enters its entry value.
+    for (const machine of options.machineDefinitions) {
+      const within = machine.within
+      if (within === undefined) continue
+      const active = restoredMachines.get(within.machine.key) === within.state
+      if (Object.hasOwn(saved.machines, machine.name)) {
+        if (!active) {
+          return Result.failure({ _tag: "InactiveSubState", name: machine.name, parent: within.machine.name, requires: within.state })
+        }
+      } else if (active && subStateEntry.has(machine.key)) {
+        restoredMachines.set(machine.key, subStateEntry.get(machine.key))
+      } else {
+        restoredMachines.delete(machine.key)
+      }
     }
 
     const scoped = new Set<number>()
@@ -2180,7 +2374,8 @@ const makeValidatedRuntime = <
       resources.set(key, value)
       resourceChangedAt.set(key, world.currentTick())
     }
-    for (const [key, value] of machineValues) currentMachines.set(key, value)
+    currentMachines.clear()
+    for (const [key, value] of restoredMachines) currentMachines.set(key, value)
     // Locals are not saved: each system starts over from its factory.
     localSlots.forEach(({ slot }, index) => { (slot.context as { local: unknown }).local = rebuiltLocals[index] })
     return succeeded
@@ -2330,6 +2525,8 @@ const makeValidatedRuntime = <
       schema: options.schema,
       machines: [...new Set(machinesByName.values())],
       currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
+      providesMachine: (machine) => providedMachineKeys.has(machine.key),
+      scopes: options.scopeDefinitions,
       providedServices: Object.keys(providedServices),
       externallyWrittenEvents: new Set([...externallyWrittenEvents, ...hostEvents]),
       relationMutations,
@@ -2406,6 +2603,8 @@ export const make = <
   readonly resources?: Resources
   readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
+  /** Scopes whose members a committed state change despawns; `Game.Runtime.make` passes every `Game.EntityScope`. */
+  readonly scopeDefinitions?: ReadonlyArray<EntityScopeModule.EntityScope.Any>
   /** Attaches a `debug` handle to the runtime, timed by `hostClock`; see the `Debug` module. */
   readonly debug?: Enabled
 }): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>, Enabled> => {
@@ -2424,6 +2623,7 @@ export const make = <
     resources: validated.value,
     machines: options.machines,
     machineDefinitions: options.machineDefinitions ?? [],
+    scopeDefinitions: options.scopeDefinitions ?? [],
     debug: options.debug
   })
   return (fallible ? Result.success(runtime) : runtime) as never

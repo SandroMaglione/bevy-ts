@@ -70,17 +70,6 @@ export const ResetWorldResourcesOnPlayingEnterSystem = Game.System(
     }
 )
 
-export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
-  "Platformer/DespawnLevelEntitiesOnPlayingEnter",
-  {
-    commands: Game.System.commands(Game.System.despawnsScope(LevelScope))
-  },
-  ({ commands }) =>
-    {
-      commands.despawnScope(LevelScope)
-    }
-)
-
 export const SpawnWorldOnPlayingEnterSystem = Game.System(
   "Platformer/SpawnWorldOnPlayingEnter",
   {

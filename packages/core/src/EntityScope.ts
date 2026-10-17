@@ -13,6 +13,11 @@
  * parent-child tree: ordered children, `lookup.parent` / `descendants`
  * traversal, and children despawned with their parent.
  *
+ * A scope whose lifetime is a game state declares it:
+ * `Game.EntityScope(name, { despawnOnExit: [Flow, "Playing"] })` despawns
+ * every member when `applyStateTransitions(...)` commits that state change,
+ * with no system, permission, or marker to place.
+ *
  * @module EntityScope
  * @docGroup core
  */
@@ -25,7 +30,19 @@ export interface EntityScope<
   readonly kind: "entityScope"
   readonly name: Name
   readonly key: symbol
+  /** State changes that despawn every member, applied by `applyStateTransitions(...)`. */
+  readonly despawnOn: ReadonlyArray<Trigger>
   readonly __schemaRoot?: Root | undefined
+}
+
+/**
+ * One state change that despawns a scope: leaving (`exit`) or entering
+ * (`enter`) `state` of `machine`.
+ */
+export interface Trigger {
+  readonly phase: "enter" | "exit"
+  readonly machine: { readonly key: symbol; readonly name: string }
+  readonly state: string | number
 }
 
 /** Type-level helpers for entity scopes. */
@@ -42,11 +59,13 @@ export namespace EntityScope {
  * branded to that game's root.
  */
 export const make = <const Name extends string, Root = unknown>(
-  name: Name
+  name: Name,
+  despawnOn: ReadonlyArray<Trigger> = []
 ): EntityScope<Name, Root> => ({
   kind: "entityScope",
   name,
-  key: keyOf(name)
+  key: keyOf(name),
+  despawnOn
 })
 
 const keyPrefix = "ritmo/entityScope/"

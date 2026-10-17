@@ -59,14 +59,20 @@ export const SessionState = Game.StateMachine(
   ["Title", "Countdown", "Round"] as const
 )
 
-// Two smaller machines are clearer than one larger combined phase union here:
-// session flow and round-local flow have different transition boundaries.
+// The round's own flow exists only during a round: a sub-state of the session.
+// It enters its runtime-provided value (Playing) whenever the session enters
+// Round and has no value elsewhere, so inState(RoundState, ...) alone implies
+// the session is in Round.
 export const RoundState = Game.StateMachine(
   "StateMachineExample/RoundState",
-  ["Playing", "Paused", "Victory", "Defeat"] as const
+  ["Playing", "Paused", "Victory", "Defeat"] as const,
+  { within: [SessionState, "Round"] }
 )
 
-export const GameplayWhen = [Game.Condition.and(
-  Game.Condition.inState(SessionState, "Round"),
-  Game.Condition.inState(RoundState, "Playing")
-)] as const
+export const GameplayWhen = [Game.Condition.inState(RoundState, "Playing")] as const
+
+// Pickups live for one round: entering Countdown (a restart) despawns them,
+// before the onEnter reset spawns the next round's.
+export const PickupScope = Game.EntityScope("StateMachineExample/Pickups", {
+  despawnOnEnter: [SessionState, "Countdown"]
+})

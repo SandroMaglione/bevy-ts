@@ -10,7 +10,6 @@ export {
 export { RenderNodesSystem } from "./render-sync.ts"
 export { SetupWorldSystem } from "./setup.ts"
 export {
-  DespawnLevelEntitiesOnPlayingEnterSystem,
   QueueLossSystem,
   QueueRestartSystem,
   ResetWorldResourcesOnPlayingEnterSystem,

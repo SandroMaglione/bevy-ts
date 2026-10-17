@@ -1,4 +1,5 @@
 import { Descriptor, Schema } from "@typeonce/ritmo"
+import type * as Machine from "@typeonce/ritmo/Machine"
 import * as Runtime from "@typeonce/ritmo/Runtime"
 import type * as SchemaTypes from "@typeonce/ritmo/Schema"
 import * as System from "@typeonce/ritmo/System"
@@ -351,6 +352,14 @@ describe("StateMachine", () => {
     const withoutMachine = Game.Runtime.make({ services: Runtime.services(), resources: { Counter: 0 } })
     // @ts-expect-error __runtimeRequirementError__: "Missing machine"; readonly __requirement__: "AppState"
     withoutMachine.tick(gated)
+
+    // A machine of another game is rejected where the condition is built, naming the fix.
+    // @ts-expect-error OtherState is a state machine of another game: use a machine defined with this game's Game.StateMachine(...)
+    Game.Condition.inState(OtherState, "Idle")
+    // @ts-expect-error OtherState is a state machine of another game: use a machine defined with this game's Game.StateMachine(...)
+    Game.Condition.stateChanged(OtherState)
+    expect(Game.Condition.inState(AppState, "Menu")).type.toBe<Machine.InStateCondition<typeof AppState>>()
+    expect(Game.Condition.stateChanged(AppState)).type.toBe<Machine.StateChangedCondition<typeof AppState>>()
 
     // Conditions from another game do not fit.
     Game.Schedule.when(

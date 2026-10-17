@@ -123,6 +123,8 @@ export type RestoreError =
   | { readonly _tag: "InvalidRelation"; readonly name: string; readonly sourceId: number; readonly targetId: number }
   | { readonly _tag: "UnknownMachine"; readonly name: string }
   | { readonly _tag: "InvalidMachineState"; readonly name: string; readonly value: unknown }
+  /** A saved sub-state value while its parent machine is not in the state the sub-state exists in. */
+  | { readonly _tag: "InactiveSubState"; readonly name: string; readonly parent: string; readonly requires: unknown }
   | { readonly _tag: "DuplicateEntity"; readonly entityId: number }
   /** A scope member that is not a saved entity, or is already in another scope. */
   | { readonly _tag: "InvalidScope"; readonly name: string; readonly entityId: number }

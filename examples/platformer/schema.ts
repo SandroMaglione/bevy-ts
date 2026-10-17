@@ -56,9 +56,12 @@ export const Game = Schema.bind(
 
 export const schema = Game.schema
 
-export const LevelScope = Game.EntityScope("Platformer/Level")
-
 export const SessionState = Game.StateMachine(
   "Platformer/SessionState",
   ["Playing", "Lost"] as const
 )
+
+/** The level's player and solids: despawned on each restart, before the new level spawns. */
+export const LevelScope = Game.EntityScope("Platformer/Level", {
+  despawnOnEnter: [SessionState, "Playing"]
+})
