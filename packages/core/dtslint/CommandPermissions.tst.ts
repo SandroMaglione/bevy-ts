@@ -101,6 +101,20 @@ describe("declared commands", () => {
     })
   })
 
+  it("keeps an inline query's proof exact: an omitted with proves nothing more", () => {
+    Game.System("Perms/DespawnInline", {
+      queries: { positions: Game.Query({ selection: { position: Game.Query.read(Position) } }) },
+      commands: Game.System.commands(Game.System.despawns(Enemy))
+    }, ({ queries, commands }) => {
+      for (const match of queries.positions.each()) {
+        // @ts-expect-error despawn needs an entity from a query proving Perms/Enemy (declared in despawns)
+        commands.despawn(match.entity)
+      }
+    })
+    const inline = Game.Query({ selection: { position: Game.Query.read(Position) } })
+    expect(inline.with).type.toBe<[]>()
+  })
+
   it("despawns an entity this run spawned, by the components its draft always holds", () => {
     Game.System("Perms/DespawnSpawned", {
       commands: Game.System.commands(Game.System.spawns(Position, Enemy, Noise), Game.System.despawns(Enemy))

@@ -167,7 +167,7 @@ export interface SystemDescription {
   readonly removed: ReadonlyArray<string>
   readonly despawned: boolean
   readonly relationFailures: ReadonlyArray<string>
-  /** Events and resources read with `Game.System.thisTick`. */
+  /** Events and resources read with `Game.System.thisTick`, and query slots as `queries.<slot>`. */
   readonly thisTick: ReadonlyArray<string>
   readonly services: ReadonlyArray<string>
   /** Run conditions, rendered, for example `stateChanged(Game/Flow)`. */

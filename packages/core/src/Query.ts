@@ -684,6 +684,14 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * })
  * ```
  */
+/**
+ * `T` itself, but not a place inference reads from: a list a query omits
+ * stays `[]` even when the call sits where a wider query type is expected
+ * (`queries: { ... }` in a spec). Unlike `NoInfer`, it prints as `T`.
+ */
+// `T` appears only as the check type, which inference never reads.
+export type Uninferred<T, Bound> = [T] extends [infer U extends Bound] ? U : never
+
 export const Query = <
   const Selection extends Record<string, SelectionAccess<any, Root>>,
   const With extends ReadonlyArray<ComponentDescriptor> = [],
@@ -703,14 +711,15 @@ export const Query = <
   readonly withoutRelations?: WithoutRelations
   readonly withRelated?: WithRelated
   readonly withoutRelated?: WithoutRelated
-}): QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root> => ({
+  // Uninferred: an omitted list is `[]`, never inferred from the spec it is written in (`queries: { ... }`).
+}): QuerySpec<Selection, Uninferred<With, ReadonlyArray<ComponentDescriptor>>, Uninferred<Without, ReadonlyArray<ComponentDescriptor>>, Uninferred<Filters, ReadonlyArray<Filter<ComponentDescriptor>>>, Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>, Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>, Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>, Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>, Root> => ({
   selection: spec.selection,
-  with: (spec.with ?? []) as With,
-  without: (spec.without ?? []) as Without,
-  filters: (spec.filters ?? []) as Filters,
-  withRelations: (spec.withRelations ?? []) as WithRelations,
-  withoutRelations: (spec.withoutRelations ?? []) as WithoutRelations,
-  withRelated: (spec.withRelated ?? []) as WithRelated,
-  withoutRelated: (spec.withoutRelated ?? []) as WithoutRelated,
+  with: (spec.with ?? []) as unknown as Uninferred<With, ReadonlyArray<ComponentDescriptor>>,
+  without: (spec.without ?? []) as unknown as Uninferred<Without, ReadonlyArray<ComponentDescriptor>>,
+  filters: (spec.filters ?? []) as unknown as Uninferred<Filters, ReadonlyArray<Filter<ComponentDescriptor>>>,
+  withRelations: (spec.withRelations ?? []) as unknown as Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>,
+  withoutRelations: (spec.withoutRelations ?? []) as unknown as Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>,
+  withRelated: (spec.withRelated ?? []) as unknown as Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>,
+  withoutRelated: (spec.withoutRelated ?? []) as unknown as Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>,
   __schemaRoot: undefined as unknown as Root
 })

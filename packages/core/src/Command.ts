@@ -604,7 +604,8 @@ export interface CommandsApi<
       ) => Entity.EntityId<S, Root>
   /**
    * Queues an entity removal. A despawned entity stays visible to queries
-   * until the next `applyDeferred()`.
+   * until the next `applyDeferred()`, and despawns never count as writers for
+   * `Game.System.thisTick` query reads.
    *
    * Pass `match.entity` from a query proving one of the `despawns`
    * components, or the id `spawn` returned in this run (it holds its draft's

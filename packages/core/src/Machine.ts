@@ -37,7 +37,7 @@
  * @groupDescription Functions
  * Public constructors for machines, conditions, and explicit transition bundles.
  */
-import type { Schedule } from "./Schedule.ts"
+import type { AnyScheduleOrder, Schedule } from "./Schedule.ts"
 import * as Requirement from "./Requirement.ts"
 import type { Schema } from "./Schema.ts"
 import type { SystemFailure } from "./System.ts"
@@ -239,13 +239,16 @@ export interface TransitionScheduleDefinition<
   M extends StateMachineDefinition = StateMachineDefinition,
   Needs extends Requirement.Requirement = Requirement.Requirement,
   Root = unknown,
-  Failure extends SystemFailure = never
+  Failure extends SystemFailure = never,
+  Order extends AnyScheduleOrder = AnyScheduleOrder
 > {
   readonly steps: ReadonlyArray<Schedule.Step>
   readonly systems: ReadonlyArray<unknown>
   readonly schema: S
   readonly requirements: ReadonlyArray<Needs>
   readonly __failure?: (_: never) => Failure
+  /** The plan's order, for `Game.System.thisTick` checks of the tick that applies it. */
+  readonly __order?: (_: never) => Order
   readonly __schemaRoot?: Root | undefined
   readonly transition: {
     readonly machine: M

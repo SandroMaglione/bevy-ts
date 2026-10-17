@@ -150,9 +150,14 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
     removed: names(spec.removed as Record<string, { readonly descriptor: Descriptor.Any }>, (access) => access.descriptor.name),
     despawned: Object.keys(spec.despawned).length > 0,
     relationFailures: names(spec.relationFailures as Record<string, { readonly relation: Relation.Relation.Any }>, (access) => access.relation.name),
-    thisTick: [...Object.values(spec.events as Record<string, ThisTickAccess>), ...Object.values(spec.resources as Record<string, ThisTickAccess>)]
-      .filter((access) => access.thisTick === true)
-      .map((access) => access.descriptor.name),
+    thisTick: [
+      ...[...Object.values(spec.events as Record<string, ThisTickAccess>), ...Object.values(spec.resources as Record<string, ThisTickAccess>)]
+        .filter((access) => access.thisTick === true)
+        .map((access) => access.descriptor.name),
+      ...Object.entries(spec.queries as Record<string, { readonly thisTick?: true }>)
+        .filter(([, query]) => query.thisTick === true)
+        .map(([slot]) => `queries.${slot}`)
+    ],
     services: names(spec.services as Record<string, { readonly descriptor: Descriptor.Any }>, (access) => access.descriptor.name),
     when: (spec.when as ReadonlyArray<Machine.Condition>).map(renderCondition),
     pauseWhen: (spec.pauseWhen as ReadonlyArray<Machine.Condition>).map(renderCondition),

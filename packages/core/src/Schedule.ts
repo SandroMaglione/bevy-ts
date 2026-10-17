@@ -79,11 +79,16 @@ export type AnyScheduleOrder = ScheduleOrder<ReadonlyArray<unknown>, boolean>
  * the same text `runtime.tick(...)` reports at compile time.
  */
 export interface OrderIssue {
-  readonly kind: "lateWriter"
+  /**
+   * `lateWriter`: the writer runs after the reader. `unflushedWriter`: a
+   * command writer runs before a query reader with no `applyDeferred()` in
+   * between.
+   */
+  readonly kind: "lateWriter" | "unflushedWriter"
   readonly reader: string
-  /** The event or resource name. */
+  /** The event or resource name, or `queries.<slot>` for a query read. */
   readonly data: string
-  /** The writer that runs after the reader. */
+  /** The writer at fault. */
   readonly writer: string
   readonly message: string
 }
@@ -100,10 +105,19 @@ type SpecAccessValues<Spec> =
     ? Events[keyof Events] | Resources[keyof Resources]
     : never
 
+type SpecQueryValues<Spec> =
+  Spec extends { readonly queries: infer Queries } ? Queries[keyof Queries] : never
+
 type CarriedOrder<Entry> =
   "__order" extends keyof Entry
     ? Entry extends { readonly __order?: (_: never) => infer Order extends AnyScheduleOrder } ? Order : never
     : never
+
+/** The order an entry carries: a schedule's, or the bundle of an `applyStateTransitions(...)` step. */
+type OrderOf<Entry> =
+  Entry extends { readonly kind: "applyStateTransitions"; readonly bundle?: infer Bundle }
+    ? CarriedOrder<NonNullable<Bundle>>
+    : CarriedOrder<Entry>
 
 /**
  * Whether one entry has a `thisTick` read: a cheap flag, computed once per
@@ -112,8 +126,8 @@ type CarriedOrder<Entry> =
 type EntryHasReads<Entry> =
   Entry extends AnySystem
     ? IsErased<Entry["spec"]> extends true ? "no"
-      : [Extract<SpecAccessValues<Entry["spec"]>, ThisTick>] extends [never] ? "no" : "yes"
-    : CarriedOrder<Entry>["reads"] extends infer Reads
+      : [Extract<SpecAccessValues<Entry["spec"]> | SpecQueryValues<Entry["spec"]>, ThisTick>] extends [never] ? "no" : "yes"
+    : OrderOf<Entry>["reads"] extends infer Reads
       ? boolean extends Reads ? "unknown" : Reads extends true ? "yes" : "no"
       : "no"
 
@@ -129,31 +143,64 @@ export type CompositionOrder<Entries extends ReadonlyArray<unknown>> = ScheduleO
 // The detailed check below runs only from `TickOrderErrors`, for ticks with a
 // read. It never walks a tuple element by element: per read it finds the
 // reader's position at each nesting level, slices the entries after it once,
-// and looks for writers in the union of the systems there.
+// and looks for writers in the union of the systems there. A query read also
+// walks back from the reader to the nearest marker, which is usually close.
 
-interface Read<Kind, Key, Reader> {
+/** An event or resource read. */
+interface DataRead<Kind, Key, Reader> {
   readonly kind: Kind
   readonly key: Key
   readonly reader: Reader
 }
 
+/**
+ * A query read: the components its matches must have (`Required`), and every
+ * component it names (`Named`: selection slots, optional ones included,
+ * `with`, `without`, and filters).
+ */
+interface QueryRead<Slot, Required, Named, Reader> {
+  readonly kind: "query"
+  readonly slot: Slot
+  readonly required: Required
+  readonly named: Named
+  readonly reader: Reader
+}
+
 type DescriptorKind<D> = D extends { readonly kind: infer Kind } ? Kind : never
 
-/** Every system an entry runs, nested schedules included, as a union. */
+type Names<D> = D extends { readonly name: infer Name extends string } ? Name : never
+
+type DescriptorsOf<Access> = Access extends { readonly descriptor: infer D } ? D : never
+
+/** Every system an entry runs, nested schedules and transition bundles included, as a union. */
 type SystemsIn<Entry> =
   Entry extends AnySystem ? Entry
-  : CarriedOrder<Entry> extends infer Order extends AnyScheduleOrder
+  : OrderOf<Entry> extends infer Order extends AnyScheduleOrder
     ? [Order] extends [never] ? never : SystemsIn<Order["entries"][number]>
+    : never
+
+type QueryReadOf<Slot, Q, Reader> =
+  Q extends { readonly selection: infer Selection; readonly with: infer With extends ReadonlyArray<unknown>; readonly without: infer Without extends ReadonlyArray<unknown>; readonly filters: infer Filters extends ReadonlyArray<unknown> }
+    ? QueryRead<
+        Slot,
+        Names<{ readonly [K in keyof Selection]: Selection[K] extends { readonly mode: "read" | "write"; readonly descriptor: infer D } ? D : never }[keyof Selection] | With[number]>,
+        Names<DescriptorsOf<Selection[keyof Selection]> | With[number] | Without[number] | DescriptorsOf<Filters[number]>>,
+        Reader
+      >
     : never
 
 type SystemReads<Sys> =
   Sys extends AnySystem
     ? IsErased<Sys["spec"]> extends true ? never
-      : Extract<SpecAccessValues<Sys["spec"]>, ThisTick> extends infer Access
-        ? Access extends { readonly descriptor: infer D extends { readonly name: string } }
-          ? Read<DescriptorKind<D>, D["name"], Sys["name"]>
-          : never
-        : never
+      :
+        | (Extract<SpecAccessValues<Sys["spec"]>, ThisTick> extends infer Access
+          ? Access extends { readonly descriptor: infer D extends { readonly name: string } }
+            ? DataRead<DescriptorKind<D>, D["name"], Sys["name"]>
+            : never
+          : never)
+        | (Sys["spec"] extends { readonly queries: infer Queries }
+          ? { readonly [K in keyof Queries]: Queries[K] extends ThisTick ? QueryReadOf<K, Queries[K], Sys["name"]> : never }[keyof Queries]
+          : never)
     : never
 
 /** Names of the systems among `Systems` that write `Key` (other than `Reader`). */
@@ -166,7 +213,40 @@ type WritersOf<Systems, Kind, Key, Reader> =
         : Systems["name"]
     : never
 
-/** Some level of the entries is a widened array that contains a read. */
+/**
+ * Whether declared command permissions can change what a query read sees:
+ * `spawns` covering every component it requires, or `inserts` / `removes` of
+ * any component it names. `despawns` never count.
+ */
+type CommandsCount<Commands, Required, Named> =
+  CommandNames<Commands> extends readonly [infer Spawns, infer Changes]
+    ? [Extract<Changes, Named>] extends [never]
+      ? [Spawns] extends [never] ? false
+        : [Exclude<Required, Spawns>] extends [never] ? true : false
+      : true
+    : false
+
+/** The component names a system may spawn, and may insert or remove: computed once per system, shared by every read. */
+type CommandNames<Commands> =
+  Commands extends { readonly __permissions?: (_: never) => readonly [infer Spawns, infer Inserts, infer Removes, ...Array<unknown>] }
+    ? readonly [Names<Spawns>, Names<Inserts | Removes>]
+    : readonly [never, never]
+
+/** Names of the systems among `Systems` whose commands count for a query read (other than its reader). */
+type CommandWritersOf<Systems, Required, Named, Reader> =
+  Systems extends AnySystem
+    ? IsErased<Systems["spec"]> extends true ? never
+      : Systems["name"] extends Reader ? never
+      : Systems["spec"] extends { readonly commands: infer Commands }
+        ? CommandsCount<Commands, Required, Named> extends true ? Systems["name"] : never
+        : never
+    : never
+
+type WritersFor<Systems, R> =
+  R extends QueryRead<any, infer Required, infer Named, infer Reader> ? CommandWritersOf<Systems, Required, Named, Reader>
+  : R extends DataRead<infer Kind, infer Key, infer Reader> ? WritersOf<Systems, Kind, Key, Reader>
+  : never
+
 /**
  * Some level of the entries is a widened array that may contain a read.
  * `MayRead` is the flag carried by the schedule holding them: a widened array
@@ -182,11 +262,11 @@ type UnknownInOne<Entries extends ReadonlyArray<unknown>, MayRead extends boolea
       ? Order extends AnyScheduleOrder ? UnknownIn<Order["entries"], Order["reads"]> : never
       : never
 
-type NestedOrders<Entry> = Entry extends AnySystem ? never : CarriedOrder<Entry>
+type NestedOrders<Entry> = Entry extends AnySystem ? never : OrderOf<Entry>
 
 type NestedEntries<Entry> =
   Entry extends AnySystem ? never
-  : CarriedOrder<Entry> extends infer Order extends AnyScheduleOrder
+  : OrderOf<Entry> extends infer Order extends AnyScheduleOrder
     ? [Order] extends [never] ? never : Order["entries"]
     : never
 
@@ -206,27 +286,100 @@ type ReaderIndices<Entries extends ReadonlyArray<unknown>, Reader> = {
   ? Index extends `${infer N extends number}` ? N : never
   : never
 
-type LateWriterError<Reader extends string, Key extends string, Writer> =
+type LateWriterError<R, Writer> =
   Writer extends string
-    ? `${Reader} needs ${Key} from this tick, but its writer ${Writer} runs after it: move ${Writer} before ${Reader}, or read ${Key} without thisTick`
+    ? R extends QueryRead<infer Slot extends string, any, any, infer Reader extends string>
+      ? `${Writer} queues commands that ${Reader} needs this tick (queries.${Slot}), but it runs after ${Reader}: move ${Writer} before the applyDeferred() that precedes ${Reader}, or read queries.${Slot} without thisTick`
+      : R extends DataRead<any, infer Key extends string, infer Reader extends string>
+        ? `${Reader} needs ${Key} from this tick, but its writer ${Writer} runs after it: move ${Writer} before ${Reader}, or read ${Key} without thisTick`
+        : never
+    : never
+
+type UnflushedWriterError<R, Writer> =
+  Writer extends string
+    ? R extends QueryRead<infer Slot extends string, any, any, infer Reader extends string>
+      ? `${Reader} needs this tick's commands for queries.${Slot}, but ${Writer} queues them with no applyDeferred() in between: add Game.Schedule.applyDeferred() after ${Writer}`
+      : never
     : never
 
 /** Writers of the read's data that run after its reader, at this level and inside the reader's own entry. */
-type LateWriters<Entries, Kind, Key extends string, Reader extends string> =
+type LateWriters<Entries, R, Reader extends string> =
   // Distributes over a union of schedules (a tick of one of several), then over each place the reader runs.
-  Entries extends ReadonlyArray<unknown> ? LateWritersAt<Entries, ReaderIndices<Entries, Reader>, Kind, Key, Reader> : never
+  Entries extends ReadonlyArray<unknown> ? LateWritersAt<Entries, ReaderIndices<Entries, Reader>, R, Reader> : never
 
-type LateWritersAt<Entries extends ReadonlyArray<unknown>, Index, Kind, Key extends string, Reader extends string> =
+type LateWritersAt<Entries extends ReadonlyArray<unknown>, Index, R, Reader extends string> =
   Index extends number
     ? Entries extends readonly [...TupleOf<Index>, infer At, ...infer Rest]
-      ? | LateWriterError<Reader, Key, WritersOf<SystemsIn<Rest[number]>, Kind, Key, Reader>>
-        | LateWriters<NestedEntries<At>, Kind, Key, Reader>
+      ? | LateWriterError<R, WritersFor<SystemsIn<Rest[number]>, R>>
+        | LateWriters<NestedEntries<At>, R, Reader>
+      : never
+    : never
+
+/**
+ * The systems that run between the last marker and the reader (their commands
+ * are still queued when it runs), and whether a marker was found:
+ * `[Systems, Flushed]`, one per place the reader runs.
+ */
+type Segment<Entries, Reader> =
+  Entries extends ReadonlyArray<unknown> ? SegmentAt<Entries, ReaderIndices<Entries, Reader>, Reader> : never
+
+type SegmentAt<Entries extends ReadonlyArray<unknown>, Index, Reader> =
+  Index extends number
+    ? InnerSegment<Entries[Index], Reader> extends readonly [infer Inner, infer Flushed]
+      ? Flushed extends true ? readonly [Inner, true]
+        : TailBefore<Entries, TupleOf<Index>> extends readonly [infer Outer, infer OuterFlushed]
+          ? readonly [Inner | Outer, OuterFlushed]
+          : never
+      : never
+    : never
+
+/**
+ * `TailSegment` of the entries before a position, walking back by index
+ * (`Count` holds one element per entry still to visit).
+ */
+type TailBefore<Entries extends ReadonlyArray<unknown>, Count extends ReadonlyArray<unknown>, Acc = never> =
+  Count extends readonly [unknown, ...infer Rest]
+    ? Entries[Rest["length"]] extends infer Last
+      ? Last extends ApplyDeferredStep ? readonly [Acc, true]
+        : Last extends AnySystem ? TailBefore<Entries, Rest, Acc | Last>
+        : Last extends { readonly kind: "applyStateTransitions" }
+          ? TailSegment<NestedEntries<Last>> extends readonly [infer Inner, any] ? readonly [Acc | Inner, true] : readonly [Acc, true]
+          : TailSegment<NestedEntries<Last>> extends readonly [infer Inner, infer Flushed]
+            ? Flushed extends true ? readonly [Acc | Inner, true] : TailBefore<Entries, Rest, Acc | Inner>
+            : TailBefore<Entries, Rest, Acc>
+      : never
+    : readonly [Acc, false]
+
+/** The segment inside the entry that runs the reader: none for the reader itself; a transition step flushes first. */
+type InnerSegment<At, Reader> =
+  At extends AnySystem ? readonly [never, false]
+  : At extends { readonly kind: "applyStateTransitions" }
+    ? Segment<NestedEntries<At>, Reader> extends readonly [infer Inner, any] ? readonly [Inner, true] : readonly [never, true]
+    : Segment<NestedEntries<At>, Reader>
+
+/** The systems after the last marker of `Entries` (walking back from the end), and whether a marker was found. */
+type TailSegment<Entries, Acc = never> =
+  Entries extends readonly [...infer Init, infer Last]
+    ? Last extends ApplyDeferredStep ? readonly [Acc, true]
+      : Last extends AnySystem ? TailSegment<Init, Acc | Last>
+      : Last extends { readonly kind: "applyStateTransitions" }
+        // Its bundle runs after its own flush; markers inside the bundle count too.
+        ? TailSegment<NestedEntries<Last>> extends readonly [infer Inner, any] ? readonly [Acc | Inner, true] : readonly [Acc, true]
+        : TailSegment<NestedEntries<Last>> extends readonly [infer Inner, infer Flushed]
+          ? Flushed extends true ? readonly [Acc | Inner, true] : TailSegment<Init, Acc | Inner>
+          : TailSegment<Init, Acc>
+    : readonly [Acc, false]
+
+type UnflushedWriters<Entries, R, Reader extends string> =
+  R extends QueryRead<any, any, any, any>
+    ? Segment<Entries, Reader> extends infer Found
+      ? Found extends readonly [infer Systems, any] ? UnflushedWriterError<R, WritersFor<Systems, R>> : never
       : never
     : never
 
 type ReadErrors<Entries extends ReadonlyArray<unknown>, Reads> =
-  Reads extends Read<infer Kind, infer Key extends string, infer Reader extends string>
-    ? LateWriters<Entries, Kind, Key, Reader>
+  Reads extends { readonly reader: infer Reader extends string }
+    ? LateWriters<Entries, Reads, Reader> | UnflushedWriters<Entries, Reads, Reader>
     : never
 
 type CheckTick<Schedules extends ReadonlyArray<unknown>> =
@@ -236,8 +389,9 @@ type CheckTick<Schedules extends ReadonlyArray<unknown>> =
 
 /**
  * Every `thisTick` error of one `runtime.tick(...)` call over its arguments
- * in order: writers that run after their reader, and a
- * call whose order is not statically known. Free when nothing has a read.
+ * in order: writers that run after their reader, command writers with no
+ * `applyDeferred()` before a query reader, and a call whose order is not
+ * statically known. Free when nothing has a read.
  */
 export type TickOrderErrors<Schedules extends ReadonlyArray<unknown>> =
   HasReads<Schedules> extends false ? never : CheckTick<Schedules>
@@ -248,12 +402,19 @@ export interface TransitionBundleDefinition<
   out Needs extends Requirement.Requirement = Requirement.Requirement,
   out Root = unknown,
   out CarriedNeeds extends Requirement.Requirement = Needs,
-  out Failure extends SystemFailure = never
+  out Failure extends SystemFailure = never,
+  out Order extends AnyScheduleOrder = AnyScheduleOrder
 > {
   readonly kind: "transitionBundle"
   readonly entries: Entries
   readonly requirements: ReadonlyArray<CarriedNeeds>
   readonly __failure?: (_: never) => Failure
+  /**
+   * The bundle's schedules in order, for `Game.System.thisTick` checks: they
+   * count at the position of the `applyStateTransitions(...)` step that
+   * applies the bundle, as if every one of them runs.
+   */
+  readonly __order?: (_: never) => Order
   readonly __schemaRoot?: Root | undefined
 }
 
@@ -420,7 +581,8 @@ export const transitions = <
   TransitionBundleRequirements<FlattenTransitionEntries<Entries>>,
   unknown,
   TransitionBundleRequirements<FlattenTransitionEntries<Entries>>,
-  TransitionBundleFailure<FlattenTransitionEntries<Entries>>
+  TransitionBundleFailure<FlattenTransitionEntries<Entries>>,
+  CompositionOrder<Entries>
 > => {
   const flattened = entries.flatMap((entry) =>
     "kind" in entry && entry.kind === "transitionBundle" ? [...entry.entries] : [entry]
@@ -436,7 +598,8 @@ export const transitions = <
     TransitionBundleRequirements<FlattenTransitionEntries<Entries>>,
     unknown,
     TransitionBundleRequirements<FlattenTransitionEntries<Entries>>,
-    TransitionBundleFailure<FlattenTransitionEntries<Entries>>
+    TransitionBundleFailure<FlattenTransitionEntries<Entries>>,
+    CompositionOrder<Entries>
   >
 }
 

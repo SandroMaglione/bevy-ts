@@ -10,6 +10,7 @@
  */
 import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
 import type * as Entity from "@typeonce/bevy-ts/Entity"
+import type { ScheduleEntry } from "@typeonce/bevy-ts/Schedule"
 import type { BenchCase } from "./harness.ts"
 
 const N = 10_000
@@ -308,6 +309,45 @@ const scheduleOverhead: BenchCase = {
   }
 }
 
+const longOrdered: BenchCase = {
+  name: "schedule/150-systems-thistick-x10",
+  description: "tryTick a 150-system schedule (12 groups of 10 command writers, each followed by applyDeferred(), and 30 thisTick query and event readers) 10 times: the runtime order check plus the run",
+  setup: () => {
+    const runtime = makeRuntime()
+    const entries: Array<ScheduleEntry> = []
+    for (let group = 0; group < 12; group++) {
+      for (let slot = 0; slot < 10; slot++) {
+        // Only the first group changes what the readers match; the check still weighs every writer.
+        entries.push(group === 0
+          ? Game.System(`Bench/Long${group}_${slot}`, { commands: Game.System.commands(Game.System.inserts(Hot), Game.System.removes(Hot)) }, () => {})
+          : Game.System(`Bench/Long${group}_${slot}`, { commands: Game.System.commands(Game.System.inserts(Static), Game.System.removes(Static)) }, () => {}))
+      }
+      entries.push(Game.Schedule.applyDeferred())
+      for (let reader = 0; reader < 2; reader++) {
+        entries.push(Game.System(`Bench/LongRead${group}_${reader}`, {
+          queries: { hot: Game.System.thisTick(Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Hot] })) }
+        }, ({ queries }) => {
+          if (queries.hot.each().length < 0) throw new Error("unreachable")
+        }))
+      }
+      if (group % 2 === 0) {
+        entries.push(Game.System(`Bench/LongPing${group}`, { events: { ping: Game.System.thisTick(Game.System.readEvent(Ping)) } }, ({ events }) => {
+          if (events.ping.all().length < 0) throw new Error("unreachable")
+        }))
+      }
+    }
+    const schedule = Game.Schedule(...entries)
+    return {
+      run: () => {
+        for (let index = 0; index < 10; index++) {
+          const result = runtime.tryTick(schedule)
+          if (!result.ok) throw new Error(JSON.stringify(result.error))
+        }
+      }
+    }
+  }
+}
+
 const lookupGet: BenchCase = {
   name: "lookup/get-10k",
   description: "Resolve 10k stored entity ids through a declared 2-component query's get",
@@ -511,6 +551,7 @@ export const cases: ReadonlyArray<BenchCase> = [
   changedFilter,
   churn,
   scheduleOverhead,
+  longOrdered,
   lookupGet,
   events,
   hierarchy,

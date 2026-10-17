@@ -287,6 +287,18 @@ export interface ThisTick {
  * (damage applied the tick it is dealt). A plain read is right when last
  * tick's data is acceptable.
  *
+ * On a query (`queries: { enemies: Game.System.thisTick(Enemies) }`), the
+ * writers are systems whose declared commands can change what it matches:
+ * `spawns` covering every component it requires, or `inserts` / `removes` of
+ * any component it names (selection slots, optional ones included, `with`,
+ * `without`, filters). Each must run earlier with an `applyDeferred()` (or
+ * `applyStateTransitions(...)`) between it and the reader, since commands
+ * apply only there. `despawns` never count: a despawned entity stays visible
+ * to queries until the next `applyDeferred()`. Nested schedules are
+ * flattened, gated groups count by position, and a transition bundle counts
+ * at its `applyStateTransitions(...)` step (which applies queued commands
+ * first), as if every schedule in it runs, markers inside included.
+ *
  * @example
  * ```ts
  * const ApplyDamage = Game.System("ApplyDamage", {
@@ -295,10 +307,14 @@ export interface ThisTick {
  *
  * runtime.tick(Game.Schedule(DealDamage, ApplyDamage)) // compiles
  * runtime.tick(Game.Schedule(ApplyDamage, DealDamage)) // "ApplyDamage needs Damage from this tick, but its writer DealDamage runs after it"
+ *
+ * const AimAtNewest = Game.System("AimAtNewest", { queries: { enemies: Game.System.thisTick(Enemies) } }, ...)
+ * runtime.tick(Game.Schedule(SpawnWave, Game.Schedule.applyDeferred(), AimAtNewest)) // compiles
+ * runtime.tick(Game.Schedule(SpawnWave, AimAtNewest)) // "AimAtNewest needs this tick's commands for queries.enemies, but SpawnWave queues them with no applyDeferred() in between"
  * ```
  */
 export const thisTick = <
-  const Read extends EventRead<Descriptor<"event", string, any>> | ResourceRead<Descriptor<"resource", string, any>>
+  Read extends EventRead<Descriptor<"event", string, any>> | ResourceRead<Descriptor<"resource", string, any>> | Query.Any<any>
 >(read: Read): Read & ThisTick => ({ ...read, thisTick: true })
 
 /**

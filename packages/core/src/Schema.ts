@@ -347,7 +347,8 @@ type BoundTransitionScheduleResult<
   M,
   Schedule.CompositionExactRequirements<Entries>,
   Root,
-  Schedule.CompositionFailure<Entries>
+  Schedule.CompositionFailure<Entries>,
+  Schedule.CompositionOrder<Entries>
 >
 
 type BoundTransitionBundleInput<S extends Schema.Any, Root> =
@@ -364,7 +365,8 @@ type BoundTransitionBundleResult<
   Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
   Root,
   Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
-  Schedule.TransitionBundleFailure<Schedule.FlattenTransitionEntries<Entries>>
+  Schedule.TransitionBundleFailure<Schedule.FlattenTransitionEntries<Entries>>,
+  Schedule.CompositionOrder<Entries>
 >
 
 /**
@@ -440,16 +442,18 @@ export namespace Schema {
     Root,
     M extends BoundStateMachine<Root> = BoundStateMachine<Root>,
     Needs extends Requirement.Requirement = Requirement.Requirement,
-    Failure extends System.SystemFailure = never
-  > = Machine.TransitionScheduleDefinition<S, M, Needs, Root, Failure>
+    Failure extends System.SystemFailure = never,
+    Order extends Schedule.AnyScheduleOrder = Schedule.AnyScheduleOrder
+  > = Machine.TransitionScheduleDefinition<S, M, Needs, Root, Failure, Order>
 
   export type BoundTransitionBundle<
     S extends Any,
     Root,
     Entries extends ReadonlyArray<BoundTransitionSchedule<S, Root, any, any, any>> = ReadonlyArray<BoundTransitionSchedule<S, Root, any, any, any>>,
     Needs extends Requirement.Requirement = Requirement.Requirement,
-    Failure extends System.SystemFailure = never
-  > = Schedule.TransitionBundleDefinition<S, Entries, Needs, Root, Needs, Failure>
+    Failure extends System.SystemFailure = never,
+    Order extends Schedule.AnyScheduleOrder = Schedule.AnyScheduleOrder
+  > = Schedule.TransitionBundleDefinition<S, Entries, Needs, Root, Needs, Failure, Order>
 
   /**
    * A schema-bound runtime branded to one bound schema root.
@@ -513,7 +517,8 @@ export namespace Schema {
         readonly withoutRelations?: WithoutRelations
         readonly withRelated?: WithRelated
         readonly withoutRelated?: WithoutRelated
-      }): QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
+        // Uninferred: an omitted list is `[]`, never inferred from the spec it is written in (`queries: { ... }`).
+      }): QueryModule.QuerySpec<Selection, QueryModule.Uninferred<With, ReadonlyArray<ComponentDescriptor<S>>>, QueryModule.Uninferred<Without, ReadonlyArray<ComponentDescriptor<S>>>, QueryModule.Uninferred<Filters, ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>>>, QueryModule.Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>, Root>
       read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
       write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
       optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
@@ -594,9 +599,9 @@ export namespace Schema {
       /**
        * Requires every writer of this event or resource to run earlier in the
        * same `runtime.tick(...)` call; checked at compile time by `tick`.
-       * Accepts `readEvent(...)` or `readResource(...)`.
+       * Accepts `readEvent(...)`, `readResource(...)`, or a query.
        */
-      thisTick: <const Read extends System.EventRead<EventDescriptor<S>> | System.ResourceRead<ResourceDescriptor<S>>>(
+      thisTick: <Read extends System.EventRead<EventDescriptor<S>> | System.ResourceRead<ResourceDescriptor<S>> | Query.Any<Root>>(
         read: Read
       ) => Read & System.ThisTick
       service: typeof System.service

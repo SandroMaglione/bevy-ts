@@ -37,7 +37,7 @@ describe("Game.System.thisTick", () => {
     expect(Game.System.thisTick(Game.System.readResource(Score))).type.toBe<System.ResourceRead<typeof Score> & System.ThisTick>()
   })
 
-  it("accepts only event and resource reads", () => {
+  it("accepts event and resource reads and queries, never writes", () => {
     expect(Game.System.thisTick).type.not.toBeCallableWith(Game.System.writeEvent(Damage))
     expect(Game.System.thisTick).type.not.toBeCallableWith(Game.System.writeResource(Score))
     expect(Game.System.thisTick).type.toBeCallableWith(Game.System.readEvent(Damage))

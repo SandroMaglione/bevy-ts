@@ -140,8 +140,8 @@
     "tolerance": 0.05,
     "typescript": "Version 7.0.2",
     "metrics": {
-      "types": 47097,
-      "instantiations": 342182
+      "types": 107546,
+      "instantiations": 1291357
     }
   }
 }
