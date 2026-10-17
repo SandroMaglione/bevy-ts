@@ -63,6 +63,13 @@ export const Game = Schema.bind(
       Wall,
       Collectable
     },
+    // What each kind of entity always has: spawning a player without a
+    // collider does not compile, and Game.System.spawns(Player) allows them.
+    requires: [
+      Schema.requires(Player, Position, Velocity, Collider, Renderable),
+      Schema.requires(Wall, Position, Collider, Renderable),
+      Schema.requires(Collectable, Position, Collider, Renderable)
+    ],
     resources: {
       DeltaTime,
       Viewport,

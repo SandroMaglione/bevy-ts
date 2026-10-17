@@ -1,7 +1,7 @@
 
 import { levelSolids } from "../content.ts"
-import { PlayerParts, SolidParts, playerDraft, makeSolidDraft } from "../drafts.ts"
-import { Game, LevelScope, LoseMessage, PlayerContacts } from "../schema.ts"
+import { playerDraft, makeSolidDraft } from "../drafts.ts"
+import { Game, LevelScope, LoseMessage, Player, PlayerContacts, Solid } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
 
 export const SetupWorldSystem = Game.System(
@@ -11,7 +11,7 @@ export const SetupWorldSystem = Game.System(
       contacts: Game.System.writeResource(PlayerContacts),
       loseMessage: Game.System.writeResource(LoseMessage)
     },
-    commands: Game.System.commands(Game.System.spawns(...PlayerParts, ...SolidParts))
+    commands: Game.System.commands(Game.System.spawns(Player, Solid))
   },
   ({ commands, resources }) =>
     {

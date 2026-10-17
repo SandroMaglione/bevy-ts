@@ -92,6 +92,11 @@ const Game = Schema.bind(
       Bullet,
       DescentPattern
     },
+    requires: [
+      Schema.requires(Player, Position, Velocity, RenderBody),
+      Schema.requires(Bullet, Position, Velocity, RenderBody),
+      Schema.requires(Enemy, Position, RenderBody, DescentPattern)
+    ],
     resources: {
       FrameDelta,
       DeltaMilliseconds,
@@ -188,9 +193,6 @@ const AddedRenderableQuery = Game.Query({
 const idleVelocity = { vx: 0, vy: 0, speed: 6 } as const
 const shootUpVelocity = { vx: 0, vy: -10, speed: 6 } as const
 
-/** The components of the player ship (`makePlayerDraft`). */
-const PlayerParts = [Position, Velocity, RenderBody, Player] as const
-
 const makePlayerDraft = () =>
   Game.Command.spawn(
     [Position, { x: 400, y: PLAYER_START_Y }],
@@ -207,9 +209,6 @@ const makePlayerDraft = () =>
     [Player, {}]
   )
 
-/** The components of a bullet (`makeBulletDraft`). */
-const BulletParts = [Position, Velocity, RenderBody, Bullet] as const
-
 const makeBulletDraft = (position: { x: number; y: number }) =>
   Game.Command.spawn(
     [Position, position],
@@ -225,9 +224,6 @@ const makeBulletDraft = (position: { x: number; y: number }) =>
     }],
     [Bullet, { damage: 10 }]
   )
-
-/** The components of an enemy (`makeEnemyDraft`). */
-const EnemyParts = [Position, RenderBody, Enemy, DescentPattern] as const
 
 const makeEnemyDraft = (position: { x: number; y: number }, pattern: DescentPatternValue) =>
   Game.Command.spawn(
@@ -424,7 +420,7 @@ const createNode = (renderBody: RenderBodyValue): Graphics => {
 const SpawnPlayerSystem = Game.System(
   "SpaceInvaders/SpawnPlayer",
   {
-    commands: Game.System.commands(Game.System.spawns(...PlayerParts))
+    commands: Game.System.commands(Game.System.spawns(Player))
   },
   ({ commands }) =>
     {
@@ -493,7 +489,7 @@ const ShootingSystem = Game.System(
     services: {
       input: Game.System.service(InputManager)
     },
-    commands: Game.System.commands(Game.System.spawns(...BulletParts))
+    commands: Game.System.commands(Game.System.spawns(Bullet))
   },
   ({ queries, resources, services, commands }) =>
     {
@@ -528,7 +524,7 @@ const EnemySpawnSystem = Game.System(
       frameDelta: Game.System.readResource(FrameDelta),
       enemySpawnProgress: Game.System.writeResource(EnemySpawnProgress)
     },
-    commands: Game.System.commands(Game.System.spawns(...EnemyParts))
+    commands: Game.System.commands(Game.System.spawns(Enemy))
   },
   ({ resources, commands }) =>
     {

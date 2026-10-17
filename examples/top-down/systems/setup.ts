@@ -1,12 +1,12 @@
 
 import { pickupLayout, wallLayout } from "../content.ts"
-import { PickupParts, PlayerParts, WallParts, makePickupDraft, playerDraft, makeWallDraft } from "../drafts.ts"
-import { Game } from "../schema.ts"
+import { makePickupDraft, playerDraft, makeWallDraft } from "../drafts.ts"
+import { Collectable, Game, Player, Wall } from "../schema.ts"
 
 export const SetupWorldSystem = Game.System(
   "TopDown/SetupWorld",
   {
-    commands: Game.System.commands(Game.System.spawns(...PlayerParts, ...WallParts, ...PickupParts))
+    commands: Game.System.commands(Game.System.spawns(Player, Wall, Collectable))
   },
   ({ commands }) =>
     {

@@ -35,6 +35,10 @@ export const Game = Schema.bind(
       Player,
       Pickup
     },
+    requires: [
+      Schema.requires(Player, Position, Actor),
+      Schema.requires(Pickup, Position, Actor)
+    ],
     resources: {
       Arena,
       DeltaTime,

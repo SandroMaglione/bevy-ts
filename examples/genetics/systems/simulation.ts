@@ -35,8 +35,6 @@ import {
   randomBetween,
   randomUnit,
   sampleFoundersFromSurvivors,
-  AgentParts,
-  FoodParts,
   spawnAgentDraft,
   spawnFoodDraft,
   wrap
@@ -65,7 +63,7 @@ export const SetupWorldSystem = Game.System(
       populationStats: Game.System.writeResource(PopulationStats),
       summary: Game.System.writeResource(Summary)
     },
-    commands: Game.System.commands(Game.System.spawns(...FoodParts, ...AgentParts))
+    commands: Game.System.commands(Game.System.spawns(Food, Agent))
   },
   ({ commands, resources }) =>
     {
@@ -535,7 +533,7 @@ export const ResolveAgentInteractionsSystem = Game.System(
       rngSeed: Game.System.writeResource(RngSeed),
       populationStats: Game.System.writeResource(PopulationStats)
     },
-    commands: Game.System.commands(Game.System.spawns(...AgentParts))
+    commands: Game.System.commands(Game.System.spawns(Agent))
   },
   ({ queries, resources, commands }) =>
     {
@@ -780,7 +778,7 @@ export const MaintainFoodSystem = Game.System(
       arena: Game.System.readResource(Arena),
       rngSeed: Game.System.writeResource(RngSeed)
     },
-    commands: Game.System.commands(Game.System.spawns(...FoodParts))
+    commands: Game.System.commands(Game.System.spawns(Food))
   },
   ({ queries, commands, resources }) =>
     {

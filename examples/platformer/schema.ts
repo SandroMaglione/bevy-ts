@@ -39,6 +39,10 @@ export const Game = Schema.bind(
       Player,
       Solid
     },
+    requires: [
+      Schema.requires(Player, Position, Velocity, Collider, Renderable),
+      Schema.requires(Solid, Position, Collider, Renderable)
+    ],
     resources: {
       DeltaTime,
       Viewport,

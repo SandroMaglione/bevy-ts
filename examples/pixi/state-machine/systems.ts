@@ -56,9 +56,6 @@ const distanceSquared = (left: Vector, right: Vector): number => {
   return Vector2.lengthSquared(Vector2.subtract(left, right))
 }
 
-/** The components of a pickup (`makePickupDraft`). */
-const PickupParts = [Position, Actor, Pickup] as const
-
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
   return Game.Command.spawn(
     Game.Command.entryRaw(Position, position),
@@ -66,9 +63,6 @@ const makePickupDraft = (position: { readonly x: number; readonly y: number }) =
     Game.Command.entry(Pickup, {})
   )
 }
-
-/** The components of the player (`playerDraft`). */
-const PlayerParts = [Position, Actor, Player] as const
 
 /**
  * The player draft, validated once at module load through the constructed
@@ -83,7 +77,7 @@ const playerDraft = Game.Command.spawn(
 export const SpawnPlayerSystem = Game.System(
   "StateMachineExample/SpawnPlayer",
   {
-    commands: Game.System.commands(Game.System.spawns(...PlayerParts))
+    commands: Game.System.commands(Game.System.spawns(Player))
   },
   ({ commands }) =>
     {
@@ -343,7 +337,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
       goal: Game.System.readResource(PickupGoal),
       cursor: Game.System.writeResource(SpawnCursor)
     },
-    commands: Game.System.commands(Game.System.despawns(Pickup), Game.System.spawns(...PickupParts))
+    commands: Game.System.commands(Game.System.despawns(Pickup), Game.System.spawns(Pickup))
   },
   ({ queries, resources, commands }) =>
     {

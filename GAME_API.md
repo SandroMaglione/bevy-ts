@@ -25,6 +25,51 @@ const Game = Schema.bind(Schema.fragment({
 The bound `Game` value is the authoring boundary. Queries, systems, schedules,
 entity scopes, inspectors, and runtimes made from a different root do not fit.
 
+### Components that always come together
+
+When one component only makes sense with others, say so in the schema instead
+of keeping a list of "parts" next to each draft:
+
+```ts
+const Player = Descriptor.Tag("Game/Player")
+const EnemyKind = Descriptor.Component<"grunt" | "boss">()("Game/EnemyKind", { immutable: true })
+
+const Game = Schema.bind(Schema.fragment({
+  components: { Position, Velocity, Health, Player, EnemyKind },
+  requires: [
+    Schema.requires(Player, Position, Velocity, Health),
+    Schema.requires(EnemyKind, Position, Health)
+  ]
+}))
+
+const SpawnPlayer = Game.System("Game/SpawnPlayer", {
+  // Also allows Position, Velocity, and Health.
+  commands: Game.System.commands(Game.System.spawns(Player))
+}, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([Player, {}], [Position, { x: 0, y: 0 }]))
+  // error: Game/Player requires Game/Velocity: add the missing entries to the draft
+})
+```
+
+The draft is checked where it is committed (`commands.spawn` / `spawnIn`), so a
+draft can be built in steps with `Game.Command.extend`. `commands.insert` checks
+what the target's query proves plus the entries inserted with it, and
+`commands.remove(match.entity, ...components)` refuses to remove a required
+component while the entity may keep its requirer: remove both in one call, or
+match the entity with a query that has `without: [Requirer]`. Requirements may
+name components of other fragments of the same `Schema.bind`.
+
+Types cannot see everything (another system's command applied first in the
+same `applyDeferred()`, erased types), so the runtime checks again when
+commands are applied: a command that would break a requirement is skipped,
+traced, and reported by the `requirement-violated` lint. `restore` rejects a
+save whose entity misses a required component.
+
+`immutable: true` marks data that says what an entity is. Queries can only
+read it (`Game.Query.write(EnemyKind)` does not compile); change it by
+replacing it with `commands.insert(match.entity, [EnemyKind, "boss"])`, which
+`Game.Query.changed(EnemyKind)` sees after the next `applyDeferred()`.
+
 ## 2. Write systems with exact capabilities
 
 ```ts

@@ -1,4 +1,50 @@
-# Migrate from bevy-ts to Ritmo
+# Migration guide
+
+## Upgrading to 0.8.0
+
+0.8.0 adds component requirements (`Schema.requires`) and changes how
+`commands.insert` and `commands.remove` take their target.
+
+- **`remove` takes a query match, not a raw id.** Pass `match.entity` (or the
+  id `commands.spawn` returned in the same run). With only a stored id,
+  resolve it first.
+
+  ```diff
+  -for (const match of queries.marked.each()) commands.remove(match.entity.id, Marker)
+  +for (const match of queries.marked.each()) commands.remove(match.entity, Marker)
+
+  -commands.remove(storedId, Sprite)
+  +const found = queries.sprites.get(storedId)
+  +if (found.ok) commands.remove(found.value.entity, Sprite)
+  ```
+
+- **`remove` takes several components.** Removing a component together with
+  the components that require it must happen in one call:
+  `commands.remove(match.entity, Player, Velocity)`.
+- **`insert` takes `match.entity` too.** A raw id still works for components
+  that require nothing; a component with requirements needs a target whose
+  query proves them, or the requirements inserted in the same call.
+- **A query's `without` proves absence.** `remove(match.entity, Velocity)`
+  compiles when every component that requires `Velocity` is excluded by the
+  query (`without: [Player]`) or removed in the same call.
+- **Hand-kept part lists can go.** Declare what always comes together in the
+  schema, and give `spawns` the main component:
+
+  ```diff
+  -export const PlayerParts = [Position, Velocity, Collider, Player] as const
+  -commands: Game.System.commands(Game.System.spawns(...PlayerParts))
+  +Schema.fragment({ components: { ... }, requires: [Schema.requires(Player, Position, Velocity, Collider)] })
+  +commands: Game.System.commands(Game.System.spawns(Player))
+  ```
+
+- **New optional descriptor option.** `{ immutable: true }` on a component
+  makes `Game.Query.write` of it a compile error; replace it with `insert`.
+- **Debug output.** `describe()` component entries gain `immutable` and
+  `requires`; a new effect kind `requirementViolated` and lint
+  `requirement-violated` report commands skipped at apply time. Replay schema
+  hashes are unchanged.
+
+## Rename from bevy-ts
 
 Ritmo is the new name for bevy-ts. All six packages retain the `@typeonce` scope
 and share one version.

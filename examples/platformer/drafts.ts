@@ -39,9 +39,6 @@ const renderableForSolid = (
   }
 }
 
-/** The components of the player (`playerDraft`). */
-export const PlayerParts = [Position, Velocity, Collider, Renderable, Player] as const
-
 /**
  * The player draft, validated once at module load through the constructed
  * descriptors. Drafts are plain values, so every spawn reuses it.
@@ -59,9 +56,6 @@ export const playerDraft = Game.Command.spawn(
   }),
   Game.Command.entry(Player, {})
 )
-
-/** The components of a level solid (`makeSolidDraft`). */
-export const SolidParts = [Position, Collider, Renderable, Solid] as const
 
 export const makeSolidDraft = (layout: LevelSolidLayout) => {
   return Game.Command.spawn(

@@ -16,6 +16,7 @@ const { relation: ChildOf } = Descriptor.Hierarchy("Concepts/ChildOf", "Concepts
 - Identity is `(kind, name)`. A schema rejects two descriptors of one kind with the same name, so prefix names per game or package.
 - `Descriptor.Component<T>()` declares a plain component. `Descriptor.ConstructedComponent(validator)` attaches a validating constructor (`{ result: (raw) => Result }`), used for raw input and when loading saves. `@typeonce/ritmo-math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`. `Decode` has ready-made validators (`number`, `integer`, `string`, `boolean`, `literal`, `nullable`, `array`, `struct`, `handle`), `Descriptor.Tag("Player")` declares a marker component, and `Descriptor.fromStandardSchema(schema)` adapts any Standard Schema validator (ArkType, Effect Schema, Zod, Valibot).
 - `Descriptor.TransientComponent<T>()` / `TransientResource<T>()` mark runtime-only state that saves skip.
+- A component constructor takes `{ immutable: true }` for data that says what an entity is (a kind, a team): queries can only read it, and `commands.insert` replaces it.
 
 ## 2. A schema closes the world
 
@@ -32,6 +33,7 @@ const Game = Schema.bind(Schema.fragment({
 - Everything else is built from `Game`: queries, systems, schedules, state machines and the runtime.
 - Anything outside the schema, or from another `Game`, is a compile error.
 - Split large games into several `Schema.fragment(...)` values.
+- A fragment's `requires: [Schema.requires(Player, Position, Velocity)]` says every entity with `Player` also has `Position` and `Velocity`. Spawns, inserts, and removes that would break it do not compile; nothing is filled in with a default.
 
 ## 3. Systems declare exactly what they touch
 
@@ -61,9 +63,10 @@ const Spawn = Game.System("Concepts/Spawn", {
 })
 ```
 
-- A system has `commands` only when its spec declares them, and only for what it names: `spawns(...)` (every component of the draft), `inserts(...)`, `removes(...)`, `despawns(...)`, `despawnsScope(scope)`, and `relates(...)`. Without the declaration, `commands` is a type naming the fix.
-- `despawn` takes `match.entity` from a query that proves one of the `despawns` components, never a raw id. With only an id, resolve it first: `const enemy = queries.enemies.get(id); if (enemy.ok) commands.despawn(enemy.value.entity)`.
-- `Game.Command.extend(draft, ...entries)` adds entries to a draft before it is spawned; `commands.insert` changes an entity that already exists.
+- A system has `commands` only when its spec declares them, and only for what it names: `spawns(...)` (every component of the draft, plus what they require), `inserts(...)`, `removes(...)`, `despawns(...)`, `despawnsScope(scope)`, and `relates(...)`. Without the declaration, `commands` is a type naming the fix.
+- `despawn` and `remove` take `match.entity` from a query (or the id `spawn` returned in this run), never a raw id. With only an id, resolve it first: `const enemy = queries.enemies.get(id); if (enemy.ok) commands.despawn(enemy.value.entity)`. `despawn` also needs the query to prove one of the `despawns` components.
+- `insert` takes `match.entity` too: what the query proves, plus the entries inserted together, must cover what the inserted components require. `remove(entity, A, B)` removes several components at once; a required component goes only together with its requirers, or from a query with `without: [Requirer]`.
+- `Game.Command.extend(draft, ...entries)` adds entries to a draft before it is spawned (drafts are checked against `requires` at `commands.spawn`); `commands.insert` changes an entity that already exists.
 - Commands are applied only when a schedule reaches `applyDeferred()`. `commands.spawn` returns the entity id immediately.
 - `Game.Command.spawn(...)` returns a draft, or a `Result` of one if any entry can fail validation (for example `Game.Command.entryRaw(Position, raw)`).
 
