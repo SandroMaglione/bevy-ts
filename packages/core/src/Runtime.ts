@@ -182,7 +182,9 @@ export type RuntimeConstructionError<S extends Schema.Any, Provided> = Simplify<
  * A runtime plus the `debug` handle when it was made with `debug: true`.
  */
 export type WithDebug<R, Enabled, S extends Schema.Any, Root> =
-  [Enabled] extends [Debug.Option] ? R & Debug.Member<S, Root> : R
+  [Enabled] extends [true] ? R & Debug.Member<S, Root>
+  : [Enabled] extends [false | undefined] ? R
+  : R & Partial<Debug.Member<S, Root>>
 
 /**
  * The runtime returned by `make`, wrapped in a `Result` exactly when a

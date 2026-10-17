@@ -26,8 +26,14 @@ describe("Runtime debug option", () => {
     }
   })
 
-  it("rejects non-literal debug flags", () => {
-    expect(Game.Runtime.make).type.not.toBeCallableWith({ services: Game.Runtime.services(), debug: false })
+  it("types the handle as optional when the flag is only known at runtime (a dev build)", () => {
+    const dev: boolean = Math.random() > 2
+    const maybe = Game.Runtime.make({ services: Game.Runtime.services(), debug: dev })
+    expect(maybe.debug).type.toBe<Debug.Handle<typeof Game.schema, typeof Game.schema> | undefined>()
+    // @ts-expect-error 'maybe.debug' is possibly 'undefined'.
+    maybe.debug.describe()
+    const off = Game.Runtime.make({ services: Game.Runtime.services(), debug: false })
+    expect(off).type.not.toHaveProperty("debug")
   })
 
   it("filters dumps by the runtime's own components", () => {

@@ -507,9 +507,11 @@ export type TraceEvent =
   | RestoreEvent
 
 /**
- * The `debug` runtime option: `true` attaches a handle.
+ * The `debug` runtime option: `true` attaches a handle; a `boolean` known
+ * only at runtime (`import.meta.env.DEV`) attaches it when true and types
+ * `debug` as optional, so code checks it before use.
  */
-export type Option = true
+export type Option = boolean
 
 /**
  * The member a runtime made with `debug: true` carries.
@@ -520,4 +522,6 @@ export interface Member<S extends Schema.Any, Root> {
 
 /** Resolves the extra runtime member for a `debug` option type. */
 export type MemberFor<Enabled, S extends Schema.Any, Root> =
-  [Enabled] extends [Option] ? Member<S, Root> : {}
+  [Enabled] extends [true] ? Member<S, Root>
+  : [Enabled] extends [false | undefined] ? {}
+  : Partial<Member<S, Root>>
