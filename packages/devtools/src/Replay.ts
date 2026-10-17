@@ -34,7 +34,7 @@
  * @example
  * ```ts
  * const recorder = Replay.recorder(runtime, {
- *   schedule: simulate, name: "simulate", keep: 30, stepSeconds: 1 / 30,
+ *   schedule: simulate, name: "simulate", keep: 30, step: Clock.hz(30),
  *   sink: ReplayViteSink.make({ fetch }), hostClock: HostClock.standard,
  *   saveOn: { failure: true, invariants: [DeadAreGone] }
  * })
@@ -44,7 +44,7 @@
  * if (replay.ok) console.log(replay.value.play().text)
  * ```
  */
-import type { HostClock } from "@typeonce/bevy-ts"
+import type { Clock, HostClock } from "@typeonce/bevy-ts"
 import type * as Debug from "@typeonce/bevy-ts/Debug"
 import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
 import type * as Requirement from "@typeonce/bevy-ts/Requirement"
@@ -171,8 +171,8 @@ export interface RecorderOptions<S extends Schema.Any, Root, Recorded extends An
   readonly name: string
   /** Seconds of play to keep. */
   readonly keep: number
-  /** Seconds per tick of the schedule (the fixed step). */
-  readonly stepSeconds: number
+  /** The schedule's fixed step (`Clock.hz(...)`), the same the game's clock runs at. */
+  readonly step: Clock.Step
   /** Seconds between world snapshots. Defaults to 5. */
   readonly every?: number
   readonly sink: Sink
@@ -240,8 +240,8 @@ export const recorder = <S extends Schema.Any, Root, const Recorded extends AnyS
   runtime: Recordable<S, Root>,
   options: RecorderOptions<S, Root, Recorded> & ValidateRecordable<Recorded>
 ): Recorder => {
-  const keepTicks = Math.max(1, Math.ceil(options.keep / options.stepSeconds))
-  const everyTicks = Math.max(1, Math.round((options.every ?? 5) / options.stepSeconds))
+  const keepTicks = Math.max(1, Math.ceil(options.keep / options.step.dt))
+  const everyTicks = Math.max(1, Math.round((options.every ?? 5) / options.step.dt))
   const constants: Record<string, unknown> = {}
   const restores: Array<() => void> = []
   let current: Map<string, Array<unknown>> | undefined

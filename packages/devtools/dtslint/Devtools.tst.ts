@@ -1,4 +1,4 @@
-import { Decode, Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
+import { Clock, Decode, Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import { Invariant, Lint, Replay, Session } from "@typeonce/bevy-ts-devtools"
 import { describe, expect, it } from "tstyche"
 
@@ -124,7 +124,7 @@ describe("Replay.recorder", () => {
     ),
     debug: { hostClock }
   })
-  const base = { name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), hostClock }
+  const base = { name: "update", keep: 10, step: Clock.hz(1), sink: Replay.memorySink(), hostClock }
 
   it("accepts plain-data sources and plain constants", () => {
     const update = Saved.Schedule(Saved.System("DevtoolsTypes/Plain", {

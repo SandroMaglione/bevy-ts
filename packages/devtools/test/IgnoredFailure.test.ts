@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { HostClock, Result, Schema } from "@typeonce/bevy-ts"
+import { Clock, HostClock, Result, Schema } from "@typeonce/bevy-ts"
 import { Replay, Session } from "@typeonce/bevy-ts-devtools"
 import { Collector } from "@typeonce/bevy-ts-devtools/Monitor"
 
@@ -59,7 +59,7 @@ describe("ignored tick failures in devtools", () => {
   it("saves a replay when a failure goes unread", () => {
     const { runtime, hostClock } = make()
     const sink = Replay.memorySink()
-    Replay.recorder(runtime, { schedule: setup, name: "setup", keep: 10, stepSeconds: 1, sink, hostClock, saveOn: { failure: true } })
+    Replay.recorder(runtime, { schedule: setup, name: "setup", keep: 10, step: Clock.hz(1), sink, hostClock, saveOn: { failure: true } })
     runtime.tick(setup)
     runtime.tick(update)
     expect(sink.files.map((file) => file.reason)).toContain(ignoredText)

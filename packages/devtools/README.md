@@ -202,7 +202,7 @@ to open headless, explain, and turn into a test, then delete.
 // In the game's dev build: record the simulation schedule.
 const recorder = Replay.recorder(runtime, {
   schedule: simulate, name: "simulate",
-  keep: 30, stepSeconds: STEP_SECONDS,       // seconds kept, seconds per tick
+  keep: 30, step: STEP,                      // seconds kept, the fixed step (Clock.hz)
   sink: ReplayViteSink.make({ fetch: (url, init) => fetch(url, init) }),
   hostClock: BrowserHostClock.make(window),  // for savedAt
   saveOn: { failure: true, invariants: [DeadAreGone] } // saves by itself

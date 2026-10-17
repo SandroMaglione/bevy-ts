@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { FixedLoop } from "@typeonce/bevy-ts-browser"
-import { Debug, HostClock, Result, Schema } from "@typeonce/bevy-ts"
+import { Clock, Debug, HostClock, Result, Schema } from "@typeonce/bevy-ts"
 
 const Game = Schema.bind(Schema.fragment({}))
 const Fail = Game.System("LoopIgnored/Fail", {}, () => Result.failure("boom" as const))
@@ -21,7 +21,7 @@ describe("ignored tick failures through FixedLoop", () => {
         tick = onTick
         return { stop: () => {} }
       }),
-      stepSeconds: 0.01,
+      step: Clock.hz(100),
       maxFrameSeconds: 0.1,
       maxStepsPerFrame: 3,
       update: () => runtime.tick(step),

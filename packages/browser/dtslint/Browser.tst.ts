@@ -1,5 +1,5 @@
 import { FixedLoop, packageTag } from "@typeonce/bevy-ts-browser"
-import { Result } from "@typeonce/bevy-ts"
+import { Clock, Result } from "@typeonce/bevy-ts"
 import { describe, expect, it } from "tstyche"
 
 describe("@typeonce/bevy-ts-browser", () => {
@@ -10,7 +10,7 @@ describe("@typeonce/bevy-ts-browser", () => {
   it("preserves the update failure type in the loop failure channel", () => {
     FixedLoop.start({
       source: FixedLoop.source(() => ({ stop() {} })),
-      stepSeconds: 1 / 60,
+      step: Clock.hz(60),
       maxFrameSeconds: 0.25,
       maxStepsPerFrame: 5,
       update: () => Result.failure("GameOver" as const),
@@ -20,6 +20,20 @@ describe("@typeonce/bevy-ts-browser", () => {
       onFailure: (failure) => {
         expect(failure).type.toBe<FixedLoop.Failure<"GameOver">>()
       }
+    })
+  })
+
+  it("takes the clock's step, never a number of seconds", () => {
+    expect<FixedLoop.Options["step"]>().type.toBe<Clock.Step>()
+    FixedLoop.start({
+      source: FixedLoop.source(() => ({ stop() {} })),
+      // @ts-expect-error Type 'number' is not assignable to type 'Step<number>'
+      step: 1 / 60,
+      maxFrameSeconds: 0.25,
+      maxStepsPerFrame: 5,
+      update: () => Result.success(undefined),
+      render: () => {},
+      onFailure: () => {}
     })
   })
 })

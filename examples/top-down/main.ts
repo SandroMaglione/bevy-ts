@@ -1,6 +1,6 @@
 import { FixedLoop } from "@typeonce/bevy-ts-browser"
 
-import { FIXED_STEP_SECONDS, MAX_FRAME_SECONDS, MAX_STEPS_PER_FRAME } from "./constants.ts"
+import { FIXED_STEP, MAX_FRAME_SECONDS, MAX_STEPS_PER_FRAME } from "./constants.ts"
 import { createTopDownBrowserHost } from "./host.ts"
 import { createTopDownRuntime } from "./runtime.ts"
 import { setupSchedule, updateSchedule } from "./schedules.ts"
@@ -31,7 +31,7 @@ export const startTopDownExample = async (mount: HTMLElement): Promise<BrowserEx
         stop: () => browserHost.host.application.ticker.remove(tick)
       }
     }),
-    stepSeconds: FIXED_STEP_SECONDS,
+    step: FIXED_STEP,
     maxFrameSeconds: MAX_FRAME_SECONDS,
     maxStepsPerFrame: MAX_STEPS_PER_FRAME,
     update: (stepSeconds) => {

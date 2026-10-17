@@ -252,7 +252,7 @@ import { FixedLoop } from "@typeonce/bevy-ts-browser"
 const source = FixedLoop.animationFrames(window)
 const loop = FixedLoop.start({
   source,
-  stepSeconds: 1 / 60,
+  step: Clock.hz(60),
   maxFrameSeconds: 0.1,
   maxStepsPerFrame: 5,
   update: (stepSeconds) => {

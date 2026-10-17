@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
+import { Clock, Decode, Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
 import { Invariant, Replay } from "@typeonce/bevy-ts-devtools"
 
 const hostClock = HostClock.test()
@@ -64,7 +64,7 @@ const record = (dxs: ReadonlyArray<number>, options: { readonly keep?: number; r
   // savedAt reads the recorder's clock: a test clock moved to 1000 ms.
   const savedClock = HostClock.test()
   savedClock.adjust(1_000)
-  const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: options.keep ?? 10, stepSeconds: 1, every: options.every ?? 2, sink, hostClock: savedClock })
+  const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: options.keep ?? 10, step: Clock.hz(1), every: options.every ?? 2, sink, hostClock: savedClock })
   return { runtime, sink, recorder }
 }
 
@@ -153,14 +153,14 @@ describe("Replay", () => {
   it("saves by itself when an invariant breaks, once until it holds again, and when a tick fails", () => {
     const runtime = live([5, 5, 5, 5, 5])
     const sink = Replay.memorySink()
-    Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, stepSeconds: 1, sink, hostClock, saveOn: { invariants: [FarAway] } })
+    Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, step: Clock.hz(1), sink, hostClock, saveOn: { invariants: [FarAway] } })
     for (let step = 0; step < 5; step++) runtime.tick(update)
     expect(sink.files.map((file) => file.reason)).toEqual(["invariant far away broke at tick 3: x above 20"])
 
     const failing = Game.Schedule(Game.System("Replay/Fail", {}, () => Result.failure("Broken" as const)))
     const failures = Replay.memorySink()
     const quiet = live([])
-    Replay.recorder(quiet, { schedule: failing, name: "failing", keep: 10, stepSeconds: 1, sink: failures, hostClock, saveOn: { failure: true } })
+    Replay.recorder(quiet, { schedule: failing, name: "failing", keep: 10, step: Clock.hz(1), sink: failures, hostClock, saveOn: { failure: true } })
     quiet.tick(failing)
     expect(failures.files.map((file) => file.reason)).toEqual([`tick 1 failed: Replay/Fail returned "Broken"`])
   })
@@ -168,7 +168,7 @@ describe("Replay", () => {
   it("stops recording and gives the services back their own snapshot", () => {
     const runtime = live([1])
     const before = runtime.services["Replay/Input"].snapshot
-    const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), hostClock })
+    const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, step: Clock.hz(1), sink: Replay.memorySink(), hostClock })
     expect(runtime.services["Replay/Input"].snapshot).not.toBe(before)
     recorder.stop()
     expect(runtime.services["Replay/Input"].snapshot).toBe(before)

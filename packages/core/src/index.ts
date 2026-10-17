@@ -18,6 +18,10 @@ export * as Decode from "./Decode.ts"
  */
 export * as Debug from "./Debug.ts"
 /**
+ * Simulation time: the fixed step, the clock resource, durations in whole steps.
+ */
+export * as Clock from "./Clock.ts"
+/**
  * Descriptor authoring helpers.
  */
 export * as Descriptor from "./Descriptor.ts"

@@ -8,6 +8,7 @@
  * @module FixedLoop
  * @docGroup browser
  */
+import type * as Clock from "@typeonce/bevy-ts/Clock"
 import * as Result from "@typeonce/bevy-ts/Result"
 
 /** One renderer or browser tick measured in milliseconds. */
@@ -27,8 +28,11 @@ export interface TickSource<TTick extends Tick = Tick> {
 
 /** Validated fixed-step timing policy. */
 export interface Options {
-  /** Simulation duration advanced by every fixed update. */
-  readonly stepSeconds: number
+  /**
+   * The fixed step every update advances (`Clock.hz(60)`): the same value
+   * the game's clock resource runs at, so the loop and the clock agree.
+   */
+  readonly step: Clock.Step
   /** Maximum host-frame duration admitted into the accumulator. */
   readonly maxFrameSeconds: number
   /** Maximum number of simulation updates performed for one host frame. */
@@ -86,7 +90,7 @@ export const source = <TTick extends Tick>(
 ): TickSource<TTick> => ({ subscribe })
 
 const validate = (options: Options): Result.Result<void, InvalidOptions> => {
-  for (const field of ["stepSeconds", "maxFrameSeconds"] as const) {
+  for (const field of ["maxFrameSeconds"] as const) {
     const value = options[field]
     if (!Number.isFinite(value) || value <= 0) {
       return Result.failure({
@@ -155,18 +159,18 @@ export const start = <TTick extends Tick, UpdateError>(
     accumulator += elapsedSeconds
 
     let fixedSteps = 0
-    while (accumulator >= options.stepSeconds && fixedSteps < options.maxStepsPerFrame) {
-      const update = options.update(options.stepSeconds)
+    while (accumulator >= options.step.dt && fixedSteps < options.maxStepsPerFrame) {
+      const update = options.update(options.step.dt)
       if (!update.ok) {
         fail({ kind: "UpdateFailure", error: update.error })
         return
       }
-      accumulator -= options.stepSeconds
+      accumulator -= options.step.dt
       fixedSteps += 1
     }
 
-    if (accumulator >= options.stepSeconds) {
-      const droppedWholeSteps = Math.floor(accumulator / options.stepSeconds) * options.stepSeconds
+    if (accumulator >= options.step.dt) {
+      const droppedWholeSteps = Math.floor(accumulator / options.step.dt) * options.step.dt
       accumulator -= droppedWholeSteps
       droppedSeconds += droppedWholeSteps
     }
@@ -174,7 +178,7 @@ export const start = <TTick extends Tick, UpdateError>(
     options.render({
       elapsedSeconds,
       fixedSteps,
-      alpha: accumulator / options.stepSeconds,
+      alpha: accumulator / options.step.dt,
       droppedSeconds
     })
   }
