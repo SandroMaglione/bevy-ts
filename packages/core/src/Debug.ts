@@ -90,6 +90,14 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
    * tool can listen for a whole play session (replay recorders do).
    */
   readonly observeHost: (listener: (event: HostEvent<S, Root>) => void) => () => void
+  /**
+   * Reports the last failed tick result if nobody read its `ok`, as a
+   * `failure.ignored` event (to `observe` and `observeHost` listeners), with
+   * `when: "session-end"`. Call it when a session ends; the start of the
+   * next tick checks the same with `when: "next-tick"`. Emits nothing to a
+   * console.
+   */
+  readonly checkIgnoredFailures: () => void
   /** Retention and reader state of every stream that has readers or entries. */
   readonly streams: () => ReadonlyArray<StreamStatus>
   /** Live entity count and, per component, how many entities have it. Cheap enough to sample every frame. */
@@ -512,6 +520,27 @@ export type HostEvent<S extends Schema.Any = Schema.Any, Root = unknown> =
       readonly error?: unknown
     }
   | { readonly type: "send"; readonly event: string; readonly value: unknown }
+  | FailureIgnoredEvent
+
+/**
+ * A failed `tick` / `tryTick` result whose `ok` nobody read: the failure
+ * went unnoticed, and the systems after the failing one did not run that
+ * tick. Found at the start of the next tick (`when: "next-tick"`) or by
+ * `checkIgnoredFailures()` (`when: "session-end"`). Debug runtimes only.
+ */
+export interface FailureIgnoredEvent {
+  readonly type: "failure.ignored"
+  /** The frame of the failed tick. */
+  readonly frame: number
+  /** The schedule holding the failing system (the first one for a tick that ran nothing). */
+  readonly schedule: string
+  /** The failing system; `undefined` when `tryTick` ran nothing (missing requirements, order). */
+  readonly system: string | undefined
+  readonly error: unknown
+  /** The systems of the tick that did not run because of the failure, in order. */
+  readonly skipped: ReadonlyArray<string>
+  readonly when: "next-tick" | "session-end"
+}
 
 /** Everything `observe` delivers. */
 export type TraceEvent =
@@ -524,6 +553,7 @@ export type TraceEvent =
   | DeferredEvent
   | TransitionEvent
   | RestoreEvent
+  | FailureIgnoredEvent
 
 /**
  * The `debug` runtime option: `{ hostClock }` attaches a handle, timing

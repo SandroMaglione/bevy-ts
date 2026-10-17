@@ -45,7 +45,7 @@ export interface Sample {
 }
 
 export interface Alert {
-  readonly code: "system-failed" | "non-finite-value" | "discarded-messages"
+  readonly code: "system-failed" | "non-finite-value" | "discarded-messages" | "ignored-failure"
   readonly message: string
   readonly count: number
   readonly firstFrame: number
@@ -133,6 +133,9 @@ export class Collector {
       }
       case "deferred":
         this.onDeferred(event)
+        break
+      case "failure.ignored":
+        this.alert("ignored-failure", `ignored:${event.frame}`, Format.ignoredFailure(event), event.frame)
         break
       case "schedule.end":
         if (!event.schedule.includes(" > ")) {

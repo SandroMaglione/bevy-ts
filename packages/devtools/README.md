@@ -183,6 +183,7 @@ data without DOM, for a custom UI.
 | `discarded-messages` | A skipped system discarded messages published while it was skipped. |
 | `transition-failed` | An exit or transition schedule failed (queued again), or an enter schedule failed. |
 | `system-failed` | A system returned an expected failure or threw. |
+| `ignored-failure` | A `tick` / `tryTick` result failed and nobody read its `ok` before the next tick (or the session's `report()`): the failure went unnoticed and later systems did not run. `run` stops on it with `reason: "ignored-failure"`. |
 | `non-finite-value` | A system wrote NaN or an infinity into a component, resource, event, or spawned entity. The message names the entity and path; `why()` shows the history. |
 | `population-growing` | A component's count rose through every quarter of a run of 60+ frames: its lowest count in each quarter was higher than in the quarter before. Bursts that are cleaned up do not trigger it; entities that are never despawned do. `run()` returns the counts in `growing`. |
 

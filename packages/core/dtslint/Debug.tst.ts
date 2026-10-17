@@ -66,3 +66,12 @@ describe("Debug descriptions", () => {
     expect<Extract<Debug.Lint["code"], "command-permission-unused">>().type.toBe<"command-permission-unused">()
   })
 })
+
+describe("Ignored tick failures", () => {
+  it("are trace and host events, and a session end checks them", () => {
+    expect<Extract<Debug.TraceEvent, { readonly type: "failure.ignored" }>>().type.toBe<Debug.FailureIgnoredEvent>()
+    expect<Extract<Debug.HostEvent, { readonly type: "failure.ignored" }>>().type.toBe<Debug.FailureIgnoredEvent>()
+    expect<Debug.FailureIgnoredEvent["when"]>().type.toBe<"next-tick" | "session-end">()
+    expect<Debug.Handle["checkIgnoredFailures"]>().type.toBe<() => void>()
+  })
+})

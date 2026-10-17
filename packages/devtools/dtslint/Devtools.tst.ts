@@ -164,3 +164,9 @@ describe("Replay.recorder", () => {
     expect<Replay.IsPlain<Broken>>().type.toBe<false>()
   })
 })
+
+describe("Session stops", () => {
+  it("include a failed tick result nobody read", () => {
+    expect<Extract<Session.Stop, { readonly reason: "ignored-failure" }>["skipped"]>().type.toBe<ReadonlyArray<string>>()
+  })
+})

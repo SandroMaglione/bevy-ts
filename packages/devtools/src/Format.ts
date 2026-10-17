@@ -276,6 +276,22 @@ export type LineKind =
   | "skip"
   | "transition"
   | "restore"
+  | "ignored"
+
+/**
+ * The text for a failed tick result nobody read: who failed, with what, how
+ * many later systems did not run, and when it was found unread.
+ */
+export const ignoredFailure = (event: Debug.FailureIgnoredEvent, options: ValueOptions = {}): string => {
+  const who = event.system === undefined ? `${event.schedule} did not run` : `${event.system} failed`
+  // A system failure shows what the system returned; anything else (missing requirements) as it is.
+  const error = typeof event.error === "object" && event.error !== null && (event.error as { readonly kind?: unknown }).kind === "SystemFailure"
+    ? (event.error as { readonly error: unknown }).error
+    : event.error
+  const later = `${event.skipped.length} later ${event.skipped.length === 1 ? "system" : "systems"} did not run`
+  const found = event.when === "next-tick" ? "not read before the next tick" : "not read before the session ended"
+  return `tick failure ignored: ${who} with ${value(error, options)}; ${later} (${found})`
+}
 
 /**
  * Structural equality for plain data: primitives by `Object.is`, arrays and
@@ -361,6 +377,8 @@ export const lines = (event: Debug.TraceEvent, options: ValueOptions = {}): Read
       return []
     case "restore":
       return [{ kind: "restore", frame: event.frame, schedule: "", system: undefined, entity: undefined, subject: undefined, noop: false, text: `restore ${event.ok ? "applied" : "rejected"}` }]
+    case "failure.ignored":
+      return [{ kind: "ignored", frame: event.frame, schedule: event.schedule, system: event.system, entity: undefined, subject: undefined, noop: false, text: ignoredFailure(event, options) }]
     case "transition":
       return [{
         kind: "transition",

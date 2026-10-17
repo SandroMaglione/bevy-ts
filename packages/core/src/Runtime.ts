@@ -1783,18 +1783,66 @@ const makeValidatedRuntime = <
     relationFailures.trim(boundary)
   }
 
+  /**
+   * With debug: the last failed tick result, until its `ok` is read. The
+   * result handed back is a copy whose `ok` getter marks it read.
+   */
+  let unread: { read: boolean; readonly event: Omit<Debug.FailureIgnoredEvent, "type" | "when"> } | undefined
+  const reportUnread = (when: Debug.FailureIgnoredEvent["when"]): void => {
+    const pending = unread
+    unread = undefined
+    if (pending === undefined || pending.read) return
+    const event: Debug.FailureIgnoredEvent = { type: "failure.ignored", ...pending.event, when }
+    emit(event)
+    emitHost(event)
+  }
+  const watchResult = <R extends Result.Result<void, unknown>>(
+    result: R,
+    schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>
+  ): R => {
+    if (!debugEnabled || result.ok) return result
+    const error = result.error
+    const system = typeof error === "object" && error !== null && (error as { readonly kind?: unknown }).kind === "SystemFailure"
+      ? (error as SystemFailure).system
+      : undefined
+    const names = schedules.flatMap((schedule) => schedule.steps.filter(Schedule.isSystemStep).map((step) => (step as SystemDefinition<any, any, any>).name))
+    const at = system === undefined ? -1 : names.indexOf(system)
+    const holder = system === undefined
+      ? schedules[0]
+      : schedules.find((schedule) => schedule.steps.some((step) => Schedule.isSystemStep(step) && (step as SystemDefinition<any, any, any>).name === system)) ?? schedules[0]
+    const entry = {
+      read: false,
+      event: {
+        frame: frameCount,
+        schedule: holder === undefined ? "(none)" : scheduleName(holder),
+        system,
+        error,
+        skipped: [...new Set(names.slice(at + 1))]
+      }
+    }
+    unread = entry
+    return {
+      get ok() {
+        entry.read = true
+        return false
+      },
+      error
+    } as unknown as R
+  }
+
   const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>): Result.Result<void, SystemFailure> => {
     if (ticking) throw new Error("runtime.tick cannot run inside another tick")
+    if (debugEnabled) reportUnread("next-tick")
     ticking = true
     try {
       advanceFrame()
-      return observedTick(schedules, () => {
+      return watchResult(observedTick(schedules, () => {
         for (const schedule of schedules) {
           const result = runScheduleUnsafe(schedule)
           if (!result.ok) return result
         }
         return succeeded
-      })
+      }), schedules)
     } finally {
       ticking = false
     }
@@ -1834,24 +1882,25 @@ const makeValidatedRuntime = <
   const tryRunSchedule = <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>(
     schedule: Selected
   ): Result.Result<void, MissingRuntimeRequirements | TickOrderViolation | Schedule.FailureOf<Selected>> => {
+    if (debugEnabled) reportUnread("next-tick")
     const missing = schedule.requirements
       .filter((requirement) => !hasRequirement(requirement))
       .map(({ kind, name }) => ({ kind, name }))
 
     if (missing.length > 0) {
-      return Result.failure({
-        kind: "MissingRuntimeRequirements",
+      return watchResult(Result.failure({
+        kind: "MissingRuntimeRequirements" as const,
         requirements: missing
-      })
+      }), [schedule])
     }
 
     const issues = OrderInternal.tickOrderIssues(schedule.steps)
     if (issues.length > 0) {
-      return Result.failure({ kind: "TickOrderViolation", issues })
+      return watchResult(Result.failure({ kind: "TickOrderViolation" as const, issues }), [schedule])
     }
 
     advanceFrame()
-    return observedTick([schedule], () => runScheduleUnsafe(schedule)) as Result.Result<void, Schedule.FailureOf<Selected>>
+    return watchResult(observedTick([schedule], () => runScheduleUnsafe(schedule)), [schedule]) as Result.Result<void, Schedule.FailureOf<Selected>>
   }
 
   /**
@@ -2177,6 +2226,7 @@ const makeValidatedRuntime = <
         hostListeners.delete(listener)
       }
     },
+    checkIgnoredFailures: () => reportUnread("session-end"),
     streams,
     population: () => {
       const components: Record<string, number> = {}

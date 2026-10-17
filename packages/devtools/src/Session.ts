@@ -146,6 +146,20 @@ export type Stop =
   | { readonly reason: "tickOrder"; readonly frame: number; readonly issues: ReadonlyArray<string> }
   | { readonly reason: "defect"; readonly frame: number; readonly error: unknown }
   | { readonly reason: "invariant"; readonly frame: number; readonly invariant: string; readonly message: string }
+  /**
+   * A failed tick result nobody read (for example a setup tick the game ran
+   * before this run): `frame` is the failed tick's, `skipped` the systems
+   * that did not run then.
+   */
+  | {
+      readonly reason: "ignored-failure"
+      readonly frame: number
+      readonly schedule: string
+      readonly system: string | undefined
+      readonly error: unknown
+      readonly skipped: ReadonlyArray<string>
+      readonly when: "next-tick" | "session-end"
+    }
 
 export interface RunResult {
   readonly schedule: string
@@ -223,6 +237,7 @@ export interface Warning {
     | "system-failed"
     | "non-finite-value"
     | "population-growing"
+    | "ignored-failure"
   readonly message: string
   readonly count: number
   readonly firstFrame: number
@@ -455,6 +470,10 @@ export const make = <
           }
         }
         break
+      case "failure.ignored":
+        ignored = event
+        warn("ignored-failure", `ignored:${event.frame}`, Format.ignoredFailure(event, format), event.frame)
+        break
       case "transition":
         if (event.outcome !== "failed") pendingStates.delete(event.machine)
         if (event.outcome === "failed" || event.outcome === "enterFailed") {
@@ -462,6 +481,13 @@ export const make = <
         }
         break
     }
+  }
+  /** The last `failure.ignored` event seen, for `run` to stop on. */
+  let ignored: Debug.FailureIgnoredEvent | undefined
+  const takeIgnored = (): Debug.FailureIgnoredEvent | undefined => {
+    const found = ignored
+    ignored = undefined
+    return found
   }
   const stopObserving = debug.observe(record)
 
@@ -486,6 +512,7 @@ export const make = <
     let first: number | undefined
     let last: number | undefined
     let stop: Stop = { reason: "completed" }
+    takeIgnored()
     for (let index = 0; index < frames; index++) {
       let result: Result.Result<void, unknown>
       try {
@@ -501,6 +528,12 @@ export const make = <
       first ??= frame
       last = frame
       sample()
+      const unread = takeIgnored()
+      if (unread !== undefined) {
+        const { type: _type, ...found } = unread
+        stop = { reason: "ignored-failure", ...found }
+        break
+      }
       if (!result.ok) {
         const error = describeError(result.error)
         stop = error.kind === "MissingRuntimeRequirements"
@@ -685,6 +718,8 @@ export const make = <
   }
 
   const report = () => {
+    // The report is where a session ends: a failure still unread shows here.
+    debug.checkIgnoredFailures()
     const systems = [...stats.keys()].map((name) => statsFor(name)!).sort((left, right) => right.totalMs - left.totalMs)
     const data: Report = {
       frames: debug.frame(),
@@ -732,7 +767,10 @@ export const make = <
     },
     report,
     frame: () => debug.frame(),
-    close: stopObserving
+    close: () => {
+      debug.checkIgnoredFailures()
+      stopObserving()
+    }
   }
 }
 
@@ -755,5 +793,7 @@ const renderRun = (result: RunResult, format: Format.ValueOptions): string => {
       return `${head}, INVARIANT "${stop.invariant}" violated at f${stop.frame}: ${stop.message}`
     case "tickOrder":
       return `${head}, NOT RUN after f${stop.frame}: ${stop.issues.join("; ")}`
+    case "ignored-failure":
+      return `${head}, STOPPED: ${Format.ignoredFailure({ type: "failure.ignored", ...stop }, format)}, at f${stop.frame}`
   }
 }

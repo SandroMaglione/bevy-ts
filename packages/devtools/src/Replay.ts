@@ -53,6 +53,7 @@ import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/b
 import type { Schema } from "@typeonce/bevy-ts/Schema"
 import type * as Snapshot from "@typeonce/bevy-ts/Snapshot"
 
+import * as Format from "./Format.ts"
 import type { Invariant } from "./Invariant.ts"
 import { libraryVersion } from "./internal/version.ts"
 import * as Rendered from "./Rendered.ts"
@@ -310,6 +311,11 @@ export const recorder = <S extends Schema.Any, Root, const Recorded extends AnyS
   const stopObserving = runtime.debug.observeHost((event) => {
     if (event.type === "send") {
       sent.push({ event: event.event, value: event.value })
+      return
+    }
+    if (event.type === "failure.ignored") {
+      // An unread failure is a failure nobody saw: save it like one.
+      if (options.saveOn?.failure === true) save(Format.ignoredFailure(event))
       return
     }
     if (!event.schedules.includes(options.schedule)) return
