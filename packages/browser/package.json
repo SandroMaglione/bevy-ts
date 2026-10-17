@@ -1,6 +1,6 @@
 {
   "name": "@typeonce/ritmo-browser",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Browser fixed-step loop, keyboard actions, and input capture for Ritmo",
   "author": "Sandro Maglione",
   "license": "MIT",

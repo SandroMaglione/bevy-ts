@@ -1,5 +1,15 @@
 # @typeonce/ritmo-math
 
+## 0.7.0
+
+### Patch Changes
+
+- 358401a: Link the bevy-ts migration guide from each published package README.
+- Updated dependencies [84eac37]
+- Updated dependencies [7ebd9af]
+- Updated dependencies [358401a]
+  - @typeonce/ritmo@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
