@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./brand/assets/ritmo-lockup-inverse.svg">
-    <img alt="Ritmo" src="./brand/assets/ritmo-lockup.svg" width="360">
+    <source media="(prefers-color-scheme: dark)" srcset="./brand/assets/ritmo-lockup-padded-inverse.svg">
+    <img alt="Ritmo" src="./brand/assets/ritmo-lockup-padded.svg" width="360">
   </picture>
 </p>
 
@@ -17,13 +17,11 @@ headless sessions expose lints, invariants, journals, and the causes of changes.
 Ritmo works with your renderer and game loop. Its packages provide simulation,
 input, timing, math, and renderer bridges. Drawing stays in the game.
 
-Previously `bevy-ts`. This branch prepares the Ritmo package names; npm publication
-and the GitHub repository rename follow separately. The documentation URL below
-continues to use the current repository name.
+<p align="center">
+  <img alt="Ritmo: the typed ECS runtime for agent-built games" src="./brand/assets/ritmo-banner.svg" width="720">
+</p>
 
 [Brand assets and palette](./brand/README.md)
-
-Documentation: https://sandromaglione.github.io/bevy-ts/
 
 New to the library? Start with [CONCEPTS.md](./CONCEPTS.md) (the model in five
 minutes), then [GAME_API.md](./GAME_API.md). Type architecture and storage are
@@ -77,9 +75,7 @@ const runtime = Game.Runtime.make({
 runtime.tick(Game.Schedule(Move))
 ```
 
-Start with the docs homepage for the full step-by-step Pixi example:
-
-- https://sandromaglione.github.io/bevy-ts/
+Start with the [Pixi walkthrough](./scripts/homepage.md) for the full step-by-step example.
 
 ## Runtime semantics
 
@@ -101,4 +97,10 @@ pnpm bench:update   # record a new baseline
 ```
 
 CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 25%, or type-checker growth over 5%.
+
+## Naming note
+
+Ritmo was previously named `bevy-ts`. The [hosted documentation](https://sandromaglione.github.io/bevy-ts/)
+still uses the existing repository address. The package names here are prepared for
+the separate npm publication and GitHub rename.
 

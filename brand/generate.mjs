@@ -35,15 +35,18 @@ export const wordmarkDot = { x: I - 9, y: 14, size: 18, radius: 2.5 }
 /** The wordmark's viewBox, with or without the tick ruler. */
 export const wordmarkBox = (ruler) => ({ x: -3, y: 12, width: WIDTH + 6, height: (ruler ? 132 : 100) - 14 + 4 })
 
-/** The wordmark's shapes, drawn in `color` with the i's dot in `dot`. */
-export const wordmarkShapes = ({ color, dot, ruler }) => {
-  const strokes = [
+/** The five letters, kept separate so motion can react on the r and i. */
+export const wordmarkLetterShapes = () => [
     `<path d="M6 100 V40 M6 70 C6 52 16 46 30 46 H38" transform="translate(${R} 0)"/>`,
     `<path d="M${I} 100 V40"/>`,
     `<path d="M${T} 100 V20 M${T - 18} 46 H${T + 18}"/>`,
     `<path transform="translate(${M} 0)" d="M6 100 V40 M6 60 Q6 46 15.5 46 Q25 46 25 60 V100 M25 60 Q25 46 34.5 46 Q44 46 44 60 V100"/>`,
     `<rect x="${O + 6}" y="46" width="38" height="48" rx="19"/>`
-  ].join("")
+  ]
+
+/** The wordmark's shapes, drawn in `color` with the i's dot in `dot`. */
+export const wordmarkShapes = ({ color, dot, ruler }) => {
+  const strokes = wordmarkLetterShapes().join("")
   let ticks = ""
   if (ruler) {
     for (let k = 0; k <= 20; k++) {
@@ -83,6 +86,19 @@ const lockup = ({ color, dot }) => {
   const w = (box.width * 100) / box.height
   return svg(100 + 30 + w, 100, iconShapes({ color, dot }) + nested(130, 0, w, 100, box, wordmarkShapes({ color, dot, ruler: false })))
 }
+const paddedLockup = (colors) => {
+  const box = wordmarkBox(false)
+  const width = 130 + (box.width * 100) / box.height
+  return svg(width, 160, nested(0, 30, width, 100, { x: 0, y: 0, width, height: 100 }, iconShapes(colors) + nested(130, 0, width - 130, 100, box, wordmarkShapes({ ...colors, ruler: false }))))
+}
+
+// A dark banner matching the approved lockup-and-tagline composition.
+const banner = () => {
+  const box = wordmarkBox(false)
+  const width = 130 + (box.width * 100) / box.height
+  const mark = iconShapes({ color: palette.paper, dot: palette.tick }) + nested(130, 0, width - 130, 100, box, wordmarkShapes({ color: palette.paper, dot: palette.tick, ruler: false }))
+  return svg(720, 380, `<title>Ritmo: the typed ECS runtime for agent-built games</title><rect width="720" height="380" rx="20" fill="${palette.ink}"/>` + nested(145, 110, 430, 43000 / width, { x: 0, y: 0, width, height: 100 }, mark) + `<text x="360" y="266" text-anchor="middle" fill="${palette.steel}" font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" font-size="22">the typed ECS runtime for agent-built games</text>`)
+}
 const stacked = ({ color, dot }) => {
   const box = wordmarkBox(false)
   const w = 200
@@ -110,6 +126,9 @@ export const files = {
   "ritmo-wordmark-compact-inverse.svg": wordmark({ ...onDark, ruler: false }),
   "ritmo-lockup.svg": lockup(onLight),
   "ritmo-lockup-inverse.svg": lockup(onDark),
+  "ritmo-lockup-padded.svg": paddedLockup(onLight),
+  "ritmo-lockup-padded-inverse.svg": paddedLockup(onDark),
+  "ritmo-banner.svg": banner(),
   "ritmo-lockup-stacked.svg": stacked(onLight),
   "ritmo-lockup-stacked-inverse.svg": stacked(onDark),
   "ritmo-app-icon.svg": appIcon(),
@@ -144,6 +163,7 @@ const sheet = () => {
   .swatch div:last-child { padding: 10px 12px; font-size: 12px; } code { font-family: ui-monospace, monospace; }
 </style></head><body>
 <h1 aria-label="Ritmo">${asset("ritmo-lockup-inverse.svg", 56)}</h1>
+<h2>Banner</h2><div style="max-width:720px">${files["ritmo-banner.svg"].replace("<svg ", '<svg style="width:100%;height:auto;display:block" ')}</div>
 <h2>Lockups</h2><div class="grid">
 ${tile(palette.ink, palette.paper, asset("ritmo-lockup-inverse.svg", 64), "ritmo-lockup-inverse.svg")}
 ${tile(palette.paper, palette.ink, asset("ritmo-lockup.svg", 64), "ritmo-lockup.svg")}

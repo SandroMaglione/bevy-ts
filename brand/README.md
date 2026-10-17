@@ -16,8 +16,8 @@ node brand/generate.mjs --png   # SVGs, PNGs (needs rsvg-convert), and sheet.htm
 
 Open [`sheet.html`](./sheet.html) in a browser for every variation on one page.
 
-Open [`motion.html`](./motion.html) for three animation studies with play, pause,
-scrubbing, speed, and background controls. Regenerate it with `node brand/motion.mjs`.
+Open [`motion.html`](./motion.html) for the whole-icon jump, stamp, and return, with
+play, pause, scrubbing, speed, and background controls. Regenerate it with `node brand/motion.mjs`.
 It uses the same geometry as the SVGs and works offline.
 
 ## The idea
@@ -37,6 +37,8 @@ beats.
 | File | Use |
 |---|---|
 | `ritmo-lockup.svg` / `-inverse` | Icon and name: READMEs, the docs header, slides |
+| `ritmo-lockup-padded.svg` / `-inverse` | The lockup with extra vertical space for the README header |
+| `ritmo-banner.svg` | Dark banner with the lockup and the full tagline |
 | `ritmo-lockup-stacked.svg` / `-inverse` | Square spaces: social cards, title slides |
 | `ritmo-wordmark.svg` / `-inverse` | The name with the tick ruler, 120px wide and up |
 | `ritmo-wordmark-compact.svg` / `-inverse` | The name without the ruler, for small sizes |
