@@ -63,6 +63,7 @@ import type { Descriptor } from "./Descriptor.ts"
 import type * as Entity from "./Entity.ts"
 import type * as Inspector from "./Inspector.ts"
 import * as Cells from "./internal/cells.ts"
+import { sameValue } from "./internal/equal.ts"
 import * as DebugInternal from "./internal/debug.ts"
 import { makeQueryEngine } from "./internal/queries.ts"
 import * as Streams from "./internal/streams.ts"
@@ -83,6 +84,7 @@ import type { Registry, Schema } from "./Schema.ts"
 import type {
   DespawnedReadView,
   EventReadView,
+  ResourceChangedView,
   EventWriteView,
   LookupApi,
   QueryHandle,
@@ -1091,6 +1093,15 @@ const makeValidatedRuntime = <
     }
   const writeResource = journalStoreWrite(resources, resourceOriginals)
 
+  /**
+   * Resource change ticks for `changedResource` readers. Only resources some
+   * system reads with `changedResource` are compared at commit; a reader's
+   * first run reports a change anyway, so writes before it registers are not
+   * needed.
+   */
+  const watchedResources = new Set<symbol>()
+  const resourceChangedAt = new Map<symbol, number>()
+
   const journalMachine = (key: symbol): void => {
     if (!machineOriginals.has(key)) {
       machineOriginals.set(key, pendingMachines.get(key) ?? absentValue)
@@ -1103,6 +1114,14 @@ const makeValidatedRuntime = <
 
   const commitSystemTransaction = (): void => {
     world.commitTransaction()
+    if (watchedResources.size > 0) {
+      for (const [key, before] of resourceOriginals) {
+        if (!watchedResources.has(key)) continue
+        if (before === absentValue || !sameValue(before, resources.get(key))) {
+          resourceChangedAt.set(key, world.currentTick())
+        }
+      }
+    }
     if (emittedEvents.size > 0) {
       const published = world.advanceTick()
       for (const [key, values] of emittedEvents) {
@@ -1144,6 +1163,17 @@ const makeValidatedRuntime = <
     store: Map<symbol, unknown>,
     write: (key: symbol, value: unknown) => void
   ) => Cells.storeWrite(store, descriptor.key, write, DescriptorModule.constructorOf(descriptor))
+
+  const makeResourceChangedView = (descriptor: Descriptor<"resource", string, any>, reader: ReaderState): ResourceChangedView<unknown> => {
+    const key = descriptor.key
+    watchedResources.add(key)
+    const read = Cells.storeRead(resources, key)
+    return {
+      get: () => read.get(),
+      // `since` is the previous completed run; 0 before the first one.
+      changed: () => reader.since === 0 || (resourceChangedAt.get(key) ?? 0) > reader.since
+    }
+  }
 
   const makeEventReadView = <T>(descriptorKey: symbol, reader: ReaderState): EventReadView<T> => ({
     all() {
@@ -1282,7 +1312,9 @@ const makeValidatedRuntime = <
       resources: mapRecord(spec.resources as Record<string, any>, (access) =>
         access.mode === "read"
           ? Cells.storeRead(resources, access.descriptor.key)
-          : makeResourceWriteView(access.descriptor, resources, writeResource)),
+          : access.mode === "changed"
+            ? makeResourceChangedView(access.descriptor, reader)
+            : makeResourceWriteView(access.descriptor, resources, writeResource)),
       events: mapRecord(spec.events as Record<string, any>, (access) =>
         access.mode === "read"
           ? makeEventReadView(access.descriptor.key, reader)
@@ -2066,7 +2098,10 @@ const makeValidatedRuntime = <
       world.tryRelate(source, relation, target)
     }
     for (const [id, key] of memberships) world.assignEntityScope(id, key)
-    for (const [key, value] of validatedResources) resources.set(key, value)
+    for (const [key, value] of validatedResources) {
+      resources.set(key, value)
+      resourceChangedAt.set(key, world.currentTick())
+    }
     for (const [key, value] of machineValues) currentMachines.set(key, value)
     // Locals are not saved: each system starts over from its factory.
     localSlots.forEach(({ slot }, index) => { (slot.context as { local: unknown }).local = rebuiltLocals[index] })

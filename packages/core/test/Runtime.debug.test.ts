@@ -111,7 +111,7 @@ describe("Runtime debug handle", () => {
     const move = description.systems.find((system) => system.name === "Debug/Move")!
     expect(move.placements).toEqual(["update#0"])
     expect(move.queries).toEqual([expect.objectContaining({ slot: "moving", writes: ["Debug/Position"] })])
-    expect(move.resources).toEqual({ reads: [], writes: ["Debug/Score"] })
+    expect(move.resources).toEqual({ reads: [], changed: [], writes: ["Debug/Score"] })
     expect(description.access.resources).toEqual([{ name: "Debug/Score", readers: [], writers: ["Debug/Move"] }])
     expect(description.lints.map((lint) => [lint.code, lint.subject])).toEqual([
       ["event-never-read", "Debug/Ping"],

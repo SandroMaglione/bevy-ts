@@ -9,7 +9,7 @@ import type { SystemDefinition } from "../System.ts"
 
 type AnySystem = SystemDefinition<any, any, any, any, any>
 type OrderIssue = Schedule.OrderIssue
-type Access = { readonly mode: "read" | "write"; readonly descriptor: Descriptor.Any; readonly thisTick?: true }
+type Access = { readonly mode: "read" | "changed" | "write"; readonly descriptor: Descriptor.Any; readonly thisTick?: true }
 type QueryAccess = {
   readonly thisTick?: true
   readonly selection: Record<string, { readonly mode?: string; readonly descriptor?: Descriptor.Any }>
@@ -95,7 +95,7 @@ const computeIssues = (steps: ReadonlyArray<Schedule.ScheduleStep>): ReadonlyArr
   const systemsAt = items.flatMap((item, at) => item.kind === "system" ? [{ system: item.system, at }] : [])
   for (const { system: reader, at: index } of systemsAt) {
     for (const read of accesses(reader)) {
-      if (read.mode !== "read" || read.thisTick !== true) continue
+      if ((read.mode !== "read" && read.mode !== "changed") || read.thisTick !== true) continue
       const data = read.descriptor.name
       for (const { system, at } of systemsAt) {
         if (at <= index || sameSystem(system, reader)) continue

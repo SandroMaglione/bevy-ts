@@ -165,7 +165,8 @@ export interface SystemDescription {
   /** Where the system runs, as `schedule#step`. */
   readonly placements: ReadonlyArray<string>
   readonly queries: ReadonlyArray<QueryDescription>
-  readonly resources: { readonly reads: ReadonlyArray<string>; readonly writes: ReadonlyArray<string> }
+  /** Resource reads and writes. `changed` lists the reads declared with `changedResource` (also in `reads`). */
+  readonly resources: { readonly reads: ReadonlyArray<string>; readonly changed: ReadonlyArray<string>; readonly writes: ReadonlyArray<string> }
   readonly events: { readonly reads: ReadonlyArray<string>; readonly writes: ReadonlyArray<string> }
   readonly machines: {
     readonly reads: ReadonlyArray<string>
@@ -230,6 +231,7 @@ export interface Lint {
     | "relation-failure-never-read"
     | "event-never-written"
     | "next-state-never-applied"
+    | "resource-changed-never-written"
     | "component-never-read"
     | "read-before-write"
     | "this-tick-order"

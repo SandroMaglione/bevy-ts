@@ -50,7 +50,7 @@ describe("Game.Condition.check", () => {
     Game.Condition.check("despawned", { despawned: { entities: Game.System.readDespawned() } }, () => true)
     // @ts-expect-error Object literal may only specify known properties, and 'transitionEvents' does not exist in type
     Game.Condition.check("transitions", { transitionEvents: { flow: Game.System.readTransitionEvent(Flow) } }, () => true)
-    // @ts-expect-error Type '"write"' is not assignable to type '"read"'.
+    // @ts-expect-error a check cannot write resources: use Game.System.readResource
     Game.Condition.check("writes", { resources: { freeze: Game.System.writeResource(Freeze) } }, () => true)
     // @ts-expect-error Object literal may only specify known properties, and 'commands' does not exist in type
     Game.Condition.check("unknown", { commands: {} }, () => true)

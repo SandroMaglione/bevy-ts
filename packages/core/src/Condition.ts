@@ -45,8 +45,23 @@ type AnyQuery = Query.Query.Any<any>
 /** Access categories a check may declare. */
 export interface CheckAccessInput {
   readonly queries?: Record<string, AnyQuery>
-  readonly resources?: Record<string, System.ResourceRead<Descriptor<"resource", string, any>>>
+  readonly resources?: Record<string, CheckResourceAccess>
   readonly machines?: Record<string, Machine.MachineRead<Machine.StateMachine.Any>>
+}
+
+/** Accepted at the constraint so `ExactCheckAccess` can reject the last two with a message naming the fix. */
+type CheckResourceAccess =
+  | System.ResourceRead<Descriptor<"resource", string, any>>
+  | System.ResourceChanged<Descriptor<"resource", string, any>>
+  | System.ResourceWrite<Descriptor<"resource", string, any>>
+
+/** A check reads committed values and owns no cursor: `changedResource` and `writeResource` slots become a message naming the fix. */
+type CheckResources<Resources> = {
+  readonly [K in keyof Resources]: Resources[K] extends { readonly mode: "changed" }
+    ? "changedResource consumes a per-reader cursor, which a check does not have: use Game.System.readResource here, and changedResource in the gated system"
+    : Resources[K] extends { readonly mode: "write" }
+      ? "a check cannot write resources: use Game.System.readResource"
+      : Resources[K]
 }
 
 type QueryWriteAccess<Q extends AnyQuery> =
@@ -72,6 +87,7 @@ export type ExactCheckAccess<Access extends CheckAccessInput> = Access & {
   readonly queries?: Access["queries"] extends Record<string, AnyQuery>
     ? StatelessQueries<Access["queries"]>
     : never
+  readonly resources?: CheckResources<Access["resources"]>
 }
 
 /** What a check's predicate sees: its declared resources, machines, and queries, read-only. */

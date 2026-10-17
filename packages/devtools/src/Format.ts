@@ -107,7 +107,8 @@ export const system = (input: Debug.SystemDescription): string => {
   const add = (label: string, items: ReadonlyArray<string>) => {
     if (items.length > 0) lines.push(`  ${label}: ${items.join(", ")}`)
   }
-  add("reads resources", input.resources.reads)
+  add("reads resources", input.resources.reads.filter((name) => !input.resources.changed.includes(name)))
+  add("reads resources when changed", input.resources.changed)
   add("writes resources", input.resources.writes)
   add("reads events", input.events.reads)
   add("emits events", input.events.writes)

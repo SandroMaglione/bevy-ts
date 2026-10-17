@@ -298,7 +298,7 @@ type QuerySelectionAccess<S extends Schema.Any, Root> =
 
 interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAccessInput {
   readonly queries?: Record<string, Query.Any<Root>>
-  readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>>
+  readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceChanged<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>>
   readonly events?: Record<string, System.EventRead<EventDescriptor<S>> | System.EventWrite<EventDescriptor<S>>>
   readonly machines?: Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>>
   readonly nextMachines?: Record<string, Machine.NextMachineWrite<Schema.BoundStateMachine<Root>>>
@@ -314,7 +314,7 @@ interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAcc
 
 interface BoundCheckAccess<S extends Schema.Any, Root> extends Condition.CheckAccessInput {
   readonly queries?: Record<string, Query.Any<Root>>
-  readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>>>
+  readonly resources?: Record<string, System.ResourceRead<ResourceDescriptor<S>> | System.ResourceChanged<ResourceDescriptor<S>> | System.ResourceWrite<ResourceDescriptor<S>>>
   readonly machines?: Record<string, Machine.MachineRead<Schema.BoundStateMachine<Root>>>
 }
 
@@ -594,6 +594,7 @@ export namespace Schema {
       ): BoundSystem<S, Root, System.SystemSpec<S, Access, Root>, E, Name, System.SystemAccessNeeds<Access>>
       readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
       writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
+      changedResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceChanged<D>
       readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>
       writeEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventWrite<D>
       /**
@@ -601,7 +602,7 @@ export namespace Schema {
        * same `runtime.tick(...)` call; checked at compile time by `tick`.
        * Accepts `readEvent(...)`, `readResource(...)`, or a query.
        */
-      thisTick: <Read extends System.EventRead<EventDescriptor<S>> | System.ResourceRead<ResourceDescriptor<S>> | Query.Any<Root>>(
+      thisTick: <Read extends System.EventRead<EventDescriptor<S>> | System.ResourceRead<ResourceDescriptor<S>> | System.ResourceChanged<ResourceDescriptor<S>> | Query.Any<Root>>(
         read: Read
       ) => Read & System.ThisTick
       service: typeof System.service
