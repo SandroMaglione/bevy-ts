@@ -74,6 +74,7 @@ import * as Relation from "./Relation.ts"
 import type * as Requirement from "./Requirement.ts"
 import * as Result from "./Result.ts"
 import * as Schedule from "./Schedule.ts"
+import * as EntityScopeModule from "./EntityScope.ts"
 import * as Snapshot from "./Snapshot.ts"
 import type { ExecutableScheduleDefinition } from "./Schedule.ts"
 import type { Registry, Schema } from "./Schema.ts"
@@ -1779,13 +1780,19 @@ const makeValidatedRuntime = <
       const value = currentMachines.get(machine.key)
       if (value !== undefined) savedMachines[name] = value as Machine.StateValue
     }
+    const savedScopes: Record<string, ReadonlyArray<number>> = {}
+    for (const [key, members] of world.exportScopes()) {
+      const name = EntityScopeModule.nameOf(key)
+      if (name !== undefined) savedScopes[name] = members
+    }
     return {
-      version: 1,
+      version: Snapshot.version,
       nextEntity: world.nextEntityValue(),
       entities: world.exportEntities(DescriptorModule.isTransient),
       relations: world.exportRelations(),
       resources: savedResources,
-      machines: savedMachines
+      machines: savedMachines,
+      scopes: savedScopes
     }
   }
 
@@ -1860,6 +1867,16 @@ const makeValidatedRuntime = <
       machineValues.push([machine.key, value])
     }
 
+    const scoped = new Set<number>()
+    const memberships: Array<readonly [number, symbol]> = []
+    for (const [name, members] of Object.entries(saved.scopes)) {
+      for (const id of members) {
+        if (!ids.has(id) || scoped.has(id)) return Result.failure({ _tag: "InvalidScope", name, entityId: id })
+        scoped.add(id)
+        memberships.push([id, EntityScopeModule.keyOf(name)])
+      }
+    }
+
     const rebuiltLocals = localSlots.map(({ make }) => make())
 
     // Apply: the old world is despawned and the saved one spawned, so change
@@ -1879,6 +1896,7 @@ const makeValidatedRuntime = <
     for (const [relation, source, target] of edges) {
       world.tryRelate(source, relation, target)
     }
+    for (const [id, key] of memberships) world.assignEntityScope(id, key)
     for (const [key, value] of validatedResources) resources.set(key, value)
     for (const [key, value] of machineValues) currentMachines.set(key, value)
     // Locals are not saved: each system starts over from its factory.

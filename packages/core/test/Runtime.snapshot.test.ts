@@ -133,7 +133,9 @@ describe("Runtime snapshots", () => {
 
     const cases: ReadonlyArray<readonly [unknown, Snapshot.RestoreError["_tag"]]> = [
       [null, "InvalidSnapshot"],
-      [{ ...good, version: 2 }, "UnsupportedVersion"],
+      [{ ...good, version: 1 }, "UnsupportedVersion"],
+      [{ ...good, version: 3 }, "UnsupportedVersion"],
+      [{ ...good, scopes: { "Snapshot/Level": [0] } }, "InvalidSnapshot"],
       [{ ...good, entities: [{ id: firstId, components: { Missing: 1 } }] }, "UnknownComponent"],
       [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Position": { x: Number.NaN, y: 0 } } }] }, "InvalidComponent"],
       [{ ...good, entities: [{ id: firstId, components: { "Snapshot/Name": 12 } }] }, "InvalidComponent"],

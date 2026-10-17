@@ -40,5 +40,16 @@ export const make = <const Name extends string, Root = unknown>(
 ): EntityScope<Name, Root> => ({
   kind: "entityScope",
   name,
-  key: Symbol.for(`bevy-ts/entityScope/${name}`)
+  key: keyOf(name)
 })
+
+const keyPrefix = "bevy-ts/entityScope/"
+
+/** The storage key of the scope named `name`: the same for every scope value of that name. */
+export const keyOf = (name: string): symbol => Symbol.for(`${keyPrefix}${name}`)
+
+/** The name of the scope behind a storage key made by {@link keyOf}. */
+export const nameOf = (key: symbol): string | undefined => {
+  const description = Symbol.keyFor(key)
+  return description?.startsWith(keyPrefix) ? description.slice(keyPrefix.length) : undefined
+}
