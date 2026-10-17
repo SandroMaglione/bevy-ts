@@ -18,6 +18,10 @@
   +if (found.ok) commands.remove(found.value.entity, Sprite)
   ```
 
+  A raw id fails with an error that first prints the id's type (the whole
+  schema), then the fix: `remove needs an entity from a query (pass
+  match.entity) or the id spawn returned in this run, not a raw id`.
+
 - **`remove` takes several components.** Removing a component together with
   the components that require it must happen in one call:
   `commands.remove(match.entity, Player, Velocity)`.
@@ -36,6 +40,15 @@
   +Schema.fragment({ components: { ... }, requires: [Schema.requires(Player, Position, Velocity, Collider)] })
   +commands: Game.System.commands(Game.System.spawns(Player))
   ```
+
+  - Put a requirement on the component that needs it, not on widely shared
+    ones. If many components require `Position` or `Renderable`, every
+    `remove` of those needs a query with `without` for each requirer.
+  - Only `spawns(...)` expands requirements. `inserts(...)`, `removes(...)`,
+    and `remove(...)` do not, so a list such as "every part of a body" stays a
+    plain array: `removes(...BodyParts)` and `remove(match.entity, ...BodyParts)`.
+  - Components a draft may hold that no requirement covers (optional parts)
+    are still listed in `spawns(...)` next to the main component.
 
 - **New optional descriptor option.** `{ immutable: true }` on a component
   makes `Game.Query.write` of it a compile error; replace it with `insert`.
