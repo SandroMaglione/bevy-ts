@@ -196,6 +196,8 @@ export interface Lint {
     | "this-tick-order"
   readonly message: string
   readonly subject: string
+  /** What to change to resolve it (or, for `info`, when it is fine as it is). */
+  readonly fix: string
 }
 
 /** Readers and writers of one component, resource, or event. */

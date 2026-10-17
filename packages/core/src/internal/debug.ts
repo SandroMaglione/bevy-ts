@@ -290,7 +290,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
   const appliesTransitions = schedules.some(([, schedule]) =>
     schedule.steps.some((step) => !Schedule.isSystemStep(step) && step.kind === "applyStateTransitions"))
 
-  const lints: Array<Debug.Lint> = []
+  const lints: Array<Omit<Debug.Lint, "fix">> = []
   if (schedules.length > 0) {
     for (const entry of events.list()) {
       if (entry.writers.length > 0 && entry.readers.length === 0) {
@@ -378,7 +378,27 @@ export const describe = (input: DescribeInput): Debug.Description => {
       resources: resources.list(),
       events: events.list()
     },
-    lints
+    lints: lints.map((lint) => ({ ...lint, fix: fixFor(lint.code, lint.subject) }))
+  }
+}
+
+/** The fix each lint names, by code. */
+const fixFor = (code: Debug.Lint["code"], subject: string): string => {
+  switch (code) {
+    case "event-never-read":
+      return `read ${subject} in a system with Game.System.readEvent, or stop emitting it; if only a render schedule reads it, pass that schedule as describe-only`
+    case "event-never-written":
+      return `emit ${subject} from a system with Game.System.writeEvent (or runtime.send from the host), or stop reading it`
+    case "next-state-never-applied":
+      return `add Game.Schedule.applyStateTransitions(...) to a schedule that runs after the system that queues ${subject}`
+    case "relation-failure-never-read":
+      return `read the failures with Game.System.readRelationFailures(${subject}) in a system and handle them`
+    case "this-tick-order":
+      return "move the writer before the reader in the schedule (the message names both), or read without Game.System.thisTick"
+    case "component-never-read":
+      return `fine if ${subject} is read outside the described schedules (rendering, inspectors); otherwise stop writing it`
+    case "read-before-write":
+      return "fine when a one-run lag is intended (input before movement); otherwise move the reader after the writer, or read with Game.System.thisTick to make it an error"
   }
 }
 
@@ -403,8 +423,8 @@ const readBeforeWriteLints = (
   schedules: ReadonlyArray<readonly [string, AnySchedule]>,
   described: ReadonlyMap<AnySystem, Debug.SystemDescription>,
   externallyWrittenEvents: ReadonlySet<string>
-): Array<Debug.Lint> => {
-  const lints: Array<Debug.Lint> = []
+): Array<Omit<Debug.Lint, "fix">> => {
+  const lints: Array<Omit<Debug.Lint, "fix">> = []
   for (const [name, schedule] of schedules) {
     const steps = schedule.steps.flatMap((step) =>
       Schedule.isSystemStep(step) ? [{ system: described.get(step as AnySystem)!, accesses: accessesOf(described.get(step as AnySystem)!) }] : [])

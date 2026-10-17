@@ -130,7 +130,8 @@ describe("Runtime debug handle", () => {
       severity: "warning",
       code: "relation-failure-never-read",
       subject: "Debug/ChildOf",
-      message: "Debug/ChildOf is related by commands from Debug/Spawn, but no described system reads its failures (Game.System.readRelationFailures(Debug/ChildOf)), so a failed relate or reorder is dropped silently"
+      message: "Debug/ChildOf is related by commands from Debug/Spawn, but no described system reads its failures (Game.System.readRelationFailures(Debug/ChildOf)), so a failed relate or reorder is dropped silently",
+      fix: "read the failures with Game.System.readRelationFailures(Debug/ChildOf) in a system and handle them"
     }])
 
     const ReadFailures = Game.System("Debug/ReadChildOfFailures", {
