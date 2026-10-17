@@ -7,7 +7,7 @@
 
 # Ritmo
 
-The typed ECS runtime for agent-built games.
+The agent-first typed ECS runtime for games.
 
 You direct the mechanics and feel. Your coding agent builds the simulation with
 closed schemas, declared system access, explicit schedule boundaries, and typed
@@ -18,7 +18,7 @@ Ritmo works with your renderer and game loop. Its packages provide simulation,
 input, timing, math, and renderer bridges. Drawing stays in the game.
 
 <p align="center">
-  <img alt="Ritmo: the typed ECS runtime for agent-built games" src="./brand/assets/ritmo-banner.svg" width="720">
+  <img alt="Ritmo: the agent-first typed ECS runtime for games" src="./brand/assets/ritmo-banner.svg" width="720">
 </p>
 
 [Brand assets and palette](./brand/README.md)

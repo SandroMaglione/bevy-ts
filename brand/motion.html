@@ -30,7 +30,6 @@
 </div>
 <div class="timeline"><input id="time" aria-label="Animation time" type="range" min="0" max="5000" step="1" value="0"><output id="readout" for="time">0.00 s</output></div>
 <div class="stage"><svg viewBox="-35 -220 490 370" role="img" aria-label="The whole Ritmo icon jumps onto the r and i, stamps the orange dot, and bounces home">
-  <ellipse class="shadow" cx="50" cy="106" rx="45" ry="5" fill="currentColor" opacity=".12"/>
   <g transform="translate(130 0) scale(1.1111111111111112) translate(3 -12)" fill="none" stroke="currentColor" stroke-width="12">
     <g class="ri"><path d="M6 100 V40 M6 70 C6 52 16 46 30 46 H38" transform="translate(0 0)"/><path d="M60 100 V40"/></g><path d="M100 100 V20 M82 46 H118"/><path transform="translate(134 0)" d="M6 100 V40 M6 60 Q6 46 15.5 46 Q25 46 25 60 V100 M25 60 Q25 46 34.5 46 Q44 46 44 60 V100"/><rect x="206" y="46" width="38" height="48" rx="19"/>
   </g>
@@ -38,7 +37,7 @@
   <g class="jumper"><rect x="6" y="6" width="40" height="40" rx="6" fill="currentColor"/><rect x="54" y="6" width="40" height="40" rx="6" fill="currentColor"/><rect x="6" y="54" width="40" height="40" rx="6" fill="currentColor"/><rect x="62" y="62" width="24" height="24" rx="4" fill="#FF5A36"/></g>
 </svg></div>
 <div class="caption"><span id="phase">Ready</span><div><button id="impact" type="button">Stamp frame</button> <button id="return" type="button">Return frame</button></div></div>
-<footer>The four cells stay together throughout the jump. The dot stays painted after contact. Reduced-motion preferences start paused at the finished lockup. Works offline.</footer>
+<footer>The icon stays square in flight and squashes only at takeoff and contact. The dot stays painted after the bounce. Reduced-motion preferences start paused at the finished lockup.</footer>
 </main><script>
 (() => {
   const contact = {"x":176,"y":32.22222222222222};
@@ -52,7 +51,6 @@
   const jumper = document.querySelector('.jumper');
   const paint = document.querySelector('.paint');
   const ri = document.querySelector('.ri');
-  const shadow = document.querySelector('.shadow');
   const time = document.getElementById('time');
   const readout = document.getElementById('readout');
   const phase = document.getElementById('phase');
@@ -67,15 +65,12 @@
   function pose(t) {
     let point = home, angle = 0, sx = 1, sy = 1, dip = 0, name = 'Ready';
     if (t >= 220 && t < 500) {
-      const n = ease((t - 220) / 280);
-      sx = mix(1, 1.45, n); sy = mix(1, .62, n); angle = -10 * n; name = 'Windup';
+      const compression = Math.sin((t - 220) / 280 * Math.PI);
+      sx = 1 + .45 * compression; sy = 1 - .38 * compression; angle = -10 * compression; name = 'Windup';
     } else if (t >= 500 && t < 1350) {
       const n = (t - 500) / 850;
       point = arc(home, contact, n, 135);
-      const release = ease(n / .15);
-      sx = mix(1.45, 1 - .25 * Math.sin(Math.PI * n), release);
-      sy = mix(.62, 1 + .35 * Math.sin(Math.PI * n), release);
-      angle = -10 + 370 * ease(n); name = 'Jump';
+      angle = 360 * ease(n); name = 'Jump';
     } else if (t >= 1350 && t < 1570) {
       const compression = Math.sin((t - 1350) / 220 * Math.PI);
       sx = 1 + .5 * compression; sy = 1 - .42 * compression;
@@ -85,11 +80,10 @@
     } else if (t >= 1570 && t < 2570) {
       const n = (t - 1570) / 1000;
       point = arc(contact, home, n, 120);
-      sx = 1 - .24 * Math.sin(Math.PI * n); sy = 1 + .32 * Math.sin(Math.PI * n);
       angle = 360 * (1 - ease(n)); name = 'Return';
     } else if (t >= 2570 && t < 2970) {
       const n = (t - 2570) / 400;
-      const compression = Math.sin(n * Math.PI * 3) * Math.pow(1 - n, 2);
+      const compression = Math.abs(Math.sin(n * Math.PI * 3)) * Math.pow(1 - n, 2);
       sx = 1 + .55 * compression; sy = 1 - .42 * compression;
       angle = -5 * compression; name = 'Land';
     } else if (t >= 2970) name = 'Rest';
@@ -102,9 +96,6 @@
     ri.setAttribute('transform', 'translate(0 ' + p.dip / 1.1111111111111112 + ')');
     paint.setAttribute('opacity', String(p.paint));
     paint.setAttribute('transform', 'translate(' + target.x + ' ' + target.y + ') scale(' + mix(.72, 1, p.paint) + ')');
-    const grounded = 1 - clamp(Math.abs(p.x - home.x) / 90 + Math.max(0, home.y - p.y) / 120);
-    shadow.setAttribute('opacity', String(.12 * grounded));
-    shadow.setAttribute('rx', String(45 * Math.max(.4, grounded)));
     time.value = String(Math.round(t));
     readout.value = (t / 1000).toFixed(2) + ' s';
     phase.textContent = p.phase;

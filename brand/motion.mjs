@@ -14,7 +14,6 @@ const dotSize = wordmarkDot.size * scale
 const contact = { x: target.x - (iconDot.x + iconDot.size / 2 - 50), y: target.y + (94 - iconDot.y - iconDot.size / 2) }
 const letters = wordmarkLetterShapes()
 const drawing = `<svg viewBox="-35 -220 490 370" role="img" aria-label="The whole Ritmo icon jumps onto the r and i, stamps the orange dot, and bounces home">
-  <ellipse class="shadow" cx="50" cy="106" rx="45" ry="5" fill="currentColor" opacity=".12"/>
   <g transform="translate(130 0) scale(${scale}) translate(${-box.x} ${-box.y})" fill="none" stroke="currentColor" stroke-width="12">
     <g class="ri">${letters.slice(0, 2).join("")}</g>${letters.slice(2).join("")}
   </g>
@@ -55,7 +54,7 @@ export const html = `<!doctype html>
 <div class="timeline"><input id="time" aria-label="Animation time" type="range" min="0" max="5000" step="1" value="0"><output id="readout" for="time">0.00 s</output></div>
 <div class="stage">${drawing}</div>
 <div class="caption"><span id="phase">Ready</span><div><button id="impact" type="button">Stamp frame</button> <button id="return" type="button">Return frame</button></div></div>
-<footer>The four cells stay together throughout the jump. The dot stays painted after contact. Reduced-motion preferences start paused at the finished lockup. Works offline.</footer>
+<footer>The icon stays square in flight and squashes only at takeoff and contact. The dot stays painted after the bounce. Reduced-motion preferences start paused at the finished lockup.</footer>
 </main><script>
 (() => {
   const contact = ${JSON.stringify(contact)};
@@ -69,7 +68,6 @@ export const html = `<!doctype html>
   const jumper = document.querySelector('.jumper');
   const paint = document.querySelector('.paint');
   const ri = document.querySelector('.ri');
-  const shadow = document.querySelector('.shadow');
   const time = document.getElementById('time');
   const readout = document.getElementById('readout');
   const phase = document.getElementById('phase');
@@ -84,15 +82,12 @@ export const html = `<!doctype html>
   function pose(t) {
     let point = home, angle = 0, sx = 1, sy = 1, dip = 0, name = 'Ready';
     if (t >= 220 && t < 500) {
-      const n = ease((t - 220) / 280);
-      sx = mix(1, 1.45, n); sy = mix(1, .62, n); angle = -10 * n; name = 'Windup';
+      const compression = Math.sin((t - 220) / 280 * Math.PI);
+      sx = 1 + .45 * compression; sy = 1 - .38 * compression; angle = -10 * compression; name = 'Windup';
     } else if (t >= 500 && t < 1350) {
       const n = (t - 500) / 850;
       point = arc(home, contact, n, 135);
-      const release = ease(n / .15);
-      sx = mix(1.45, 1 - .25 * Math.sin(Math.PI * n), release);
-      sy = mix(.62, 1 + .35 * Math.sin(Math.PI * n), release);
-      angle = -10 + 370 * ease(n); name = 'Jump';
+      angle = 360 * ease(n); name = 'Jump';
     } else if (t >= 1350 && t < 1570) {
       const compression = Math.sin((t - 1350) / 220 * Math.PI);
       sx = 1 + .5 * compression; sy = 1 - .42 * compression;
@@ -102,11 +97,10 @@ export const html = `<!doctype html>
     } else if (t >= 1570 && t < 2570) {
       const n = (t - 1570) / 1000;
       point = arc(contact, home, n, 120);
-      sx = 1 - .24 * Math.sin(Math.PI * n); sy = 1 + .32 * Math.sin(Math.PI * n);
       angle = 360 * (1 - ease(n)); name = 'Return';
     } else if (t >= 2570 && t < 2970) {
       const n = (t - 2570) / 400;
-      const compression = Math.sin(n * Math.PI * 3) * Math.pow(1 - n, 2);
+      const compression = Math.abs(Math.sin(n * Math.PI * 3)) * Math.pow(1 - n, 2);
       sx = 1 + .55 * compression; sy = 1 - .42 * compression;
       angle = -5 * compression; name = 'Land';
     } else if (t >= 2970) name = 'Rest';
@@ -119,9 +113,6 @@ export const html = `<!doctype html>
     ri.setAttribute('transform', 'translate(0 ' + p.dip / ${scale} + ')');
     paint.setAttribute('opacity', String(p.paint));
     paint.setAttribute('transform', 'translate(' + target.x + ' ' + target.y + ') scale(' + mix(.72, 1, p.paint) + ')');
-    const grounded = 1 - clamp(Math.abs(p.x - home.x) / 90 + Math.max(0, home.y - p.y) / 120);
-    shadow.setAttribute('opacity', String(.12 * grounded));
-    shadow.setAttribute('rx', String(45 * Math.max(.4, grounded)));
     time.value = String(Math.round(t));
     readout.value = (t / 1000).toFixed(2) + ' s';
     phase.textContent = p.phase;

@@ -19,6 +19,8 @@ export const palette = {
   line: "#D9D5CC"
 }
 
+export const tagline = "the agent-first typed ECS runtime for games"
+
 // Wordmark geometry, in wordmark units: stroke 12, x-height 40..100, one gap between letters.
 const GAP = 16
 const R = 0
@@ -97,7 +99,7 @@ const banner = () => {
   const box = wordmarkBox(false)
   const width = 130 + (box.width * 100) / box.height
   const mark = iconShapes({ color: palette.paper, dot: palette.tick }) + nested(130, 0, width - 130, 100, box, wordmarkShapes({ color: palette.paper, dot: palette.tick, ruler: false }))
-  return svg(720, 380, `<title>Ritmo: the typed ECS runtime for agent-built games</title><rect width="720" height="380" rx="20" fill="${palette.ink}"/>` + nested(145, 110, 430, 43000 / width, { x: 0, y: 0, width, height: 100 }, mark) + `<text x="360" y="266" text-anchor="middle" fill="${palette.steel}" font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" font-size="22">the typed ECS runtime for agent-built games</text>`)
+  return svg(720, 380, `<title>Ritmo: ${tagline}</title><rect width="720" height="380" rx="20" fill="${palette.ink}"/>` + nested(145, 110, 430, 43000 / width, { x: 0, y: 0, width, height: 100 }, mark) + `<text x="360" y="266" text-anchor="middle" fill="${palette.steel}" font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" font-size="22">${tagline}</text>`)
 }
 const stacked = ({ color, dot }) => {
   const box = wordmarkBox(false)
