@@ -62,7 +62,8 @@ const { relation: ChildOf } = Descriptor.Hierarchy("Stress/ChildOf", "Stress/Chi
 
 const Game = Schema.bind(
   Schema.fragment({ components: { C00, C01, C02, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13, C14, C15 }, resources: { R00, R01, R02, R03, R04, R05, R06, R07 }, events: { E00, E01, E02, E03 } }),
-  Schema.fragment({ components: { C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31 }, resources: { R08, R09, R10, R11, R12, R13, R14, R15 }, events: { E04, E05, E06, E07 }, relations: { ChildOf } })
+  Schema.fragment({ components: { C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31 }, resources: { R08, R09, R10, R11, R12, R13, R14, R15 }, events: { E04, E05, E06, E07 }, relations: { ChildOf } }),
+  Schema.fragment({ requires: [Schema.requires(C28, C29, C30), Schema.requires(C29, C31), Schema.requires(C30, C31)] })
 )
 
 const Flow = Game.StateMachine("Stress/Flow", ["Menu", "Playing", "Paused"])
@@ -1795,6 +1796,200 @@ const Long = Game.Schedule(L000, L001, L002, L003, L004, L005, L006, L007, L008,
 runtime.tick(Long)
 // @ts-expect-error a command writer with no applyDeferred() before a thisTick query reader is a compile error
 runtime.tick(Game.Schedule(L000, L001, L002, L003, L004, L005, L006, L007, L008, L009, Q00, Q01, X00, L010, L011, L012, L013, L014, L015, L016, L017, L018, L019, Q02, Q03, L020, L021, L022, L023, L024, L025, L026, L027, L028, L029, Q04, Q05, X01, L030, L031, L032, L033, L034, L035, L036, L037, L038, L039, Q06, Q07, L040, L041, L042, L043, L044, L045, L046, L047, L048, L049, Q08, Q09, X02, L050, L051, L052, L053, L054, L055, L056, L057, L058, L059, Q10, Q11, L060, L061, L062, L063, L064, L065, L066, L067, L068, L069, Q12, Q13, X03, L070, L071, L072, L073, L074, L075, L076, L077, L078, L079, Q14, Q15, L080, L081, L082, L083, L084, L085, L086, L087, L088, L089, Q16, Q17, X04, L090, L091, L092, L093, L094, L095, L096, L097, L098, L099, Q18, Q19, L100, L101, L102, L103, L104, L105, L106, L107, L108, L109, Q20, Q21, X05, L110, L111, L112, L113, L114, L115, L116, L117, L118, L119, Q22, Q23))
+
+const Rq00 = Game.System("Stress/Rq00", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 0 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq01 = Game.System("Stress/Rq01", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 1 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq02 = Game.System("Stress/Rq02", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 2 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq03 = Game.System("Stress/Rq03", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 3 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq04 = Game.System("Stress/Rq04", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 4 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq05 = Game.System("Stress/Rq05", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 5 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq06 = Game.System("Stress/Rq06", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 6 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq07 = Game.System("Stress/Rq07", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 7 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq08 = Game.System("Stress/Rq08", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 8 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq09 = Game.System("Stress/Rq09", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 9 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq10 = Game.System("Stress/Rq10", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 10 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq11 = Game.System("Stress/Rq11", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 11 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq12 = Game.System("Stress/Rq12", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 12 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq13 = Game.System("Stress/Rq13", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 13 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq14 = Game.System("Stress/Rq14", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 14 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+const Rq15 = Game.System("Stress/Rq15", {
+  queries: {
+    held: Game.Query({ selection: { c29: Game.Query.read(C29), c30: Game.Query.read(C30) } }),
+    whole: Game.Query({ selection: { c28: Game.Query.read(C28) }, with: [C29, C30, C31] })
+  },
+  commands: Game.System.commands(Game.System.spawns(C28), Game.System.inserts(C28, C31), Game.System.removes(C28, C29, C30))
+}, ({ queries, commands }) => {
+  const spawned = commands.spawn(Game.Command.spawn([C28, { v28: 15 }], [C29, { v29: 0 }], [C30, { v30: 0 }], [C31, { v31: 0 }]))
+  commands.remove(spawned, C28)
+  for (const match of queries.held.each()) commands.insert(match.entity, [C28, { v28: 1 }], [C31, { v31: 1 }])
+  for (const match of queries.whole.each()) commands.remove(match.entity, C28, C29, C30)
+})
+runtime.tick(Game.Schedule(Rq00, Rq01, Rq02, Rq03, Rq04, Rq05, Rq06, Rq07, Rq08, Rq09, Rq10, Rq11, Rq12, Rq13, Rq14, Rq15, Game.Schedule.applyDeferred()))
 
 const incomplete = Game.Runtime.make({ services: Game.Runtime.services() })
 // @ts-expect-error missing services, resources and machines are compile errors
