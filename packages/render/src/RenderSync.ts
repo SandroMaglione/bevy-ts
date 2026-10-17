@@ -189,6 +189,7 @@ export const system = <
   // above carries the exact requirements (the registry and extra services).
   const System = Game.System as unknown as (name: string, spec: object, run: (context: any) => void) => unknown
   const Query = Game.Query as unknown as (spec: object) => object
+  const anyOf = Game.Query.anyOf as unknown as (...filters: ReadonlyArray<object>) => object
   const transform = options.transform as Schema.ComponentDescriptor<S> | undefined
   const selection = {
     ...options.select,
@@ -235,12 +236,14 @@ export const system = <
     // Despawns are recorded as removals of every component, so these cover them too.
     removedReads[`removed${index}`] = Game.System.readRemoved(descriptor)
   })
-  additions.forEach((descriptor, index) => {
-    queries[`added${index}`] = Query({ selection, filters: [Game.Query.added(descriptor)] })
-  })
-  triggers.forEach((trigger, index) => {
-    queries[`changed${index}`] = Query({ selection, filters: [Game.Query.changed(trigger)] })
-  })
+  // One query: an entity whose required component was added, or whose
+  // trigger changed, is synced once.
+  const filters = [
+    ...additions.map((descriptor) => Game.Query.added(descriptor)),
+    ...triggers.map((trigger) => Game.Query.changed(trigger))
+  ]
+  // Never empty: `required` always holds the renderable.
+  queries["sync"] = Query({ selection, filters: [filters.length === 1 ? filters[0] : anyOf(...filters)] })
 
   return System(options.name, {
     queries,
@@ -256,23 +259,9 @@ export const system = <
       for (const entity of removed[`removed${index}`].all()) registry.remove(entity)
     }
 
-    const applied = new Set<number>()
-    for (let index = 0; index < additions.length; index++) {
-      for (const { entity, data } of queries[`added${index}`].each()) {
-        if (applied.has(entity.id)) continue
-        const context = contextOf(entity, data, services, resources)
-        options.apply(registry.ensure(entity.id, () => options.create(context)), context)
-        applied.add(entity.id)
-      }
-    }
-    for (let index = 0; index < triggers.length; index++) {
-      for (const { entity, data } of queries[`changed${index}`].each()) {
-        if (applied.has(entity.id)) continue
-        applied.add(entity.id)
-        const context = contextOf(entity, data, services, resources)
-        const node = registry.get(entity.id) ?? registry.ensure(entity.id, () => options.create(context))
-        options.apply(node, context)
-      }
+    for (const { entity, data } of queries["sync"].each()) {
+      const context = contextOf(entity, data, services, resources)
+      options.apply(registry.ensure(entity.id, () => options.create(context)), context)
     }
   }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | ConditionNeedsFromConditions<When>>
 }

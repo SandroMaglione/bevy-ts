@@ -194,6 +194,50 @@ export const writeResource = <D extends Descriptor<"resource", string, any>>(
 })
 
 /**
+ * Declares read access to a resource plus whether it changed since this
+ * system's previous completed run.
+ */
+export type ResourceChanged<D extends Descriptor<"resource", string, any>> = {
+  readonly mode: "changed"
+  readonly descriptor: D
+}
+
+/**
+ * Creates a resource read that also reports `changed()`: whether a committed
+ * write left a different value since this system's previous completed run.
+ *
+ * Use it for work worth doing only when a value moved: rewriting a HUD label,
+ * rebuilding a cache from settings. Use `readResource` when the system needs
+ * the value every run anyway.
+ *
+ * A write that leaves an equal value is not a change: primitives compare
+ * with `Object.is`, plain objects and arrays by their entries, other objects
+ * by reference. This differs from `Game.Query.changed`, where every write
+ * through a component write cell counts. The first run reports `true`; a
+ * failed run (rolled back) is not a change, and a failed reader sees the same
+ * change again next run. Its own writes are not reported to the writer.
+ *
+ * Conditions (`Game.Condition.check`) cannot declare it: they own no cursor.
+ *
+ * @example
+ * ```ts
+ * const SyncHud = Game.System("SyncHud", {
+ *   resources: { score: Game.System.changedResource(Score) },
+ *   services: { hud: Game.System.service(Hud) }
+ * }, ({ resources, services }) => {
+ *   if (!resources.score.changed()) return
+ *   services.hud.score.textContent = `${resources.score.get()}`
+ * })
+ * ```
+ */
+export const changedResource = <D extends Descriptor<"resource", string, any>>(
+  descriptor: D
+): ResourceChanged<D> => ({
+  mode: "changed",
+  descriptor
+})
+
+/**
  * Declares read-only access to an event stream.
  */
 export type EventRead<D extends Descriptor<"event", string, any>> = {
@@ -314,7 +358,7 @@ export interface ThisTick {
  * ```
  */
 export const thisTick = <
-  Read extends EventRead<Descriptor<"event", string, any>> | ResourceRead<Descriptor<"resource", string, any>> | Query.Any<any>
+  Read extends EventRead<Descriptor<"event", string, any>> | ResourceRead<Descriptor<"resource", string, any>> | ResourceChanged<Descriptor<"resource", string, any>> | Query.Any<any>
 >(read: Read): Read & ThisTick => ({ ...read, thisTick: true })
 
 /**
@@ -367,7 +411,10 @@ export const readTransitionEvent = <M extends Machine.StateMachine.Any>(
 /**
  * Internal union for all supported resource access declarations.
  */
-type ResourceAccess = ResourceRead<Descriptor<"resource", string, any>> | ResourceWrite<Descriptor<"resource", string, any>>
+type ResourceAccess =
+  | ResourceRead<Descriptor<"resource", string, any>>
+  | ResourceChanged<Descriptor<"resource", string, any>>
+  | ResourceWrite<Descriptor<"resource", string, any>>
 /**
  * Internal union for all supported event access declarations.
  */
@@ -377,6 +424,15 @@ type EventAccess = EventRead<Descriptor<"event", string, any>> | EventWrite<Desc
  * A read-only view over a resource value.
  */
 export interface ResourceReadView<T> extends ReadCell<T> {}
+
+/**
+ * A read-only view over a resource value that also reports whether it
+ * changed since this system's previous completed run (`changedResource`).
+ */
+export interface ResourceChangedView<T> extends ReadCell<T> {
+  /** Whether a committed write left a different value since this system's previous completed run. `true` on the first run. */
+  changed(): boolean
+}
 
 /**
  * A mutable view over a resource value.
@@ -847,6 +903,7 @@ export type AnySystemSpec = SystemSpec<any, any, any>
 type ResourceContext<Spec extends AnySystemSpec> = {
   readonly [K in keyof Spec["resources"]]:
     Spec["resources"][K] extends ResourceRead<infer D> ? ResourceReadView<Descriptor.Value<D>>
+    : Spec["resources"][K] extends ResourceChanged<infer D> ? ResourceChangedView<Descriptor.Value<D>>
     : Spec["resources"][K] extends ResourceWrite<infer D> ? ResourceWriteView<D>
     : never
 }

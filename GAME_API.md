@@ -61,6 +61,29 @@ changes go through `set`, `update`, or a validated write helper. Type helper
 functions that take such values as `ReadonlyValue<T>` (from
 `@typeonce/ritmo/Query`) so they accept `get()` results without casts.
 
+Work that only matters when something moved reads the change explicitly
+instead of keeping a "last value" by hand:
+
+```ts
+const SyncHud = Game.System("Game/SyncHud", {
+  resources: { score: Game.System.changedResource(Score) },
+  services: { hud: Game.System.service(Hud) }
+}, ({ resources, services }) => {
+  if (!resources.score.changed()) return
+  services.hud.score.textContent = `Score ${resources.score.get()}`
+})
+
+const Redraw = Game.Query({
+  selection: { position: Game.Query.read(Position), sprite: Game.Query.read(Sprite) },
+  filters: [Game.Query.anyOf(Game.Query.changed(Position), Game.Query.changed(Sprite))]
+})
+```
+
+`changed()` is true when a committed write left a different value since this
+system's previous run (and on its first run). `anyOf` matches an entity once
+when any of its `added`/`changed` filters passes; filters listed side by side
+must all pass.
+
 ## 3. Keep expected failures in the type
 
 ```ts

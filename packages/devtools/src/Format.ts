@@ -100,6 +100,10 @@ export const system = (input: Debug.SystemDescription): string => {
       query.without.length > 0 ? `without ${query.without.join(", ")}` : undefined,
       query.added.length > 0 ? `added ${query.added.join(", ")}` : undefined,
       query.changed.length > 0 ? `changed ${query.changed.join(", ")}` : undefined,
+      ...query.anyOf.map((members) => `any of (${[
+        ...members.added.map((name) => `added ${name}`),
+        ...members.changed.map((name) => `changed ${name}`)
+      ].join(", ")})`),
       query.relations.length > 0 ? query.relations.join(", ") : undefined
     ].filter((part) => part !== undefined)
     lines.push(`  query ${query.slot}: ${parts.join("; ")}`)
@@ -107,7 +111,8 @@ export const system = (input: Debug.SystemDescription): string => {
   const add = (label: string, items: ReadonlyArray<string>) => {
     if (items.length > 0) lines.push(`  ${label}: ${items.join(", ")}`)
   }
-  add("reads resources", input.resources.reads)
+  add("reads resources", input.resources.reads.filter((name) => !input.resources.changed.includes(name)))
+  add("reads resources when changed", input.resources.changed)
   add("writes resources", input.resources.writes)
   add("reads events", input.events.reads)
   add("emits events", input.events.writes)

@@ -179,9 +179,23 @@ export interface ChangedFilter<D extends ComponentDescriptor> {
   readonly descriptor: D
 }
 
-export type Filter<D extends ComponentDescriptor> =
+/** An `added` or `changed` filter: the filters `anyOf` combines. */
+export type LifecycleFilter<D extends ComponentDescriptor> =
   | AddedFilter<D>
   | ChangedFilter<D>
+
+/**
+ * A filter that matches entities passing at least one of its `added` /
+ * `changed` filters since the reading system's previous run.
+ */
+export interface AnyOfFilter<D extends ComponentDescriptor> {
+  readonly kind: "anyOf"
+  readonly filters: ReadonlyArray<LifecycleFilter<D>>
+}
+
+export type Filter<D extends ComponentDescriptor> =
+  | LifecycleFilter<D>
+  | AnyOfFilter<D>
 
 /**
  * Declares read-only access to a component in a query selection.
@@ -280,6 +294,34 @@ export const added = <D extends ComponentDescriptor>(descriptor: D): AddedFilter
 export const changed = <D extends ComponentDescriptor>(descriptor: D): ChangedFilter<D> => ({
   kind: "changed",
   descriptor
+})
+
+/**
+ * Declares a filter that matches entities passing at least one of `filters`
+ * (`added` / `changed`) since the reading system's previous run. Each entity
+ * is matched once, however many of its filters pass.
+ *
+ * Filters listed side by side in `filters: [...]` must all pass; use `anyOf`
+ * when any one of them is enough, for example to redraw when either the
+ * position or the sprite changed.
+ *
+ * @example
+ * ```ts
+ * const RedrawQuery = Game.Query({
+ *   selection: { position: Game.Query.read(Position), sprite: Game.Query.read(Sprite) },
+ *   filters: [Game.Query.anyOf(Game.Query.changed(Position), Game.Query.changed(Sprite))]
+ * })
+ * ```
+ */
+export const anyOf = <
+  const Filters extends readonly [
+    LifecycleFilter<ComponentDescriptor>,
+    LifecycleFilter<ComponentDescriptor>,
+    ...ReadonlyArray<LifecycleFilter<ComponentDescriptor>>
+  ]
+>(...filters: Filters): AnyOfFilter<Filters[number]["descriptor"]> => ({
+  kind: "anyOf",
+  filters
 })
 
 /**

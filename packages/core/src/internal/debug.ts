@@ -72,6 +72,9 @@ export const transitionScheduleName = (schedule: TransitionSchedule): string => 
 const names = <A>(record: Record<string, A>, name: (value: A) => string): Array<string> =>
   Object.values(record).map(name)
 
+const lifecycleNames = (filters: ReadonlyArray<Query.Filter<any>>, kind: "added" | "changed"): Array<string> =>
+  filters.flatMap((filter) => filter.kind === kind ? [filter.descriptor.name] : [])
+
 const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDescription => {
   const reads: Array<string> = []
   const writes: Array<string> = []
@@ -102,8 +105,11 @@ const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDe
     optional,
     with: query.with.map((descriptor) => descriptor.name),
     without: query.without.map((descriptor) => descriptor.name),
-    added: query.filters.filter((filter) => filter.kind === "added").map((filter) => filter.descriptor.name),
-    changed: query.filters.filter((filter) => filter.kind === "changed").map((filter) => filter.descriptor.name),
+    added: lifecycleNames(query.filters, "added"),
+    changed: lifecycleNames(query.filters, "changed"),
+    anyOf: query.filters.flatMap((filter) => filter.kind === "anyOf"
+      ? [{ added: lifecycleNames(filter.filters, "added"), changed: lifecycleNames(filter.filters, "changed") }]
+      : []),
     relations: [
       ...relations,
       ...relationNames(query.withRelations, "with"),
@@ -114,7 +120,7 @@ const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDe
   }
 }
 
-type Mode = { readonly mode: "read" | "write"; readonly descriptor: Descriptor.Any }
+type Mode = { readonly mode: "read" | "changed" | "write"; readonly descriptor: Descriptor.Any }
 type CommandAccess = { readonly permissions: ReadonlyArray<{ readonly permission: keyof Debug.CommandPermissions; readonly values: ReadonlyArray<{ readonly name: string }> }> }
 
 const permissionsOf = (access: CommandAccess | undefined): Debug.CommandPermissions => {
@@ -142,7 +148,7 @@ type ThisTickAccess = Mode & { readonly thisTick?: true }
 
 export const describeSystem = (system: AnySystem, placements: ReadonlyArray<string>): Debug.SystemDescription => {
   const spec = system.spec
-  const byMode = (record: Record<string, Mode>, mode: "read" | "write") =>
+  const byMode = (record: Record<string, Mode>, mode: Mode["mode"]) =>
     Object.values(record).filter((access) => access.mode === mode).map((access) => access.descriptor.name)
   const machineName = (access: { readonly machine: Machine.StateMachine.Any }) => access.machine.name
   // A system also reads whatever its `check` conditions read.
@@ -160,7 +166,8 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
         Object.entries(check.spec.queries as Record<string, Query.Query.Any<any>>).map(([slot, query]) => describeQuery(`check(${check.name}).${slot}`, query)))
     ],
     resources: {
-      reads: unique([...byMode(spec.resources, "read"), ...checks.flatMap((check) => byMode(check.spec.resources, "read"))]),
+      reads: unique([...byMode(spec.resources, "read"), ...byMode(spec.resources, "changed"), ...checks.flatMap((check) => byMode(check.spec.resources, "read"))]),
+      changed: byMode(spec.resources, "changed"),
       writes: byMode(spec.resources, "write")
     },
     events: { reads: byMode(spec.events, "read"), writes: byMode(spec.events, "write") },
@@ -370,6 +377,20 @@ export const describe = (input: DescribeInput): Debug.Description => {
         message: `${name} is related by commands from ${[...queuers].sort().join(", ")}, but no described system reads its failures (Game.System.readRelationFailures(${name})), so a failed relate or reorder is dropped silently`
       })
     }
+    const resourceWriters = new Set(systems.flatMap((system) => system.resources.writes))
+    const changedReaders = new Map<string, Array<string>>()
+    for (const system of systems) {
+      for (const name of system.resources.changed) changedReaders.set(name, [...(changedReaders.get(name) ?? []), system.name])
+    }
+    for (const [name, readers] of changedReaders) {
+      if (resourceWriters.has(name)) continue
+      lints.push({
+        severity: "warning",
+        code: "resource-changed-never-written",
+        subject: name,
+        message: `${name} is read with changedResource by ${readers.join(", ")}, but no described system writes it, so changed() is true only on the first run`
+      })
+    }
     lints.push(...readBeforeWriteLints(schedules, described, input.externallyWrittenEvents))
     // Each named schedule is checked as one tick; `tick` checks this at compile time.
     for (const [name, schedule] of input.schedules) {
@@ -446,6 +467,8 @@ const fixFor = (code: Debug.Lint["code"], subject: string): string => {
       return `emit ${subject} from a system with Game.System.writeEvent, or stop reading it; if the host sends it with runtime.send, declare it (debug.declareHostEvents, or hostEvents in a Session or lint target)`
     case "next-state-never-applied":
       return `add Game.Schedule.applyStateTransitions(...) to a schedule that runs after the system that queues ${subject}`
+    case "resource-changed-never-written":
+      return `write ${subject} from a system with Game.System.writeResource, or read it with Game.System.readResource; if only a render schedule writes it, pass that schedule as describe-only`
     case "relation-failure-never-read":
       return `read the failures with Game.System.readRelationFailures(${subject}) in a system and handle them`
     case "this-tick-order":
@@ -467,7 +490,7 @@ const accessesOf = (system: Debug.SystemDescription): Record<"component" | "reso
     reads: system.queries.flatMap((query) => [...query.reads, ...query.optional, ...query.added, ...query.changed]),
     writes: system.queries.flatMap((query) => query.writes)
   },
-  resource: system.resources,
+  resource: { reads: system.resources.reads, writes: system.resources.writes },
   event: system.events
 })
 

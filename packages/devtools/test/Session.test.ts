@@ -225,6 +225,26 @@ describe("Session", () => {
   })
 })
 
+describe("Format.system change reads", () => {
+  it("prints anyOf filters and resources read with changedResource", () => {
+    const Redraw = Game.System("Dev/Redraw", {
+      queries: {
+        moved: Game.Query({
+          selection: { position: Game.Query.read(Position) },
+          filters: [Game.Query.anyOf(Game.Query.changed(Position), Game.Query.added(Health))]
+        })
+      },
+      resources: { score: Game.System.changedResource(Score) }
+    }, () => {})
+    const runtime = makeRuntime()
+    const session = Session.make(runtime, { hostClock, schedules: { update: Game.Schedule(Idle, Redraw) } })
+    const text = session.system("Dev/Redraw").text
+    expect(text).toContain("query moved: read Dev/Position; any of (added Dev/Health, changed Dev/Position)")
+    expect(text).toContain("reads resources when changed: Dev/Score")
+    expect(text).not.toContain("reads resources: Dev/Score")
+  })
+})
+
 describe("Format.value", () => {
   it("prints compact values", () => {
     expect(Format.value({ x: 1.23456, list: [1, 2, 3], nested: { deep: { deeper: { deepest: 1 } } } })).toBe(

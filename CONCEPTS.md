@@ -152,10 +152,14 @@ resources.score.update((score) => score + total)
 
 ```ts
 filters: [Game.Query.changed(Position)]
+filters: [Game.Query.anyOf(Game.Query.changed(Position), Game.Query.changed(Sprite))]
+resources: { score: Game.System.changedResource(Score) }   // resources.score.changed()
 ```
 
 - `added(...)` and `changed(...)` match what happened since this system's previous run. Every system sees each change exactly once, independently of other systems.
+- Filters listed side by side must all pass; `anyOf(...)` matches when any one of its `added`/`changed` filters does.
 - A system's first run sees everything that already exists as added.
+- `changedResource(...)` reads a resource and reports `changed()`: whether a committed write left a different value since this system's previous run. Unlike component `changed`, a write of an equal value is not a change. Use it to redraw a HUD label only when its value moves.
 - `readRemoved(...)` and `readDespawned()` work the same way.
 - Nothing needs a marker. Removal records are kept until every system that reads them has run, so a render schedule ticked after several fixed updates still sees every despawn.
 
@@ -223,7 +227,7 @@ const update = Game.Schedule(Move, Attack, ApplyHits, Game.Schedule.applyStateTr
 - Steps run in the order written. Nested schedules are flattened in place.
 - Only markers apply queued work: `applyDeferred` (commands) and `applyStateTransitions` (commands, then machine transitions). Reads (change detection, events, relation failures) are per system and need no marker.
 - Nothing is flushed when a schedule ends.
-- `Game.System.thisTick(Game.System.readEvent(Damage))` (or `readResource`) declares that a read needs this tick's data: every system writing it must run earlier in the same `runtime.tick(...)` call. The library never reorders; `tick` rejects at compile time a writer after the reader ("ApplyDamage needs Damage from this tick, but its writer UpdateFrostFields runs after it: move ...") and a call whose order is not statically known. A read with no writer in the call compiles (`event-never-written` reports data nobody writes). `tryTick` checks the same at runtime; the `this-tick-order` lint reports it for named schedules. Plugin systems with erased specs (render sync, input capture) are not counted as writers.
+- `Game.System.thisTick(Game.System.readEvent(Damage))` (or `readResource` / `changedResource`) declares that a read needs this tick's data: every system writing it must run earlier in the same `runtime.tick(...)` call. The library never reorders; `tick` rejects at compile time a writer after the reader ("ApplyDamage needs Damage from this tick, but its writer UpdateFrostFields runs after it: move ...") and a call whose order is not statically known. A read with no writer in the call compiles (`event-never-written` reports data nobody writes). `tryTick` checks the same at runtime; the `this-tick-order` lint reports it for named schedules. Plugin systems with erased specs (render sync, input capture) are not counted as writers.
 - `Game.System.thisTick(Query)` declares that a query needs this tick's command changes. Its writers are systems whose declared commands can change what it matches (`spawns` covering every component it requires, or `inserts` / `removes` of a component it names); each must run earlier with an `applyDeferred()` before the reader ("AimAtNewest needs this tick's commands for queries.enemies, but SpawnWave queues them with no applyDeferred() in between"). `despawns` never count: a despawned entity stays visible until the next `applyDeferred()`. A transition bundle counts at its `applyStateTransitions(...)` step, as if every schedule in it runs.
 
 ## 11. The runtime is driven by your host

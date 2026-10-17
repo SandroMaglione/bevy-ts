@@ -4,19 +4,23 @@
  * `Schedule.ts` (`TickOrderErrors`) and produces the same messages.
  */
 import type { Descriptor } from "../Descriptor.ts"
+import type * as Query from "../Query.ts"
 import * as Schedule from "../Schedule.ts"
 import type { SystemDefinition } from "../System.ts"
 
 type AnySystem = SystemDefinition<any, any, any, any, any>
 type OrderIssue = Schedule.OrderIssue
-type Access = { readonly mode: "read" | "write"; readonly descriptor: Descriptor.Any; readonly thisTick?: true }
+type Access = { readonly mode: "read" | "changed" | "write"; readonly descriptor: Descriptor.Any; readonly thisTick?: true }
 type QueryAccess = {
   readonly thisTick?: true
   readonly selection: Record<string, { readonly mode?: string; readonly descriptor?: Descriptor.Any }>
   readonly with: ReadonlyArray<Descriptor.Any>
   readonly without: ReadonlyArray<Descriptor.Any>
-  readonly filters: ReadonlyArray<{ readonly descriptor?: Descriptor.Any }>
+  readonly filters: ReadonlyArray<Query.Filter<any>>
 }
+/** Every component a filter names: the one of `added` / `changed`, or each member of `anyOf`. */
+const filterNames = (filter: Query.Filter<any>): ReadonlyArray<string> =>
+  filter.kind === "anyOf" ? filter.filters.map((member) => member.descriptor.name) : [filter.descriptor.name]
 type Permission = { readonly permission: string; readonly values: ReadonlyArray<{ readonly name: string }> }
 
 /** One position of a tick: a system, or a point where queued commands are applied. */
@@ -65,7 +69,7 @@ const changesQuery = (system: AnySystem, query: QueryAccess): boolean => {
     ...slots.flatMap((slot) => slot.descriptor ? [slot.descriptor.name] : []),
     ...query.with.map((d) => d.name),
     ...query.without.map((d) => d.name),
-    ...query.filters.flatMap((filter) => filter.descriptor ? [filter.descriptor.name] : [])
+    ...query.filters.flatMap((filter) => filterNames(filter))
   ])
   const changes = [...permissionNames(system, "inserts"), ...permissionNames(system, "removes")]
   if (changes.some((name) => named.has(name))) return true
@@ -95,7 +99,7 @@ const computeIssues = (steps: ReadonlyArray<Schedule.ScheduleStep>): ReadonlyArr
   const systemsAt = items.flatMap((item, at) => item.kind === "system" ? [{ system: item.system, at }] : [])
   for (const { system: reader, at: index } of systemsAt) {
     for (const read of accesses(reader)) {
-      if (read.mode !== "read" || read.thisTick !== true) continue
+      if ((read.mode !== "read" && read.mode !== "changed") || read.thisTick !== true) continue
       const data = read.descriptor.name
       for (const { system, at } of systemsAt) {
         if (at <= index || sameSystem(system, reader)) continue

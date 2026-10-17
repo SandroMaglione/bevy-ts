@@ -51,6 +51,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
       optional: QueryModule.optional,
       added: QueryModule.added,
       changed: QueryModule.changed,
+      anyOf: QueryModule.anyOf,
       readRelation: Relation.read,
       optionalRelation: Relation.optional,
       readRelated: Relation.readRelated,
@@ -79,6 +80,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
       {
         readResource: System.readResource,
         writeResource: System.writeResource,
+        changedResource: System.changedResource,
         readEvent: System.readEvent,
         writeEvent: System.writeEvent,
         thisTick: System.thisTick,

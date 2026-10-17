@@ -55,7 +55,7 @@ export const SyncHudSystem = Game.System(
       agents: AgentSnapshotQuery
     },
     resources: {
-      generationIndex: Game.System.readResource(GenerationIndex),
+      generationIndex: Game.System.changedResource(GenerationIndex),
       populationStats: Game.System.readResource(PopulationStats),
       summary: Game.System.readResource(Summary),
       generationClock: Game.System.readResource(GenerationClock)
@@ -88,7 +88,7 @@ export const SyncHudSystem = Game.System(
         }
       }
 
-      hud.generation.textContent = `Generation ${resources.generationIndex.get()}`
+      if (resources.generationIndex.changed()) hud.generation.textContent = `Generation ${resources.generationIndex.get()}`
       hud.alive.textContent = `${agents.length} alive`
       hud.dominant.textContent = `lineage ${dominantLabel}`
       hud.births.textContent = `${stats.births} births`

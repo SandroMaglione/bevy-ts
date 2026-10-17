@@ -166,7 +166,7 @@ const accessOf = (system: Debug.SystemDescription): Access => {
   const unique = (values: ReadonlyArray<string>) => [...new Set(values)]
   const writes = unique(system.queries.flatMap((query) => query.writes))
   return {
-    reads: unique(system.queries.flatMap((query) => [...query.reads, ...query.optional, ...query.added, ...query.changed])).filter((name) => !writes.includes(name)),
+    reads: unique(system.queries.flatMap((query) => [...query.reads, ...query.optional, ...query.added, ...query.changed, ...query.anyOf.flatMap((members) => [...members.added, ...members.changed])])).filter((name) => !writes.includes(name)),
     writes,
     resourceReads: system.resources.reads.filter((name) => !system.resources.writes.includes(name)),
     resourceWrites: system.resources.writes,

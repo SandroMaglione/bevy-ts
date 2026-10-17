@@ -46,6 +46,9 @@ interface LifecycleFilterPlan {
   readonly ordinal: number
 }
 
+/** A query filter: one lifecycle filter, or `anyOf` several (passes when one does). */
+type FilterPlan = ReadonlyArray<LifecycleFilterPlan>
+
 interface QueryState {
   readonly ordinal: number
   readonly required: ReadonlyArray<number>
@@ -54,7 +57,7 @@ interface QueryState {
   readonly withoutRelations: ReadonlyArray<Relation.Relation.Any>
   readonly withRelated: ReadonlyArray<Relation.Relation.Any>
   readonly withoutRelated: ReadonlyArray<Relation.Relation.Any>
-  readonly filters: ReadonlyArray<LifecycleFilterPlan>
+  readonly filters: ReadonlyArray<FilterPlan>
   readonly slots: ReadonlyArray<SlotPlan>
   readonly proofSlots: ReadonlyArray<readonly [string, number]>
   readonly writeSlots: ReadonlyArray<readonly [string, number]>
@@ -185,11 +188,13 @@ export const makeQueryEngine = (world: World) => {
       withoutRelations: query.withoutRelations,
       withRelated: unique(withRelated),
       withoutRelated: query.withoutRelated,
-      filters: query.filters.map((filter) => {
-        const ordinal = world.ordinalOf(filter.descriptor)
-        world.trackChanges(ordinal)
-        return { kind: filter.kind, ordinal }
-      }),
+      filters: query.filters.map((filter) =>
+        (filter.kind === "anyOf" ? filter.filters : [filter]).map((member) => {
+          const ordinal = world.ordinalOf(member.descriptor)
+          world.trackChanges(ordinal)
+          return { kind: member.kind, ordinal }
+        })
+      ),
       slots,
       proofSlots,
       writeSlots,
@@ -239,12 +244,31 @@ export const makeQueryEngine = (world: World) => {
 
   const matchesFilters = (state: QueryState, record: EntityRecord, since: number): boolean => {
     for (const filter of state.filters) {
-      const matched = filter.kind === "added"
-        ? world.addedSince(record, filter.ordinal, since)
-        : world.changedSince(record, filter.ordinal, since)
+      let matched = false
+      for (const member of filter) {
+        matched = member.kind === "added"
+          ? world.addedSince(record, member.ordinal, since)
+          : world.changedSince(record, member.ordinal, since)
+        if (matched) break
+      }
       if (!matched) return false
     }
     return true
+  }
+
+  /**
+   * Ids that may pass one filter (may repeat), or `undefined` when a change
+   * log no longer covers `since`. An `anyOf` is the union of its members' logs.
+   */
+  const filterCandidates = (filter: FilterPlan, since: number): ReadonlyArray<number> | undefined => {
+    if (filter.length === 1) return world.changedCandidates(filter[0]!.ordinal, since)
+    const union: Array<number> = []
+    for (const member of filter) {
+      const logged = world.changedCandidates(member.ordinal, since)
+      if (logged === undefined) return undefined
+      for (const id of logged) union.push(id)
+    }
+    return union
   }
 
   const relatedIds = (relation: Relation.Relation.Any, id: number): ReadonlyArray<Entity.EntityId<any, any>> =>
@@ -426,7 +450,7 @@ export const makeQueryEngine = (world: World) => {
     // bounds the candidates for either filter.
     let candidates: ReadonlyArray<number> | undefined
     for (const filter of state.filters) {
-      const logged = world.changedCandidates(filter.ordinal, since)
+      const logged = filterCandidates(filter, since)
       if (logged === undefined) continue
       if (logged.length === 0) return []
       if (candidates === undefined || logged.length < candidates.length) candidates = logged

@@ -10,35 +10,42 @@ export const SyncHudSystem = Game.System(
       player: PlayerReadQuery
     },
     resources: {
-      contacts: Game.System.readResource(PlayerContacts),
-      loseMessage: Game.System.readResource(LoseMessage)
+      contacts: Game.System.changedResource(PlayerContacts),
+      loseMessage: Game.System.changedResource(LoseMessage)
     },
     machines: {
       session: Game.System.machine(SessionState)
+    },
+    transitionEvents: {
+      session: Game.System.readTransitionEvent(SessionState)
     },
     services: {
       host: Game.System.service(PlatformerHost)
     }
   },
-  ({ queries, resources, machines, services }) =>
+  ({ queries, resources, machines, transitionEvents, services }) =>
     {
       const player = queries.player.singleOptional()
-      const contacts = resources.contacts.get()
       const hud = services.host.hud
 
+      // The position moves every frame; the other labels change only with what they show.
       if (player.ok && player.value) {
         const position = player.value.data.position.get()
         const velocity = player.value.data.velocity.get()
         hud.stats.textContent =
           `x ${Math.round(position.x)}  |  y ${Math.round(position.y)}  |  vx ${Math.round(velocity.x)}  |  vy ${Math.round(velocity.y)}`
-        hud.prompt.textContent =
-          machines.session.get() === "Playing"
-            ? "Run with Shift, move with Arrow keys or A/D, jump with Space, W, or ArrowUp."
-            : resources.loseMessage.get()
+      }
+      if (resources.contacts.changed()) {
+        const contacts = resources.contacts.get()
         hud.hint.textContent =
           `Grounded ${contacts.grounded ? "yes" : "no"}  |  Ceiling ${contacts.hitCeiling ? "yes" : "no"}  |  Kill plane ${levelBounds.killPlaneY}`
       }
 
+      if (transitionEvents.session.all().length === 0 && !resources.loseMessage.changed()) return
+      hud.prompt.textContent =
+        machines.session.get() === "Playing"
+          ? "Run with Shift, move with Arrow keys or A/D, jump with Space, W, or ArrowUp."
+          : resources.loseMessage.get()
       if (machines.session.get() === "Lost") {
         hud.overlay.style.opacity = "1"
         hud.overlayTitle.textContent = "You lost"
