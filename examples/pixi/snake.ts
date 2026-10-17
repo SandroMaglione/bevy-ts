@@ -95,6 +95,11 @@ const Game = Schema.bind(
 const schema = Game.schema
 const GamePhase = Game.StateMachine("Phase", ["Playing", "GameOver"])
 
+// One round's head and food. Body segments are ChildOf the head, so they go
+// with it. Entering Playing (a restart) despawns the round, before
+// ResetGameSystem spawns the next one.
+const RoundScope = Game.EntityScope("Snake/Round", { despawnOnEnter: [GamePhase, "Playing"] })
+
 const HeadQuery = Game.Query({
   selection: {
     position: Game.Query.write(Position),
@@ -341,46 +346,21 @@ const placeNode = (
 const ResetGameSystem = Game.System(
   "Snake/ResetGame",
   {
-    queries: {
-      head: Game.Query({
-        selection: {
-          head: Game.Query.read(SnakeHead)
-        }
-      }),
-      body: Game.Query({
-        selection: {
-          body: Game.Query.read(SnakeBody)
-        }
-      }),
-      food: FoodQuery
-    },
     resources: {
       score: Game.System.writeResource(Score),
       pendingGrowth: Game.System.writeResource(PendingGrowth),
       reason: Game.System.writeResource(GameOverReason)
     },
-    commands: Game.System.commands(
-      Game.System.despawns(SnakeHead, SnakeBody, Food),
-      Game.System.spawns(SnakeHead, SnakeBody)
-    )
+    commands: Game.System.commands(Game.System.spawns(SnakeHead, SnakeBody))
   },
-  ({ queries, resources, commands }) =>
+  ({ resources, commands }) =>
     {
       resources.score.set(0)
       resources.pendingGrowth.set(0)
       resources.reason.set(null)
 
-      for (const match of queries.head.each()) {
-        commands.despawn(match.entity)
-      }
-      for (const match of queries.body.each()) {
-        commands.despawn(match.entity)
-      }
-      for (const match of queries.food.each()) {
-        commands.despawn(match.entity)
-      }
-
-      const headId = commands.spawn(makeHeadDraft())
+      // The previous round was despawned with RoundScope on entering Playing.
+      const headId = commands.spawnIn(RoundScope, makeHeadDraft())
 
       commands.spawn(
         makeTailDraft(headId, INITIAL_TAIL_POSITION)
@@ -734,9 +714,7 @@ const EnsureFoodSystem = Game.System(
         return
       }
 
-      commands.spawn(
-        makeFoodDraft(spawnAt)
-      )
+      commands.spawnIn(RoundScope, makeFoodDraft(spawnAt))
     }
 )
 

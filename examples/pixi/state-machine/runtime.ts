@@ -29,7 +29,8 @@ const makeRuntime = (
 ) => {
   const machines = Game.Runtime.machines(
     Game.Runtime.machine(SessionState, "Title"),
-    Game.Runtime.machine(RoundState, "Paused")
+    // Entered whenever the session enters Round.
+    Game.Runtime.machine(RoundState, "Playing")
   )
 
   return Game.Runtime.make({

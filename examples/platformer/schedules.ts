@@ -4,7 +4,6 @@ import {
   ApplyWorldCameraTransformSystem,
   CaptureFrameContextSystem,
   RenderNodesSystem,
-  DespawnLevelEntitiesOnPlayingEnterSystem,
   MovePlayerSystem,
   QueueLossSystem,
   QueueRestartSystem,
@@ -26,12 +25,11 @@ export const setupSchedule = Game.Schedule(
   SyncHudSystem
 )
 
+// LevelScope despawns itself on entering Playing, before this runs.
 const restartOnPlayingEnter = Game.Schedule(
-    ResetWorldResourcesOnPlayingEnterSystem,
-    DespawnLevelEntitiesOnPlayingEnterSystem,
-    Game.Schedule.applyDeferred(),
-    SpawnWorldOnPlayingEnterSystem
-  )
+  ResetWorldResourcesOnPlayingEnterSystem,
+  SpawnWorldOnPlayingEnterSystem
+)
 
 export const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SessionState, "Playing", [

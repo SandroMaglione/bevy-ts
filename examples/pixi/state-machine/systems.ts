@@ -30,6 +30,7 @@ import {
   InputManager,
   Pickup,
   PickupGoal,
+  PickupScope,
   Position,
   RoundState,
   RoundTimeRemaining,
@@ -128,12 +129,9 @@ export const QueueStartFromTitleSystem = Game.System(
 export const QueueRestartSystem = Game.System(
   "StateMachineExample/QueueRestart",
   {
-    when: [Game.Condition.and(
-      Game.Condition.inState(SessionState, "Round"),
-      Game.Condition.or(
-        Game.Condition.inState(RoundState, "Victory"),
-        Game.Condition.inState(RoundState, "Defeat")
-      )
+    when: [Game.Condition.or(
+      Game.Condition.inState(RoundState, "Victory"),
+      Game.Condition.inState(RoundState, "Defeat")
     )],
     nextMachines: {
       session: Game.System.nextState(SessionState)
@@ -153,10 +151,7 @@ export const QueueRestartSystem = Game.System(
 export const QueuePauseSystem = Game.System(
   "StateMachineExample/QueuePause",
   {
-    when: [Game.Condition.and(
-      Game.Condition.inState(SessionState, "Round"),
-      Game.Condition.inState(RoundState, "Playing")
-    )],
+    when: [Game.Condition.inState(RoundState, "Playing")],
     nextMachines: {
       round: Game.System.nextState(RoundState)
     },
@@ -175,10 +170,7 @@ export const QueuePauseSystem = Game.System(
 export const QueueResumeSystem = Game.System(
   "StateMachineExample/QueueResume",
   {
-    when: [Game.Condition.and(
-      Game.Condition.inState(SessionState, "Round"),
-      Game.Condition.inState(RoundState, "Paused")
-    )],
+    when: [Game.Condition.inState(RoundState, "Paused")],
     nextMachines: {
       round: Game.System.nextState(RoundState)
     },
@@ -203,8 +195,7 @@ export const TickCountdownSystem = Game.System(
       countdown: Game.System.writeResource(CountdownRemaining)
     },
     nextMachines: {
-      session: Game.System.nextState(SessionState),
-      round: Game.System.nextState(RoundState)
+      session: Game.System.nextState(SessionState)
     }
   },
   ({ resources, nextMachines }) =>
@@ -212,8 +203,8 @@ export const TickCountdownSystem = Game.System(
       const remaining = clamp(resources.countdown.get() - resources.deltaTime.get(), 0, COUNTDOWN_DURATION_SECONDS)
       resources.countdown.set(remaining)
       if (remaining <= 0) {
+        // RoundState enters Playing with the session's Round.
         nextMachines.session.set("Round")
-        nextMachines.round.set("Playing")
       }
     }
 )
@@ -327,8 +318,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
   "StateMachineExample/ResetRoundOnCountdownEnter",
   {
     queries: {
-      player: PlayerQuery,
-      pickups: PickupQuery
+      player: PlayerQuery
     },
     resources: {
       score: Game.System.writeResource(Score),
@@ -337,7 +327,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
       goal: Game.System.readResource(PickupGoal),
       cursor: Game.System.writeResource(SpawnCursor)
     },
-    commands: Game.System.commands(Game.System.despawns(Pickup), Game.System.spawns(Pickup))
+    commands: Game.System.commands(Game.System.spawns(Pickup))
   },
   ({ queries, resources, commands }) =>
     {
@@ -346,9 +336,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
         player.value.data.position.setRaw({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })
       }
 
-      for (const pickup of queries.pickups.each()) {
-        commands.despawn(pickup.entity)
-      }
+      // The previous round's pickups were despawned with PickupScope on entering Countdown.
 
       const cursor = resources.cursor.get()
       const goal = resources.goal.get()
@@ -356,7 +344,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
         const point = PICKUP_POINTS[(cursor + index) % PICKUP_POINTS.length] ?? PICKUP_POINTS[0]!
         const pickupDraft = makePickupDraft(point)
         if (pickupDraft.ok) {
-          commands.spawn(pickupDraft.value)
+          commands.spawnIn(PickupScope, pickupDraft.value)
         }
       }
 
@@ -382,7 +370,8 @@ export const WriteTransitionNoticeSystem = Game.System(
     {
       const messages = [
         ...transitionEvents.session.all().map((event) => `Session ${event.from} -> ${event.to}`),
-        ...transitionEvents.round.all().map((event) => `Round ${event.from} -> ${event.to}`)
+        // A round change within a round; RoundState entering or leaving with the session is in the session message.
+        ...transitionEvents.round.all().flatMap((event) => event.from === undefined || event.to === undefined ? [] : [`Round ${event.from} -> ${event.to}`])
       ]
 
       if (messages.length === 0) {
@@ -470,7 +459,7 @@ export const SyncHudSystem = Game.System(
         hud.overlay.style.opacity = "1"
         hud.title.textContent = "State Machine Sprint"
         hud.subtitle.textContent = "Press Enter to start. Arrows or WASD move. P pauses during play."
-        hud.footer.textContent = "The game uses separate session and round machines so countdown, play, pause, win, and lose stay explicit."
+        hud.footer.textContent = "The round machine is a sub-state of the session: it exists only during a round, so countdown, play, pause, win, and lose stay explicit."
         return
       }
 

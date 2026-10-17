@@ -21,11 +21,11 @@ import {
   SyncHudSystem
 } from "./systems/render.ts"
 
+// GenerationScope despawns the previous generation on entering Running, before this runs.
 const runningEntry = Game.Schedule(
-    ResetGenerationOnRunningEnterSystem,
-    Game.Schedule.applyDeferred(),
-    SetupWorldSystem
-  )
+  ResetGenerationOnRunningEnterSystem,
+  SetupWorldSystem
+)
 
 const stateTransitions = Game.Schedule.transitions(
   Game.Schedule.onEnter(SimulationPhase, "Running", [runningEntry])

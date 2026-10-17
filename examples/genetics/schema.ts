@@ -120,6 +120,11 @@ export const Game = Schema.bind(
 export const schema = Game.schema
 export const SimulationPhase = Game.StateMachine("SimulationPhase", ["Running", "GenerationSummary", "Extinction"] as const)
 
+/** One generation's food and agents: despawned when the next generation starts running. */
+export const GenerationScope = Game.EntityScope("GeneticsArena/Generation", {
+  despawnOnEnter: [SimulationPhase, "Running"]
+})
+
 export const ChangedAgentVitalsQuery = Game.Query({
   selection: {
     renderable: Game.Query.read(Renderable),
@@ -175,8 +180,3 @@ export const AgentResolveQuery = Game.Query({
   }
 })
 
-export const DespawnableQuery = Game.Query({
-  selection: {
-    renderable: Game.Query.read(Renderable)
-  }
-})
