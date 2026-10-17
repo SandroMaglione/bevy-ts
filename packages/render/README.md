@@ -1,5 +1,7 @@
 # `@typeonce/ritmo-render`
 
+Migrating from bevy-ts? See the [package migration guide](https://github.com/typeonce-dev/ritmo/blob/main/MIGRATION.md).
+
 Renderer-agnostic entity-to-node mirroring for ritmo: a render-node registry keyed by entity (`NodeRegistry`), a system that creates, updates, and destroys renderer nodes from ECS entities (`RenderSync.system`), and a system that draws fixed-step movement smoothly between steps (`RenderSync.interpolate`).
 
 ```sh

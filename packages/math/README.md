@@ -1,5 +1,7 @@
 # `@typeonce/ritmo-math`
 
+Migrating from bevy-ts? See the [package migration guide](https://github.com/typeonce-dev/ritmo/blob/main/MIGRATION.md).
+
 Math for ritmo games, in two kinds:
 
 - **Validated values**: `Scalar`, `Vector2`, `Size2`, `Aabb`, and `InputAxis`. Every one exports constructors that validate untrusted input, so they work as `Descriptor.ConstructedComponent(...)` constructors and survive snapshot restore.

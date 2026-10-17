@@ -1,5 +1,7 @@
 # `@typeonce/ritmo-devtools`
 
+Migrating from bevy-ts? See the [package migration guide](https://github.com/typeonce-dev/ritmo/blob/main/MIGRATION.md).
+
 `Determinism.check` compares the same scripted simulation twice, including
 transient components that snapshots omit:
 

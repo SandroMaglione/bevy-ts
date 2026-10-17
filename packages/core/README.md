@@ -1,5 +1,7 @@
 # `@typeonce/ritmo`
 
+Migrating from bevy-ts? See the [package migration guide](https://github.com/typeonce-dev/ritmo/blob/main/MIGRATION.md).
+
 The agent-first type safe ECS runtime
 
 Closed schemas, declared system access, explicit schedule boundaries, typed
