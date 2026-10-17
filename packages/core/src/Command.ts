@@ -65,7 +65,7 @@ import * as Entity from "./Entity.ts"
 import type * as EntityScope from "./EntityScope.ts"
 import type * as Relation from "./Relation.ts"
 import * as Result from "./Result.ts"
-import type { Schema } from "./Schema.ts"
+import type { RequirementPair, Schema } from "./Schema.ts"
 
 /**
  * Type-level helpers for staged entity construction.
@@ -541,6 +541,21 @@ declare const spawnedTypeId: unique symbol
  */
 export type SpawnedId<S extends Schema.Any, Root, Components extends string> =
   Entity.EntityId<S, Root> & { readonly [spawnedTypeId]: (_: never) => Components }
+
+/** The transitive closure of the names `N` require (cycles stop). */
+type RequiredClosure<Pairs extends RequirementPair, N extends string, Seen extends string = never> =
+  [Exclude<N, Seen>] extends [never]
+    ? Seen
+    : RequiredClosure<Pairs, Extract<Pairs, readonly [Exclude<N, Seen>, string]>[1], Seen | N>
+
+/**
+ * The component descriptors that `Names` require, transitively
+ * (`Schema.requires`): what `Game.System.spawns(...)` also allows.
+ */
+export type RequiredDescriptors<S extends Schema.Any, Names extends string> =
+  [Extract<Schema.Requires<S>, readonly [Names, string]>] extends [never]
+    ? never
+    : Extract<Schema.ComponentDescriptor<S>, { readonly name: Exclude<RequiredClosure<Schema.Requires<S>, Names>, Names> }>
 
 /** The keys every member of a union of proofs requires (what a draft holds in every case). */
 type RequiredKeys<P> = P extends unknown ? { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P] & string : never

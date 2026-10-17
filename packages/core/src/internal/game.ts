@@ -6,6 +6,7 @@
  */
 import * as Command from "../Command.ts"
 import type * as Debug from "../Debug.ts"
+import type { Descriptor } from "../Descriptor.ts"
 import * as Condition from "../Condition.ts"
 import * as Entity from "../Entity.ts"
 import * as EntityScope from "../EntityScope.ts"
@@ -17,8 +18,10 @@ import * as Runtime from "../Runtime.ts"
 import * as Schedule from "../Schedule.ts"
 import type { Schema } from "../Schema.ts"
 import * as System from "../System.ts"
+import { requirementIndex, withRequired } from "./requirements.ts"
 
 export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Schema.Game<S, Root> => {
+  const requirements = requirementIndex(schema)
   const definedMachines: Array<Machine.StateMachine.Any> = []
   const definedMachineNames = new Set<string>()
 
@@ -85,7 +88,9 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         writeEvent: System.writeEvent,
         thisTick: System.thisTick,
         commands: Command.commands,
-        spawns: Command.spawns,
+        // `spawns(Player)` also allows what `Player` requires (`Schema.requires`), matching its type.
+        spawns: (...components: ReadonlyArray<Descriptor<"component", string, any>>) =>
+          Command.spawns(...withRequired(requirements, components)),
         inserts: Command.inserts,
         removes: Command.removes,
         despawns: Command.despawns,

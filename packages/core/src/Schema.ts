@@ -75,19 +75,79 @@ export type Registry = Record<string, Descriptor.Any>
 
 /**
  * A closed schema: the components, resources, events, and relations a world
- * may contain.
+ * may contain, and the component requirements (`Schema.requires`) every
+ * entity of it keeps.
  */
 export interface SchemaDefinition<
   out Components extends Registry = {},
   out Resources extends Registry = {},
   out Events extends Registry = {},
-  out Relations extends Record<string, Relation.Relation.Any> = {}
+  out Relations extends Record<string, Relation.Relation.Any> = {},
+  out Requires extends RequirementPair = never
 > {
   readonly components: Components
   readonly resources: Resources
   readonly events: Events
   readonly relations: Relations
+  /** Component requirements declared with `Schema.requires(...)`. */
+  readonly requires: ReadonlyArray<ComponentRequirement<Requires>>
 }
+
+/**
+ * One requirement carried in a schema type, by component name:
+ * `[requirer, required]`. One pair per required component, so lookups by
+ * either end stay exact.
+ */
+export type RequirementPair = readonly [string, string]
+
+/**
+ * One `Schema.requires(...)` declaration: every entity holding `component`
+ * also holds each of `required`.
+ */
+export interface ComponentRequirement<out Pairs extends RequirementPair = RequirementPair> {
+  readonly kind: "requires"
+  readonly component: Descriptor<"component", string, any>
+  readonly required: ReadonlyArray<Descriptor<"component", string, any>>
+  readonly __pairs?: (_: never) => Pairs
+}
+
+type AnyComponentDescriptor = Descriptor<"component", string, any>
+
+/** One `[from, to]` pair per required name. */
+type RequirementPairs<From extends string, To extends string> = To extends string ? readonly [From, To] : never
+
+type PairsOf<R> = R extends ComponentRequirement<infer Pairs> ? Pairs : never
+
+/**
+ * Declares that every entity holding `component` also holds each of
+ * `required`. List it in a fragment's `requires`.
+ *
+ * The compiler then rejects every command that would break it:
+ * `commands.spawn` / `spawnIn` of a draft missing a required entry,
+ * `commands.insert` of `component` on an entity not proven to hold the
+ * rest, and `commands.remove` of a required component while a requirer may
+ * stay. `Game.System.spawns(component)` also allows spawning what it
+ * requires. Nothing is ever filled in with a default: the draft must carry
+ * every value.
+ *
+ * Requirements chain (`A` requires `B`, `B` requires `C`) and may name
+ * components of other fragments of the same `Schema.bind`.
+ *
+ * @example
+ * ```ts
+ * const Gameplay = Schema.fragment({
+ *   components: { Player, Position, Velocity },
+ *   requires: [Schema.requires(Player, Position, Velocity)]
+ * })
+ * ```
+ */
+export const requires = <
+  D extends AnyComponentDescriptor,
+  const Required extends readonly [AnyComponentDescriptor, ...Array<AnyComponentDescriptor>]
+>(
+  component: D,
+  ...required: Required
+): ComponentRequirement<RequirementPairs<D["name"], Required[number]["name"]>> => ({ kind: "requires", component, required })
 
 const schemaRootTypeId = "~ritmo/SchemaRoot" as const
 
@@ -112,7 +172,8 @@ export type MergeSchemaDefinitions<
   Schema.Components<A> & Schema.Components<B>,
   Schema.Resources<A> & Schema.Resources<B>,
   Schema.Events<A> & Schema.Events<B>,
-  Schema.Relations<A> & Schema.Relations<B>
+  Schema.Relations<A> & Schema.Relations<B>,
+  Schema.Requires<A> | Schema.Requires<B>
 >
 
 /**
@@ -186,6 +247,24 @@ export type ValidateFragments<Fragments extends ReadonlyArray<Schema.Any>> =
         readonly __schemaConflicts__: FragmentConflicts<Fragments>
       }
 
+type UnregisteredRequirements<S extends Schema.Any> =
+  Exclude<Schema.Requires<S>[0] | Schema.Requires<S>[1], Schema.ComponentDescriptor<S>["name"]>
+
+/**
+ * Rejects requirements naming a component the bound schema does not
+ * register. Checked at `bind`, so a fragment may require a component another
+ * fragment registers. Erased schemas (`Schema.Any`) are checked by `bind` at
+ * runtime instead.
+ */
+export type ValidateRequires<S extends Schema.Any> =
+  [UnregisteredRequirements<S>] extends [never]
+    ? unknown
+    : string extends Schema.Requires<S>[1]
+    ? unknown
+    : {
+        readonly __schemaRequires__: `${UnregisteredRequirements<S>} is named in Schema.requires(...) but no fragment registers it: add it to a fragment's components`
+      }
+
 /**
  * Creates one explicit root token for schema-bound long-lived references.
  *
@@ -224,8 +303,9 @@ export const empty = (): SchemaDefinition => emptySchema()
  * @example
  * ```ts
  * const Combat = Schema.fragment({
- *   components: { Health, Damage },
- *   events: { Hit }
+ *   components: { Health, Damage, Enemy },
+ *   events: { Hit },
+ *   requires: [Schema.requires(Enemy, Health)]
  * })
  * ```
  */
@@ -233,19 +313,22 @@ export const fragment = <
   const Components extends Registry = {},
   const Resources extends Registry = {},
   const Events extends Registry = {},
-  const Relations extends Record<string, Relation.Relation.Any> = {}
+  const Relations extends Record<string, Relation.Relation.Any> = {},
+  const Requires extends ReadonlyArray<ComponentRequirement> = readonly []
 >(definition: {
   readonly components?: Components
   readonly resources?: Resources
   readonly events?: Events
   readonly relations?: Relations
-} & ValidateFragments<[SchemaDefinition<Components, Resources, Events, Relations>]>): SchemaDefinition<Components, Resources, Events, Relations> =>
+  readonly requires?: Requires
+} & ValidateFragments<[SchemaDefinition<Components, Resources, Events, Relations>]>): SchemaDefinition<Components, Resources, Events, Relations, PairsOf<Requires[number]>> =>
   mergeSchemas(emptySchema(), {
     components: definition.components ?? {},
     resources: definition.resources ?? {},
     events: definition.events ?? {},
-    relations: definition.relations ?? {}
-  }) as SchemaDefinition<Components, Resources, Events, Relations>
+    relations: definition.relations ?? {},
+    requires: definition.requires ?? []
+  }) as SchemaDefinition<Components, Resources, Events, Relations, PairsOf<Requires[number]>>
 
 /**
  * Composes one or more fragments and returns one bound `Game` surface.
@@ -262,18 +345,18 @@ export const fragment = <
  */
 export function bind<
   S extends Schema.Any
->(schema: S & ValidateFragments<[S]>): Schema.Game<S, S>
+>(schema: S & ValidateFragments<[S]> & ValidateRequires<S>): Schema.Game<S, S>
 export function bind<
   S extends Schema.Any,
   const Name extends string
->(schema: S & ValidateFragments<[S]>, root: RootToken<Name>): Schema.Game<S, RootToken<Name>>
+>(schema: S & ValidateFragments<[S]> & ValidateRequires<S>, root: RootToken<Name>): Schema.Game<S, RootToken<Name>>
 export function bind<
   const Fragments extends readonly [Schema.Any, Schema.Any, ...Array<Schema.Any>]
->(...fragments: Fragments & ValidateFragments<Fragments>): Schema.Game<BuildFragments<Fragments>, BuildFragments<Fragments>>
+>(...fragments: Fragments & ValidateFragments<Fragments> & ValidateRequires<BuildFragments<Fragments>>): Schema.Game<BuildFragments<Fragments>, BuildFragments<Fragments>>
 export function bind<
   const Fragments extends readonly [Schema.Any, Schema.Any, ...Array<Schema.Any>],
   const Name extends string
->(...args: [...Fragments, RootToken<Name>] & ValidateFragments<Fragments>): Schema.Game<BuildFragments<Fragments>, RootToken<Name>>
+>(...args: [...Fragments, RootToken<Name>] & ValidateFragments<Fragments> & ValidateRequires<BuildFragments<Fragments>>): Schema.Game<BuildFragments<Fragments>, RootToken<Name>>
 export function bind(...args: ReadonlyArray<Schema.Any | RootToken>) {
   const maybeRoot = args[args.length - 1]
   const fragments = (isRootToken(maybeRoot) ? args.slice(0, -1) : args) as Array<Schema.Any>
@@ -376,12 +459,14 @@ export namespace Schema {
   /**
    * Any complete schema definition.
    */
-  export type Any = SchemaDefinition<Registry, Registry, Registry, Record<string, Relation.Relation.Any>>
+  export type Any = SchemaDefinition<Registry, Registry, Registry, Record<string, Relation.Relation.Any>, RequirementPair>
 
   export type Components<T extends Any> = T["components"]
   export type Resources<T extends Any> = T["resources"]
   export type Events<T extends Any> = T["events"]
   export type Relations<T extends Any> = T["relations"]
+  /** The component requirements of a schema, as `[requirer, required]` name pairs (`Schema.requires`). */
+  export type Requires<T extends Any> = T extends SchemaDefinition<any, any, any, any, infer Pairs> ? Pairs : never
 
   export type ComponentValue<T extends Any, K extends keyof Components<T>> = Descriptor.Value<Components<T>[K]>
   export type ResourceValue<T extends Any, K extends keyof Resources<T>> = Descriptor.Value<Resources<T>[K]>
@@ -625,8 +710,8 @@ export namespace Schema {
        * `Game.System.commands(Game.System.spawns(Enemy, Position), Game.System.despawns(Enemy))`.
        */
       commands: typeof Command.commands
-      /** Allows spawning drafts whose components are all among these; see `Command.spawns`. */
-      spawns: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"spawns", Components[number]>
+      /** Allows spawning drafts whose components are all among these and what they require (`Schema.requires`); see `Command.spawns`. */
+      spawns: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"spawns", Components[number] | Command.RequiredDescriptors<S, Components[number]["name"]>>
       /** Allows `insert` (add or replace at the next `applyDeferred()`) of these; see `Command.inserts`. */
       inserts: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"inserts", Components[number]>
       /** Allows `remove` of these. */
