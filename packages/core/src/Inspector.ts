@@ -80,7 +80,7 @@ export interface InspectorDefinition<
 > {
   readonly kind: "inspector"
   readonly name: Name
-  readonly system: System.SystemDefinition<Spec, void, never, Root, Name, Needs>
+  readonly system: System.SystemDefinition<Spec, never, Root, Name, Needs>
   readonly requirements: ReadonlyArray<Needs>
   readonly read: (context: InspectorContext<Spec>) => Value
   readonly __schemaRoot?: Root | undefined
@@ -117,7 +117,6 @@ export const make = <
     () => undefined
   ) as unknown as System.SystemDefinition<
     System.SystemSpec<S, Access, Root>,
-    void,
     never,
     Root,
     Name,

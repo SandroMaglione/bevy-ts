@@ -102,7 +102,14 @@ describe("System", () => {
         }
     )
 
-    expect(system).type.toBeAssignableTo<System.SystemDefinition<any, void, never>>()
+    expect(system).type.toBeAssignableTo<System.SystemDefinition<any, never>>()
+  })
+
+  it("carries only the failure type, not a success value", () => {
+    type Failing = System.SystemDefinition<any, "Rejected">
+    expect<System.FailureOf<Failing>>().type.toBe<System.SystemFailure<string, "Rejected">>()
+    // @ts-expect-error requires between 1 and 5 type arguments
+    type _WithSuccess = System.SystemDefinition<any, void, never, unknown, string, never>
   })
 
   it("accepts reusable plain object access fragments without a wrapper", () => {

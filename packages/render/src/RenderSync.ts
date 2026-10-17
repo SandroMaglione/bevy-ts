@@ -163,7 +163,7 @@ export interface Options<
  * services.
  */
 export type RenderSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | ConditionNeedsFromConditions<ReadonlyArray<Condition>>> =
-  Schema.BoundSystem<S, Root, any, void, never, string, Needs>
+  Schema.BoundSystem<S, Root, any, never, string, Needs>
 
 /**
  * Builds the render system for one renderable component.

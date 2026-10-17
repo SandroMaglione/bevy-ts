@@ -328,7 +328,7 @@ interface BoundInspectorAccess<S extends Schema.Any, Root> extends Inspector.Ins
 }
 
 type BoundScheduleEntry<S extends Schema.Any, Root> =
-  | Schema.BoundSystem<S, Root, any, any, any>
+  | Schema.BoundSystem<S, Root, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
   | Schema.BoundSchedule<S, Root, any, any>
@@ -400,11 +400,10 @@ export namespace Schema {
     S extends Any,
     Root,
     Spec extends System.AnySystemSpec = System.AnySystemSpec,
-    A = void,
     E = never,
     Name extends string = string,
     Needs extends Requirement.Requirement = Requirement.Requirement
-  > = System.SystemDefinition<Spec & { readonly schema: S }, A, E, Root, Name, Needs>
+  > = System.SystemDefinition<Spec & { readonly schema: S }, E, Root, Name, Needs>
 
   /** A schema-bound read-only world projection. */
   export type BoundInspector<
@@ -578,13 +577,12 @@ export namespace Schema {
       <
         const Name extends string,
         const Access extends BoundSystemAccess<S, Root>,
-        A = void,
         E = never
       >(
         name: Name,
         spec: System.ExactAccess<Access>,
-        run: System.SystemRun<System.SystemSpec<S, Access, Root>, A, E>
-      ): BoundSystem<S, Root, System.SystemSpec<S, Access, Root>, A, E, Name, System.SystemAccessNeeds<Access>>
+        run: System.SystemRun<System.SystemSpec<S, Access, Root>, E>
+      ): BoundSystem<S, Root, System.SystemSpec<S, Access, Root>, E, Name, System.SystemAccessNeeds<Access>>
       readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
       writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
       readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>

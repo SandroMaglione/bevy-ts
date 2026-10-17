@@ -973,7 +973,7 @@ export interface SystemFailure<
 
 /** Extracts the normalized failure carried by one system definition. */
 export type FailureOf<Value> =
-  Value extends SystemDefinition<any, any, infer Error, any, infer Name, any>
+  Value extends SystemDefinition<any, infer Error, any, infer Name, any>
     ? [Error] extends [never] ? never : SystemFailure<Name, Error>
     : never
 
@@ -982,7 +982,6 @@ export type FailureOf<Value> =
  */
 export interface SystemDefinition<
   Spec extends AnySystemSpec,
-  out A = void,
   out E = never,
   out Root = unknown,
   out Name extends string = string,
@@ -1015,14 +1014,14 @@ export interface SystemDefinition<
   /**
    * The executable implementation of the system.
    */
-  readonly run: SystemRun<Spec, A, E>
+  readonly run: SystemRun<Spec, E>
   /**
    * The system this one is a gated copy of, made by `Schedule.when(...)`:
    * the same system with extra run conditions. The runtime keys per-system
    * state (change detection, event cursors) by the original, so a system and
    * its gated copies are one reader.
    */
-  readonly base?: SystemDefinition<any, any, any, any, any, any> | undefined
+  readonly base?: SystemDefinition<any, any, any, any, any> | undefined
 }
 
 /**
@@ -1046,8 +1045,8 @@ export interface SystemDefinition<
  * })
  * ```
  */
-export type SystemRun<Spec extends AnySystemSpec, A = void, E = never> =
-  (context: SystemContext<Spec>) => Result.Result<A, E> | void
+export type SystemRun<Spec extends AnySystemSpec, E = never> =
+  (context: SystemContext<Spec>) => Result.Result<unknown, E> | void
 
 /**
  * Defines a system from an explicit spec and a typed implementation.
@@ -1113,7 +1112,6 @@ const collectSystemRequirements = (
 
 export function System<
   const Access extends SystemAccessInput & { readonly schema: Schema.Any },
-  A = void,
   E = never,
   Root = unknown,
   const Name extends string = string
@@ -1122,14 +1120,14 @@ export function System<
   spec: Access & {
     readonly [Key in Exclude<keyof Access, keyof SystemAccessInput | "schema">]: never
   },
-  run: SystemRun<SystemSpec<Access["schema"], Access, Root>, A, E>
-): SystemDefinition<SystemSpec<Access["schema"], Access, Root>, A, E, Root, Name, SystemAccessNeeds<Access>>
+  run: SystemRun<SystemSpec<Access["schema"], Access, Root>, E>
+): SystemDefinition<SystemSpec<Access["schema"], Access, Root>, E, Root, Name, SystemAccessNeeds<Access>>
 
 export function System(
   name: string,
   spec: { readonly schema: Schema.Any } & SystemAccessInput,
   run: (context: any) => Result.Result<any, any> | void
-): SystemDefinition<any, any, any, any, any, any> {
+): SystemDefinition<any, any, any, any, any> {
   type Spec = SystemSpec<Schema.Any, SystemAccessInput, unknown>
 
   const normalizedSpec = {
@@ -1161,5 +1159,5 @@ export function System(
     },
     spec: normalizedSpec,
     run
-  } as SystemDefinition<any, any, any, any, any, any>
+  } as SystemDefinition<any, any, any, any, any>
 }

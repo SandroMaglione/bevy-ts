@@ -46,7 +46,7 @@ export type ScheduleMarkerStep =
   | ApplyDeferredStep
   | ApplyStateTransitionsStep<any, any>
 
-type AnySystem = SystemDefinition<any, any, any, any, any, any>
+type AnySystem = SystemDefinition<any, any, any, any, any>
 
 export type ScheduleStep = AnySystem | ScheduleMarkerStep
 
@@ -118,7 +118,7 @@ export type ScheduleEntry =
 
 type EntrySchema<Entry> =
   Entry extends { readonly schema: infer S extends Schema.Any } ? S
-  : Entry extends SystemDefinition<infer Spec, any, any, any, any, any> ? Spec["schema"]
+  : Entry extends SystemDefinition<infer Spec, any, any, any, any> ? Spec["schema"]
   : never
 
 type MarkerNeeds<Step> =

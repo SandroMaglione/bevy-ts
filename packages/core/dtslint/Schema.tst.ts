@@ -595,7 +595,7 @@ describe("Schema", () => {
         }
     )
 
-    expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
+    expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, never>>()
   })
 
   it("supports durable handles with explicit roots and checked lookup resolution", () => {
@@ -708,6 +708,6 @@ describe("Schema", () => {
         }
     )
 
-    expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, void, never>>()
+    expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, never>>()
   })
 })
