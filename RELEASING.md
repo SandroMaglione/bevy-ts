@@ -86,6 +86,9 @@ operations. Do not run the external steps as part of merging the preparation PR.
    Repeat for `bevy-ts-browser`, `bevy-ts-render`, `bevy-ts-pixi`, `bevy-ts-math`,
    and `bevy-ts-devtools`, naming the matching replacement from [MIGRATION.md](./MIGRATION.md).
    Verify registry warnings for old versions and that pinned installs still work.
+   Also deprecate all versions of the earlier `@typeonce/ecs` package after Ritmo
+   is available. Name Ritmo as the replacement for new projects and state that
+   its API is different; the bevy-ts import mapping is not an ECS migration guide.
 8. Update consuming repositories, local workspace links, the Typeonce project
    listing, personal-site links, profile pins, and external integrations that use
    the old repo name. Announce the rename after install and migration checks pass.
