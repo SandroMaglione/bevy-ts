@@ -10,5 +10,4 @@ The package owns browser plumbing only; schemas, resources, and schedules stay i
 
 Released together with [`@typeonce/ritmo`](https://www.npmjs.com/package/@typeonce/ritmo), always with the same version.
 
-Documentation: https://sandromaglione.github.io/bevy-ts/ ·
-Source: https://github.com/SandroMaglione/bevy-ts
+Source: https://github.com/typeonce-dev/ritmo

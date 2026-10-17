@@ -6,13 +6,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SandroMaglione/bevy-ts.git",
+    "url": "git+https://github.com/typeonce-dev/ritmo.git",
     "directory": "packages/core"
   },
   "bugs": {
-    "url": "https://github.com/SandroMaglione/bevy-ts/issues"
+    "url": "https://github.com/typeonce-dev/ritmo/issues"
   },
-  "homepage": "https://sandromaglione.github.io/bevy-ts/",
+  "homepage": "https://github.com/typeonce-dev/ritmo#readme",
   "keywords": [
     "ecs",
     "entity-component-system",

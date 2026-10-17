@@ -742,6 +742,13 @@ export const makeWorld = <S extends Schema.Any>(schema: S, lifecycleCapacity: nu
   }
 
   /**
+   * Scope membership by scope storage key, members in id order. Every
+   * member is a live entity: despawns leave their scope.
+   */
+  const exportScopes = (): Array<readonly [symbol, ReadonlyArray<number>]> =>
+    [...scopeMembers].map(([key, members]) => [key, [...members].sort((left, right) => left - right)] as const)
+
+  /**
    * Despawns every live entity (recorded like normal despawns).
    */
   const despawnAll = (): void => {
@@ -794,6 +801,7 @@ export const makeWorld = <S extends Schema.Any>(schema: S, lifecycleCapacity: nu
     advanceFrame,
     exportEntities,
     exportRelations,
+    exportScopes,
     despawnAll,
     nextEntityValue,
     setNextEntity,

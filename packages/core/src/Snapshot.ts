@@ -81,8 +81,15 @@ export interface EntitySnapshot {
   readonly components: Readonly<Record<string, unknown>>
 }
 
+/**
+ * The snapshot format version `snapshot()` writes and `restore()` accepts.
+ * Version 1 had no scope membership; restoring one would leave every scoped
+ * entity outside its scope, so it is rejected (`UnsupportedVersion`).
+ */
+export const version = 2
+
 export interface WorldSnapshot {
-  readonly version: 1
+  readonly version: typeof version
   /** The next id the runtime will allocate. */
   readonly nextEntity: number
   readonly entities: ReadonlyArray<EntitySnapshot>
@@ -92,6 +99,12 @@ export interface WorldSnapshot {
   readonly resources: Readonly<Record<string, unknown>>
   /** Committed machine values by machine name. */
   readonly machines: Readonly<Record<string, string | number>>
+  /**
+   * Entity scope membership: per scope name, the ids of the entities spawned
+   * into it (`commands.spawnIn`), so `despawnScope` still finds them after a
+   * restore. An entity is in at most one scope.
+   */
+  readonly scopes: Readonly<Record<string, ReadonlyArray<number>>>
 }
 
 /**
@@ -109,6 +122,8 @@ export type RestoreError =
   | { readonly _tag: "UnknownMachine"; readonly name: string }
   | { readonly _tag: "InvalidMachineState"; readonly name: string; readonly value: unknown }
   | { readonly _tag: "DuplicateEntity"; readonly entityId: number }
+  /** A scope member that is not a saved entity, or is already in another scope. */
+  | { readonly _tag: "InvalidScope"; readonly name: string; readonly entityId: number }
   | { readonly _tag: "UnvalidatedDescriptor"; readonly name: string }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -125,7 +140,7 @@ const invalid = (path: string) => Result.failure<RestoreError>({ _tag: "InvalidS
  */
 export const parse = (data: unknown): Result.Result<WorldSnapshot, RestoreError> => {
   if (!isRecord(data)) return invalid("$")
-  if (data["version"] !== 1) return Result.failure({ _tag: "UnsupportedVersion", version: data["version"] })
+  if (data["version"] !== version) return Result.failure({ _tag: "UnsupportedVersion", version: data["version"] })
   if (!isEntityId(data["nextEntity"])) return invalid("$.nextEntity")
   const entities = data["entities"]
   if (!Array.isArray(entities)) return invalid("$.entities")
@@ -151,6 +166,11 @@ export const parse = (data: unknown): Result.Result<WorldSnapshot, RestoreError>
   if (!isRecord(machines)) return invalid("$.machines")
   for (const [name, value] of Object.entries(machines)) {
     if (typeof value !== "string" && typeof value !== "number") return invalid(`$.machines.${name}`)
+  }
+  const scopes = data["scopes"]
+  if (!isRecord(scopes)) return invalid("$.scopes")
+  for (const [name, members] of Object.entries(scopes)) {
+    if (!Array.isArray(members) || !members.every(isEntityId)) return invalid(`$.scopes.${name}`)
   }
   return Result.success(data as unknown as WorldSnapshot)
 }
