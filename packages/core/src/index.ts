@@ -30,6 +30,10 @@ export * as Entity from "./Entity.ts"
  */
 export * as EntityScope from "./EntityScope.ts"
 /**
+ * The host's wall clock as an injected contract (`standard`, `test()`).
+ */
+export * as HostClock from "./HostClock.ts"
+/**
  * Read-only typed world projections.
  */
 export * as Inspector from "./Inspector.ts"

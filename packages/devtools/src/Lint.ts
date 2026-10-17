@@ -10,7 +10,7 @@
  * ```
  *
  * The entry module exports `lintTarget`, a function that builds the game's
- * headless runtime (made with `debug: true`) and names its schedules: the
+ * headless runtime (made with `debug: { hostClock }`) and names its schedules: the
  * ones ticked headless in `schedules`, and the ones that need a renderer or
  * other host services in `describe` (described and linted, never run).
  *
@@ -39,7 +39,7 @@ type AnySchedule<S extends Schema.Any, Root> = ExecutableScheduleDefinition<S, a
 
 /** What `lintTarget` returns. */
 export interface Target<S extends Schema.Any, Root> {
-  /** A runtime made with `debug: true`. */
+  /** A runtime made with `debug: { hostClock }`. */
   readonly runtime: { readonly debug: Debug.Handle<S, Root> }
   /** The schedules the game ticks, by name. */
   readonly schedules: Readonly<Record<string, AnySchedule<S, Root>>>

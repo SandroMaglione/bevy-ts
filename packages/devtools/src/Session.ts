@@ -1,5 +1,5 @@
 /**
- * A debug session around a runtime made with `debug: true`.
+ * A debug session around a runtime made with `debug: { hostClock }`.
  *
  * The session names the schedules it drives, keeps a bounded history of
  * trace events, and answers questions about it as text and data:
@@ -35,6 +35,7 @@
  * console.log(session.journal({ frames: [180, 185], entity: 1 }))
  * ```
  */
+import { HostClock } from "@typeonce/bevy-ts"
 import type * as Debug from "@typeonce/bevy-ts/Debug"
 import type * as Inspector from "@typeonce/bevy-ts/Inspector"
 import type * as Machine from "@typeonce/bevy-ts/Machine"
@@ -118,6 +119,12 @@ export interface Options<
   readonly invariants?: Invariants
   /** Frames of trace history kept for `journal` and `why`. Defaults to 600. */
   readonly history?: number
+  /**
+   * Times runs (`RunResult.ms`). `HostClock.test()` makes every timing 0,
+   * so text output is identical across runs (give the runtime's
+   * `debug: { hostClock }` a test clock too).
+   */
+  readonly hostClock: HostClock.HostClock
   /** Value formatting for all text output. */
   readonly format?: Format.ValueOptions
 }
@@ -466,7 +473,7 @@ export const make = <
   const run = (name: Names, runOptions: RunOptions = {}): Rendered.Rendered<RunResult> => {
     const schedule = schedules[name]!
     const frames = runOptions.frames ?? 1
-    const started = performance.now()
+    const started = options.hostClock.now()
     const warningsBefore = new Map([...warnings].map(([key, warning]) => [key, warning.count]))
     const initial = debug.population()
     const entityCounts: Array<number> = []
@@ -551,7 +558,7 @@ export const make = <
       frames: first === undefined || last === undefined ? 0 : last - first + 1,
       range: first === undefined || last === undefined ? undefined : [first, last],
       stop,
-      ms: performance.now() - started,
+      ms: HostClock.elapsed(started, options.hostClock.now()),
       lintWarnings: lintWarnings.length,
       warnings: raised,
       entities: range(initial.entities, entityCounts),

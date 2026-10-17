@@ -1,6 +1,8 @@
-import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import { Invariant, Lint, Replay, Session } from "@typeonce/bevy-ts-devtools"
 import { describe, expect, it } from "tstyche"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DevtoolsTypes/Position")
 const Other = Descriptor.Component<{ readonly y: number }>()("DevtoolsTypes/Other")
@@ -12,30 +14,36 @@ const OtherGame = Schema.bind(Schema.fragment({ components: { Other } }))
 const update = Game.Schedule(Game.System("DevtoolsTypes/Noop", {}, () => {}))
 
 describe("Session.make", () => {
-  it("requires a runtime made with debug: true", () => {
+  it("requires a runtime made with debug: { hostClock }", () => {
     const plain = Game.Runtime.make({ services: Game.Runtime.services() })
-    expect(Session.make).type.not.toBeCallableWith(plain, { schedules: { update } })
-    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
-    expect(Session.make).type.toBeCallableWith(debugged, { schedules: { update } })
+    expect(Session.make).type.not.toBeCallableWith(plain, { hostClock, schedules: { update } })
+    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
+    expect(Session.make).type.toBeCallableWith(debugged, { hostClock, schedules: { update } })
+  })
+
+  it("requires the host clock that times runs", () => {
+    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
+    // @ts-expect-error Property 'hostClock' is missing
+    Session.make(debugged, { schedules: { update } })
   })
 
   it("rejects schedules of another schema", () => {
-    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
     const foreign = OtherGame.Schedule(OtherGame.System("DevtoolsTypes/Foreign", {}, () => {}))
-    expect(Session.make).type.not.toBeCallableWith(debugged, { schedules: { foreign } })
+    expect(Session.make).type.not.toBeCallableWith(debugged, { hostClock, schedules: { foreign } })
   })
 
   it("describes but does not run describe-only schedules", () => {
     const render = Game.Schedule(Game.System("DevtoolsTypes/Render", {}, () => {}))
-    const session = Session.make(Game.Runtime.make({ services: Game.Runtime.services(), debug: true }), { schedules: { update }, describe: { render } })
+    const session = Session.make(Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } }), { hostClock, schedules: { update }, describe: { render } })
     expect(session.run).type.toBeCallableWith("update")
     expect(session.run).type.not.toBeCallableWith("render")
     const foreign = OtherGame.Schedule(OtherGame.System("DevtoolsTypes/ForeignRender", {}, () => {}))
-    expect(Session.make).type.not.toBeCallableWith(Game.Runtime.make({ services: Game.Runtime.services(), debug: true }), { schedules: { update }, describe: { foreign } })
+    expect(Session.make).type.not.toBeCallableWith(Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } }), { hostClock, schedules: { update }, describe: { foreign } })
   })
 
   it("runs only named schedules and filters by the runtime's descriptors", () => {
-    const session = Session.make(Game.Runtime.make({ services: Game.Runtime.services(), debug: true }), { schedules: { update } })
+    const session = Session.make(Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } }), { hostClock, schedules: { update } })
     expect(session.run).type.toBeCallableWith("update")
     expect(session.run).type.not.toBeCallableWith("updat")
     expect(session.journal).type.toBeCallableWith({ component: Position })
@@ -69,32 +77,32 @@ describe("Invariant.fromInspector", () => {
     }, ({ queries, resources }) =>
       queries.positions.each().some((match) => match.data.position.get().x > resources.limit.get()) ? "over limit" : undefined))
 
-    const provided = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 10 }, debug: true })
-    Session.make(provided, { schedules: { update }, invariants: [UnderLimit] })
+    const provided = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 10 }, debug: { hostClock } })
+    Session.make(provided, { hostClock, schedules: { update }, invariants: [UnderLimit] })
 
-    const missing = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const missing = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
     // @ts-expect-error __fixInvariantRequirements__: { readonly __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "DevtoolsTypes/Limit"
-    Session.make(missing, { schedules: { update }, invariants: [UnderLimit] })
+    Session.make(missing, { hostClock, schedules: { update }, invariants: [UnderLimit] })
   })
 
   it("rejects invariants of another game", () => {
     const Foreign = Invariant.fromInspector(OtherGame.Inspector("DevtoolsTypes/Foreign", {}, () => undefined))
-    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
-    expect(Session.make).type.not.toBeCallableWith(debugged, { schedules: { update }, invariants: [Foreign] })
-    expect(Session.make).type.toBeCallableWith(debugged, { schedules: { update }, invariants: [Invariant.fromInspector(Game.Inspector("DevtoolsTypes/Own", {}, () => undefined))] })
+    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
+    expect(Session.make).type.not.toBeCallableWith(debugged, { hostClock, schedules: { update }, invariants: [Foreign] })
+    expect(Session.make).type.toBeCallableWith(debugged, { hostClock, schedules: { update }, invariants: [Invariant.fromInspector(Game.Inspector("DevtoolsTypes/Own", {}, () => undefined))] })
   })
 })
 
 describe("Lint.run", () => {
   it("returns a report and takes host events of the runtime's schema only", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 1 }, debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 1 }, debug: { hostClock } })
     expect(Lint.run({ runtime, schedules: { update }, hostEvents: [Request] }).data).type.toBe<Lint.Report>()
     expect(Lint.run).type.not.toBeCallableWith({ runtime, schedules: { update }, hostEvents: [Foreign] })
     expect(runtime.debug.declareHostEvents).type.not.toBeCallableWith([Foreign])
     expect(runtime.debug.declareHostEvents).type.toBeCallableWith([Request])
   })
 
-  it("requires a runtime made with debug: true", () => {
+  it("requires a runtime made with debug: { hostClock }", () => {
     const plain = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 1 } })
     expect(Lint.run).type.not.toBeCallableWith({ runtime: plain, schedules: { update } })
   })
@@ -114,9 +122,9 @@ describe("Replay.recorder", () => {
       Saved.Runtime.service(Page, { toast: () => {} }),
       Saved.Runtime.service(Mapped, { snapshot: () => new Map() })
     ),
-    debug: true
+    debug: { hostClock }
   })
-  const base = { name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), now: () => 0 }
+  const base = { name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), hostClock }
 
   it("accepts plain-data sources and plain constants", () => {
     const update = Saved.Schedule(Saved.System("DevtoolsTypes/Plain", {
@@ -140,7 +148,7 @@ describe("Replay.recorder", () => {
   it("requires a runtime whose world can be saved", () => {
     const Loose = Descriptor.Component<{ readonly x: number }>()("DevtoolsTypes/Loose")
     const Unsaved = Schema.bind(Schema.fragment({ components: { Loose } }))
-    const unsaved = Unsaved.Runtime.make({ services: Unsaved.Runtime.services(), debug: true })
+    const unsaved = Unsaved.Runtime.make({ services: Unsaved.Runtime.services(), debug: { hostClock } })
     const update = Unsaved.Schedule(Unsaved.System("DevtoolsTypes/Unsaved", {}, () => {}))
     expect(Replay.recorder).type.not.toBeCallableWith(unsaved, { ...base, schedule: update })
   })

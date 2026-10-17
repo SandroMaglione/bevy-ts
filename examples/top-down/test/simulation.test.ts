@@ -1,3 +1,4 @@
+import { HostClock } from "@typeonce/bevy-ts"
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { Session } from "@typeonce/bevy-ts-devtools"
 import { describe, expect, it } from "vitest"
@@ -8,7 +9,7 @@ import { CollectedCount, Game } from "../schema.ts"
 import { inputBindings } from "../types.ts"
 
 const start = (timeline: Keyboard.Timeline<typeof inputBindings>) => {
-  const simulation = createTopDownSimulation({ keyboard: Keyboard.scripted(inputBindings, timeline) })
+  const simulation = createTopDownSimulation({ keyboard: Keyboard.scripted(inputBindings, timeline), hostClock: HostClock.test() })
   if (!simulation.ok) throw new Error(simulation.error.message)
   const { runtime, setup, update } = simulation.value
   expect(runtime.tick(setup).ok).toBe(true)
@@ -46,10 +47,11 @@ describe("top-down debug session", () => {
       { frame: 85, release: ["left"] },
       { frame: 88, press: ["interact"], release: ["interact"] }
     ])
-    const simulation = createTopDownSimulation({ keyboard })
+    const hostClock = HostClock.test()
+    const simulation = createTopDownSimulation({ keyboard, hostClock })
     if (!simulation.ok) throw new Error(simulation.error.message)
     const { runtime, setup, update } = simulation.value
-    const session = Session.make(runtime, { schedules: { setup, update } })
+    const session = Session.make(runtime, { hostClock, schedules: { setup, update } })
     session.run("setup")
 
     const run = session.run("update", { frames: 120 })

@@ -1,7 +1,7 @@
 /**
  * Opt-in runtime introspection for tools, tests, and coding agents.
  *
- * A runtime made with `debug: true` carries a `debug` handle. Runtimes made
+ * A runtime made with `debug: { hostClock }` carries a `debug` handle. Runtimes made
  * without it have no handle at all, so production code cannot reach into
  * internals by accident and pays nothing for them.
  *
@@ -35,7 +35,7 @@
  *
  * @example
  * ```ts
- * const runtime = Game.Runtime.make({ services, resources, debug: true })
+ * const runtime = Game.Runtime.make({ services, resources, debug: { hostClock: HostClock.standard } })
  * runtime.debug.nameSchedules({ setup: setupSchedule, update: updateSchedule })
  *
  * const stop = runtime.debug.observe((event) => {
@@ -46,6 +46,7 @@
  * stop()
  * ```
  */
+import type { HostClock } from "./HostClock.ts"
 import type * as Machine from "./Machine.ts"
 import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "./Schedule.ts"
 import type { Schema } from "./Schema.ts"
@@ -54,7 +55,7 @@ import type { Schema } from "./Schema.ts"
 export const formatVersion = 1 as const
 
 /**
- * The debug handle of a runtime made with `debug: true`.
+ * The debug handle of a runtime made with `debug: { hostClock }`.
  */
 export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
   /**
@@ -525,14 +526,18 @@ export type TraceEvent =
   | RestoreEvent
 
 /**
- * The `debug` runtime option: `true` attaches a handle; a `boolean` known
- * only at runtime (`import.meta.env.DEV`) attaches it when true and types
- * `debug` as optional, so code checks it before use.
+ * The `debug` runtime option: `{ hostClock }` attaches a handle, timing
+ * traces with that clock. A value that may be `undefined`
+ * (`import.meta.env.DEV ? { hostClock } : undefined`) attaches it when
+ * present and types `debug` as optional, so code checks it before use.
  */
-export type Option = boolean
+export interface Option {
+  /** Times trace events (`ms`); see `HostClock`. */
+  readonly hostClock: HostClock
+}
 
 /**
- * The member a runtime made with `debug: true` carries.
+ * The member a runtime made with `debug: { hostClock }` carries.
  */
 export interface Member<S extends Schema.Any, Root> {
   readonly debug: Handle<S, Root>

@@ -211,18 +211,21 @@ as despawns and spawns to change detection, so renderer sync rebuilds itself.
 
 ## Debug a run
 
-A runtime made with `debug: true` carries a read-only `debug` handle:
+A runtime made with `debug: { hostClock }` carries a read-only `debug` handle:
 `describe()` for schedules and declared access, `dump()` for the current
 world, `observe(listener)` for a trace of every system run, applied command,
 and transition, and `streams()` for event retention. Runtimes made without it
-have no handle.
+have no handle. The host clock times traces: `HostClock.test()` (every timing
+0) in tests and headless scripts, `BrowserHostClock.make(window)` in the
+browser, `HostClock.standard` in Node tools that want real timings.
 
 `@typeonce/bevy-ts-devtools` wraps the handle in a session that runs schedules headless
 and answers questions as text:
 
 ```ts
-const runtime = Game.Runtime.make({ services, resources, debug: true })
-const session = Session.make(runtime, { schedules: { setup, update }, invariants: [HealthNeverNegative] })
+const hostClock = HostClock.test()
+const runtime = Game.Runtime.make({ services, resources, debug: { hostClock } })
+const session = Session.make(runtime, { hostClock, schedules: { setup, update }, invariants: [HealthNeverNegative] })
 
 session.run("setup")
 console.log(session.run("update", { frames: 300 }))  // stops at the first violated invariant
@@ -254,7 +257,7 @@ const loop = FixedLoop.start({
   maxStepsPerFrame: 5,
   update: (stepSeconds) => {
     // A capture system can copy this host value into DeltaTime first.
-    hostClock.deltaSeconds = stepSeconds
+    frameTime.deltaSeconds = stepSeconds
     return runtime.tick(gameplay)
   },
   render: ({ alpha, droppedSeconds }) => {

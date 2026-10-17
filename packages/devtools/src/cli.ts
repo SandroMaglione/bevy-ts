@@ -44,7 +44,7 @@ const main = async (args: ReadonlyArray<string>): Promise<number> => {
   }
   const target: unknown = await make()
   if (!isTarget(target)) {
-    console.error(`lintTarget in ${entry} must return { runtime, schedules, describe? } with a runtime made with debug: true`)
+    console.error(`lintTarget in ${entry} must return { runtime, schedules, describe? } with a runtime made with debug: { hostClock }`)
     return 2
   }
   const report = Lint.run(target)

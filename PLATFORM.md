@@ -70,7 +70,7 @@ Own debugging infrastructure over the core `Debug` handle:
 - bounded trace history and text rendering for terminals and agents
 - invariants checked between frames
 
-This package reads the world; it must not mutate it or require games to change their runtime shape beyond `debug: true`.
+This package reads the world; it must not mutate it or require games to change their runtime shape beyond `debug: { hostClock }`.
 
 ## Bad Packages
 

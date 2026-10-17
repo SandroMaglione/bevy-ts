@@ -26,7 +26,7 @@
  * This module calls no platform API: sinks deliver files (`memorySink`
  * here; `ReplayNodeSink` writes files in Node; `ReplayViteSink` and
  * `ReplayVitePlugin` deliver to a Vite dev server), and wall time comes
- * from the injected `now`.
+ * from the injected `hostClock`.
  *
  * @module Replay
  * @docGroup devtools
@@ -35,7 +35,7 @@
  * ```ts
  * const recorder = Replay.recorder(runtime, {
  *   schedule: simulate, name: "simulate", keep: 30, stepSeconds: 1 / 30,
- *   sink: ReplayViteSink.make({ fetch }), now: () => Date.now(),
+ *   sink: ReplayViteSink.make({ fetch }), hostClock: HostClock.standard,
  *   saveOn: { failure: true, invariants: [DeadAreGone] }
  * })
  *
@@ -44,6 +44,7 @@
  * if (replay.ok) console.log(replay.value.play().text)
  * ```
  */
+import type { HostClock } from "@typeonce/bevy-ts"
 import type * as Debug from "@typeonce/bevy-ts/Debug"
 import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
 import type * as Requirement from "@typeonce/bevy-ts/Requirement"
@@ -127,7 +128,7 @@ export interface ReplayFile {
   readonly schedule: string
   /** Why it was saved, e.g. "invariant DeadAreGone broke at tick 1412". */
   readonly reason: string
-  /** `now()` when it was saved. */
+  /** `hostClock.now()` when it was saved. */
   readonly savedAt: number
   /** Services that are plain data, as they were (rules, config). */
   readonly constants: Readonly<Record<string, unknown>>
@@ -154,7 +155,7 @@ export const memorySink = (): Sink & { readonly files: ReadonlyArray<ReplayFile>
   return { files, save: (file) => { files.push(file) } }
 }
 
-/** What a recorder needs from a runtime: made with `debug: true`, with snapshots available. */
+/** What a recorder needs from a runtime: made with `debug: { hostClock }`, with snapshots available. */
 export interface Recordable<S extends Schema.Any, Root> {
   readonly debug: Debug.Handle<S, Root>
   readonly snapshot: () => Snapshot.WorldSnapshot
@@ -174,8 +175,12 @@ export interface RecorderOptions<S extends Schema.Any, Root, Recorded extends An
   /** Seconds between world snapshots. Defaults to 5. */
   readonly every?: number
   readonly sink: Sink
-  /** Wall time, for `savedAt` (milliseconds). */
-  readonly now: () => number
+  /**
+   * Wall time, for `savedAt` (milliseconds since the epoch): sinks name
+   * files from it, so use `HostClock.standard`, not a page-relative clock
+   * like `BrowserHostClock` (`HostClock.test()` in tests).
+   */
+  readonly hostClock: HostClock.HostClock
   /** Saves by itself: when a tick fails or throws, and when an invariant breaks (once until it holds again). */
   readonly saveOn?: {
     readonly failure?: boolean
@@ -226,7 +231,7 @@ const serviceNames = (schedule: { readonly requirements: ReadonlyArray<unknown> 
     isRecord(requirement) && requirement["kind"] === "service" && typeof requirement["name"] === "string" ? [requirement["name"]] : [])
 
 /**
- * Starts recording a runtime made with `debug: true`. The schedule's source
+ * Starts recording a runtime made with `debug: { hostClock }`. The schedule's source
  * services have their `snapshot` wrapped to record what the systems got; the
  * services must not be frozen.
  */
@@ -291,7 +296,7 @@ export const recorder = <S extends Schema.Any, Root, const Recorded extends AnyS
       schema: schemaHash(runtime.debug),
       schedule: options.name,
       reason,
-      savedAt: options.now(),
+      savedAt: options.hostClock.now(),
       constants,
       start,
       ticks: ticks.filter((record) => record.tick > start.tick),
@@ -393,8 +398,14 @@ export interface Playback {
   readonly constant: <const Name extends string, Value>(descriptor: Descriptor<"service", Name, Value>) => unknown
 }
 
-/** What the game's `make` function returns: a fresh runtime (`debug: true`) built on the playback, and the recorded schedule by name. */
+/**
+ * What the game's `make` function returns: a fresh runtime
+ * (`debug: { hostClock }`) built on the playback, the recorded schedule by
+ * name, and the clock the replay session times runs with
+ * (`HostClock.test()` for identical text output).
+ */
 export interface Target<S extends Schema.Any, Root> {
+  readonly hostClock: HostClock.HostClock
   readonly runtime: Session.Target<S, Root> & {
     readonly snapshot: () => Snapshot.WorldSnapshot
     readonly restore: (data: unknown) => Result.Result<void, Snapshot.RestoreError>
@@ -456,7 +467,7 @@ export const session = <S extends Schema.Any, Root>(
   }
   const restored = target.runtime.restore(file.start.snapshot)
   if (!restored.ok) return Result.failure({ _tag: "RestoreFailed", error: restored.error })
-  const replay = Session.make(target.runtime, { schedules: { [file.schedule]: schedule } })
+  const replay = Session.make(target.runtime, { schedules: { [file.schedule]: schedule }, hostClock: target.hostClock })
   const send = target.runtime.send as (descriptor: { readonly kind: "event"; readonly name: string; readonly key: symbol }, value: unknown) => void
   const events = new Map(target.runtime.debug.describe().events.map(({ name }) => [name, { kind: "event" as const, name, key: Symbol.for(`bevy-ts/event/${name}`) }]))
   const hashes = new Map<number, string>([[ran, worldHash(target.runtime.snapshot())]])

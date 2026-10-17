@@ -9,12 +9,27 @@ pnpm add -D @typeonce/bevy-ts-devtools
 ```
 
 The package reads the core `Debug` handle, which exists only on runtimes made
-with `debug: true`. Production runtimes carry no handle and pay nothing.
+with `debug: { hostClock }`. Production runtimes carry no handle and pay
+nothing. The modules read no platform globals: give the runtime and the
+session the same `HostClock` (`HostClock.test()` headless, so every timing is
+0 and text output is identical across runs; `BrowserHostClock.make(window)`
+in the browser).
+
+A dev-only debug handle in a browser game:
+
+```ts
+const runtime = Game.Runtime.make({
+  services,
+  debug: import.meta.env.DEV ? { hostClock: BrowserHostClock.make(window) } : undefined
+})
+if (runtime.debug !== undefined) Monitor.attach({ debug: runtime.debug }, { schedules, host: window })
+```
 
 ## The debugging loop
 
 1. **Get a headless runtime.** Build the game's simulation schedules on a
-   runtime that needs no renderer, with `debug: true` and scripted input. The
+   runtime that needs no renderer, with `debug: { hostClock: HostClock.test() }`
+   and scripted input. The
    top-down example's [`simulation.ts`](../../examples/top-down/simulation.ts)
    is the reference; its [`debug.ts`](../../examples/top-down/debug.ts) is a
    script to copy.
@@ -57,7 +72,8 @@ const keyboard = Keyboard.scripted(bindings, [
   { frame: 30, release: ["left"] },
   { frame: 32, press: ["jump"], release: ["jump"] } // a tap within one frame
 ])
-const runtime = Game.Runtime.make({ services, resources, machines, debug: true })
+const hostClock = HostClock.test()           // every timing 0: identical text on every run
+const runtime = Game.Runtime.make({ services, resources, machines, debug: { hostClock } })
 // An invariant is a typed, read-only Inspector that returns a violation
 // message, or undefined while it holds. It declares its reads like a system:
 // Session.make rejects at compile time one that reads a resource, service,
@@ -70,6 +86,7 @@ const HealthNeverNegative = Invariant.fromInspector(Game.Inspector("health >= 0"
 }))
 
 const session = Session.make(runtime, {
+  hostClock,                              // times run(); the runtime's clock
   schedules: { setup, update },           // names used by run() and in traces
   describe: { render },                   // described and linted, never run (needs a renderer)
   invariants: [HealthNeverNegative],      // checked after every frame of every run
@@ -126,7 +143,7 @@ f186 update  -                   transition Game/Flow Playing -> Paused applied
 
 ## Live monitor (browser)
 
-`Monitor.attach(runtime, { schedules })` adds a panel to a running game for
+`Monitor.attach(runtime, { schedules, host: window })` adds a panel to a running game for
 people who want to see how it works without reading its code. Toggle it
 with the backslash key or the corner button. It observes the runtime only while it is
 open, so a closed monitor costs nothing.
@@ -134,6 +151,7 @@ open, so a closed monitor costs nothing.
 ```ts
 const monitor = Monitor.attach(runtime, {
   schedules: { fixedUpdate: step, frame },           // the schedule objects you tick
+  host: window,                                      // its document, timers, events, and clock
   pick: (event) => entityUnderPointer(event),        // optional: "Pick on screen"
   locate: (entity) => clientPositionOf(entity)       // optional: ring on the selected entity
 })
@@ -185,10 +203,10 @@ const recorder = Replay.recorder(runtime, {
   schedule: simulate, name: "simulate",
   keep: 30, stepSeconds: STEP_SECONDS,       // seconds kept, seconds per tick
   sink: ReplayViteSink.make({ fetch: (url, init) => fetch(url, init) }),
-  now: () => Date.now(),
+  hostClock: BrowserHostClock.make(window),  // for savedAt
   saveOn: { failure: true, invariants: [DeadAreGone] } // saves by itself
 })
-Monitor.attach(runtime, { schedules, replay: recorder }) // adds "Save replay"
+Monitor.attach(runtime, { schedules, host: window, replay: recorder }) // adds "Save replay"
 
 // vite.config.ts: writes posted replays to .replays/<time>.json and logs them.
 plugins: [ReplayVitePlugin.plugin()]
@@ -202,13 +220,14 @@ plugins: [ReplayVitePlugin.plugin()]
 - Sinks deliver files: `Replay.memorySink()` (tests), `ReplayNodeSink`
   (files, for headless runs), `ReplayViteSink` + `ReplayVitePlugin` (dev
   server). The generic modules call no platform API; wall time comes from
-  `now`.
+  `hostClock`.
 
 ```ts
 // In Node: make(playback) builds the game with the recorded input.
 const make = (playback: Replay.Playback) => {
-  const runtime = makeRuntime({ input: playback.source(Input), debug: true })
-  return { runtime, schedules: { simulate } }
+  const hostClock = HostClock.test()       // replay text is identical on every run
+  const runtime = makeRuntime({ input: playback.source(Input), debug: { hostClock } })
+  return { runtime, schedules: { simulate }, hostClock }
 }
 const file = Replay.parse(JSON.parse(readFileSync(".replays/....json", "utf8")))
 const replay = file.ok ? Replay.session(make, file.value) : file

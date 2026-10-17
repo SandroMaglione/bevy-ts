@@ -10,6 +10,7 @@
  * changes to the player's position, and the world dump. Copy it and change
  * the timeline, the invariants, and the questions.
  */
+import { HostClock } from "@typeonce/bevy-ts"
 import { Keyboard } from "@typeonce/bevy-ts-browser"
 import { Invariant, Session } from "@typeonce/bevy-ts-devtools"
 
@@ -27,7 +28,9 @@ const keyboard = Keyboard.scripted(inputBindings, [
   { frame: 50, press: ["interact"], release: ["interact"] }
 ])
 
-const simulation = createTopDownSimulation({ keyboard })
+// A test clock keeps every timing at 0, so the output is the same on every run.
+const hostClock = HostClock.test()
+const simulation = createTopDownSimulation({ keyboard, hostClock })
 if (!simulation.ok) throw new Error(simulation.error.message)
 const { runtime, setup, update } = simulation.value
 
@@ -44,7 +47,7 @@ const PlayerInsideWorld = Invariant.fromInspector(Game.Inspector("player inside 
   return undefined
 }))
 
-const session = Session.make(runtime, { schedules: { setup, update }, invariants: [PlayerInsideWorld] })
+const session = Session.make(runtime, { hostClock, schedules: { setup, update }, invariants: [PlayerInsideWorld] })
 
 console.log(session.run("setup"))
 console.log(session.run("update", { frames: 120 }))

@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import { Lint } from "@typeonce/bevy-ts-devtools"
+
+const hostClock = HostClock.test()
 
 const Ping = Descriptor.Event<number>()("LintTest/Ping")
 const Score = Descriptor.Component<number>()("LintTest/Score")
@@ -16,7 +18,7 @@ const Count = Game.System("LintTest/Count", {
 }, ({ queries }) => {
   for (const { data } of queries.scores.each()) data.score.update((score) => score + 1)
 })
-const runtime = () => Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+const runtime = () => Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
 
 const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url))
 const entry = fileURLToPath(new URL("./fixtures/lint-entry.ts", import.meta.url))

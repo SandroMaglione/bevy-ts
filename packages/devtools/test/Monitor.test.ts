@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import { Collector, recentSchedule, recentSystem } from "@typeonce/bevy-ts-devtools/Monitor"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Mon/Position")
 const Shot = Descriptor.Component<{ readonly speed: number }>()("Mon/Shot")
@@ -23,12 +25,12 @@ const paused = Game.Condition.check("paused", { resources: { paused: Game.System
 const Idle = Game.System("Mon/Idle", { when: [paused] }, () => {})
 
 const setup = () => {
-  const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Paused: false }, debug: true })
+  const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Paused: false }, debug: { hostClock } })
   const update = Game.Schedule(Move, Fire, Idle, Game.Schedule.applyDeferred())
   runtime.debug.nameSchedules({ update })
   runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
   let now = 0
-  const collector = new Collector(() => runtime.debug.population(), now)
+  const collector = new Collector(() => runtime.debug.population(), () => now)
   const stop = runtime.debug.observe(collector.observe)
   const run = (frames: number) => {
     for (let index = 0; index < frames; index++) runtime.tick(update)

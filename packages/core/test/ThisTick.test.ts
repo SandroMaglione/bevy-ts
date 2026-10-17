@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
+
+const hostClock = HostClock.test()
 
 const Damage = Descriptor.Event<number>()("ThisTickRuntime/Damage")
 const Game = Schema.bind(Schema.fragment({ events: { Damage } }))
@@ -58,13 +60,13 @@ describe("thisTick at runtime", () => {
   })
 
   it("reports no this-tick-order lint when the writer runs first", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
     runtime.debug.nameSchedules({ update: erased(Game.Schedule(Deal, Apply)) })
     expect(runtime.debug.describe().lints.filter((lint) => lint.code === "this-tick-order")).toEqual([])
   })
 
   it("reports a this-tick-order lint for named schedules", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock } })
     runtime.debug.nameSchedules({ update: erased(Game.Schedule(Apply, Deal)) })
     expect(runtime.debug.describe().lints.filter((lint) => lint.code === "this-tick-order").map((lint) => lint.message)).toEqual([
       "in update, ThisTickRuntime/Apply needs ThisTickRuntime/Damage from this tick, but its writer ThisTickRuntime/Deal runs after it: move ThisTickRuntime/Deal before ThisTickRuntime/Apply, or read ThisTickRuntime/Damage without thisTick"

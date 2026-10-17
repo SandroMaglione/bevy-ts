@@ -80,8 +80,10 @@ component solely for cleanup.
 Inspectors reuse the system access model but admit only read capabilities. They
 return a projection directly and do not advance schedule visibility.
 
-`debug: true` attaches a read-only `Debug.Handle`; without it the runtime has
-no `debug` member at all. Tracing is enabled only while an `observe` listener is
+`debug: { hostClock }` attaches a read-only `Debug.Handle`; without it the
+runtime has no `debug` member at all. Core reads no platform clock: trace
+timings come from the injected `HostClock` (`HostClock.test()` in tests,
+`BrowserHostClock.make(window)` in the browser). Tracing is enabled only while an `observe` listener is
 registered: system, schedule, and marker boundaries check one boolean, and
 component writes are reported from the rollback journal each system already
 keeps, so untraced runs do no extra work per write.

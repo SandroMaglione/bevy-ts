@@ -1,7 +1,9 @@
 import { inspect } from "node:util"
 import { describe, expect, it } from "vitest"
-import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
 import { Format, Invariant, Session } from "@typeonce/bevy-ts-devtools"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Dev/Position")
 const Health = Descriptor.Component<number>()("Dev/Health")
@@ -59,12 +61,12 @@ const makeRuntime = () => Game.Runtime.make({
   services: Game.Runtime.services(),
   resources: { Score: 0 },
   machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
-  debug: true
+  debug: { hostClock }
 })
 
 const makeSession = () => {
   const runtime = makeRuntime()
-  const session = Session.make(runtime, { schedules: { setup, update } })
+  const session = Session.make(runtime, { hostClock, schedules: { setup, update } })
   return { runtime, session }
 }
 
@@ -73,11 +75,11 @@ describe("Session", () => {
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services(),
       machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
-      debug: true
+      debug: { hostClock }
     })
     const Read = Game.System("Dev/HeldReader", { events: { hit: Game.System.readEvent(Hit) } }, () => {})
     const update = Game.Schedule.pauseWhen([Game.Condition.inState(Flow, "Playing")], Read)
-    const session = Session.make(runtime, { schedules: { update } })
+    const session = Session.make(runtime, { hostClock, schedules: { update } })
     session.run("update")
     runtime.send(Hit, 7)
     session.run("update")
@@ -102,6 +104,26 @@ describe("Session", () => {
     expect(JSON.parse(JSON.stringify(run))).toMatchObject({ schedule: "update", ok: true })
   })
 
+  it("writes identical text in two sessions timed by test clocks", () => {
+    const play = () => {
+      const clock = HostClock.test()
+      const runtime = Game.Runtime.make({
+        services: Game.Runtime.services(),
+        resources: { Score: 0 },
+        machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
+        debug: { hostClock: clock }
+      })
+      const session = Session.make(runtime, { hostClock: clock, schedules: { setup, update } })
+      const runs = [session.run("setup").text, session.run("update", { frames: 5 }).text]
+      return { runs, report: session.report().text }
+    }
+    const first = play()
+    const second = play()
+    expect(first.runs[1]).toMatch(/ in 0(\.0+)?ms/)
+    expect(second.runs).toEqual(first.runs)
+    expect(second.report).toBe(first.report)
+  })
+
   it("stops at an until condition", () => {
     const { session } = makeSession()
     session.run("setup")
@@ -109,7 +131,7 @@ describe("Session", () => {
   })
 
   it("stops at the first violated invariant with its message", () => {
-    const session = Session.make(makeRuntime(), { schedules: { setup, update }, invariants: [NearOrigin] })
+    const session = Session.make(makeRuntime(), { hostClock, schedules: { setup, update }, invariants: [NearOrigin] })
     session.run("setup")
     const run = session.run("update", { frames: 10 })
     expect(run.data).toMatchObject({ ok: false, frames: 3, stop: { reason: "invariant", frame: 4, invariant: "near origin", message: "x=3" } })
@@ -117,12 +139,12 @@ describe("Session", () => {
   })
 
   it("reports expected failures and thrown defects as stops", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: { hostClock } })
     const Fail = Game.System("Dev/Fail", {}, () => Result.failure("Broken" as const))
     const Throw = Game.System("Dev/Throw", {}, () => {
       throw new Error("kaboom")
     })
-    const session = Session.make(runtime, { schedules: { fail: Game.Schedule(Fail), boom: Game.Schedule(Throw) } })
+    const session = Session.make(runtime, { hostClock, schedules: { fail: Game.Schedule(Fail), boom: Game.Schedule(Throw) } })
     expect(session.run("fail").data.stop).toEqual({ reason: "failure", frame: 1, system: "Dev/Fail", error: "Broken" })
     const defect = session.run("boom").data.stop
     expect(defect).toMatchObject({ reason: "defect", frame: 2 })
@@ -173,8 +195,8 @@ describe("Session", () => {
     const Queue = Game.System("Dev/QueueLate", { commands: Game.System.commands(Game.System.spawns(Health)) }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Health, 1]))
     })
-    const runtime2 = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
-    const late = Session.make(runtime2, { schedules: { late: Game.Schedule(Queue) } })
+    const runtime2 = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: { hostClock } })
+    const late = Session.make(runtime2, { hostClock, schedules: { late: Game.Schedule(Queue) } })
     late.run("late", { frames: 2 })
     expect(late.report().data.warnings).toMatchObject([
       { code: "pending-commands", count: 2, firstFrame: 1, lastFrame: 2 }
@@ -219,12 +241,12 @@ describe("Format.value", () => {
 
 describe("Session report streams", () => {
   it("lists streams held past the frame window by a reader", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: { hostClock } })
     const Emit = Game.System("Dev/EmitHit", { events: { hit: Game.System.writeEvent(Hit) } }, ({ events }) => {
       events.hit.emit(1)
     })
     const Read = Game.System("Dev/RareReader", { events: { hit: Game.System.readEvent(Hit) } }, () => {})
-    const session = Session.make(runtime, { schedules: { read: Game.Schedule(Read), emit: Game.Schedule(Emit) } })
+    const session = Session.make(runtime, { hostClock, schedules: { read: Game.Schedule(Read), emit: Game.Schedule(Emit) } })
     session.run("read")
     session.run("emit", { frames: 4 })
     const report = session.report()
@@ -239,9 +261,9 @@ describe("Session next states and resources", () => {
       services: Game.Runtime.services(),
       resources: { Score: 0 },
       machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Paused")),
-      debug: true
+      debug: { hostClock }
     })
-    const session = Session.make(runtime, { schedules: { update: Game.Schedule(Play, Game.Schedule.applyDeferred()) } })
+    const session = Session.make(runtime, { hostClock, schedules: { update: Game.Schedule(Play, Game.Schedule.applyDeferred()) } })
     const run = session.run("update", { frames: 3 })
     expect(run.data.lintWarnings).toBe(1)
     expect(run.text.split("\n")[1]).toBe("1 lint warnings (see describe() or report()): next-state-never-applied Dev/Flow")
@@ -254,11 +276,11 @@ describe("Session next states and resources", () => {
   })
 
   it("explains the latest changes to a resource", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: { hostClock } })
     const Add = Game.System("Dev/Add", { resources: { score: Game.System.writeResource(Score) } }, ({ resources }) => {
       resources.score.update((score) => score + 5)
     })
-    const session = Session.make(runtime, { schedules: { add: Game.Schedule(Add) } })
+    const session = Session.make(runtime, { hostClock, schedules: { add: Game.Schedule(Add) } })
     session.run("add", { frames: 2 })
     expect(session.whyResource(Score).text).toBe([
       "Dev/Score is now 10; last 2 changes (oldest first):",
@@ -281,7 +303,7 @@ describe("describe-only schedules", () => {
     services: Game.Runtime.services(),
     resources: { Score: 0 },
     machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Playing")),
-    debug: true
+    debug: { hostClock }
   })
   const update = Game.Schedule(Damage)
 
@@ -289,10 +311,10 @@ describe("describe-only schedules", () => {
     const lintCodes = (session: { describe: () => { data: { lints: ReadonlyArray<{ code: string; message: string }> } } }) =>
       session.describe().data.lints.filter((lint) => lint.message.includes("Dev/Hit")).map((lint) => lint.code)
 
-    const without = Session.make(headless(), { schedules: { update } })
+    const without = Session.make(headless(), { hostClock, schedules: { update } })
     expect(lintCodes(without)).toContain("event-never-read")
 
-    const withRender = Session.make(headless(), { schedules: { update }, describe: { render: Game.Schedule(DrawHits) } })
+    const withRender = Session.make(headless(), { hostClock, schedules: { update }, describe: { render: Game.Schedule(DrawHits) } })
     expect(lintCodes(withRender)).not.toContain("event-never-read")
     expect(withRender.describe().data.schedules.map((schedule) => schedule.name).sort()).toEqual(["render", "update"])
     // The renderer is shown as needed but not provided, which is not a lint.
@@ -300,7 +322,7 @@ describe("describe-only schedules", () => {
   })
 
   it("rejects a name used for both a runnable and a described-only schedule", () => {
-    expect(() => Session.make(headless(), { schedules: { update }, describe: { update: Game.Schedule(DrawHits) } })).toThrow(/both a runnable/)
+    expect(() => Session.make(headless(), { hostClock, schedules: { update }, describe: { update: Game.Schedule(DrawHits) } })).toThrow(/both a runnable/)
   })
 })
 
@@ -313,8 +335,8 @@ describe("Session risk checks", () => {
   const RiskGame = Schema.bind(Schema.fragment({ components: { Velocity, Shot }, resources: { Total }, events: { Blast } }))
 
   const makeRiskSession = (update: ReturnType<typeof RiskGame.Schedule>) => {
-    const runtime = RiskGame.Runtime.make({ services: RiskGame.Runtime.services(), resources: { Total: { sum: 0 } }, debug: true })
-    return Session.make(runtime, { schedules: { update } })
+    const runtime = RiskGame.Runtime.make({ services: RiskGame.Runtime.services(), resources: { Total: { sum: 0 } }, debug: { hostClock } })
+    return Session.make(runtime, { hostClock, schedules: { update } })
   }
 
   it("warns about NaN and infinite numbers in writes, resources, events, and spawns", () => {

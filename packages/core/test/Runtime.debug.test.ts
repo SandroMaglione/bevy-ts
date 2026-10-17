@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { Debug, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
+import { Debug, Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Debug/Position")
 const Tagged = Descriptor.Component<{}>()("Debug/Tagged")
@@ -22,7 +24,7 @@ const makeRuntime = () => Game.Runtime.make({
   services: Game.Runtime.services(Game.Runtime.service(Clock, { now: () => 0 })),
   resources: { Score: 0 },
   machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Menu")),
-  debug: true
+  debug: { hostClock }
 })
 
 const Moving = Game.Query({ selection: { position: Game.Query.write(Position) } })

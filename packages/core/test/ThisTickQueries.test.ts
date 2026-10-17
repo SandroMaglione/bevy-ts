@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<number>()("TickQuery/Position")
 const Enemy = Descriptor.Component<{}>()("TickQuery/Enemy")
@@ -24,7 +26,7 @@ const erased = (schedule: ExecutableScheduleDefinition<any, any, any, any, any, 
 
 const machines = Game.Runtime.machines(Game.Runtime.machine(Flow, "Menu"))
 const make = () => Game.Runtime.make({ services: Game.Runtime.services(), machines })
-const makeDebug = () => Game.Runtime.make({ services: Game.Runtime.services(), machines, debug: true })
+const makeDebug = () => Game.Runtime.make({ services: Game.Runtime.services(), machines, debug: { hostClock } })
 
 const unflushed = "TickQuery/Aim needs this tick's commands for queries.enemies, but TickQuery/SpawnWave queues them with no applyDeferred() in between: add Game.Schedule.applyDeferred() after TickQuery/SpawnWave"
 const late = "TickQuery/SpawnWave queues commands that TickQuery/Aim needs this tick (queries.enemies), but it runs after TickQuery/Aim: move TickQuery/SpawnWave before the applyDeferred() that precedes TickQuery/Aim, or read queries.enemies without thisTick"

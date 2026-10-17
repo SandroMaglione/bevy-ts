@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
 import * as Runtime from "@typeonce/bevy-ts/Runtime"
+
+const hostClock = HostClock.test()
 
 const Freeze = Descriptor.Resource<{ readonly remaining: number }>()("Check/Freeze")
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("Check/Log")
@@ -15,7 +17,7 @@ const makeRuntime = (freeze = 0, flow: "Playing" | "Over" = "Playing") =>
     services: Runtime.services(),
     resources: { Freeze: { remaining: freeze }, Log: [] },
     machines: Runtime.machines(Runtime.machine(Flow, flow)),
-    debug: true
+    debug: { hostClock }
   })
 
 const ReadLog = Game.Inspector("Check/ReadLog", { resources: { log: Game.System.readResource(Log) } }, ({ resources }) => resources.log.get())

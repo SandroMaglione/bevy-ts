@@ -55,6 +55,7 @@
  * @groupDescription Functions
  * Public runtime constructors and helpers for services, machines, and bootstrap input.
  */
+import * as HostClockModule from "./HostClock.ts"
 import * as Command from "./Command.ts"
 import type * as Debug from "./Debug.ts"
 import * as DescriptorModule from "./Descriptor.ts"
@@ -179,11 +180,12 @@ export type RuntimeConstructionError<S extends Schema.Any, Provided> = Simplify<
 }>
 
 /**
- * A runtime plus the `debug` handle when it was made with `debug: true`.
+ * A runtime plus the `debug` handle when it was made with `debug: { hostClock }`
+ * (optional when the option may be `undefined`).
  */
 export type WithDebug<R, Enabled, S extends Schema.Any, Root> =
-  [Enabled] extends [true] ? R & Debug.Member<S, Root>
-  : [Enabled] extends [false | undefined] ? R
+  [Enabled] extends [undefined] ? R
+  : [Enabled] extends [Debug.Option] ? R & Debug.Member<S, Root>
   : R & Partial<Debug.Member<S, Root>>
 
 /**
@@ -702,7 +704,7 @@ const makeValidatedRuntime = <
   readonly resources: Partial<Record<string, unknown>>
   readonly machines: RuntimeMachines<any> | undefined
   readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
-  readonly debug: boolean
+  readonly debug: Debug.Option | undefined
 }): Runtime<S, Services, Resources, Root, Machines> => {
   const world = makeWorld(options.schema, streamCapacity)
   const queries = makeQueryEngine(world)
@@ -747,12 +749,12 @@ const makeValidatedRuntime = <
   const pendingCommands: Array<Command.DeferredCommand<S>> = []
 
   /**
-   * Debug state. With `debug: true`, `pendingOrigins` names the system that
+   * Debug state. With `debug`, `pendingOrigins` names the system that
    * queued each pending command, in step with `pendingCommands`. Tracing is
    * on only while `observe` listeners are registered; untraced runs pay one
    * boolean check at each system, schedule, and marker boundary.
    */
-  const debugEnabled = options.debug
+  const debugEnabled = options.debug !== undefined
   const pendingOrigins: Array<string> = []
   const traceListeners = new Set<(event: Debug.TraceEvent) => void>()
   let tracing = false
@@ -764,7 +766,9 @@ const makeValidatedRuntime = <
   const scheduleNames = new Map<object, string>()
   const anonymousScheduleNames = new WeakMap<object, string>()
   let anonymousScheduleCount = 0
-  const now = (): number => performance.now()
+  // Only a debug runtime times anything; the clock is the one it was given.
+  const hostClock: HostClockModule.HostClock = options.debug?.hostClock ?? { now: () => 0 }
+  const now = (): number => hostClock.now()
   const emit = (event: Debug.TraceEvent): void => {
     for (const listener of traceListeners) listener(event)
   }
@@ -822,7 +826,7 @@ const makeValidatedRuntime = <
   }
 
   /**
-   * With `debug: true`, the relations commands have tried to relate or
+   * With `debug`, the relations commands have tried to relate or
    * reorder, with the systems that queued those commands, for the
    * `relation-failure-never-read` lint. `commandOrigin` names the system whose
    * command is being applied.
@@ -830,7 +834,7 @@ const makeValidatedRuntime = <
   const relationMutations = new Map<string, Set<string>>()
   let commandOrigin = "(unknown)"
   /**
-   * With `debug: true`, what each system's applied commands did, as
+   * With `debug`, what each system's applied commands did, as
    * `kind:name` (`spawns:Enemy`, `despawns:Enemy` for every component the
    * despawned entity had), and the systems that ran: for the
    * `command-permission-unused` lint.
@@ -1388,7 +1392,7 @@ const makeValidatedRuntime = <
       system: system.name,
       outcome,
       ...(outcome === "ok" ? {} : { error }),
-      ms: now() - started,
+      ms: HostClockModule.elapsed(started, now()),
       writes,
       resources: resourceWrites,
       events: emitted,
@@ -1583,7 +1587,7 @@ const makeValidatedRuntime = <
     } finally {
       schedulePath.pop()
     }
-    emit({ type: "schedule.end", frame: frameCount, schedule: scheduleLabel, ok: result.ok, ms: now() - started })
+    emit({ type: "schedule.end", frame: frameCount, schedule: scheduleLabel, ok: result.ok, ms: HostClockModule.elapsed(started, now()) })
     return result
   }
 
@@ -2220,7 +2224,7 @@ export const make = <
   readonly resources?: Resources
   readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-  /** Attaches a `debug` handle to the runtime; see the `Debug` module. */
+  /** Attaches a `debug` handle to the runtime, timed by `hostClock`; see the `Debug` module. */
   readonly debug?: Enabled
 }): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>, Enabled> => {
   const fallible = Object.entries(options.schema.resources).some(([key, descriptor]) =>
@@ -2238,7 +2242,7 @@ export const make = <
     resources: validated.value,
     machines: options.machines,
     machineDefinitions: options.machineDefinitions ?? [],
-    debug: options.debug === true
+    debug: options.debug
   })
   return (fallible ? Result.success(runtime) : runtime) as never
 }

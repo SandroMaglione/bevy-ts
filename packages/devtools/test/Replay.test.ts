@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
 import { Invariant, Replay } from "@typeonce/bevy-ts-devtools"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.ConstructedComponent(Decode.struct({ x: Decode.number }))("Replay/Position")
 const Steps = Descriptor.ConstructedResource(Decode.number)("Replay/Steps")
@@ -38,7 +40,7 @@ const live = (dxs: ReadonlyArray<number>) => {
   const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Input, input), Game.Runtime.service(Config, { scale: 2 })),
     resources: { Steps: 0 },
-    debug: true
+    debug: { hostClock }
   })
   if (!made.ok) throw new Error("fixture")
   made.value.tick(setup)
@@ -50,16 +52,19 @@ const make = (playback: Replay.Playback) => {
   const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Input, playback.source(Input)), Game.Runtime.service(Config, { scale: 2 })),
     resources: { Steps: 0 },
-    debug: true
+    debug: { hostClock }
   })
   if (!made.ok) throw new Error("fixture")
-  return { runtime: made.value, schedules: { update } }
+  return { runtime: made.value, schedules: { update }, hostClock }
 }
 
 const record = (dxs: ReadonlyArray<number>, options: { readonly keep?: number; readonly every?: number } = {}) => {
   const runtime = live(dxs)
   const sink = Replay.memorySink()
-  const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: options.keep ?? 10, stepSeconds: 1, every: options.every ?? 2, sink, now: () => 1_000 })
+  // savedAt reads the recorder's clock: a test clock moved to 1000 ms.
+  const savedClock = HostClock.test()
+  savedClock.adjust(1_000)
+  const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: options.keep ?? 10, stepSeconds: 1, every: options.every ?? 2, sink, hostClock: savedClock })
   return { runtime, sink, recorder }
 }
 
@@ -148,14 +153,14 @@ describe("Replay", () => {
   it("saves by itself when an invariant breaks, once until it holds again, and when a tick fails", () => {
     const runtime = live([5, 5, 5, 5, 5])
     const sink = Replay.memorySink()
-    Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, stepSeconds: 1, sink, now: () => 0, saveOn: { invariants: [FarAway] } })
+    Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, stepSeconds: 1, sink, hostClock, saveOn: { invariants: [FarAway] } })
     for (let step = 0; step < 5; step++) runtime.tick(update)
     expect(sink.files.map((file) => file.reason)).toEqual(["invariant far away broke at tick 3: x above 20"])
 
     const failing = Game.Schedule(Game.System("Replay/Fail", {}, () => Result.failure("Broken" as const)))
     const failures = Replay.memorySink()
     const quiet = live([])
-    Replay.recorder(quiet, { schedule: failing, name: "failing", keep: 10, stepSeconds: 1, sink: failures, now: () => 0, saveOn: { failure: true } })
+    Replay.recorder(quiet, { schedule: failing, name: "failing", keep: 10, stepSeconds: 1, sink: failures, hostClock, saveOn: { failure: true } })
     quiet.tick(failing)
     expect(failures.files.map((file) => file.reason)).toEqual([`tick 1 failed: Replay/Fail returned "Broken"`])
   })
@@ -163,7 +168,7 @@ describe("Replay", () => {
   it("stops recording and gives the services back their own snapshot", () => {
     const runtime = live([1])
     const before = runtime.services["Replay/Input"].snapshot
-    const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), now: () => 0 })
+    const recorder = Replay.recorder(runtime, { schedule: update, name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), hostClock })
     expect(runtime.services["Replay/Input"].snapshot).not.toBe(before)
     recorder.stop()
     expect(runtime.services["Replay/Input"].snapshot).toBe(before)
