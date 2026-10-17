@@ -115,6 +115,8 @@ export type RestoreError =
   | { readonly _tag: "UnsupportedVersion"; readonly version: unknown }
   | { readonly _tag: "UnknownComponent"; readonly entityId: number; readonly name: string }
   | { readonly _tag: "InvalidComponent"; readonly entityId: number; readonly name: string; readonly error: unknown }
+  /** A saved entity holds `requiredBy` but lacks `name`, which `Schema.requires` says it needs. */
+  | { readonly _tag: "MissingRequiredComponent"; readonly entityId: number; readonly name: string; readonly requiredBy: string }
   | { readonly _tag: "UnknownResource"; readonly name: string }
   | { readonly _tag: "InvalidResource"; readonly name: string; readonly error: unknown }
   | { readonly _tag: "UnknownRelation"; readonly name: string }

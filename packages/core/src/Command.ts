@@ -206,9 +206,10 @@ export type DeferredCommand<S extends Schema.Any> = {
 export interface InternalWorld<S extends Schema.Any> {
   /**
    * Creates the entity for an id reserved by `commands.spawn(...)` with its
-   * staged components.
+   * staged components. Returns `false`, creating nothing, when the
+   * components break a `Schema.requires` requirement.
    */
-  readonly spawnEntity: (id: Entity.EntityId<S, any>, components: ReadonlyArray<Entity.StagedComponent>) => void
+  readonly spawnEntity: (id: Entity.EntityId<S, any>, components: ReadonlyArray<Entity.StagedComponent>) => boolean
   /**
    * Removes an entity and its outgoing and incoming relations.
    */
@@ -225,13 +226,15 @@ export interface InternalWorld<S extends Schema.Any> {
    */
   readonly destroyEntityScope: (scope: EntityScope.EntityScope.Any) => void
   /**
-   * Removes a component from a live entity.
+   * Removes components from a live entity, all or none: nothing is removed
+   * when that would leave a component without one it requires.
    */
-  readonly removeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor<"component", string, any>) => void
+  readonly removeComponents: (id: Entity.EntityId<S, any>, descriptors: ReadonlyArray<Descriptor<"component", string, any>>) => void
   /**
-   * Inserts or replaces a component on a live entity.
+   * Inserts or replaces components on a live entity, all or none: nothing is
+   * written when an inserted component would miss one it requires.
    */
-  readonly writeComponent: (id: Entity.EntityId<S, any>, descriptor: Descriptor<"component", string, any>, value: unknown) => void
+  readonly insertComponents: (id: Entity.EntityId<S, any>, entries: ReadonlyArray<Entity.StagedComponent>) => void
   /**
    * Attempts to attach one relation edge between two live entities.
    */
@@ -740,7 +743,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "spawn",
         apply(world) {
-          world.spawnEntity(id, draft.components)
+          if (!world.spawnEntity(id, draft.components)) return
           for (const stagedRelation of draft.relations) {
             world.tryRelate(id, stagedRelation.relation, stagedRelation.target)
           }
@@ -753,7 +756,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "spawnIn",
         apply(world) {
-          world.spawnEntity(id, draft.components)
+          if (!world.spawnEntity(id, draft.components)) return
           world.assignEntityScope(id, scope)
           for (const stagedRelation of draft.relations) {
             world.tryRelate(id, stagedRelation.relation, stagedRelation.target)
@@ -766,9 +769,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "insert",
         apply(world) {
-          for (const [descriptor, value] of entries) {
-            world.writeComponent(entity, descriptor, value)
-          }
+          world.insertComponents(entity, entries)
         }
       })
       return entity
@@ -794,7 +795,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       queue.push({
         tag: "remove",
         apply(world) {
-          world.removeComponent(entity, descriptor)
+          world.removeComponents(entity, [descriptor])
         }
       })
       return entity

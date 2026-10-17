@@ -66,6 +66,7 @@ import * as Cells from "./internal/cells.ts"
 import { sameValue } from "./internal/equal.ts"
 import * as DebugInternal from "./internal/debug.ts"
 import { makeQueryEngine } from "./internal/queries.ts"
+import { requirementIndex } from "./internal/requirements.ts"
 import * as Streams from "./internal/streams.ts"
 import { ABSENT, makeWorld } from "./internal/world.ts"
 import type { WorldHooks } from "./internal/world.ts"
@@ -862,12 +863,62 @@ const makeValidatedRuntime = <
   }
 
   /**
+   * `Schema.requires`, checked when commands are applied. Types reject a
+   * breaking command when they can see it; this catches the rest: a query
+   * proof gone stale within one flush (another system's command applied in
+   * between), erased types, and raw ids. A breaking command is skipped
+   * whole, traced, and reported by the `requirement-violated` lint.
+   */
+  const requirements = requirementIndex(options.schema)
+  /** With `debug`, skipped commands by system, command, and requirement, for the lint. */
+  const requirementViolations = new Map<string, Debug.RequirementViolation>()
+  const violateRequirement = (
+    command: Debug.RequirementViolation["command"],
+    entity: number,
+    [component, missing]: readonly [string, string]
+  ): void => {
+    if (tracing) recordEffect({ kind: "requirementViolated", entity, command, component, missing })
+    if (debugEnabled) {
+      const key = `${commandOrigin}/${command}/${component}/${missing}`
+      const seen = requirementViolations.get(key)
+      requirementViolations.set(key, { system: commandOrigin, command, component, missing, entity, count: (seen?.count ?? 0) + 1 })
+    }
+  }
+  const holds = (id: number) => {
+    const record = world.records.get(id)
+    return (descriptor: Descriptor<"component", string, any>): boolean =>
+      record !== undefined && world.has(record, world.ordinalOf(descriptor))
+  }
+  /** The first requirement `components` break, as `[requirer, missing]`. */
+  const missingIn = (
+    components: ReadonlyArray<Entity.StagedComponent>,
+    alsoHeld: (descriptor: Descriptor<"component", string, any>) => boolean
+  ): readonly [string, string] | undefined => {
+    for (const [descriptor] of components) {
+      for (const required of requirements.requires.get(descriptor.name) ?? []) {
+        if (!alsoHeld(required) && !components.some(([staged]) => staged.name === required.name)) {
+          return [descriptor.name, required.name]
+        }
+      }
+    }
+    return undefined
+  }
+
+  /**
    * World adapter used by deferred commands.
    */
   const commandWorld: Command.InternalWorld<S> = {
     spawnEntity(id, components) {
+      if (!requirements.empty) {
+        const missing = missingIn(components, () => false)
+        if (missing !== undefined) {
+          violateRequirement("spawn", id, missing)
+          return false
+        }
+      }
       if (debugEnabled) for (const [descriptor] of components) noteCommand("spawns", descriptor.name)
       world.spawnEntity(id, components)
+      return true
     },
     destroyEntity(id) {
       if (debugEnabled) {
@@ -885,13 +936,35 @@ const makeValidatedRuntime = <
       if (debugEnabled) noteCommand("despawnsScope", scope.name)
       world.destroyEntityScope(scope.key)
     },
-    removeComponent(id, descriptor) {
-      if (debugEnabled) noteCommand("removes", descriptor.name)
-      world.removeComponent(id, descriptor)
+    removeComponents(id, descriptors) {
+      if (!requirements.empty && world.records.has(id)) {
+        const held = holds(id)
+        for (const descriptor of descriptors) {
+          for (const requirer of requirements.requiredBy.get(descriptor.name) ?? []) {
+            if (held(requirer) && !descriptors.some((removed) => removed.name === requirer.name)) {
+              violateRequirement("remove", id, [requirer.name, descriptor.name])
+              return
+            }
+          }
+        }
+      }
+      for (const descriptor of descriptors) {
+        if (debugEnabled) noteCommand("removes", descriptor.name)
+        world.removeComponent(id, descriptor)
+      }
     },
-    writeComponent(id, descriptor, value) {
-      if (debugEnabled) noteCommand("inserts", descriptor.name)
-      world.writeComponent(id, descriptor, value)
+    insertComponents(id, entries) {
+      if (!requirements.empty && world.records.has(id)) {
+        const missing = missingIn(entries, holds(id))
+        if (missing !== undefined) {
+          violateRequirement("insert", id, missing)
+          return
+        }
+      }
+      for (const [descriptor, value] of entries) {
+        if (debugEnabled) noteCommand("inserts", descriptor.name)
+        world.writeComponent(id, descriptor, value)
+      }
     },
     tryRelate(id, relation, target) {
       if (debugEnabled) {
@@ -2024,6 +2097,11 @@ const makeValidatedRuntime = <
         if (!value.ok) return Result.failure({ _tag: "InvalidComponent", entityId: entity.id, name, error: value.error })
         components.push([descriptor, value.value])
       }
+      // Transient components are never saved, so a requirement on one is not checked here.
+      const missing = missingIn(components, DescriptorModule.isTransient)
+      if (missing !== undefined) {
+        return Result.failure({ _tag: "MissingRequiredComponent", entityId: entity.id, name: missing[1], requiredBy: missing[0] })
+      }
       entities.push({ id: entity.id, components })
     }
     const validatedResources: Array<readonly [symbol, unknown]> = []
@@ -2257,6 +2335,7 @@ const makeValidatedRuntime = <
       relationMutations,
       commandUses,
       ranSystems,
+      requirementViolations: [...requirementViolations.values()],
       hasResource: (descriptor) => resources.has(descriptor.key),
       schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)
     }),

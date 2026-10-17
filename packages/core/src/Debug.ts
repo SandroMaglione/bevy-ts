@@ -116,6 +116,10 @@ export type Storage = "constructed" | "transient" | "plain"
 export interface ComponentDescription {
   readonly name: string
   readonly storage: Storage
+  /** Declared `immutable: true`: queries only read it, `commands.insert` replaces it. */
+  readonly immutable: boolean
+  /** The components it directly requires (`Schema.requires`). */
+  readonly requires: ReadonlyArray<string>
 }
 
 export interface ResourceDescription {
@@ -220,11 +224,13 @@ export interface ScheduleDescription {
  * A finding about the described schedules. `warning` is almost certainly a
  * bug; `info` is worth a look but can be intentional.
  *
- * Most lints read declarations only. Two also use what the runtime has seen
- * so far: events sent with `runtime.send(...)` count as written, and
+ * Most lints read declarations only. Some also use what the runtime has seen
+ * so far: events sent with `runtime.send(...)` count as written,
  * `relation-failure-never-read` fires for a relation that applied commands
  * have tried to relate or reorder (which can fail) while no described system
- * reads its failures, so describe after the game has run for a while.
+ * reads its failures, and `requirement-violated` lists commands skipped
+ * because they would have broken a `Schema.requires` requirement, so
+ * describe after the game has run for a while.
  */
 export interface Lint {
   readonly severity: "warning" | "info"
@@ -238,6 +244,7 @@ export interface Lint {
     | "read-before-write"
     | "this-tick-order"
     | "command-permission-unused"
+    | "requirement-violated"
   readonly message: string
   readonly subject: string
   /** What to change to resolve it (or, for `info`, when it is fine as it is). */
@@ -397,6 +404,32 @@ export type Effect =
   | { readonly kind: "relate"; readonly entity: number; readonly relation: string; readonly target: number }
   | { readonly kind: "unrelate"; readonly entity: number; readonly relation: string }
   | { readonly kind: "relationFailure"; readonly entity: number; readonly relation: string; readonly error: string }
+  /** A command skipped because it would leave `component` without `missing` (`Schema.requires`). */
+  | {
+      readonly kind: "requirementViolated"
+      readonly entity: number
+      readonly command: RequirementViolation["command"]
+      readonly component: string
+      readonly missing: string
+    }
+
+/**
+ * Commands of one system skipped because applying them would have left a
+ * component without one it requires (`Schema.requires`): the
+ * `requirement-violated` lint.
+ */
+export interface RequirementViolation {
+  readonly system: string
+  readonly command: "spawn" | "insert" | "remove"
+  /** The requirer. */
+  readonly component: string
+  /** The required component it would have lacked. */
+  readonly missing: string
+  /** The last entity it happened to. */
+  readonly entity: number
+  /** How many commands were skipped this way. */
+  readonly count: number
+}
 
 export interface AppliedCommand {
   readonly tag: string
