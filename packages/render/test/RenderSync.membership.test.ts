@@ -18,6 +18,11 @@ const Visible = Descriptor.Component<{}>()("Membership/Visible")
 const Nodes = Descriptor.Service<NodeRegistry.NodeRegistry<FakeNode>>()("Membership/Nodes")
 const Game = Schema.bind(Schema.fragment({ components: { Position, Sprite, Visible } }))
 type Id = Entity.EntityId<typeof Game.schema, typeof Game.schema>
+const stepAccess = {
+  commands: Game.System.commands(Game.System.spawns(Position, Sprite, Visible), Game.System.inserts(Position, Visible), Game.System.removes(Position, Visible), Game.System.despawns(Sprite)),
+  queries: { sprites: Game.Query({ selection: { sprite: Game.Query.read(Sprite) } }) }
+}
+const Step = Game.System("Membership/Step", stepAccess, () => {})
 
 /** A render sync over Sprite + Position (+ a required `Visible` select slot when asked), and its registry. */
 const setup = (withSelect = false) => {
@@ -37,19 +42,19 @@ const setup = (withSelect = false) => {
     : RenderSync.system(Game, options)
   const runtime = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Nodes, registry)) })
   const ids: Array<Id> = []
-  const step = (run: (commands: Parameters<Parameters<typeof Game.System>[2]>[0]["commands"]) => void) =>
-    runtime.tick(Game.Schedule(Game.System("Membership/Step", {}, ({ commands }) => run(commands)), Game.Schedule.applyDeferred(), render))
+  const step = (run: (context: Parameters<typeof Step.run>[0]) => void) =>
+    runtime.tick(Game.Schedule(Game.System("Membership/Step", stepAccess, run), Game.Schedule.applyDeferred(), render))
   return { registry, ids, step }
 }
 
 describe("RenderSync keeps one node per entity its query matches", () => {
   it("creates the node when the transform arrives after the renderable", () => {
     const { registry, ids, step } = setup()
-    step((commands) => {
+    step(({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Sprite, { label: "hero" }])))
     })
     expect(registry.size).toBe(0)
-    step((commands) => {
+    step(({ commands }) => {
       commands.insert(ids[0]!, [Position, { x: 4 }])
     })
     expect(registry.size).toBe(1)
@@ -58,16 +63,16 @@ describe("RenderSync keeps one node per entity its query matches", () => {
 
   it("destroys the node when the transform is removed, and makes it again when it returns", () => {
     const { registry, ids, step } = setup()
-    step((commands) => {
+    step(({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Sprite, { label: "hero" }], [Position, { x: 1 }])))
     })
     const first = registry.get(ids[0]!)!
-    step((commands) => {
+    step(({ commands }) => {
       commands.remove(ids[0]!, Position)
     })
     expect(registry.size).toBe(0)
     expect(first.destroyed).toBe(true)
-    step((commands) => {
+    step(({ commands }) => {
       commands.insert(ids[0]!, [Position, { x: 9 }])
     })
     expect(registry.get(ids[0]!)?.x).toBe(9)
@@ -75,15 +80,15 @@ describe("RenderSync keeps one node per entity its query matches", () => {
 
   it("follows a required select slot like the renderable and the transform", () => {
     const { registry, ids, step } = setup(true)
-    step((commands) => {
+    step(({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Sprite, { label: "hero" }], [Position, { x: 1 }])))
     })
     expect(registry.size).toBe(0)
-    step((commands) => {
+    step(({ commands }) => {
       commands.insert(ids[0]!, [Visible, {}])
     })
     expect(registry.size).toBe(1)
-    step((commands) => {
+    step(({ commands }) => {
       commands.remove(ids[0]!, Visible)
     })
     expect(registry.size).toBe(0)
@@ -91,11 +96,13 @@ describe("RenderSync keeps one node per entity its query matches", () => {
 
   it("still destroys the nodes of despawned entities", () => {
     const { registry, ids, step } = setup()
-    step((commands) => {
+    step(({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Sprite, { label: "hero" }], [Position, { x: 1 }])))
     })
-    step((commands) => {
-      commands.despawn(ids[0]!)
+    step(({ commands, queries }) => {
+      const found = queries.sprites.get(ids[0]!)
+      if (!found.ok) throw new Error("sprite must still be alive")
+      commands.despawn(found.value.entity)
     })
     expect(registry.size).toBe(0)
   })

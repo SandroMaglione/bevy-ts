@@ -17,7 +17,7 @@ const file: Replay.ReplayFile = {
   reason: "invariant DeadAreGone broke at tick 3",
   savedAt: Date.UTC(2026, 9, 17, 12, 0, 0),
   constants: {},
-  start: { tick: 0, snapshot: { version: 1, nextEntity: 1, entities: [], relations: {}, resources: {}, machines: {} }, pendingCommands: 0 },
+  start: { tick: 0, snapshot: { version: 2, nextEntity: 1, entities: [], relations: {}, resources: {}, machines: {}, scopes: {} }, pendingCommands: 0 },
   ticks: [{ tick: 1 }, { tick: 2 }, { tick: 3 }],
   checkpoints: []
 }
