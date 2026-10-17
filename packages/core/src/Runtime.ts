@@ -373,7 +373,7 @@ type RequirementErrorsOfSchedule<
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
-> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any, any>
+> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any, any, AnyScheduleOrder>
   ? RequirementErrorsFor<Requirement.Of<Selected>, S, Services, Resources, Machines>
   : never
 

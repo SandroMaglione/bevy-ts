@@ -1,4 +1,5 @@
 import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
 import type * as System from "@typeonce/bevy-ts/System"
 import { describe, expect, it } from "tstyche"
 
@@ -84,6 +85,25 @@ describe("Game.System.thisTick", () => {
     const schedules: Array<ReturnType<typeof Game.Schedule<[typeof Deal, typeof Apply]>>> = []
     // @ts-expect-error the order of this tick is not statically known
     runtime.tick(...schedules)
+  })
+
+  it("still reports missing requirements for a schedule with thisTick reads", () => {
+    const Clock = Descriptor.Service<{ readonly now: () => number }>()("ThisTick/Clock")
+    const Timed = Game.System("ThisTick/Timed", {
+      events: { damage: Game.System.thisTick(Game.System.readEvent(Damage)) },
+      services: { clock: Game.System.service(Clock) }
+    }, () => {})
+    // @ts-expect-error __runtimeRequirementError__: "Missing service"; readonly __requirement__: "ThisTick/Clock"
+    runtime.tick(Game.Schedule(Deal, Timed))
+    const bare = Game.Runtime.make({ services: Game.Runtime.services() })
+    // @ts-expect-error __runtimeRequirementError__: "Missing resource"; readonly __requirement__: "ThisTick/Score"
+    bare.tick(Game.Schedule(Count, Show))
+  })
+
+  it("fails a tick of a schedule whose order was erased by an annotation, instead of passing it", () => {
+    const erased: ExecutableScheduleDefinition<typeof Game.schema, never, typeof Game.schema> = Game.Schedule(Apply, Deal)
+    // @ts-expect-error the order of this tick is not statically known
+    runtime.tick(erased)
   })
 
   it("does not let a schedule with thisTick reads widen into an annotation that drops them", () => {

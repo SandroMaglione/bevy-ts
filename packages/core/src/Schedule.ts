@@ -56,9 +56,11 @@ export type ScheduleStep = AnySystem | ScheduleMarkerStep
  * computes only the flag; `runtime.tick(...)` walks the entries, and only
  * when some read exists. Schedules never report order errors themselves.
  *
- * The default (used by annotations such as `Schema.BoundSchedule`) has no
- * `thisTick` reads, so a schedule with one cannot be widened into it and
- * lose its check.
+ * `ScheduleOrder`'s defaults claim no `thisTick` reads: `Schema.BoundSchedule`
+ * (an annotation) uses it, so a schedule with a read cannot be widened into
+ * one and lose its check. Schedule types default to `AnyScheduleOrder`, and a
+ * schedule whose order was erased that way fails at `tick` as "not
+ * statically known", never silently.
  */
 export interface ScheduleOrder<
   out Entries extends ReadonlyArray<unknown> = ReadonlyArray<unknown>,
@@ -165,15 +167,22 @@ type WritersOf<Systems, Kind, Key, Reader> =
     : never
 
 /** Some level of the entries is a widened array that contains a read. */
-type UnknownIn<Entries extends ReadonlyArray<unknown>> =
-  Entries extends unknown ? UnknownInOne<Entries> : never
+/**
+ * Some level of the entries is a widened array that may contain a read.
+ * `MayRead` is the flag carried by the schedule holding them: a widened array
+ * no longer shows its elements, so the flag decides (`boolean`: unknown).
+ */
+type UnknownIn<Entries extends ReadonlyArray<unknown>, MayRead extends boolean> =
+  Entries extends unknown ? UnknownInOne<Entries, MayRead> : never
 
-type UnknownInOne<Entries extends ReadonlyArray<unknown>> =
+type UnknownInOne<Entries extends ReadonlyArray<unknown>, MayRead extends boolean> =
   number extends Entries["length"]
-    ? HasReads<Entries> extends false ? never : UnknownOrderError
-    : NestedEntries<Entries[number]> extends infer Nested
-      ? Nested extends ReadonlyArray<unknown> ? UnknownIn<Nested> : never
+    ? [MayRead] extends [false] ? never : UnknownOrderError
+    : NestedOrders<Entries[number]> extends infer Order
+      ? Order extends AnyScheduleOrder ? UnknownIn<Order["entries"], Order["reads"]> : never
       : never
+
+type NestedOrders<Entry> = Entry extends AnySystem ? never : CarriedOrder<Entry>
 
 type NestedEntries<Entry> =
   Entry extends AnySystem ? never
@@ -221,7 +230,7 @@ type ReadErrors<Entries extends ReadonlyArray<unknown>, Reads> =
     : never
 
 type CheckTick<Schedules extends ReadonlyArray<unknown>> =
-  [UnknownIn<Schedules>] extends [never]
+  [UnknownIn<Schedules, HasReads<Schedules>>] extends [never]
     ? ReadErrors<Schedules, SystemReads<SystemsIn<Schedules[number]>>>
     : UnknownOrderError
 
@@ -254,7 +263,8 @@ export interface ExecutableScheduleDefinition<
   out Root = unknown,
   out CarriedNeeds extends Requirement.Requirement = Needs,
   out Failure extends SystemFailure = never,
-  out Order extends AnyScheduleOrder = ScheduleOrder
+  // Any order by default, so a pattern that names five parameters (`infer S, any, ...`) matches every schedule.
+  out Order extends AnyScheduleOrder = AnyScheduleOrder
 > {
   readonly kind: "schedule"
   readonly steps: ReadonlyArray<ScheduleStep>
@@ -273,7 +283,7 @@ export type ScheduleDefinition<
   Root = unknown,
   CarriedNeeds extends Requirement.Requirement = Needs,
   Failure extends SystemFailure = never,
-  Order extends AnyScheduleOrder = ScheduleOrder
+  Order extends AnyScheduleOrder = AnyScheduleOrder
 > = ExecutableScheduleDefinition<S, Needs, Root, CarriedNeeds, Failure, Order>
 
 export namespace Schedule {

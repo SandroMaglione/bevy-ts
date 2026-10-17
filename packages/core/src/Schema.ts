@@ -423,7 +423,7 @@ export namespace Schema {
     Root,
     Needs extends Requirement.Requirement = Requirement.Requirement,
     Failure extends System.SystemFailure = never
-  > = Schedule.ScheduleDefinition<S, Needs, Root, Needs, Failure>
+  > = Schedule.ScheduleDefinition<S, Needs, Root, Needs, Failure, Schedule.ScheduleOrder>
 
   /**
    * A schema-bound finite-state machine.
