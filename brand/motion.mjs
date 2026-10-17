@@ -1,7 +1,9 @@
 /** A whole-icon jump, stamp, and return using the production SVG geometry. */
 import { writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { palette, iconDot, wordmarkDot, iconShapes, wordmarkLetterShapes, wordmarkBox } from "./generate.mjs"
+import { palette, tagline, iconDot, wordmarkDot, iconShapes, wordmarkLetterShapes, wordmarkBox } from "./generate.mjs"
+
+const timing = { launch: 500, stamp: 1200, rebound: 1360, land: 2080, rest: 2400, duration: 4400, reduced: 3000 }
 
 const box = wordmarkBox(false)
 const scale = 100 / box.height
@@ -44,14 +46,14 @@ export const html = `<!doctype html>
   footer { margin: 16px 0 0; color: var(--muted-foreground, #60656e); font-size: 12px; }
   @media (max-width: 430px) { .stage { height: 310px; } button, select { padding: 8px 10px; } }
 </style></head><body><main>
-<p class="intro">The whole icon squashes, jumps onto the ri, stamps the dot, and bounces home.</p>
+<p class="intro">Ritmo: ${tagline}.</p>
 <div class="controls">
   <button id="play" type="button">Pause</button><button id="replay" type="button">Replay</button>
   <label>Speed <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select></label>
   <label><input id="loop" type="checkbox" checked>Loop</label>
   <button id="theme" type="button" aria-pressed="false">Light background</button>
 </div>
-<div class="timeline"><input id="time" aria-label="Animation time" type="range" min="0" max="5000" step="1" value="0"><output id="readout" for="time">0.00 s</output></div>
+<div class="timeline"><input id="time" aria-label="Animation time" type="range" min="0" max="${timing.duration}" step="1" value="0"><output id="readout" for="time">0.00 s</output></div>
 <div class="stage">${drawing}</div>
 <div class="caption"><span id="phase">Ready</span><div><button id="impact" type="button">Stamp frame</button> <button id="return" type="button">Return frame</button></div></div>
 <footer>The icon stays square in flight and squashes only at takeoff and contact. The dot stays painted after the bounce. Reduced-motion preferences start paused at the finished lockup.</footer>
@@ -59,11 +61,18 @@ export const html = `<!doctype html>
 (() => {
   const contact = ${JSON.stringify(contact)};
   const target = ${JSON.stringify(target)};
-  const duration = 5000;
+  const timing = ${JSON.stringify(timing)};
+  const duration = timing.duration;
   const clamp = n => Math.max(0, Math.min(1, n));
   const ease = n => { n = clamp(n); return n * n * (3 - 2 * n); };
   const mix = (a, b, n) => a + (b - a) * n;
-  const arc = (a, b, n, height) => ({ x: mix(a.x, b.x, n), y: mix(a.y, b.y, n) - height * 4 * n * (1 - n) });
+  // Constant downward acceleration. Shorter flights at the same height land harder.
+  const flight = (a, b, elapsedMs, durationMs, height) => {
+    const seconds = elapsedMs / 1000, durationSeconds = durationMs / 1000;
+    const gravity = 8 * height / (durationSeconds * durationSeconds);
+    const velocityY = (b.y - a.y) / durationSeconds - gravity * durationSeconds / 2;
+    return { x: mix(a.x, b.x, elapsedMs / durationMs), y: a.y + velocityY * seconds + gravity * seconds * seconds / 2 };
+  };
   const home = { x: 50, y: 94 };
   const jumper = document.querySelector('.jumper');
   const paint = document.querySelector('.paint');
@@ -73,7 +82,7 @@ export const html = `<!doctype html>
   const phase = document.getElementById('phase');
   const playButton = document.getElementById('play');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  let elapsed = reducedMotion.matches ? 3500 : 0;
+  let elapsed = reducedMotion.matches ? timing.reduced : 0;
   let playing = !reducedMotion.matches;
   let speed = 1;
   let last = null;
@@ -81,30 +90,30 @@ export const html = `<!doctype html>
 
   function pose(t) {
     let point = home, angle = 0, sx = 1, sy = 1, dip = 0, name = 'Ready';
-    if (t >= 220 && t < 500) {
-      const compression = Math.sin((t - 220) / 280 * Math.PI);
+    if (t >= 220 && t < timing.launch) {
+      const compression = Math.sin((t - 220) / (timing.launch - 220) * Math.PI);
       sx = 1 + .45 * compression; sy = 1 - .38 * compression; angle = -10 * compression; name = 'Windup';
-    } else if (t >= 500 && t < 1350) {
-      const n = (t - 500) / 850;
-      point = arc(home, contact, n, 135);
+    } else if (t >= timing.launch && t < timing.stamp) {
+      const n = (t - timing.launch) / (timing.stamp - timing.launch);
+      point = flight(home, contact, t - timing.launch, timing.stamp - timing.launch, 135);
       angle = 360 * ease(n); name = 'Jump';
-    } else if (t >= 1350 && t < 1570) {
-      const compression = Math.sin((t - 1350) / 220 * Math.PI);
+    } else if (t >= timing.stamp && t < timing.rebound) {
+      const compression = Math.sin((t - timing.stamp) / (timing.rebound - timing.stamp) * Math.PI);
       sx = 1 + .5 * compression; sy = 1 - .42 * compression;
       dip = 7 * compression;
       point = { x: contact.x, y: contact.y + dip };
       angle = 360; name = 'Stamp';
-    } else if (t >= 1570 && t < 2570) {
-      const n = (t - 1570) / 1000;
-      point = arc(contact, home, n, 120);
+    } else if (t >= timing.rebound && t < timing.land) {
+      const n = (t - timing.rebound) / (timing.land - timing.rebound);
+      point = flight(contact, home, t - timing.rebound, timing.land - timing.rebound, 120);
       angle = 360 * (1 - ease(n)); name = 'Return';
-    } else if (t >= 2570 && t < 2970) {
-      const n = (t - 2570) / 400;
+    } else if (t >= timing.land && t < timing.rest) {
+      const n = (t - timing.land) / (timing.rest - timing.land);
       const compression = Math.abs(Math.sin(n * Math.PI * 3)) * Math.pow(1 - n, 2);
       sx = 1 + .55 * compression; sy = 1 - .42 * compression;
       angle = -5 * compression; name = 'Land';
-    } else if (t >= 2970) name = 'Rest';
-    return { x: point.x, y: point.y, angle, sx, sy, dip, paint: ease((t - 1350) / 85), phase: name };
+    } else if (t >= timing.rest) name = 'Rest';
+    return { x: point.x, y: point.y, angle, sx, sy, dip, paint: ease((t - timing.stamp) / 65), phase: name };
   }
 
   function draw(t) {
@@ -139,16 +148,16 @@ export const html = `<!doctype html>
   document.getElementById('replay').onclick = () => { elapsed = 0; play(); };
   document.getElementById('speed').onchange = event => { speed = Number(event.target.value); };
   time.oninput = event => seek(Number(event.target.value));
-  document.getElementById('impact').onclick = () => seek(1460);
-  document.getElementById('return').onclick = () => seek(2050);
+  document.getElementById('impact').onclick = () => seek((timing.stamp + timing.rebound) / 2);
+  document.getElementById('return').onclick = () => seek((timing.rebound + timing.land) / 2);
   document.getElementById('theme').onclick = event => {
     const light = document.body.classList.toggle('light');
     event.currentTarget.setAttribute('aria-pressed', String(light));
     event.currentTarget.textContent = light ? 'Dark background' : 'Light background';
   };
   document.addEventListener('visibilitychange', () => { last = null; schedule(); });
-  reducedMotion.addEventListener('change', event => { if (event.matches) seek(3500); });
-  window.ritmoMotion = { seek, play, pause, pose, get state() { return { elapsed, playing, speed }; } };
+  reducedMotion.addEventListener('change', event => { if (event.matches) seek(timing.reduced); });
+  window.ritmoMotion = { seek, play, pause, pose, timing, get state() { return { elapsed, playing, speed }; } };
   draw(elapsed); schedule();
 })();
 </script></body></html>`

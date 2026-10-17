@@ -21,8 +21,6 @@ input, timing, math, and renderer bridges. Drawing stays in the game.
   <img alt="Ritmo: the agent-first typed ECS runtime for games" src="./brand/assets/ritmo-banner.svg" width="720">
 </p>
 
-[Brand assets and palette](./brand/README.md)
-
 New to the library? Start with [CONCEPTS.md](./CONCEPTS.md) (the model in five
 minutes), then [GAME_API.md](./GAME_API.md). Type architecture and storage are
 documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
@@ -103,4 +101,6 @@ CI measures every pull request against its base commit on the same runner and fa
 Ritmo was previously named `bevy-ts`. The [hosted documentation](https://sandromaglione.github.io/bevy-ts/)
 still uses the existing repository address. The package names here are prepared for
 the separate npm publication and GitHub rename.
+
+<sub>[Brand assets and palette](./brand/README.md)</sub>
 
