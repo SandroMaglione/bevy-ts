@@ -10,8 +10,8 @@ describe("HostClock", () => {
   it("types the test clock with adjust, which returns a Result", () => {
     const clock = HostClock.test()
     expect(clock).type.toBe<HostClock.TestHostClock>()
-    expect(clock.adjust(16)).type.toBe<Result.Result<void, HostClock.NegativeAdjustment>>()
-    expect<HostClock.NegativeAdjustment["_tag"]>().type.toBe<"NegativeAdjustment">()
+    expect(clock.adjust(16)).type.toBe<Result.Result<void, HostClock.InvalidAdjustment>>()
+    expect<HostClock.InvalidAdjustment["_tag"]>().type.toBe<"InvalidAdjustment">()
     expect(clock).type.toBeAssignableTo<HostClock.HostClock>()
   })
 

@@ -14,8 +14,17 @@ describe("HostClock.test", () => {
   it("rejects a negative adjustment and does not move", () => {
     const clock = HostClock.test()
     clock.adjust(10)
-    expect(clock.adjust(-5)).toEqual({ ok: false, error: { _tag: "NegativeAdjustment", ms: -5 } })
+    expect(clock.adjust(-5)).toEqual({ ok: false, error: { _tag: "InvalidAdjustment", ms: -5 } })
     expect(clock.now()).toBe(10)
+  })
+
+  it("rejects non-finite adjustments without poisoning later readings", () => {
+    const clock = HostClock.test()
+    for (const ms of [NaN, Infinity, -Infinity]) expect(clock.adjust(ms).ok).toBe(false)
+    expect(clock.now()).toBe(0)
+    expect(clock.adjust(Number.MAX_VALUE).ok).toBe(true)
+    expect(clock.adjust(Number.MAX_VALUE).ok).toBe(false)
+    expect(clock.now()).toBe(Number.MAX_VALUE)
   })
 })
 

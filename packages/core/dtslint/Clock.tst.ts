@@ -26,6 +26,8 @@ describe("Clock.hz", () => {
     const rate: number = 60
     // @ts-expect-error Clock.hz needs a literal
     Clock.hz(rate)
+    // @ts-expect-error Clock.hz needs a positive whole number of steps per second
+    Clock.hz(9007199254740992)
     const chooseRate = (): 0 | 60 => 60
     // @ts-expect-error Clock.hz needs one literal rate
     Clock.hz(chooseRate())
@@ -59,6 +61,11 @@ describe("Clock.duration", () => {
   it("accepts exactly one step and rejects anything shorter", () => {
     Clock.duration(Clock.hz(50), 0.02)
     Clock.duration(Clock.hz(4), 0.25)
+    expect(Clock.duration(Clock.hz(10000000), 1e-7)).type.toBe<Clock.Duration<10000000>>()
+    // @ts-expect-error 1e-8s is shorter than one step (1/60s)
+    Clock.duration(step, 1e-8)
+    // @ts-expect-error a duration must fit in a safe whole number of steps
+    Clock.duration(step, 1e+30)
     // @ts-expect-error 0.001s is shorter than one step (1/60s)
     Clock.duration(step, 0.001)
     // @ts-expect-error 0.016s is shorter than one step (1/60s)

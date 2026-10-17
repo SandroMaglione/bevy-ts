@@ -56,6 +56,7 @@ export type ValidHz<N extends number> =
   number extends N ? "Clock.hz needs a literal"
   : true extends IsUnion<N> ? "Clock.hz needs one literal rate"
   : `${N}` extends `-${string}` | `${string}.${string}` | `${string}e${string}` | "0" ? HzMessage
+  : AtLeast<Trimmed<Reversed<`${N}`>>, Reversed<"9007199254740992">> extends true ? HzMessage
   : N
 
 /**
@@ -248,13 +249,21 @@ type ZerosAfterOne<Fraction extends string, Out extends Array<Digit> = []> =
 type FractionReachesStep<Fraction extends string, Hz extends number> =
   AtLeast<Trimmed<Multiply<Reversed<Fraction>, Reversed<`${Hz}`>>>, ZerosAfterOne<Fraction>>
 
+type MantissaDigits<S extends string> = S extends `${infer Whole}.${infer Fraction}` ? `${Whole}${Fraction}` : S
+type ScientificFraction<Mantissa extends string, Exponent extends string, Count extends Array<0> = [0], Zeros extends string = ""> =
+  `${Count["length"]}` extends Exponent ? `${Zeros}${MantissaDigits<Mantissa>}`
+  : ScientificFraction<Mantissa, Exponent, [...Count, 0], `${Zeros}0`>
+
 /** `Seconds` when it is a literal, non-negative, and at least one step at `Hz`; otherwise the message. */
 export type ValidDuration<Hz extends number, Seconds extends number> =
   number extends Seconds ? "Clock.duration needs a literal number of seconds: use Clock.durationRaw for data"
   : true extends IsUnion<Seconds> ? "Clock.duration needs one literal duration: use Clock.durationRaw for data"
   : number extends Hz ? "Clock.duration needs a step built with Clock.hz(literal)"
   : `${Seconds}` extends `-${string}` ? "Clock.duration needs a non-negative number of seconds"
-  : `${Seconds}` extends `${string}e-${string}` | "0" ? `${Seconds}s is shorter than one step (1/${Hz}s)`
+  : `${Seconds}` extends "0" ? `${Seconds}s is shorter than one step (1/${Hz}s)`
+  : `${Seconds}` extends `${string}e+${string}` ? "a duration must fit in a safe whole number of steps"
+  : `${Seconds}` extends `${infer Mantissa}e-${infer Exponent}`
+    ? FractionReachesStep<ScientificFraction<Mantissa, Exponent>, Hz> extends true ? Seconds : `${Seconds}s is shorter than one step (1/${Hz}s)`
   : `${Seconds}` extends `0.${infer Fraction}`
     ? FractionReachesStep<Fraction, Hz> extends true ? Seconds : `${Seconds}s is shorter than one step (1/${Hz}s)`
     : Seconds

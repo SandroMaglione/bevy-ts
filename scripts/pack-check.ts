@@ -93,7 +93,7 @@ writeFileSync(path.join(consumer, "tsconfig.json"), JSON.stringify({
 }, null, 2))
 
 const program = `
-import { Descriptor, HostClock, Schema } from "@typeonce/ritmo"
+import { Clock, Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 import * as Result from "@typeonce/ritmo/Result"
 import * as Vector2 from "@typeonce/ritmo-math/Vector2"
 import { Collide2, FlowField, Random, Scalar, SpatialGrid } from "@typeonce/ritmo-math"
@@ -101,7 +101,18 @@ import { BrowserHostClock, Keyboard } from "@typeonce/ritmo-browser"
 import { NodeRegistry } from "@typeonce/ritmo-render"
 import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
 import * as Pixi from "@typeonce/ritmo-pixi"
-import { Session } from "@typeonce/ritmo-devtools"
+import { Determinism, Session } from "@typeonce/ritmo-devtools"
+
+const step = Clock.hz(60)
+const Time = Clock.resource("Consumer/Time", step)
+const Sim = Schema.bind(Schema.fragment({ resources: { Time } }))
+const AdvanceTime = Clock.system(Sim, { name: "Consumer/AdvanceTime", resource: Time })
+const repeated = Determinism.check(({ hostClock }) => {
+  const made = Sim.Runtime.make({ services: Sim.Runtime.services(), resources: { Time: Clock.start(step) }, debug: { hostClock } })
+  if (!made.ok) throw new Error("initial clock must be valid")
+  return { runtime: made.value, schedules: { update: Sim.Schedule(AdvanceTime) } }
+}, { schedule: "update", frames: Clock.steps(Clock.duration(step, 0.5)), hostClock: HostClock.test() })
+if (!repeated.ok) throw new Error(JSON.stringify(repeated))
 
 const Position = Descriptor.ConstructedComponent(Vector2)("Consumer/Position")
 const Game = Schema.bind(Schema.fragment({ components: { Position } }))
@@ -146,6 +157,11 @@ const output = run("node", ["out/main.js"], consumer).trim()
 const expected = JSON.stringify({ ok: true, entities: 1, jump: true, nodes: 0 })
 if (output !== expected) throw new Error(`consumer printed ${output}, expected ${expected}`)
 console.log(output)
+
+step("run the published devtools CLI")
+writeFileSync(path.join(consumer, "lint.mjs"), `import { HostClock, Schema } from "@typeonce/ritmo"; const Game = Schema.bind(Schema.fragment({})); export const lintTarget = () => ({ runtime: Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock: HostClock.test() } }), schedules: { update: Game.Schedule() } });\n`)
+const lintOutput = run(path.join(consumer, "node_modules", ".bin", "ritmo-devtools"), ["lint", "lint.mjs"], consumer)
+if (!lintOutput.includes("0 warnings")) throw new Error(`published lint CLI failed: ${lintOutput}`)
 
 step("internal modules are not exported")
 writeFileSync(path.join(consumer, "internal.mjs"), `import("@typeonce/ritmo/internal/world").then(() => process.exit(1), (error) => { if (error.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") process.exit(2) })\n`)

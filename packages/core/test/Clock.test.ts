@@ -79,6 +79,8 @@ describe("Clock", () => {
     expect(Clock.durationRaw(step, 0.001)).toEqual(Result.failure({ _tag: "InvalidDuration", seconds: 0.001, message: "0.001s is shorter than one step (1/60s)" }))
     expect(Clock.durationRaw(step, -1).ok).toBe(false)
     expect(Clock.durationRaw(step, Number.NaN).ok).toBe(false)
+    expect(Clock.durationRaw(step, Number.MAX_VALUE).ok).toBe(false)
+    expect(Clock.steps(Clock.duration(Clock.hz(10000000), 1e-7))).toBe(1)
   })
 
   it("runs two clocks of one game at their own rates", () => {

@@ -8,7 +8,7 @@
  * Scores are normalized by the `calibration` case in `harness.ts` (see
  * `scripts/bench.ts`).
  */
-import { Decode, Descriptor, Schema } from "@typeonce/ritmo"
+import { Clock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
 import type * as Entity from "@typeonce/ritmo/Entity"
 import type { ScheduleEntry } from "@typeonce/ritmo/Schedule"
 import type { BenchCase } from "./harness.ts"
@@ -542,7 +542,22 @@ const frame: BenchCase = {
   }
 }
 
+const clockAdvance: BenchCase = {
+  name: "clock/advance-1000",
+  description: "Advance the validated simulation clock through 1000 fixed steps",
+  setup: () => {
+    const step = Clock.hz(60)
+    const Time = Clock.resource("ClockBench/Time", step)
+    const Game = Schema.bind(Schema.fragment({ resources: { Time } }))
+    const made = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Time: Clock.start(step) } })
+    if (!made.ok) throw new Error("initial clock is valid")
+    const update = Game.Schedule(Clock.system(Game, { name: "ClockBench/Advance", resource: Time }))
+    return { run: () => { for (let index = 0; index < 1000; index++) made.value.tick(update) } }
+  }
+}
+
 export const cases: ReadonlyArray<BenchCase> = [
+  clockAdvance,
   spawn,
   despawn,
   iterateRead,

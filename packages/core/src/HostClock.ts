@@ -35,16 +35,16 @@ export interface HostClock {
  */
 export const standard: HostClock = { now: () => Date.now() }
 
-/** `adjust` was given a negative step: a test clock only moves forward. */
-export interface NegativeAdjustment {
-  readonly _tag: "NegativeAdjustment"
+/** `adjust` must leave a finite clock reading and never move backwards. */
+export interface InvalidAdjustment {
+  readonly _tag: "InvalidAdjustment"
   readonly ms: number
 }
 
 /** A manual clock for tests: starts at 0 and moves only through `adjust`. */
 export interface TestHostClock extends HostClock {
   /** Moves the clock forward by `ms` (0 or more). */
-  readonly adjust: (ms: number) => Result.Result<void, NegativeAdjustment>
+  readonly adjust: (ms: number) => Result.Result<void, InvalidAdjustment>
 }
 
 /** A test clock at 0. Every reading is the same until `adjust` moves it. */
@@ -53,7 +53,7 @@ export const test = (): TestHostClock => {
   return {
     now: () => current,
     adjust: (ms) => {
-      if (!(ms >= 0)) return Result.failure({ _tag: "NegativeAdjustment", ms })
+      if (!Number.isFinite(ms) || ms < 0 || !Number.isFinite(current + ms)) return Result.failure({ _tag: "InvalidAdjustment", ms })
       current += ms
       return Result.success(undefined)
     }
