@@ -1,4 +1,4 @@
-# bevy-ts in 5 minutes
+# ritmo in 5 minutes
 
 This is the mental model, one concept at a time, for someone who knows ECS. Every snippet comes from [`examples/concepts.ts`](./examples/concepts.ts), a complete program that is typechecked and run by the test suite.
 
@@ -14,7 +14,7 @@ const { relation: ChildOf } = Descriptor.Hierarchy("Concepts/ChildOf", "Concepts
 
 - **Components** are per-entity data. **Resources** are world singletons. **Events** are messages between systems. **Services** are host capabilities (clock, audio, renderer) that live outside the world. **Relations** link entities.
 - Identity is `(kind, name)`. A schema rejects two descriptors of one kind with the same name, so prefix names per game or package.
-- `Descriptor.Component<T>()` declares a plain component. `Descriptor.ConstructedComponent(validator)` attaches a validating constructor (`{ result: (raw) => Result }`), used for raw input and when loading saves. `@typeonce/bevy-ts-math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`. `Decode` has ready-made validators (`number`, `integer`, `string`, `boolean`, `literal`, `nullable`, `array`, `struct`, `handle`), `Descriptor.Tag("Player")` declares a marker component, and `Descriptor.fromStandardSchema(schema)` adapts any Standard Schema validator (ArkType, Effect Schema, Zod, Valibot).
+- `Descriptor.Component<T>()` declares a plain component. `Descriptor.ConstructedComponent(validator)` attaches a validating constructor (`{ result: (raw) => Result }`), used for raw input and when loading saves. `@typeonce/ritmo-math` provides `Vector2`, `Size2`, `Aabb` and `Scalar`. `Decode` has ready-made validators (`number`, `integer`, `string`, `boolean`, `literal`, `nullable`, `array`, `struct`, `handle`), `Descriptor.Tag("Player")` declares a marker component, and `Descriptor.fromStandardSchema(schema)` adapts any Standard Schema validator (ArkType, Effect Schema, Zod, Valibot).
 - `Descriptor.TransientComponent<T>()` / `TransientResource<T>()` mark runtime-only state that saves skip.
 
 ## 2. A schema closes the world
@@ -46,7 +46,7 @@ const Move = Game.System("Concepts/Move", {
 
 - The callback receives only what the spec declares.
 - `read` slots are deeply readonly. `write` slots expose `set` / `update`.
-- Values from `get()` are `ReadonlyValue<T>`. Type helpers that receive them as `ReadonlyValue<T>` (from `@typeonce/bevy-ts/Query`), not `T`, so a config resource or component value passes straight in without a cast: `const spawnRate = (tuning: ReadonlyValue<Tuning>) => ...`.
+- Values from `get()` are `ReadonlyValue<T>`. Type helpers that receive them as `ReadonlyValue<T>` (from `@typeonce/ritmo/Query`), not `T`, so a config resource or component value passes straight in without a cast: `const spawnRate = (tuning: ReadonlyValue<Tuning>) => ...`.
 - Queries also take `with`, `without`, `optional(...)`, relation selections, and the change filters described in section 8.
 - Query results come back in spawn order.
 
@@ -101,7 +101,7 @@ Helpers can take the exact cells of a query without spelling out cell types
 or passing a schema parameter:
 
 ```ts
-import type { Query } from "@typeonce/bevy-ts/Query"
+import type { Query } from "@typeonce/ritmo/Query"
 
 const positionOf = (data: Query.Cells<typeof Moving>) => data.position.get()
 ```
@@ -250,10 +250,10 @@ runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 
 | Package | What it owns |
 |---|---|
-| `@typeonce/bevy-ts` | Schema, systems, schedules, runtime, snapshots |
-| `@typeonce/bevy-ts-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis`; hot-path `Vec2`, `Box2`, `Collide2`, `SpatialGrid`, `FlowField`, `Random` |
-| `@typeonce/bevy-ts-browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
-| `@typeonce/bevy-ts-render` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into any renderer |
-| `@typeonce/bevy-ts-pixi` | `PixiNodeRegistry.make` for Pixi containers |
+| `@typeonce/ritmo` | Schema, systems, schedules, runtime, snapshots |
+| `@typeonce/ritmo-math` | Validated `Scalar`, `Vector2`, `Size2`, `Aabb`, `InputAxis`; hot-path `Vec2`, `Box2`, `Collide2`, `SpatialGrid`, `FlowField`, `Random` |
+| `@typeonce/ritmo-browser` | `FixedLoop` timing, `Keyboard` action input, `InputCapture` into resources |
+| `@typeonce/ritmo-render` | `NodeRegistry` and `RenderSync` (with `redrawOn`) for mirroring entities into any renderer |
+| `@typeonce/ritmo-pixi` | `PixiNodeRegistry.make` for Pixi containers |
 
 Next: [GAME_API.md](./GAME_API.md) for a larger walkthrough, [ARCHITECTURE.md](./ARCHITECTURE.md) for how the types and storage work.

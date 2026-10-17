@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
-import type * as Entity from "@typeonce/bevy-ts/Entity"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
+import type * as Entity from "@typeonce/ritmo/Entity"
 
 const Position = Descriptor.Component<{ x: number }>()("Lifecycle/Position")
 const Tag = Descriptor.Component<{}>()("Lifecycle/Tag")

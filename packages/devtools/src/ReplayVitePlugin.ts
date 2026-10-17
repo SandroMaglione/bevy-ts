@@ -12,7 +12,7 @@
  * @example
  * ```ts
  * // vite.config.ts
- * import * as ReplayVitePlugin from "@typeonce/bevy-ts-devtools/ReplayVitePlugin"
+ * import * as ReplayVitePlugin from "@typeonce/ritmo-devtools/ReplayVitePlugin"
  * export default defineConfig({ plugins: [ReplayVitePlugin.plugin()] })
  * ```
  */

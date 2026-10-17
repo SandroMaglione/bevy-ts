@@ -1,5 +1,5 @@
-import { Result } from "@typeonce/bevy-ts"
-import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@typeonce/bevy-ts-math"
+import { Result } from "@typeonce/ritmo"
+import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@typeonce/ritmo-math"
 import { describe, expect, it } from "tstyche"
 
 describe("helpers", () => {

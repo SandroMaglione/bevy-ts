@@ -6,7 +6,7 @@
  * Run it from a game's `check` script with the CLI:
  *
  * ```sh
- * bevy-ts-devtools lint src/simulation.ts
+ * ritmo-devtools lint src/simulation.ts
  * ```
  *
  * The entry module exports `lintTarget`, a function that builds the game's
@@ -29,9 +29,9 @@
  * }
  * ```
  */
-import type * as Debug from "@typeonce/bevy-ts/Debug"
-import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
-import type { Schema } from "@typeonce/bevy-ts/Schema"
+import type * as Debug from "@typeonce/ritmo/Debug"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type { Schema } from "@typeonce/ritmo/Schema"
 
 import * as Rendered from "./Rendered.ts"
 

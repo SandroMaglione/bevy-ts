@@ -1,9 +1,9 @@
-import { Descriptor, Result, Entity, Schema } from "@typeonce/bevy-ts"
-import * as Public from "@typeonce/bevy-ts"
-import type { EntityId } from "@typeonce/bevy-ts/Entity"
-import * as QueryTypes from "@typeonce/bevy-ts/Query"
-import * as Relation from "@typeonce/bevy-ts/Relation"
-import type * as SchemaTypes from "@typeonce/bevy-ts/Schema"
+import { Descriptor, Result, Entity, Schema } from "@typeonce/ritmo"
+import * as Public from "@typeonce/ritmo"
+import type { EntityId } from "@typeonce/ritmo/Entity"
+import * as QueryTypes from "@typeonce/ritmo/Query"
+import * as Relation from "@typeonce/ritmo/Relation"
+import type * as SchemaTypes from "@typeonce/ritmo/Schema"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")

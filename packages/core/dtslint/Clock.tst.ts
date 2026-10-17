@@ -1,5 +1,5 @@
-import { Clock, Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { Result } from "@typeonce/bevy-ts"
+import { Clock, Descriptor, Schema } from "@typeonce/ritmo"
+import type { Result } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 const step = Clock.hz(60)

@@ -36,7 +36,7 @@
  * capture the timeline a session produced. `parseTimeline(...)` validates a
  * timeline loaded from JSON.
  */
-import * as Result from "@typeonce/bevy-ts/Result"
+import * as Result from "@typeonce/ritmo/Result"
 
 import type { ActionState } from "./Keyboard.ts"
 

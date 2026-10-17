@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Debug, Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
+import { Debug, Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 
 describe("HostClock.test", () => {
   it("starts at 0 and moves only through adjust", () => {

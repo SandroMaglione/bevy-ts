@@ -35,14 +35,14 @@
  * console.log(session.journal({ frames: [180, 185], entity: 1 }))
  * ```
  */
-import { HostClock } from "@typeonce/bevy-ts"
-import type * as Debug from "@typeonce/bevy-ts/Debug"
-import type * as Inspector from "@typeonce/bevy-ts/Inspector"
-import type * as Machine from "@typeonce/bevy-ts/Machine"
-import type * as Result from "@typeonce/bevy-ts/Result"
-import type * as Runtime from "@typeonce/bevy-ts/Runtime"
-import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
-import type { Schema } from "@typeonce/bevy-ts/Schema"
+import { HostClock } from "@typeonce/ritmo"
+import type * as Debug from "@typeonce/ritmo/Debug"
+import type * as Inspector from "@typeonce/ritmo/Inspector"
+import type * as Machine from "@typeonce/ritmo/Machine"
+import type * as Result from "@typeonce/ritmo/Result"
+import type * as Runtime from "@typeonce/ritmo/Runtime"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type { Schema } from "@typeonce/ritmo/Schema"
 
 import * as Format from "./Format.ts"
 import type { Invariant } from "./Invariant.ts"

@@ -1,6 +1,6 @@
-import * as Scalar from "@typeonce/bevy-ts-math/Scalar"
-import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
-import { RenderSync } from "@typeonce/bevy-ts-render"
+import * as Scalar from "@typeonce/ritmo-math/Scalar"
+import * as Vector2 from "@typeonce/ritmo-math/Vector2"
+import { RenderSync } from "@typeonce/ritmo-render"
 import { PICKUP_POINTS } from "./content.ts"
 import {
   COUNTDOWN_DURATION_SECONDS,

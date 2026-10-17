@@ -14,8 +14,8 @@
  * }
  * ```
  */
-import type { HostClock } from "@typeonce/bevy-ts"
-import * as Result from "@typeonce/bevy-ts/Result"
+import type { HostClock } from "@typeonce/ritmo"
+import * as Result from "@typeonce/ritmo/Result"
 
 import { FIXED_STEP_SECONDS } from "./constants.ts"
 import { describeRuntimeError, initialMachines, initialResources } from "./runtime.ts"

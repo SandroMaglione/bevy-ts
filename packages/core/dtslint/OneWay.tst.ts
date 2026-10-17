@@ -1,5 +1,5 @@
-import * as Core from "@typeonce/bevy-ts"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import * as Core from "@typeonce/ritmo"
+import { Descriptor, Schema } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 const Game = Schema.bind(Schema.fragment({ components: { Position: Descriptor.Component<{ x: number }>()("OneWay/Position") } }))

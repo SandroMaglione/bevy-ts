@@ -1,5 +1,5 @@
 // A lint target for the CLI test: `Noise` is emitted and never read (a warning) unless LINT_QUIET is set.
-import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 
 const hostClock = HostClock.test()
 

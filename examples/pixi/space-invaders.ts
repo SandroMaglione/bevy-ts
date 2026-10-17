@@ -1,10 +1,10 @@
 import { Application, Container, Graphics } from "pixi.js"
 import * as Matter from "matter-js"
 
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { Descriptor, Entity, Schema } from "@typeonce/ritmo"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
 
 interface BrowserExampleHandle {
   destroy(): Promise<void>

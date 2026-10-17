@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { Clock, Decode, Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
-import { Invariant, Replay } from "@typeonce/bevy-ts-devtools"
+import { Clock, Decode, Descriptor, HostClock, Result, Schema } from "@typeonce/ritmo"
+import { Invariant, Replay } from "@typeonce/ritmo-devtools"
 
 const hostClock = HostClock.test()
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import * as Runtime from "@typeonce/ritmo/Runtime"
 
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("ScheduleWhen/Log")
 const Ping = Descriptor.Event<number>()("ScheduleWhen/Ping")

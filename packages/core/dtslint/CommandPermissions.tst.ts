@@ -1,6 +1,6 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type * as Command from "@typeonce/bevy-ts/Command"
-import type * as Entity from "@typeonce/bevy-ts/Entity"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type * as Command from "@typeonce/ritmo/Command"
+import type * as Entity from "@typeonce/ritmo/Entity"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Perms/Position")

@@ -44,14 +44,14 @@
  * if (replay.ok) console.log(replay.value.play().text)
  * ```
  */
-import type { Clock, HostClock } from "@typeonce/bevy-ts"
-import type * as Debug from "@typeonce/bevy-ts/Debug"
-import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
-import type * as Requirement from "@typeonce/bevy-ts/Requirement"
-import * as Result from "@typeonce/bevy-ts/Result"
-import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
-import type { Schema } from "@typeonce/bevy-ts/Schema"
-import type * as Snapshot from "@typeonce/bevy-ts/Snapshot"
+import type { Clock, HostClock } from "@typeonce/ritmo"
+import type * as Debug from "@typeonce/ritmo/Debug"
+import type { Descriptor } from "@typeonce/ritmo/Descriptor"
+import type * as Requirement from "@typeonce/ritmo/Requirement"
+import * as Result from "@typeonce/ritmo/Result"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type { Schema } from "@typeonce/ritmo/Schema"
+import type * as Snapshot from "@typeonce/ritmo/Snapshot"
 
 import * as Format from "./Format.ts"
 import type { Invariant } from "./Invariant.ts"
@@ -61,7 +61,7 @@ import * as Session from "./Session.ts"
 
 type AnySchedule<S extends Schema.Any, Root> = ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>
 
-/** The `@typeonce/bevy-ts-devtools` version written into replay files. */
+/** The `@typeonce/ritmo-devtools` version written into replay files. */
 export const version = libraryVersion
 
 /** An input service: one value per call, such as a keyboard's actions this step. */
@@ -121,7 +121,7 @@ export interface TickRecord {
 export interface ReplayFile {
   readonly format: "bevy-ts-replay"
   readonly version: 1
-  /** The `@typeonce/bevy-ts-devtools` version that recorded it. */
+  /** The `@typeonce/ritmo-devtools` version that recorded it. */
   readonly library: string
   /** Hash of the schema (components, resources, events, relations, machines) from `describe()`. */
   readonly schema: string
@@ -475,7 +475,7 @@ export const session = <S extends Schema.Any, Root>(
   if (!restored.ok) return Result.failure({ _tag: "RestoreFailed", error: restored.error })
   const replay = Session.make(target.runtime, { schedules: { [file.schedule]: schedule }, hostClock: target.hostClock })
   const send = target.runtime.send as (descriptor: { readonly kind: "event"; readonly name: string; readonly key: symbol }, value: unknown) => void
-  const events = new Map(target.runtime.debug.describe().events.map(({ name }) => [name, { kind: "event" as const, name, key: Symbol.for(`bevy-ts/event/${name}`) }]))
+  const events = new Map(target.runtime.debug.describe().events.map(({ name }) => [name, { kind: "event" as const, name, key: Symbol.for(`ritmo/event/${name}`) }]))
   const hashes = new Map<number, string>([[ran, worldHash(target.runtime.snapshot())]])
   const recorded = new Map(file.checkpoints.map(({ tick, hash }) => [tick, hash] as const))
   const last = file.ticks.at(-1)?.tick ?? file.start.tick

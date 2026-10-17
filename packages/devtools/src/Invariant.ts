@@ -30,7 +30,7 @@
  * const session = Session.make(runtime, { schedules: { update }, invariants: [PlayerInsideWorld] })
  * ```
  */
-import type * as Inspector from "@typeonce/bevy-ts/Inspector"
+import type * as Inspector from "@typeonce/ritmo/Inspector"
 
 export namespace Invariant {
   /** An inspector usable as an invariant: it returns a violation message or `undefined`. */

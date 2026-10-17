@@ -1,6 +1,6 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
-import type * as System from "@typeonce/bevy-ts/System"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type { ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type * as System from "@typeonce/ritmo/System"
 import { describe, expect, it } from "tstyche"
 
 const Damage = Descriptor.Event<{ readonly amount: number }>()("ThisTick/Damage")

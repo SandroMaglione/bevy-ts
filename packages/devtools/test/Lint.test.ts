@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
-import { Lint } from "@typeonce/bevy-ts-devtools"
+import { Descriptor, HostClock, Schema } from "@typeonce/ritmo"
+import { Lint } from "@typeonce/ritmo-devtools"
 
 const hostClock = HostClock.test()
 
@@ -60,7 +60,7 @@ describe("Lint.run", () => {
   })
 })
 
-describe("bevy-ts-devtools lint", () => {
+describe("ritmo-devtools lint", () => {
   it("exits 1 and prints the warning with its fix", () => {
     const { status, output } = runCli({})
     expect(status).toBe(1)

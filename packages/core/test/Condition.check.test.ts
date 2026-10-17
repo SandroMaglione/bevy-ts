@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
-import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import { Descriptor, HostClock, Schema } from "@typeonce/ritmo"
+import * as Runtime from "@typeonce/ritmo/Runtime"
 
 const hostClock = HostClock.test()
 

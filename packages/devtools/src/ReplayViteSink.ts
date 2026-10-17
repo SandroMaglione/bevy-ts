@@ -16,7 +16,7 @@
 import type * as Replay from "./Replay.ts"
 
 /** The dev server's endpoint for replays (what `ReplayVitePlugin` serves). */
-export const endpoint = "/__bevy-ts/replays"
+export const endpoint = "/__ritmo/replays"
 
 export interface Options {
   /** The page's `fetch` (or any function with its shape for these two arguments). */

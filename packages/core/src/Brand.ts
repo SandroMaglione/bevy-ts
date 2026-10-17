@@ -6,7 +6,7 @@
  * this module are always explicit and non-throwing.
  *
  * This module is for packages that author validated value types, like
- * `@typeonce/bevy-ts-math`: `Vector2`, `Size2`, `Scalar`, and `Aabb` all build
+ * `@typeonce/ritmo-math`: `Vector2`, `Size2`, `Scalar`, and `Aabb` all build
  * on it so validated values can move through the ECS without losing the fact
  * that they were checked once already.
  *

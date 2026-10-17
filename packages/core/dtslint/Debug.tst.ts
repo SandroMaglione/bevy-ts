@@ -1,4 +1,4 @@
-import { Debug, Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
+import { Debug, Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DebugTypes/Position")

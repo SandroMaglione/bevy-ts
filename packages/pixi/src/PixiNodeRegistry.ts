@@ -1,7 +1,7 @@
 /**
  * Pixi container implementation of the renderer-independent node registry.
  *
- * Import the registry contract and render systems from `@typeonce/bevy-ts-render`.
+ * Import the registry contract and render systems from `@typeonce/ritmo-render`.
  * Construct this adapter in the host and provide it as a normal runtime service.
  * Removing a node detaches it and destroys it with its children.
  *
@@ -16,7 +16,7 @@
  * sprites.clear()
  * ```
  */
-import * as NodeRegistry from "@typeonce/bevy-ts-render/NodeRegistry"
+import * as NodeRegistry from "@typeonce/ritmo-render/NodeRegistry"
 
 /**
  * The container surface the registry needs; Pixi's `Container` satisfies it.

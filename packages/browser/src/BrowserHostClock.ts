@@ -11,7 +11,7 @@
  *
  * @module BrowserHostClock
  */
-import type { HostClock } from "@typeonce/bevy-ts"
+import type { HostClock } from "@typeonce/ritmo"
 
 /** What the clock needs from the window. */
 export interface Host {

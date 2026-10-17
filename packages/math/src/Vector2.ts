@@ -34,9 +34,9 @@
  * @categoryDescription Operations
  * Immutable vector math and normalization helpers on already-validated values.
  */
-import type * as Brand from "@typeonce/bevy-ts/Brand"
+import type * as Brand from "@typeonce/ritmo/Brand"
 import * as internal from "./internal/vector2.ts"
-import type * as Result from "@typeonce/bevy-ts/Result"
+import type * as Result from "@typeonce/ritmo/Result"
 import type * as Scalar from "./Scalar.ts"
 
 /**

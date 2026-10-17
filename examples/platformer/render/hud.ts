@@ -12,7 +12,7 @@ export const createHud = (): {
 
   const badge = document.createElement("div")
   badge.className = "platformer-hud__badge"
-  badge.textContent = "bevy-ts platformer v1"
+  badge.textContent = "ritmo platformer v1"
 
   const title = document.createElement("h1")
   title.className = "platformer-hud__title"

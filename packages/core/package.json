@@ -1,7 +1,7 @@
 {
-  "name": "@typeonce/bevy-ts",
+  "name": "@typeonce/ritmo",
   "version": "0.5.0",
-  "description": "Type-safe, game-loop-agnostic ECS runtime for TypeScript, inspired by Bevy",
+  "description": "The agent-first type safe ECS runtime",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {
@@ -18,7 +18,7 @@
     "entity-component-system",
     "game-engine",
     "gamedev",
-    "bevy",
+    "ritmo",
     "typescript",
     "type-safe"
   ],

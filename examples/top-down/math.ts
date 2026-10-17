@@ -1,7 +1,7 @@
-import * as Aabb from "@typeonce/bevy-ts-math/Aabb"
-import * as InputAxis from "@typeonce/bevy-ts-math/InputAxis"
-import * as Scalar from "@typeonce/bevy-ts-math/Scalar"
-import * as Vector2Module from "@typeonce/bevy-ts-math/Vector2"
+import * as Aabb from "@typeonce/ritmo-math/Aabb"
+import * as InputAxis from "@typeonce/ritmo-math/InputAxis"
+import * as Scalar from "@typeonce/ritmo-math/Scalar"
+import * as Vector2Module from "@typeonce/ritmo-math/Vector2"
 import { WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 import type { AnimationFrameIndex, InputStateValue, Vector2 } from "./types.ts"
 

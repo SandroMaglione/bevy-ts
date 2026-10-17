@@ -31,9 +31,9 @@
  * })
  * ```
  */
-import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
-import type { Condition, ConditionNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
-import type { Schema } from "@typeonce/bevy-ts/Schema"
+import type { Descriptor } from "@typeonce/ritmo/Descriptor"
+import type { Condition, ConditionNeedsFromConditions } from "@typeonce/ritmo/Machine"
+import type { Schema } from "@typeonce/ritmo/Schema"
 
 /**
  * Anything that produces one input snapshot per call.

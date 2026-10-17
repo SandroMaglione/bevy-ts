@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { FixedLoop } from "@typeonce/bevy-ts-browser"
-import { Clock, Debug, HostClock, Result, Schema } from "@typeonce/bevy-ts"
+import { FixedLoop } from "@typeonce/ritmo-browser"
+import { Clock, Debug, HostClock, Result, Schema } from "@typeonce/ritmo"
 
 const Game = Schema.bind(Schema.fragment({}))
 const Fail = Game.System("LoopIgnored/Fail", {}, () => Result.failure("boom" as const))

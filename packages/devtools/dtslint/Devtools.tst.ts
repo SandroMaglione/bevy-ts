@@ -1,5 +1,5 @@
-import { Clock, Decode, Descriptor, HostClock, Schema } from "@typeonce/bevy-ts"
-import { Invariant, Lint, Replay, Session } from "@typeonce/bevy-ts-devtools"
+import { Clock, Decode, Descriptor, HostClock, Schema } from "@typeonce/ritmo"
+import { Invariant, Lint, Replay, Session } from "@typeonce/ritmo-devtools"
 import { describe, expect, it } from "tstyche"
 
 const hostClock = HostClock.test()

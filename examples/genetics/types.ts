@@ -1,5 +1,5 @@
-import type { Entity } from "@typeonce/bevy-ts"
-import type { NodeRegistry } from "@typeonce/bevy-ts-render"
+import type { Entity } from "@typeonce/ritmo"
+import type { NodeRegistry } from "@typeonce/ritmo-render"
 import type { Application, Container, Graphics } from "pixi.js"
 import type { Agent, Root } from "./schema.ts"
 

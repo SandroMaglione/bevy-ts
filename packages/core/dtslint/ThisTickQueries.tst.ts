@@ -1,6 +1,6 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { QuerySpec } from "@typeonce/bevy-ts/Query"
-import type * as System from "@typeonce/bevy-ts/System"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type { QuerySpec } from "@typeonce/ritmo/Query"
+import type * as System from "@typeonce/ritmo/System"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Tick/Position")

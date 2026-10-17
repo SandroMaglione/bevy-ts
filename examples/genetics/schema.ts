@@ -1,4 +1,4 @@
-import { Descriptor, Entity, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Entity, Schema } from "@typeonce/ritmo"
 import type {
   ArenaValue,
   BrowserHostValue,

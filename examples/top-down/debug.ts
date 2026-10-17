@@ -10,9 +10,9 @@
  * changes to the player's position, and the world dump. Copy it and change
  * the timeline, the invariants, and the questions.
  */
-import { HostClock } from "@typeonce/bevy-ts"
-import { Keyboard } from "@typeonce/bevy-ts-browser"
-import { Invariant, Session } from "@typeonce/bevy-ts-devtools"
+import { HostClock } from "@typeonce/ritmo"
+import { Keyboard } from "@typeonce/ritmo-browser"
+import { Invariant, Session } from "@typeonce/ritmo-devtools"
 
 import { WORLD_HEIGHT, WORLD_WIDTH } from "./constants.ts"
 import { PlayerCameraQuery } from "./queries.ts"

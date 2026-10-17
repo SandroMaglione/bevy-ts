@@ -11,8 +11,8 @@
     "declarationMap": false,
     "sourceMap": false,
     "paths": {
-      "@typeonce/bevy-ts": ["../../src/index.ts"],
-      "@typeonce/bevy-ts/*": ["../../src/*"]
+      "@typeonce/ritmo": ["../../src/index.ts"],
+      "@typeonce/ritmo/*": ["../../src/*"]
     }
   }
 }

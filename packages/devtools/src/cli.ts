@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * `bevy-ts-devtools`: devtools from the command line.
+ * `ritmo-devtools`: devtools from the command line.
  *
- *   bevy-ts-devtools lint <entry>
+ *   ritmo-devtools lint <entry>
  *
  * Imports `<entry>` (a module exporting `lintTarget`, see the `Lint` module),
  * prints every lint of its schedules with its fix, and exits with 1 when one
@@ -16,7 +16,7 @@ import { pathToFileURL } from "node:url"
 
 import * as Lint from "./Lint.ts"
 
-const usage = "usage: bevy-ts-devtools lint <entry>\n  <entry> exports lintTarget: () => { runtime, schedules, describe?, hostEvents? } (see the Lint module)"
+const usage = "usage: ritmo-devtools lint <entry>\n  <entry> exports lintTarget: () => { runtime, schedules, describe?, hostEvents? } (see the Lint module)"
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 

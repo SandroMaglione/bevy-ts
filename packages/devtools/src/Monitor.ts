@@ -30,9 +30,9 @@
  * // Toggle with the backslash key or the corner button.
  * ```
  */
-import type * as Debug from "@typeonce/bevy-ts/Debug"
-import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/bevy-ts/Schedule"
-import type { Schema } from "@typeonce/bevy-ts/Schema"
+import type * as Debug from "@typeonce/ritmo/Debug"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type { Schema } from "@typeonce/ritmo/Schema"
 
 import * as Format from "./Format.ts"
 import { Collector, recentSchedule, recentSystem } from "./internal/monitor.ts"
@@ -270,10 +270,10 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
   const root = host.document.createElement("div")
   root.className = "btm"
   root.innerHTML = `
-    <button class="btm-toggle" type="button" title="Toggle the bevy-ts monitor">◉ monitor</button>
+    <button class="btm-toggle" type="button" title="Toggle the Ritmo monitor">◉ monitor</button>
     <section class="btm-panel" hidden>
       <div class="btm-head">
-        <span class="btm-title">bevy-ts</span>
+        <span class="btm-title">Ritmo</span>
         <button class="btm-tab" data-tab="overview" type="button">Overview</button>
         <button class="btm-tab" data-tab="systems" type="button">Systems</button>
         <button class="btm-tab" data-tab="entity" type="button">Entity</button>

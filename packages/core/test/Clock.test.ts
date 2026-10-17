@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Clock, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
+import { Clock, Descriptor, Result, Schema } from "@typeonce/ritmo"
 
 const step = Clock.hz(60)
 const Time = Clock.resource("ClockRun/Time", step)

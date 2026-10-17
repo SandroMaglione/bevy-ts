@@ -3,10 +3,10 @@ import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { Replay } from "@typeonce/bevy-ts-devtools"
-import * as ReplayNodeSink from "@typeonce/bevy-ts-devtools/ReplayNodeSink"
-import * as ReplayVitePlugin from "@typeonce/bevy-ts-devtools/ReplayVitePlugin"
-import * as ReplayViteSink from "@typeonce/bevy-ts-devtools/ReplayViteSink"
+import { Replay } from "@typeonce/ritmo-devtools"
+import * as ReplayNodeSink from "@typeonce/ritmo-devtools/ReplayNodeSink"
+import * as ReplayVitePlugin from "@typeonce/ritmo-devtools/ReplayVitePlugin"
+import * as ReplayViteSink from "@typeonce/ritmo-devtools/ReplayViteSink"
 
 const file: Replay.ReplayFile = {
   format: "bevy-ts-replay",

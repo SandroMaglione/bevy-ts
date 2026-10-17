@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Result, Schema } from "@typeonce/bevy-ts"
-import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
+import * as Runtime from "@typeonce/ritmo/Runtime"
 
 const Ping = Descriptor.Event<{ value: number }>()("Ping")
 const Game = Schema.bind(Schema.fragment({ events: { Ping } }))

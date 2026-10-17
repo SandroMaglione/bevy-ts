@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Debug, Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
+import { Debug, Descriptor, HostClock, Result, Schema } from "@typeonce/ritmo"
 
 const hostClock = HostClock.test()
 

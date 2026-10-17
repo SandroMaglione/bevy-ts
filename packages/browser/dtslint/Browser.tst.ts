@@ -1,8 +1,8 @@
-import { FixedLoop, packageTag } from "@typeonce/bevy-ts-browser"
-import { Clock, Result } from "@typeonce/bevy-ts"
+import { FixedLoop, packageTag } from "@typeonce/ritmo-browser"
+import { Clock, Result } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
-describe("@typeonce/bevy-ts-browser", () => {
+describe("@typeonce/ritmo-browser", () => {
   it("exposes the package entrypoint type through the workspace", () => {
     expect(packageTag).type.toBe<"browser">()
   })

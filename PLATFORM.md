@@ -1,6 +1,6 @@
 # Platform Packages
 
-`bevy-ts` core stays platform-agnostic and renderer-agnostic.
+`ritmo` core stays platform-agnostic and renderer-agnostic.
 
 Extra packages are allowed when they stay platform-specific and encapsulate a stable integration boundary that user code would otherwise have to rewrite in every project. These packages must be composable lego blocks: they own lifecycle and plumbing, while callers keep control over schema, resources, services, schedules, and game semantics.
 
@@ -10,7 +10,7 @@ A plugin is a function `(Game, options) => System | Schedule`. It takes the game
 
 ## Good Packages
 
-### `@typeonce/bevy-ts-browser`
+### `@typeonce/ritmo-browser`
 
 Own browser-specific infrastructure:
 
@@ -21,7 +21,7 @@ Own browser-specific infrastructure:
 
 This package must not own gameplay resources or feature flow.
 
-### `@typeonce/bevy-ts-render`
+### `@typeonce/ritmo-render`
 
 Own renderer-agnostic render infrastructure:
 
@@ -30,9 +30,9 @@ Own renderer-agnostic render infrastructure:
 
 This package imports no renderer. It must not own what a node looks like, HUD semantics, or camera policy.
 
-### `@typeonce/bevy-ts-pixi`
+### `@typeonce/ritmo-pixi`
 
-Own Pixi-specific infrastructure implementing the contracts in `@typeonce/bevy-ts-render`:
+Own Pixi-specific infrastructure implementing the contracts in `@typeonce/ritmo-render`:
 
 - registries whose nodes are children of a Pixi container and are destroyed with their children (`PixiNodeRegistry.make`)
 - the Pixi-shaped surfaces those need (`ContainerLike`, `Destroyable`), without importing `pixi.js`
@@ -49,11 +49,11 @@ implementations; generic APIs are imported from the package that owns them.
 This follows Effect's separation of `FileSystem` from `NodeFileSystem`, and
 `KeyValueStore` from `BrowserKeyValueStore`. The host constructs an adapter and
 provides it through `Game.Runtime.service`; systems declare the generic service
-descriptor. Bevy-ts's synchronous services use that existing provision API.
+descriptor. Ritmo's synchronous services use that existing provision API.
 
 ```ts
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi"
 
 const Sprites = Descriptor.Service<NodeRegistry.NodeRegistry<Sprite>>()("Game/Sprites")
 const services = Game.Runtime.services(
@@ -62,7 +62,7 @@ const services = Game.Runtime.services(
 // RenderSync.system(Game, { ..., registry: Sprites }) uses the generic contract.
 ```
 
-### `@typeonce/bevy-ts-devtools`
+### `@typeonce/ritmo-devtools`
 
 Own debugging infrastructure over the core `Debug` handle:
 
@@ -76,10 +76,10 @@ This package reads the world; it must not mutate it or require games to change t
 
 These do not belong as public platform packages:
 
-- `@typeonce/bevy-ts-platformer-hud`
-- `@typeonce/bevy-ts-browser-runtime`
-- `@typeonce/bevy-ts-browser-rendered`
-- `@typeonce/bevy-ts-pixi-top-down-player`
+- `@typeonce/ritmo-platformer-hud`
+- `@typeonce/ritmo-browser-runtime`
+- `@typeonce/ritmo-browser-rendered`
+- `@typeonce/ritmo-pixi-top-down-player`
 - any package that bundles input, rendering, state, and gameplay into one opinionated runtime
 
 Those abstractions are feature-specific, not platform-specific. They stop being composable as soon as a game has slightly different behavior.

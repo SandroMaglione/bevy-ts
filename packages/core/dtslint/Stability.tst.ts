@@ -1,6 +1,6 @@
-import { Descriptor, EntityScope, Result, Schema } from "@typeonce/bevy-ts"
-import type * as Query from "@typeonce/bevy-ts/Query"
-import type * as System from "@typeonce/bevy-ts/System"
+import { Descriptor, EntityScope, Result, Schema } from "@typeonce/ritmo"
+import type * as Query from "@typeonce/ritmo/Query"
+import type * as System from "@typeonce/ritmo/System"
 import { describe, expect, it } from "tstyche"
 
 const Value = Descriptor.Resource<number>()("StabilityTypes/Value")

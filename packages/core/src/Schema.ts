@@ -89,7 +89,7 @@ export interface SchemaDefinition<
   readonly relations: Relations
 }
 
-const schemaRootTypeId = "~bevy-ts/SchemaRoot" as const
+const schemaRootTypeId = "~ritmo/SchemaRoot" as const
 
 export type RootToken<Name extends string = string> = {
   readonly kind: "SchemaRoot"

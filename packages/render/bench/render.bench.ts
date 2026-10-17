@@ -6,8 +6,8 @@
  * bookkeeping (change detection, registry lookups, callbacks) and not any
  * renderer.
  */
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
 import type { BenchCase } from "../../core/bench/harness.ts"
 
 const N = 10_000

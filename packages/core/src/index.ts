@@ -6,7 +6,7 @@
  */
 /**
  * Branding helpers for packages that author validated value types (like
- * `@typeonce/bevy-ts-math`). Game code validates through descriptors instead.
+ * `@typeonce/ritmo-math`). Game code validates through descriptors instead.
  */
 export * as Brand from "./Brand.ts"
 /**

@@ -31,7 +31,7 @@ const examples: ReadonlyArray<ExampleDefinition> = [
   {
     id: "pixi",
     label: "Pixi Motion",
-    eyebrow: "PixiJS loop, bevy-ts ECS",
+    eyebrow: "PixiJS loop, ritmo ECS",
     title: "External runtime, typed motion systems.",
     description:
       "Pixi owns the canvas and ticker. The ECS side owns descriptors, schema, resources, systems, schedules, and the sync step that projects ECS state into renderer-owned sprites.",
@@ -82,9 +82,9 @@ const examples: ReadonlyArray<ExampleDefinition> = [
     id: "space-invaders",
     label: "Space Invaders",
     eyebrow: "Arcade loop with headless Matter",
-    title: "Original Space Invaders flow, adapted to typed bevy-ts systems.",
+    title: "Original Space Invaders flow, adapted to typed ritmo systems.",
     description:
-      "This keeps the original player movement, bullet spawning, enemy descent patterns, and collision-driven despawn flow, but ports the world logic to schema-bound bevy-ts systems and renders it inside the shared browser host.",
+      "This keeps the original player movement, bullet spawning, enemy descent patterns, and collision-driven despawn flow, but ports the world logic to schema-bound ritmo systems and renders it inside the shared browser host.",
     meta: ["Arrow keys move", "Space fires with cooldown", "Matter bodies stay headless behind Pixi"],
     start: startSpaceInvadersExample
   }

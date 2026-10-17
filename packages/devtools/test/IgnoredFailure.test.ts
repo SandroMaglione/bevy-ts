@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { Clock, HostClock, Result, Schema } from "@typeonce/bevy-ts"
-import { Replay, Session } from "@typeonce/bevy-ts-devtools"
-import { Collector } from "@typeonce/bevy-ts-devtools/Monitor"
+import { Clock, HostClock, Result, Schema } from "@typeonce/ritmo"
+import { Replay, Session } from "@typeonce/ritmo-devtools"
+import { Collector } from "@typeonce/ritmo-devtools/Monitor"
 
 const Game = Schema.bind(Schema.fragment({}))
 const Load = Game.System("Ignore/Load", {}, () => Result.failure("level file missing" as const))

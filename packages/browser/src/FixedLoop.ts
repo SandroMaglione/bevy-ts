@@ -8,8 +8,8 @@
  * @module FixedLoop
  * @docGroup browser
  */
-import type * as Clock from "@typeonce/bevy-ts/Clock"
-import * as Result from "@typeonce/bevy-ts/Result"
+import type * as Clock from "@typeonce/ritmo/Clock"
+import * as Result from "@typeonce/ritmo/Result"
 
 /** One renderer or browser tick measured in milliseconds. */
 export interface Tick {

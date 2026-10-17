@@ -1,4 +1,4 @@
-import { HostClock, Result } from "@typeonce/bevy-ts"
+import { HostClock, Result } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 describe("HostClock", () => {

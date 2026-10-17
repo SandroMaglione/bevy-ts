@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import type * as Entity from "@typeonce/bevy-ts/Entity"
-import { NodeRegistry, RenderSync, packageTag } from "@typeonce/bevy-ts-render"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import type * as Entity from "@typeonce/ritmo/Entity"
+import { NodeRegistry, RenderSync, packageTag } from "@typeonce/ritmo-render"
 
 class FakeNode {
   readonly label: string
@@ -40,7 +40,7 @@ const Nodes = Descriptor.Service<NodeRegistry.NodeRegistry<FakeNode>>()("RenderT
 const Game = Schema.bind(Schema.fragment({ components: { Position, Sprite } }))
 type Id = Entity.EntityId<typeof Game.schema, typeof Game.schema>
 
-describe("@typeonce/bevy-ts-render", () => {
+describe("@typeonce/ritmo-render", () => {
   it("resolves through the workspace package entrypoint", () => {
     expect(packageTag).toBe("render")
   })

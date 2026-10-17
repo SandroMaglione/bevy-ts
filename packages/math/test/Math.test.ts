@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { Result } from "@typeonce/bevy-ts"
-import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@typeonce/bevy-ts-math"
+import { Result } from "@typeonce/ritmo"
+import { Aabb, InputAxis, Scalar, Size2, Vector2 } from "@typeonce/ritmo-math"
 
 describe("helpers", () => {
   it("matches explicit success and failure branches", () => {

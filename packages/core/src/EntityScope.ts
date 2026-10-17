@@ -46,5 +46,5 @@ export const make = <const Name extends string, Root = unknown>(
 ): EntityScope<Name, Root> => ({
   kind: "entityScope",
   name,
-  key: Symbol.for(`bevy-ts/entityScope/${name}`)
+  key: Symbol.for(`ritmo/entityScope/${name}`)
 })

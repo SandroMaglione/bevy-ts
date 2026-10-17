@@ -1,4 +1,4 @@
-import * as Result from "@typeonce/bevy-ts/Result"
+import * as Result from "@typeonce/ritmo/Result"
 import {
   ActorNodes,
   Arena,

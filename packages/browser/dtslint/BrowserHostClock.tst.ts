@@ -1,5 +1,5 @@
-import { BrowserHostClock } from "@typeonce/bevy-ts-browser"
-import type { HostClock } from "@typeonce/bevy-ts"
+import { BrowserHostClock } from "@typeonce/ritmo-browser"
+import type { HostClock } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 describe("BrowserHostClock.make", () => {

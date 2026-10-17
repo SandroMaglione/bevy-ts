@@ -1,7 +1,7 @@
 import { inspect } from "node:util"
 import { describe, expect, it } from "vitest"
-import { Descriptor, HostClock, Result, Schema } from "@typeonce/bevy-ts"
-import { Format, Invariant, Session } from "@typeonce/bevy-ts-devtools"
+import { Descriptor, HostClock, Result, Schema } from "@typeonce/ritmo"
+import { Format, Invariant, Session } from "@typeonce/ritmo-devtools"
 
 const hostClock = HostClock.test()
 

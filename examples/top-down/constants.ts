@@ -1,4 +1,4 @@
-import { Clock } from "@typeonce/bevy-ts"
+import { Clock } from "@typeonce/ritmo"
 import type { FacingValue } from "./types.ts"
 
 export const WORLD_WIDTH = 2200
