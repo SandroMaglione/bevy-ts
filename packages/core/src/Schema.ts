@@ -558,11 +558,38 @@ export namespace Schema {
     readonly schema: S
     /**
      * Creates a typed ownership scope for scene or level entities: a flat
-     * group despawned together with `commands.despawnScope(...)`. Use
-     * `Descriptor.Hierarchy` instead for a parent-child tree with ordered
-     * children, traversal, and recursive despawn.
+     * group whose members are spawned with `commands.spawnIn(...)` and
+     * despawned together. Use `Descriptor.Hierarchy` instead for a
+     * parent-child tree with ordered children, traversal, and recursive
+     * despawn.
+     *
+     * When the group lives exactly as long as a state, name the state change
+     * that ends it: `despawnOnExit: [Flow, "Playing"]` despawns every member
+     * when `applyStateTransitions(...)` commits leaving `Playing` (after its
+     * `onExit` schedules, which still see the members), and
+     * `despawnOnEnter: [Flow, "Playing"]` when it commits entering it (before
+     * its `onEnter` schedules, so what they spawn survives). Use
+     * `commands.despawnScope(...)` instead when the wipe is not tied to a
+     * state change. Scope names are unique per game.
+     *
+     * @example
+     * ```ts
+     * const RunScope = Game.EntityScope("Shooter/Run", { despawnOnExit: [Flow, "Playing"] })
+     * ```
      */
-    readonly EntityScope: <const Name extends string>(name: Name) => EntityScope.EntityScope<Name, Root>
+    readonly EntityScope: <
+      const Name extends string,
+      Enter extends Machine.StateMachine.Any = never,
+      Exit extends Machine.StateMachine.Any = never
+    >(
+      name: Name,
+      options?: {
+        /** Despawns every member when the machine enters this state, before its `onEnter` schedules run. */
+        readonly despawnOnEnter?: readonly [Enter & Machine.SameGame<Enter, Root>, Machine.StateMachine.Value<Enter>]
+        /** Despawns every member when the machine leaves this state, after its `onExit` schedules run. */
+        readonly despawnOnExit?: readonly [Exit & Machine.SameGame<Exit, Root>, Machine.StateMachine.Value<Exit>]
+      }
+    ) => EntityScope.EntityScope<Name, Root>
     /** Declares a reusable, requirement-checked read-only world projection. */
     readonly Inspector: <
       const Name extends string,

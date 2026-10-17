@@ -708,6 +708,7 @@ const makeValidatedRuntime = <
   readonly resources: Partial<Record<string, unknown>>
   readonly machines: RuntimeMachines<any> | undefined
   readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
+  readonly scopeDefinitions: ReadonlyArray<EntityScopeModule.EntityScope.Any>
   readonly debug: Debug.Option | undefined
 }): Runtime<S, Services, Resources, Root, Machines> => {
   const world = makeWorld(options.schema, streamCapacity)
@@ -806,6 +807,19 @@ const makeValidatedRuntime = <
 
   for (const provision of machineEntries) {
     currentMachines.set(provision.machine.key, provision.initial)
+  }
+
+  /**
+   * Scope despawn triggers by machine key, in scope definition order
+   * (`Game.EntityScope(name, { despawnOnExit, despawnOnEnter })`).
+   */
+  const scopeTriggers = new Map<symbol, Array<{ readonly trigger: EntityScopeModule.Trigger; readonly scope: EntityScopeModule.EntityScope.Any }>>()
+  for (const scope of options.scopeDefinitions) {
+    for (const trigger of scope.despawnOn) {
+      const triggers = scopeTriggers.get(trigger.machine.key)
+      if (triggers === undefined) scopeTriggers.set(trigger.machine.key, [{ trigger, scope }])
+      else triggers.push({ trigger, scope })
+    }
   }
 
   const appendRelationFailure = (
@@ -1732,6 +1746,36 @@ const makeValidatedRuntime = <
   }
 
   /**
+   * Despawns the scopes whose trigger matches a committed transition: leaving
+   * `snapshot.from` or entering `snapshot.to`. It runs right after the
+   * commit, so `onExit` systems still saw the members and entities spawned by
+   * `onEnter` survive. Members are the entities in the scope at that moment:
+   * commands queued by `onExit` systems and not yet applied are not.
+   */
+  const despawnTriggeredScopes = (machineKey: symbol, snapshot: Machine.TransitionSnapshot): void => {
+    const triggers = scopeTriggers.get(machineKey)
+    if (triggers === undefined) return
+    const applied: Array<Debug.AppliedCommand> = []
+    for (const { trigger, scope } of triggers) {
+      const matches = trigger.phase === "exit" ? trigger.state === snapshot.from : trigger.state === snapshot.to
+      if (!matches) continue
+      const origin = `${trigger.phase === "exit" ? "onExit" : "onEnter"}(${trigger.machine.name}=${String(trigger.state)})`
+      const effects: Array<Debug.Effect> = []
+      commandEffects = tracing ? effects : undefined
+      commandOrigin = origin
+      try {
+        commandWorld.destroyEntityScope(scope)
+      } finally {
+        commandEffects = undefined
+      }
+      if (tracing) applied.push({ tag: `despawnScope ${scope.name}`, system: origin, effects })
+    }
+    if (applied.length > 0) {
+      emit({ type: "deferred", frame: frameCount, tick: world.currentTick(), schedule: currentSchedule(), marker: "applyStateTransitions", commands: applied })
+    }
+  }
+
+  /**
    * Applies queued commands, then queued machine transitions, running the
    * matching exit, transition, and enter schedules from the bundle.
    */
@@ -1797,6 +1841,7 @@ const makeValidatedRuntime = <
       changedMachines.add(machineKey)
       transitionEvents.append(machineKey, world.advanceTick(), [snapshot])
       if (tracing) traceTransition(machineKey, snapshot, "applied")
+      despawnTriggeredScopes(machineKey, snapshot)
 
       for (const schedule of schedules) {
         const transition = schedule.transition
@@ -2406,6 +2451,8 @@ export const make = <
   readonly resources?: Resources
   readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
+  /** Scopes whose members a committed state change despawns; `Game.Runtime.make` passes every `Game.EntityScope`. */
+  readonly scopeDefinitions?: ReadonlyArray<EntityScopeModule.EntityScope.Any>
   /** Attaches a `debug` handle to the runtime, timed by `hostClock`; see the `Debug` module. */
   readonly debug?: Enabled
 }): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>, Enabled> => {
@@ -2424,6 +2471,7 @@ export const make = <
     resources: validated.value,
     machines: options.machines,
     machineDefinitions: options.machineDefinitions ?? [],
+    scopeDefinitions: options.scopeDefinitions ?? [],
     debug: options.debug
   })
   return (fallible ? Result.success(runtime) : runtime) as never

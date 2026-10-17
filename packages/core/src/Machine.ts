@@ -271,6 +271,23 @@ export namespace StateMachine {
     TransitionScheduleDefinition<S, Any, Requirement.Requirement, Root, SystemFailure>
 }
 
+/**
+ * `unknown` when `M` was defined by the game rooted at `Root`; otherwise a
+ * type naming the fix, so passing another game's machine fails with that
+ * message.
+ */
+export type SameGame<M, Root> =
+  M extends StateMachineDefinition<infer Name, readonly [StateValue, ...StateValue[]], infer MachineRoot>
+    ? [Root] extends [MachineRoot]
+      ? [MachineRoot] extends [Root]
+        ? unknown
+        : ForeignMachine<`${Name} is a state machine of another game: use a machine defined with this game's Game.StateMachine(...)`>
+      : ForeignMachine<`${Name} is a state machine of another game: use a machine defined with this game's Game.StateMachine(...)`>
+    : unknown
+
+/** The message type `SameGame` resolves to: a type error prints `Message`. */
+type ForeignMachine<Message extends string> = { readonly __foreignMachine__: Message }
+
 /** Extracts the machine token from one declared machine access slot. */
 type MachineFromAccess<Access> =
   Access extends { readonly machine: infer M extends StateMachine.Any } ? M : never
