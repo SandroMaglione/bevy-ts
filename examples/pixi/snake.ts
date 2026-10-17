@@ -139,6 +139,9 @@ const randomSeedFromNow = (): number => {
   return seed === 0 ? 1 : seed
 }
 
+/** The components of the snake's head (`makeHeadDraft`). */
+const HeadParts = [Position, PreviousPosition, Velocity, SnakeHead] as const
+
 const makeHeadDraft = () =>
   Game.Command.spawn(
     [Position, INITIAL_HEAD_POSITION],
@@ -146,6 +149,9 @@ const makeHeadDraft = () =>
     [Velocity, INITIAL_VELOCITY],
     [SnakeHead, {}]
   )
+
+/** The components of a body segment (`makeTailDraft`). */
+const TailParts = [Position, PreviousPosition, SnakeBody] as const
 
 const makeTailDraft = (
   parent: Entity.EntityId<typeof schema, typeof Root>,
@@ -162,6 +168,9 @@ const makeTailDraft = (
     ChildOf,
     parent
   )
+
+/** The components of a food pellet (`makeFoodDraft`). */
+const FoodParts = [Position, PreviousPosition, Food] as const
 
 const makeFoodDraft = (position: GridPosition) =>
   Game.Command.spawn(
@@ -353,7 +362,11 @@ const ResetGameSystem = Game.System(
       score: Game.System.writeResource(Score),
       pendingGrowth: Game.System.writeResource(PendingGrowth),
       reason: Game.System.writeResource(GameOverReason)
-    }
+    },
+    commands: Game.System.commands(
+      Game.System.despawns(SnakeHead, SnakeBody, Food),
+      Game.System.spawns(...HeadParts, ...TailParts)
+    )
   },
   ({ queries, resources, commands }) =>
     {
@@ -362,13 +375,13 @@ const ResetGameSystem = Game.System(
       resources.reason.set(null)
 
       for (const match of queries.head.each()) {
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
       for (const match of queries.body.each()) {
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
       for (const match of queries.food.each()) {
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
 
       const headId = commands.spawn(makeHeadDraft())
@@ -561,7 +574,8 @@ const ResolveFoodEatenSystem = Game.System(
     resources: {
       score: Game.System.writeResource(Score),
       pendingGrowth: Game.System.writeResource(PendingGrowth)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Food))
   },
   ({ queries, events, resources, commands }) =>
     {
@@ -573,7 +587,7 @@ const ResolveFoodEatenSystem = Game.System(
           continue
         }
 
-        commands.despawn(food.value.entity.id)
+        commands.despawn(food.value.entity)
         resources.score.update((score) => score + 1)
         resources.pendingGrowth.update((growth) => growth + 1)
       }
@@ -590,7 +604,8 @@ const GrowSnakeSystem = Game.System(
     },
     resources: {
       pendingGrowth: Game.System.writeResource(PendingGrowth)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...TailParts))
   },
   ({ queries, resources, commands }) =>
     {
@@ -683,7 +698,8 @@ const EnsureFoodSystem = Game.System(
     },
     nextMachines: {
       phase: Game.System.nextState(GamePhase)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...FoodParts))
   },
   ({ queries, resources, nextMachines, commands }) =>
     {

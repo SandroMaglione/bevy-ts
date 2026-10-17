@@ -4,8 +4,9 @@ import * as Runtime from "@typeonce/bevy-ts/Runtime"
 
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("ScheduleWhen/Log")
 const Ping = Descriptor.Event<number>()("ScheduleWhen/Ping")
+const Marker = Descriptor.Tag("ScheduleWhen/Marker")
 
-const Game = Schema.bind(Schema.fragment({ resources: { Log }, events: { Ping } }))
+const Game = Schema.bind(Schema.fragment({ components: { Marker }, resources: { Log }, events: { Ping } }))
 const Mode = Game.StateMachine("ScheduleWhen/Mode", ["Playing", "Paused"] as const)
 const Round = Game.StateMachine("ScheduleWhen/Round", ["Live", "Over"] as const)
 
@@ -64,8 +65,10 @@ describe("Schedule.when", () => {
   })
 
   it("still runs marker steps in the group", () => {
-    const Spawn = Game.System("ScheduleWhen/Queue", {}, ({ commands }) => {
-      commands.spawn(Game.Command.spawn())
+    const Spawn = Game.System("ScheduleWhen/Queue", {
+      commands: Game.System.commands(Game.System.spawns(Marker))
+    }, ({ commands }) => {
+      commands.spawn(Game.Command.spawn([Marker, {}]))
     })
     const runtime = makeRuntime("Playing")
     runtime.tick(Game.Schedule(Spawn))

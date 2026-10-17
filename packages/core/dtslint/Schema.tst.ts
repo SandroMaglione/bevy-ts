@@ -455,7 +455,8 @@ describe("Schema", () => {
         relationFailures: {
           targeting: Game.System.readRelationFailures(Targeting),
           childOf: Game.System.readRelationFailures(ChildOf)
-        }
+        },
+        commands: Game.System.commands(Game.System.relates(Targeting, ChildOf))
       },
       ({ queries, lookup, commands, relationFailures }) =>
         {

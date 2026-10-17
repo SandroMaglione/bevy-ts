@@ -114,7 +114,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnMultiple",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position))
       },
       ({ commands }) =>
         {
@@ -190,7 +191,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnOneForSingleOptional",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position))
       },
       ({ commands }) =>
         {
@@ -245,7 +247,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnMultipleForSingleOptional",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position))
       },
       ({ commands }) =>
         {
@@ -291,7 +294,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnOneForLookup",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position))
       },
       ({ commands }) =>
         {
@@ -346,7 +350,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnFiltered",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position, Hidden))
       },
       ({ commands }) =>
         {
@@ -396,7 +401,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnOptional",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position, Velocity))
       },
       ({ commands }) =>
         {
@@ -457,7 +463,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnLookupOptional",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position))
       },
       ({ commands }) =>
         {
@@ -517,7 +524,8 @@ describe("Runtime query and lookup", () => {
     const spawn = System.System(
       "RuntimeQuery/SpawnWritable",
       {
-        schema
+        schema,
+        commands: Command.commands(Command.spawns(Position))
       },
       ({ commands }) =>
         {
@@ -588,7 +596,7 @@ describe("Runtime query and lookup", () => {
 
     const spawn = Game.System(
       "RuntimeQuery/SpawnHandle",
-      {},
+      { commands: Game.System.commands(Game.System.spawns(Position)) },
       ({ commands }) =>
         {
           const target = commands.spawn(Game.Command.spawn([Position, { x: 5, y: 9 }] as const))
@@ -640,6 +648,7 @@ describe("Runtime query and lookup", () => {
             }
           })
         },
+        commands: Game.System.commands(Game.System.despawns(Position))
       },
       ({ queries, commands }) =>
         {
@@ -648,7 +657,7 @@ describe("Runtime query and lookup", () => {
           }
           const result = queries.positions.getHandle(currentHandle)
           if (result.ok) {
-            commands.despawn(result.value.entity.id)
+            commands.despawn(result.value.entity)
           }
         }
     )
@@ -691,7 +700,8 @@ describe("Runtime query and lookup", () => {
         },
         events: {
           followTarget: Game.System.writeEvent(FollowTarget)
-        }
+        },
+        commands: Game.System.commands(Game.System.spawns(Position))
       },
       ({ resources, events, commands }) =>
         {
@@ -746,11 +756,23 @@ describe("Runtime query and lookup", () => {
 
     const destroy = Game.System(
       "RuntimeQuery/DestroyStoredHandleTarget",
-      {},
-      ({ commands }) =>
+      {
+        queries: {
+          positions: Game.Query({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          })
+        },
+        commands: Game.System.commands(Game.System.despawns(Position))
+      },
+      ({ queries, commands }) =>
         {
           if (spawnedTarget) {
-            commands.despawn(spawnedTarget)
+            const target = queries.positions.get(spawnedTarget)
+            if (target.ok) {
+              commands.despawn(target.value.entity)
+            }
           }
         }
     )

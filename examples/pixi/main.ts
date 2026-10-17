@@ -56,6 +56,7 @@ const SetupSceneSystem = Game.System(
     services: {
       pixi: Game.System.service(PixiHost),
     },
+    commands: Game.System.commands(Game.System.spawns(Position, Velocity, Renderable, Tint)),
   },
   ({ commands, services }) =>
     {

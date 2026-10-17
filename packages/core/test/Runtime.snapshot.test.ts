@@ -46,11 +46,12 @@ const readWorld = (runtime: ReturnType<typeof makeRuntime>) => {
 const populate = (runtime: ReturnType<typeof makeRuntime>) => {
   const Setup = Game.System("Snapshot/Setup", {
     nextMachines: { flow: Game.System.nextState(Flow) },
-    resources: { score: Game.System.writeResource(Score) }
+    resources: { score: Game.System.writeResource(Score) },
+    commands: Game.System.commands(Game.System.spawns(Name, Position, Sprite, Target))
   }, ({ commands, nextMachines, resources }) => {
     const parentDraft = Game.Command.spawn([Name, "parent"], Game.Command.entryRaw(Position, { x: 1, y: 2 }))
     if (!parentDraft.ok) throw new Error("invalid fixture")
-    const parent = commands.spawn(Game.Command.insert(parentDraft.value, [Sprite, { frame: 3 }]))
+    const parent = commands.spawn(Game.Command.extend(parentDraft.value, [Sprite, { frame: 3 }]))
     const first = commands.spawn(Game.Command.relate(Game.Command.spawn([Name, "first"]), ChildOf, parent))
     commands.spawn(Game.Command.relate(Game.Command.spawn([Name, "second"]), ChildOf, parent))
     commands.spawn(Game.Command.spawn([Target, { handle: Game.Entity.handle(first, Name) }]))
@@ -118,7 +119,9 @@ describe("Runtime snapshots", () => {
     const target = makeRuntime(0)
     target.restore(JSON.parse(JSON.stringify(source.snapshot())))
 
-    const Spawn = Game.System("Snapshot/SpawnMore", {}, ({ commands }) => {
+    const Spawn = Game.System("Snapshot/SpawnMore", {
+      commands: Game.System.commands(Game.System.spawns(Name))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Name, "later"]))
     })
     target.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))

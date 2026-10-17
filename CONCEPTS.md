@@ -53,13 +53,17 @@ const Move = Game.System("Concepts/Move", {
 ## 4. Structural changes are commands
 
 ```ts
-const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Concepts/Spawn", {
+  commands: Game.System.commands(Game.System.spawns(Health, Position))
+}, ({ commands }) => {
   const enemy = commands.spawn(Game.Command.spawn([Health, 3], [Position, { x: 10, y: 0 }]))
   commands.spawn(Game.Command.relate(Game.Command.spawn([Health, 1]), ChildOf, enemy))
 })
 ```
 
-- `commands` covers spawn, insert, remove, despawn, relate, and scope-based cleanup (`spawnIn` / `despawnScope`).
+- A system has `commands` only when its spec declares them, and only for what it names: `spawns(...)` (every component of the draft), `inserts(...)`, `removes(...)`, `despawns(...)`, `despawnsScope(scope)`, and `relates(...)`. Without the declaration, `commands` is a type naming the fix.
+- `despawn` takes `match.entity` from a query that proves one of the `despawns` components, never a raw id. With only an id, resolve it first: `const enemy = queries.enemies.get(id); if (enemy.ok) commands.despawn(enemy.value.entity)`.
+- `Game.Command.extend(draft, ...entries)` adds entries to a draft before it is spawned; `commands.insert` changes an entity that already exists.
 - Commands are applied only when a schedule reaches `applyDeferred()`. `commands.spawn` returns the entity id immediately.
 - `Game.Command.spawn(...)` returns a draft, or a `Result` of one if any entry can fail validation (for example `Game.Command.entryRaw(Position, raw)`).
 

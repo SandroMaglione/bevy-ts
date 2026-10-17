@@ -1,6 +1,6 @@
 
 import { levelBounds, levelSolids } from "../content.ts"
-import { playerDraft, makeSolidDraft } from "../drafts.ts"
+import { PlayerParts, SolidParts, playerDraft, makeSolidDraft } from "../drafts.ts"
 import { PlayerReadQuery } from "../queries.ts"
 import { Game, InputState, LevelScope, LoseMessage, PlayerContacts, SessionState } from "../schema.ts"
 import { makeInitialPlayerContacts } from "../runtime.ts"
@@ -72,7 +72,9 @@ export const ResetWorldResourcesOnPlayingEnterSystem = Game.System(
 
 export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
   "Platformer/DespawnLevelEntitiesOnPlayingEnter",
-  {},
+  {
+    commands: Game.System.commands(Game.System.despawnsScope(LevelScope))
+  },
   ({ commands }) =>
     {
       commands.despawnScope(LevelScope)
@@ -81,7 +83,9 @@ export const DespawnLevelEntitiesOnPlayingEnterSystem = Game.System(
 
 export const SpawnWorldOnPlayingEnterSystem = Game.System(
   "Platformer/SpawnWorldOnPlayingEnter",
-  {},
+  {
+    commands: Game.System.commands(Game.System.spawns(...PlayerParts, ...SolidParts))
+  },
   ({ commands }) =>
     {
       if (playerDraft.ok) {

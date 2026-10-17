@@ -72,7 +72,9 @@ describe("Condition.check", () => {
     const enemiesLeft = Game.Condition.check("enemiesLeft", {
       queries: { enemies: Game.Query({ selection: { enemy: Game.Query.read(Enemy) } }) }
     }, ({ queries }) => queries.enemies.each().length > 0)
-    const Spawn = Game.System("Check/SpawnEnemy", {}, ({ commands }) => {
+    const Spawn = Game.System("Check/SpawnEnemy", {
+      commands: Game.System.commands(Game.System.spawns(Enemy))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Enemy, {}]))
     })
     const runtime = makeRuntime()
@@ -86,7 +88,10 @@ describe("Condition.check", () => {
     const seenEvents: Array<ReadonlyArray<number>> = []
     const seenAdded: Array<number> = []
     const always = Game.Condition.check("always", { resources: { freeze: Game.System.readResource(Freeze) } }, () => true)
-    const Emit = Game.System("Check/Emit", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events, commands }) => {
+    const Emit = Game.System("Check/Emit", {
+      events: { ping: Game.System.writeEvent(Ping) },
+      commands: Game.System.commands(Game.System.spawns(Enemy))
+    }, ({ events, commands }) => {
       events.ping.emit(1)
       commands.spawn(Game.Command.spawn([Enemy, {}]))
     })

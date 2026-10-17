@@ -57,7 +57,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
     }),
     Command: {
       spawn: Command.spawn,
-      insert: Command.insert,
+      extend: Command.extend,
       entry: Command.entry,
       entryRaw: Command.entryRaw,
       relate: Command.relate
@@ -81,6 +81,13 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         readEvent: System.readEvent,
         writeEvent: System.writeEvent,
         thisTick: System.thisTick,
+        commands: Command.commands,
+        spawns: Command.spawns,
+        inserts: Command.inserts,
+        removes: Command.removes,
+        despawns: Command.despawns,
+        despawnsScope: Command.despawnsScope,
+        relates: Command.relates,
         service: System.service,
         machine: System.machine,
         nextState: System.nextState,

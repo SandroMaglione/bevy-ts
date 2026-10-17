@@ -53,7 +53,9 @@ const Move = Game.System("Concepts/Move", {
 })
 
 // 5. Structural changes are commands, applied at `applyDeferred()`.
-const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Concepts/Spawn", {
+  commands: Game.System.commands(Game.System.spawns(Health, Position, Velocity, Target))
+}, ({ commands }) => {
   const enemy = commands.spawn(Game.Command.spawn([Health, 3], [Position, { x: 10, y: 0 }]))
   commands.spawn(Game.Command.spawn(
     [Position, { x: 0, y: 0 }],

@@ -19,7 +19,9 @@ describe("Runtime stabilization APIs", () => {
       }
     })
 
-    const spawn = Game.System("Stability/Spawn", {}, ({ commands }) =>
+    const spawn = Game.System("Stability/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) =>
       {
         commands.spawn(Game.Command.spawn([Position, { x: 1 }]))
       }
@@ -30,7 +32,8 @@ describe("Runtime stabilization APIs", () => {
         queries: { positions: Positions },
         resources: { count: Game.System.writeResource(Count) },
         events: { signal: Game.System.writeEvent(Signal) },
-        nextMachines: { mode: Game.System.nextState(Mode) }
+        nextMachines: { mode: Game.System.nextState(Mode) },
+        commands: Game.System.commands(Game.System.spawns(Position))
       },
       ({ queries, resources, events, nextMachines, commands }) => {
         const position = queries.positions.single()
@@ -100,11 +103,15 @@ describe("Runtime stabilization APIs", () => {
       selection: { actor: Game.Query.read(Actor) }
     })
 
-    const spawn = Game.System("Scopes/Spawn", {}, ({ commands }) => {
+    const spawn = Game.System("Scopes/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Actor))
+    }, ({ commands }) => {
       commands.spawnIn(Level, Game.Command.spawn([Actor, { name: "level" }]))
       commands.spawn(Game.Command.spawn([Actor, { name: "persistent" }]))
     })
-    const clear = Game.System("Scopes/Clear", {}, ({ commands }) => {
+    const clear = Game.System("Scopes/Clear", {
+      commands: Game.System.commands(Game.System.despawnsScope(Level))
+    }, ({ commands }) => {
       commands.despawnScope(Level)
     })
     let names: ReadonlyArray<string> = []
@@ -131,7 +138,9 @@ describe("Runtime stabilization APIs", () => {
       resources: { Score }
     }))
 
-    const spawn = Game.System("Inspector/Spawn", {}, ({ commands }) => {
+    const spawn = Game.System("Inspector/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Position, { x: 4 }]))
     })
     const snapshot = Game.Inspector(

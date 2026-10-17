@@ -8,12 +8,14 @@ import {
   BrowserHost,
   DeltaTime,
   DespawnableQuery,
+  Food,
   FoodQuery,
   Game,
   GenerationClock,
   GenerationIndex,
   NextGeneration,
   PopulationStats,
+  Renderable,
   RngSeed,
   SimulationPhase,
   Summary
@@ -33,6 +35,8 @@ import {
   randomBetween,
   randomUnit,
   sampleFoundersFromSurvivors,
+  AgentParts,
+  FoodParts,
   spawnAgentDraft,
   spawnFoodDraft,
   wrap
@@ -60,7 +64,8 @@ export const SetupWorldSystem = Game.System(
       rngSeed: Game.System.writeResource(RngSeed),
       populationStats: Game.System.writeResource(PopulationStats),
       summary: Game.System.writeResource(Summary)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...FoodParts, ...AgentParts))
   },
   ({ commands, resources }) =>
     {
@@ -110,7 +115,8 @@ export const ResetGenerationOnRunningEnterSystem = Game.System(
     resources: {
       generationClock: Game.System.writeResource(GenerationClock),
       summary: Game.System.writeResource(Summary)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Renderable))
   },
   ({ queries, commands, resources }) =>
     {
@@ -122,7 +128,7 @@ export const ResetGenerationOnRunningEnterSystem = Game.System(
       resources.summary.set(makeRunningSummary())
 
       for (const match of queries.despawnable.each()) {
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
     }
 )
@@ -481,12 +487,13 @@ export const ResolveFoodAndHazardSystem = Game.System(
     queries: {
       agents: AgentTickQuery,
       foods: FoodQuery
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Food))
   },
   ({ queries, commands }) =>
     {
       const foods = queries.foods.each().map((match) => ({
-        entityId: match.entity.id,
+        entity: match.entity,
         position: match.data.position.get(),
         nutrition: match.data.food.get().nutrition
       }))
@@ -500,7 +507,7 @@ export const ResolveFoodAndHazardSystem = Game.System(
             continue
           }
 
-          commands.despawn(food.entityId)
+          commands.despawn(food.entity)
           match.data.vitals.update((vitals) => ({
             ...vitals,
             health: clamp(vitals.health + food.nutrition * 0.2, 0, agent.maxHealth),
@@ -527,7 +534,8 @@ export const ResolveAgentInteractionsSystem = Game.System(
       generationIndex: Game.System.readResource(GenerationIndex),
       rngSeed: Game.System.writeResource(RngSeed),
       populationStats: Game.System.writeResource(PopulationStats)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...AgentParts))
   },
   ({ queries, resources, commands }) =>
     {
@@ -735,7 +743,8 @@ export const CleanupDeadAgentsSystem = Game.System(
     },
     resources: {
       populationStats: Game.System.writeResource(PopulationStats)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Agent))
   },
   ({ queries, commands, resources }) =>
     {
@@ -747,7 +756,7 @@ export const CleanupDeadAgentsSystem = Game.System(
         }
 
         deaths += 1
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
 
       if (deaths > 0) {
@@ -770,7 +779,8 @@ export const MaintainFoodSystem = Game.System(
     resources: {
       arena: Game.System.readResource(Arena),
       rngSeed: Game.System.writeResource(RngSeed)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...FoodParts))
   },
   ({ queries, commands, resources }) =>
     {

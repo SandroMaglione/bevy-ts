@@ -95,7 +95,7 @@ describe("@typeonce/bevy-ts-render", () => {
     })
 
     const ids: Array<Id> = []
-    const Spawn = Game.System("RenderTest/Spawn", {}, ({ commands }) => {
+    const Spawn = Game.System("RenderTest/Spawn", { commands: Game.System.commands(Game.System.spawns(Position, Sprite)) }, ({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Position, { x: 1, y: 2 }], [Sprite, { label: "hero" }])))
       commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }]))
     })
@@ -106,8 +106,12 @@ describe("@typeonce/bevy-ts-render", () => {
         data.position.update((position) => ({ x: position.x + 10, y: position.y }))
       }
     })
-    const Despawn = Game.System("RenderTest/Despawn", {}, ({ commands }) => {
-      commands.despawn(ids[0]!)
+    const Despawn = Game.System("RenderTest/Despawn", {
+      queries: { sprites: Game.Query({ selection: { sprite: Game.Query.read(Sprite) } }) },
+      commands: Game.System.commands(Game.System.despawns(Sprite))
+    }, ({ queries, commands }) => {
+      const hero = queries.sprites.get(ids[0]!)
+      if (hero.ok) commands.despawn(hero.value.entity)
     })
 
     const runtime = Game.Runtime.make({
@@ -146,7 +150,7 @@ describe("@typeonce/bevy-ts-render", () => {
         node.x = transform.x * resources.zoom.get()
       }
     })
-    const Spawn = Zoomed.System("RenderTest/SpawnZoomed", {}, ({ commands }) => {
+    const Spawn = Zoomed.System("RenderTest/SpawnZoomed", { commands: Zoomed.System.commands(Zoomed.System.spawns(Position, Sprite)) }, ({ commands }) => {
       commands.spawn(Zoomed.Command.spawn([Position, { x: 3, y: 0 }], [Sprite, { label: "hero" }]))
       commands.spawn(Zoomed.Command.spawn([Position, { x: 1, y: 0 }]))
     })
@@ -181,7 +185,7 @@ describe("@typeonce/bevy-ts-render", () => {
         applied.push(`${node.label}:${node.x}:${node.y}`)
       }
     })
-    const Spawn = Animated.System("RenderTest/SpawnAnimated", {}, ({ commands }) => {
+    const Spawn = Animated.System("RenderTest/SpawnAnimated", { commands: Animated.System.commands(Animated.System.spawns(Position, Sprite, Frame)) }, ({ commands }) => {
       commands.spawn(Animated.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "hero" }], [Frame, 0]))
     })
     const step = (moves: boolean) => Animated.System(`RenderTest/Step${moves}`, {
@@ -214,13 +218,13 @@ describe("@typeonce/bevy-ts-render", () => {
       apply: () => {}
     })
     const ids: Array<Id> = []
-    const Spawn = Game.System("RenderTest/SpawnReadd", {}, ({ commands }) => {
+    const Spawn = Game.System("RenderTest/SpawnReadd", { commands: Game.System.commands(Game.System.spawns(Position, Sprite)) }, ({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "old" }])))
     })
-    const Swap = Game.System("RenderTest/Swap", {}, ({ commands }) => {
+    const Swap = Game.System("RenderTest/Swap", { commands: Game.System.commands(Game.System.removes(Sprite)) }, ({ commands }) => {
       commands.remove(ids[0]!, Sprite)
     })
-    const Readd = Game.System("RenderTest/ReaddSprite", {}, ({ commands }) => {
+    const Readd = Game.System("RenderTest/ReaddSprite", { commands: Game.System.commands(Game.System.inserts(Sprite)) }, ({ commands }) => {
       commands.insert(ids[0]!, [Sprite, { label: "new" }])
     })
     const runtime = Game.Runtime.make({
@@ -247,7 +251,7 @@ describe("@typeonce/bevy-ts-render", () => {
         node.x = transform.x
       }
     })
-    const Spawn = Game.System("RenderTest/SpawnGated", {}, ({ commands }) => {
+    const Spawn = Game.System("RenderTest/SpawnGated", { commands: Game.System.commands(Game.System.spawns(Position, Sprite)) }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Position, { x: 4, y: 0 }], [Sprite, { label: "late" }]))
     })
     const Show = Game.System("RenderTest/Show", { nextMachines: { mode: Game.System.nextState(Mode) } }, ({ nextMachines }) => {
@@ -277,7 +281,7 @@ describe("@typeonce/bevy-ts-render", () => {
       }
     })
     const ids: Array<Id> = []
-    const Spawn = Game.System("RenderTest/SpawnNoTransform", {}, ({ commands }) => {
+    const Spawn = Game.System("RenderTest/SpawnNoTransform", { commands: Game.System.commands(Game.System.spawns(Position, Sprite)) }, ({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "a" }])))
     })
     const Move = Game.System("RenderTest/MoveNoTransform", { queries: { all: Game.Query({ selection: { position: Game.Query.write(Position) } }) } }, ({ queries }) => {
@@ -317,7 +321,7 @@ describe("@typeonce/bevy-ts-render", () => {
         node.y = y
       }
     })
-    const Spawn = Moving.System("RenderTest/SpawnMoving", {}, ({ commands }) => {
+    const Spawn = Moving.System("RenderTest/SpawnMoving", { commands: Moving.System.commands(Moving.System.spawns(Position, Previous, Sprite)) }, ({ commands }) => {
       commands.spawn(Moving.Command.spawn([Position, { x: 10, y: 20 }], [Previous, { x: 0, y: 0 }], [Sprite, { label: "moving" }]))
       // No node: has both positions but no renderable.
       commands.spawn(Moving.Command.spawn([Position, { x: 1, y: 1 }], [Previous, { x: 0, y: 0 }]))
@@ -361,7 +365,7 @@ describe("@typeonce/bevy-ts-render", () => {
         placed.push([x, y, z])
       }
     })
-    const Spawn = Space.System("RenderTest/SpawnSpatial", {}, ({ commands }) => {
+    const Spawn = Space.System("RenderTest/SpawnSpatial", { commands: Space.System.commands(Space.System.spawns(Spatial, PreviousSpatial, Sprite)) }, ({ commands }) => {
       commands.spawn(Space.Command.spawn([Spatial, { x: 10, y: 20, z: 40 }], [PreviousSpatial, { x: 0, y: 0, z: 0 }], [Sprite, { label: "spatial" }]))
     })
     const runtime = Space.Runtime.make({

@@ -118,7 +118,9 @@ only to delete a level. Entity scopes model ownership directly.
 ```ts
 const Level = Game.EntityScope("Game/Level")
 
-const LoadLevel = Game.System("Game/LoadLevel", {}, ({ commands }) =>
+const LoadLevel = Game.System("Game/LoadLevel", {
+  commands: Game.System.commands(Game.System.spawns(Position, Health))
+}, ({ commands }) =>
   {
     commands.spawnIn(Level, Game.Command.spawn(
       Game.Command.entry(Position, { x: 10, y: 20 }),
@@ -127,7 +129,9 @@ const LoadLevel = Game.System("Game/LoadLevel", {}, ({ commands }) =>
   }
 )
 
-const UnloadLevel = Game.System("Game/UnloadLevel", {}, ({ commands }) =>
+const UnloadLevel = Game.System("Game/UnloadLevel", {
+  commands: Game.System.commands(Game.System.despawnsScope(Level))
+}, ({ commands }) =>
   { commands.despawnScope(Level) }
 )
 ```

@@ -13,10 +13,10 @@ const Move = Game.System("Mon/Move", { queries: { movers: Movers }, events: { hi
   for (const { data } of queries.movers.each()) data.position.update((position) => ({ x: position.x + 1 }))
   events.hit.emit(1)
 })
-const Fire = Game.System("Mon/Fire", {}, ({ commands }) => {
+const Fire = Game.System("Mon/Fire", { commands: Game.System.commands(Game.System.spawns(Shot)) }, ({ commands }) => {
   commands.spawn(Game.Command.spawn([Shot, { speed: Number.NaN }]))
 })
-const Spawn = Game.System("Mon/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Mon/Spawn", { commands: Game.System.commands(Game.System.spawns(Position)) }, ({ commands }) => {
   commands.spawn(Game.Command.spawn([Position, { x: 0 }]))
 })
 const paused = Game.Condition.check("paused", { resources: { paused: Game.System.readResource(Paused) } }, ({ resources }) => resources.paused.get())

@@ -72,7 +72,7 @@ describe("System", () => {
               readonly velocity: Query.ReadonlyValue<{ x: number; y: number }>
             }, {
               readonly position: Query.ReadonlyValue<Vector2.Vector2>
-            }>
+            }, unknown, typeof SafePosition | typeof Velocity>
             readonly data: QueryTypes.Cells<typeof query>
           }>>()
 
@@ -147,7 +147,7 @@ describe("System", () => {
               readonly velocity: Query.ReadonlyValue<{ x: number; y: number }>
             }, {
               readonly position: Query.ReadonlyValue<Vector2.Vector2>
-            }>
+            }, unknown, typeof SafePosition | typeof Velocity>
             readonly data: QueryTypes.Cells<typeof query>
           }>>()
 

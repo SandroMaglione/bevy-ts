@@ -10,7 +10,7 @@ const Input = Descriptor.Service<Replay.Source<{ readonly dx: number }>>()("Repl
 const Config = Descriptor.Service<{ readonly scale: number }>()("Replay/Config")
 const Game = Schema.bind(Schema.fragment({ components: { Position }, resources: { Steps }, events: { Bump } }))
 
-const Spawn = Game.System("Replay/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Replay/Spawn", { commands: Game.System.commands(Game.System.spawns(Position)) }, ({ commands }) => {
   const draft = Game.Command.spawn(Game.Command.entryRaw(Position, { x: 0 }))
   if (draft.ok) commands.spawn(draft.value)
 })

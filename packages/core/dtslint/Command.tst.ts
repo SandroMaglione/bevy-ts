@@ -40,7 +40,7 @@ describe("Command", () => {
   })
 
   it("insertMany widens an existing draft proof", () => {
-    const draft = Command.insert(
+    const draft = Command.extend(
       Command.spawn<typeof schema>(),
       [Position, { x: 0, y: 0 }] as const,
       [Velocity, { x: 1, y: 1 }] as const
@@ -87,7 +87,7 @@ describe("Command", () => {
     const entry = Game.Command.entryRaw(SafePosition, { x: 0, y: 0 })
     expect(entry).type.toBe<Result.Result<Command.Entry<typeof SafePosition>, Vector2.Error>>()
 
-    const inserted = Game.Command.insert(
+    const inserted = Game.Command.extend(
       Game.Command.spawn([Position, { x: 1, y: 1 }]), Game.Command.entryRaw(SafePosition, { x: 2, y: 3 }))
 
     expect(inserted).type.toBe<Result.Result<Entity.EntityDraft<typeof schema, {

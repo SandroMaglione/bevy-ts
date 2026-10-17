@@ -1,4 +1,5 @@
 import { Decode, Descriptor, Result, Schema } from "@typeonce/bevy-ts"
+import type { SpawnedId } from "@typeonce/bevy-ts/Command"
 import type { EntityId } from "@typeonce/bevy-ts/Entity"
 import type { Query } from "@typeonce/bevy-ts/Query"
 import * as Vector2 from "@typeonce/bevy-ts-math/Vector2"
@@ -87,9 +88,17 @@ describe("query cells", () => {
 
 describe("commands", () => {
   it("spawn returns a typed id and insert checks each entry against its descriptor", () => {
-    Game.System("Cells/Commands", {}, ({ commands }) => {
+    Game.System("Cells/Commands", {
+      commands: Game.System.commands(
+        Game.System.spawns(Health),
+        Game.System.inserts(Health, Position),
+        Game.System.removes(Health),
+        Game.System.despawns(Health)
+      )
+    }, ({ commands }) => {
       const id = commands.spawn(Game.Command.spawn([Health, 1]))
-      expect(id).type.toBe<EntityId<typeof Game.schema, typeof Game.schema>>()
+      expect(id).type.toBe<SpawnedId<typeof Game.schema, typeof Game.schema, "Cells/Health">>()
+      expect(id).type.toBeAssignableTo<EntityId<typeof Game.schema, typeof Game.schema>>()
       expect(commands.insert).type.toBeCallableWith(id, [Health, 2], [Position, { x: 0, y: 0 }])
       expect(commands.insert).type.not.toBeCallableWith(id, [Health, "2"])
       expect(commands.insert).type.not.toBeCallableWith(id, [Position, 2])

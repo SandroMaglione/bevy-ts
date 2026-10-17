@@ -309,6 +309,7 @@ interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAcc
   readonly pauseWhen?: ReadonlyArray<Machine.Condition<Root>>
   readonly transitions?: Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>>
   readonly local?: () => unknown
+  readonly commands?: Command.CommandAccess<ComponentDescriptor<S>, ComponentDescriptor<S>, ComponentDescriptor<S>, ComponentDescriptor<S>, EntityScope.EntityScope<string, Root>, RelationDescriptor<S>>
 }
 
 interface BoundCheckAccess<S extends Schema.Any, Root> extends Condition.CheckAccessInput {
@@ -528,8 +529,11 @@ export namespace Schema {
       spawn: <const Entries extends ReadonlyArray<Command.SpawnEntry<S>> = readonly []>(
         ...entries: Entries
       ) => Command.DraftFor<S, Entries, {}, Root>
-      /** Adds entries to a draft. */
-      insert: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SpawnEntry<S>>>(
+      /**
+       * Adds entries to a draft (a value not yet spawned). Use
+       * `commands.insert` for an entity that already exists.
+       */
+      extend: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SpawnEntry<S>>>(
         draft: Entity.EntityDraft<S, P, Root>,
         ...entries: Entries
       ) => Command.DraftFor<S, Entries, P, Root>
@@ -603,6 +607,23 @@ export namespace Schema {
       readRemoved: <D extends ComponentDescriptor<S>>(descriptor: D) => System.RemovedRead<D>
       readDespawned: () => System.DespawnedRead
       readRelationFailures: <R extends RelationDescriptor<S>>(relation: R) => System.RelationFailureRead<R>
+      /**
+       * Declares the commands a system may queue, for its spec's `commands`:
+       * `Game.System.commands(Game.System.spawns(Enemy, Position), Game.System.despawns(Enemy))`.
+       */
+      commands: typeof Command.commands
+      /** Allows spawning drafts whose components are all among these; see `Command.spawns`. */
+      spawns: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"spawns", Components[number]>
+      /** Allows `insert` (add or replace at the next `applyDeferred()`) of these; see `Command.inserts`. */
+      inserts: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"inserts", Components[number]>
+      /** Allows `remove` of these. */
+      removes: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"removes", Components[number]>
+      /** Allows `despawn` of entities a query proves have one of these; see `Command.despawns`. */
+      despawns: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"despawns", Components[number]>
+      /** Allows `despawnScope` of this scope. */
+      despawnsScope: <const Scope extends EntityScope.EntityScope<string, Root>>(scope: Scope) => Command.Permission<"despawnsScope", Scope>
+      /** Allows `relate`, `unrelate`, and `reorderChildren` of these relations. */
+      relates: <const Relations extends ReadonlyArray<RelationDescriptor<S>>>(...relations: Relations) => Command.Permission<"relates", Relations[number]>
     }
     readonly Schedule: {
       /**

@@ -66,7 +66,8 @@ export const CollectFocusedCollectableSystem = Game.System(
       input: Game.System.readResource(InputState),
       focused: Game.System.writeResource(FocusedCollectable),
       collectedCount: Game.System.writeResource(CollectedCount)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Collectable))
   },
   ({ queries, resources, commands }) =>
     {
@@ -85,7 +86,7 @@ export const CollectFocusedCollectableSystem = Game.System(
         return
       }
 
-      commands.despawn(result.value.entity.id)
+      commands.despawn(result.value.entity)
       resources.collectedCount.update((value) => value + 1)
       resources.focused.set(makeEmptyFocusedCollectable())
     }

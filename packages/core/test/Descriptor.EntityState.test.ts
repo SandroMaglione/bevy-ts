@@ -15,7 +15,9 @@ const ReadPhases = Game.Inspector("State/ReadPhases", {
 
 const makeRuntime = () => {
   const runtime = Game.Runtime.make({ services: Game.Runtime.services() })
-  const Spawn = Game.System("State/Spawn", {}, ({ commands }) => {
+  const Spawn = Game.System("State/Spawn", {
+    commands: Game.System.commands(Game.System.spawns(Phase, Mode))
+  }, ({ commands }) => {
     commands.spawn(Game.Command.spawn([Phase, "ready"], [Mode, 0]))
   })
   runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))

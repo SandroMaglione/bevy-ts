@@ -1234,7 +1234,7 @@ const makeValidatedRuntime = <
    * views the implementation is allowed to see. Views read live storage, so
    * one context is built per system and reused for every run.
    */
-  const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState): SystemContext<any> => {
+  const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState, queue: Command.CommandQueue<S, Root>): SystemContext<any> => {
     const spec = system.spec
     const lookup = makeLookup(reader)
     return {
@@ -1258,12 +1258,15 @@ const makeValidatedRuntime = <
       relationFailures: mapRecord(spec.relationFailures as Record<string, any>, (access) => makeRelationFailureReadView(access.relation, reader)),
       services: mapRecord(spec.services as Record<string, any>, (access) =>
         providedServices[access.descriptor.name as keyof Services]),
-      commands: Command.makeCommands<S, Root>(() => world.allocateEntity() as Entity.EntityId<S, Root>)
+      // The queue serves every declared permission set; the spec's types narrow it.
+      commands: queue as unknown
     } as SystemContext<any>
   }
 
   interface SystemSlot {
     readonly context: SystemContext<any>
+    /** The system's command queue (its context's `commands`, unchecked). */
+    readonly commands: Command.CommandQueue<S, Root>
     readonly reader: ReaderState
   }
 
@@ -1419,7 +1422,8 @@ const makeValidatedRuntime = <
     let slot = slots.get(stateKey(system))
     if (!slot) {
       const reader: ReaderState = { since: 0, lastRun: 0, streamSince: 0, streamLastRun: 0, registeredAt: world.currentTick() }
-      slot = { context: makeContext(system, reader), reader }
+      const commands = Command.makeCommands<S, Root>(() => world.allocateEntity() as Entity.EntityId<S, Root>)
+      slot = { context: makeContext(system, reader, commands), commands, reader }
       slots.set(stateKey(system), slot)
       if (holdsStreams) registerStreamReader(system, slot.reader)
       const make = system.spec.local as (() => unknown) | undefined
@@ -1458,7 +1462,7 @@ const makeValidatedRuntime = <
         return succeeded
       }
     }
-    const { context, reader } = slotOf(system, true)
+    const { context, commands, reader } = slotOf(system, true)
     // Changes stamped after the previous completed run are visible to this run.
     reader.since = reader.lastRun
     reader.streamSince = reader.streamLastRun
@@ -1470,18 +1474,18 @@ const makeValidatedRuntime = <
       // A system that returns nothing cannot fail; otherwise it returned a `Result`.
       outcome = system.run(context) ?? succeeded
     } catch (defect) {
-      if (tracing) emit(traceSystem(system, reader, thisRun, started, "defect", defect, context.commands.flush()))
+      if (tracing) emit(traceSystem(system, reader, thisRun, started, "defect", defect, commands.flush()))
       rollbackSystemTransaction()
-      context.commands.flush()
+      commands.flush()
       throw defect
     }
     if (!outcome.ok) {
-      if (tracing) emit(traceSystem(system, reader, thisRun, started, "failed", outcome.error, context.commands.flush()))
+      if (tracing) emit(traceSystem(system, reader, thisRun, started, "failed", outcome.error, commands.flush()))
       rollbackSystemTransaction()
-      context.commands.flush()
+      commands.flush()
       return Result.failure({ kind: "SystemFailure", system: system.name, error: outcome.error })
     }
-    const queued = context.commands.flush()
+    const queued = commands.flush()
     const traced = tracing ? traceSystem(system, reader, thisRun, started, "ok", undefined, queued) : undefined
     commitSystemTransaction()
     // A failed run leaves `lastRun` unchanged, so the next run sees the same changes again.

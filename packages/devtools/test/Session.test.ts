@@ -17,7 +17,7 @@ const Flow = Game.StateMachine("Dev/Flow", ["Playing", "Paused"])
 const Movers = Game.Query({ selection: { position: Game.Query.write(Position) } })
 const Healthy = Game.Query({ selection: { health: Game.Query.write(Health) } })
 
-const Spawn = Game.System("Dev/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Dev/Spawn", { commands: Game.System.commands(Game.System.spawns(Position, Health)) }, ({ commands }) => {
   commands.spawn(Game.Command.spawn([Position, { x: 0 }], [Health, 3]))
 })
 const Move = Game.System("Dev/Move", { queries: { movers: Movers } }, ({ queries }) => {
@@ -169,7 +169,7 @@ describe("Session", () => {
 
   it("summarizes systems and warnings in the report", () => {
     const { session } = makeSession()
-    const Queue = Game.System("Dev/QueueLate", {}, ({ commands }) => {
+    const Queue = Game.System("Dev/QueueLate", { commands: Game.System.commands(Game.System.spawns(Health)) }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Health, 1]))
     })
     const runtime2 = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 0 }, debug: true })
@@ -317,7 +317,7 @@ describe("Session risk checks", () => {
   }
 
   it("warns about NaN and infinite numbers in writes, resources, events, and spawns", () => {
-    const SpawnMover = RiskGame.System("Risk/SpawnMover", {}, ({ commands }) => {
+    const SpawnMover = RiskGame.System("Risk/SpawnMover", { commands: RiskGame.System.commands(RiskGame.System.spawns(Velocity, Shot)) }, ({ commands }) => {
       commands.spawn(RiskGame.Command.spawn([Velocity, { x: 1 }], [Shot, { speed: Number.POSITIVE_INFINITY }]))
     })
     const Normalize = RiskGame.System("Risk/Normalize", {
@@ -341,7 +341,7 @@ describe("Session risk checks", () => {
   })
 
   it("warns about counts that rise through a whole run, not about bursts that are cleaned up", () => {
-    const Fire = RiskGame.System("Risk/Fire", {}, ({ commands }) => {
+    const Fire = RiskGame.System("Risk/Fire", { commands: RiskGame.System.commands(RiskGame.System.spawns(Shot)) }, ({ commands }) => {
       commands.spawn(RiskGame.Command.spawn([Shot, { speed: 1 }]))
     })
     const leaking = makeRiskSession(RiskGame.Schedule(Fire, RiskGame.Schedule.applyDeferred()))
@@ -356,11 +356,12 @@ describe("Session risk checks", () => {
 
     // Shots live 20 frames, so the count rises and then stays level.
     const Expire = RiskGame.System("Risk/Expire", {
-      queries: { shots: RiskGame.Query({ selection: { shot: RiskGame.Query.write(Shot) } }) }
+      queries: { shots: RiskGame.Query({ selection: { shot: RiskGame.Query.write(Shot) } }) },
+      commands: RiskGame.System.commands(RiskGame.System.despawns(Shot))
     }, ({ queries, commands }) => {
       for (const { entity, data } of queries.shots.each()) {
         const speed = data.shot.get().speed + 1
-        if (speed > 20) commands.despawn(entity.id)
+        if (speed > 20) commands.despawn(entity)
         else data.shot.set({ speed })
       }
     })

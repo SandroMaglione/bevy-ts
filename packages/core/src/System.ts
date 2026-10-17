@@ -64,7 +64,7 @@ import type { ConstructedWriteCell, ReadCell, ReadonlyValue, WriteCell } from ".
 import * as Requirement from "./Requirement.ts"
 import type * as Result from "./Result.ts"
 import type { Schema } from "./Schema.ts"
-import type { CommandsApi } from "./Command.ts"
+import type { CommandAccess, CommandsApi, NotDeclared } from "./Command.ts"
 
 /**
  * System declarations, typed execution context, and runtime requirements.
@@ -723,6 +723,12 @@ export interface SystemAccessInput {
   readonly despawned?: Record<string, DespawnedRead>
   readonly relationFailures?: Record<string, RelationFailureRead<Relation.Relation.Any>>
   /**
+   * The commands the system may queue: `Game.System.commands(...)` with
+   * `spawns`, `inserts`, `removes`, `despawns`, `despawnsScope`, and
+   * `relates` permissions. Without it the system has no `commands`.
+   */
+  readonly commands?: CommandAccess.Any
+  /**
    * Run conditions that skip the system: while one fails, the system does not
    * run and the events, transition events, and relation failures published
    * meanwhile are dropped for it. Use it for a mode change after which those
@@ -812,6 +818,7 @@ export type SystemSpec<
   readonly pauseWhen: AccessField<Access, "pauseWhen", readonly []>
   readonly transitions: AccessField<Access, "transitions", {}>
   readonly local: LocalFactory<Access>
+  readonly commands: "commands" extends keyof Access ? NonNullable<Access["commands"]> : undefined
   readonly schema: S
   readonly __schemaRoot: Root
 }
@@ -906,6 +913,11 @@ type QueryContext<Spec extends AnySystemSpec> = {
 type LocalValue<Factory> = Factory extends () => infer Local ? Local : undefined
 type LocalContext<Spec extends AnySystemSpec> = LocalValue<Spec["local"]>
 
+type CommandsContext<Spec extends AnySystemSpec> =
+  Spec["commands"] extends CommandAccess<infer Spawns, infer Inserts, infer Removes, infer Despawns, infer Scopes, infer Relates>
+    ? CommandsApi<Spec["schema"], Spec["__schemaRoot"], Spawns, Inserts, Removes, Despawns, Scopes, Relates>
+    : NotDeclared
+
 /**
  * The implementation context derived from a system spec.
  *
@@ -925,7 +937,8 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly relationFailures: RelationFailureContext<Spec>
   readonly transitions: TransitionContext<Spec>
   readonly services: ServiceContext<Spec>
-  readonly commands: CommandsApi<Spec["schema"], Spec["__schemaRoot"]>
+  /** The commands the spec declares (`commands: Game.System.commands(...)`). */
+  readonly commands: CommandsContext<Spec>
   /** The system's own scratch state (see `local` in the spec); `undefined` when it declares none. */
   readonly local: LocalContext<Spec>
 }
@@ -1166,6 +1179,7 @@ export function System(
     pauseWhen: spec.pauseWhen ?? [],
     transitions: spec.transitions ?? {},
     local: spec.local,
+    commands: spec.commands,
     __schemaRoot: undefined
   } as Spec
 

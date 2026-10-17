@@ -56,6 +56,9 @@ const distanceSquared = (left: Vector, right: Vector): number => {
   return Vector2.lengthSquared(Vector2.subtract(left, right))
 }
 
+/** The components of a pickup (`makePickupDraft`). */
+const PickupParts = [Position, Actor, Pickup] as const
+
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
   return Game.Command.spawn(
     Game.Command.entryRaw(Position, position),
@@ -63,6 +66,9 @@ const makePickupDraft = (position: { readonly x: number; readonly y: number }) =
     Game.Command.entry(Pickup, {})
   )
 }
+
+/** The components of the player (`playerDraft`). */
+const PlayerParts = [Position, Actor, Player] as const
 
 /**
  * The player draft, validated once at module load through the constructed
@@ -76,7 +82,9 @@ const playerDraft = Game.Command.spawn(
 
 export const SpawnPlayerSystem = Game.System(
   "StateMachineExample/SpawnPlayer",
-  {},
+  {
+    commands: Game.System.commands(Game.System.spawns(...PlayerParts))
+  },
   ({ commands }) =>
     {
       if (!playerDraft.ok) {
@@ -260,7 +268,8 @@ export const CollectPickupsSystem = Game.System(
     },
     resources: {
       score: Game.System.writeResource(Score)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Pickup))
   },
   ({ queries, resources, commands }) =>
     {
@@ -272,7 +281,7 @@ export const CollectPickupsSystem = Game.System(
       const playerPosition = player.value.data.position.get()
       for (const pickup of queries.pickups.each()) {
         if (distanceSquared(playerPosition, pickup.data.position.get()) <= (PLAYER_RADIUS + PICKUP_RADIUS) ** 2) {
-          commands.despawn(pickup.entity.id)
+          commands.despawn(pickup.entity)
           resources.score.update((value) => value + 1)
         }
       }
@@ -333,7 +342,8 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
       countdown: Game.System.writeResource(CountdownRemaining),
       goal: Game.System.readResource(PickupGoal),
       cursor: Game.System.writeResource(SpawnCursor)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Pickup), Game.System.spawns(...PickupParts))
   },
   ({ queries, resources, commands }) =>
     {
@@ -343,7 +353,7 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
       }
 
       for (const pickup of queries.pickups.each()) {
-        commands.despawn(pickup.entity.id)
+        commands.despawn(pickup.entity)
       }
 
       const cursor = resources.cursor.get()

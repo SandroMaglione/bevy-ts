@@ -168,11 +168,17 @@ export type StagedComponent = readonly [Descriptor<"component", string, any>, un
  *
  * Query execution is the main source of `EntityRef` values.
  */
-export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown> {
+export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown, out Proves = unknown> {
   /**
    * Runtime tag for debugging and pattern matching.
    */
   readonly kind: "EntityRef"
+  /**
+   * The component descriptors the query that produced this ref proves (its
+   * required slots and `with`): what `commands.despawn` checks against the
+   * system's `despawns` permission. Type-level only.
+   */
+  readonly __proves?: (_: never) => Proves
   /**
    * The schema-bound entity identity.
    */
@@ -194,12 +200,15 @@ export interface EntityMut<
   S extends Schema.Any,
   out P extends ComponentProof,
   out W extends ComponentProof,
-  Root = unknown
+  Root = unknown,
+  out Proves = unknown
 > {
   /**
    * Runtime tag for debugging and pattern matching.
    */
   readonly kind: "EntityMut"
+  /** The component descriptors the producing query proves; see `EntityRef`. */
+  readonly __proves?: (_: never) => Proves
   /**
    * The schema-bound entity identity.
    */

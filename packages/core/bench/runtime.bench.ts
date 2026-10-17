@@ -44,7 +44,9 @@ const makeRuntime = () => Game.Runtime.make({
 
 type BenchRuntime = ReturnType<typeof makeRuntime>
 
-const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {}, ({ commands }) => {
+const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {
+  commands: Game.System.commands(Game.System.spawns(Position, Velocity, Health))
+}, ({ commands }) => {
   for (let index = 0; index < count; index++) {
     commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: index }],
@@ -54,7 +56,9 @@ const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {}, ({ c
   }
 })
 
-const spawnStatics = (count: number) => Game.System("Bench/SpawnStatics", {}, ({ commands }) => {
+const spawnStatics = (count: number) => Game.System("Bench/SpawnStatics", {
+  commands: Game.System.commands(Game.System.spawns(Position, Static))
+}, ({ commands }) => {
   for (let index = 0; index < count; index++) {
     commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: 0 }],
@@ -104,10 +108,13 @@ const despawn: BenchCase = {
   name: "despawn/10k",
   description: "Despawn 10k entities through commands + applyDeferred",
   setup: () => {
-    const DespawnAll = Game.System("Bench/DespawnAll", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
+    const DespawnAll = Game.System("Bench/DespawnAll", {
+      queries: { movers: ReadMovers },
+      commands: Game.System.commands(Game.System.despawns(Position))
+    }, ({ queries, commands }) =>
       {
         for (const match of queries.movers.each()) {
-          commands.despawn(match.entity.id)
+          commands.despawn(match.entity)
         }
       })
     const schedule = Game.Schedule(DespawnAll, Game.Schedule.applyDeferred())
@@ -166,7 +173,9 @@ const sparseSingle: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, N)
-    const SpawnPlayer = Game.System("Bench/SpawnPlayer", {}, ({ commands }) => {
+    const SpawnPlayer = Game.System("Bench/SpawnPlayer", {
+      commands: Game.System.commands(Game.System.spawns(Position, Player))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Player, {}]))
     })
     runtime.tick(Game.Schedule(SpawnPlayer, Game.Schedule.applyDeferred()))
@@ -198,7 +207,10 @@ const changedFilter: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
-    const TagHot = Game.System("Bench/TagHot", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
+    const TagHot = Game.System("Bench/TagHot", {
+      queries: { movers: ReadMovers },
+      commands: Game.System.commands(Game.System.inserts(Hot))
+    }, ({ queries, commands }) =>
       {
         let tagged = 0
         for (const match of queries.movers.each()) {
@@ -244,7 +256,10 @@ const churn: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
-    const TagHot = Game.System("Bench/TagChurn", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
+    const TagHot = Game.System("Bench/TagChurn", {
+      queries: { movers: ReadMovers },
+      commands: Game.System.commands(Game.System.inserts(Hot))
+    }, ({ queries, commands }) =>
       {
         let tagged = 0
         for (const match of queries.movers.each()) {
@@ -257,7 +272,8 @@ const churn: BenchCase = {
       queries: {
         unmarked: Game.Query({ selection: { hot: Game.Query.read(Hot) }, without: [Marker] }),
         marked: Game.Query({ selection: { hot: Game.Query.read(Hot), marker: Game.Query.read(Marker) } })
-      }
+      },
+      commands: Game.System.commands(Game.System.inserts(Marker), Game.System.removes(Marker))
     }, ({ queries, commands }) => {
       for (const match of queries.unmarked.each()) {
         commands.insert(match.entity.id, [Marker, {}])
@@ -298,7 +314,9 @@ const lookupGet: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     const ids: Array<Id> = []
-    const SpawnTracked = Game.System("Bench/SpawnTracked", {}, ({ commands }) => {
+    const SpawnTracked = Game.System("Bench/SpawnTracked", {
+      commands: Game.System.commands(Game.System.spawns(Position, Velocity))
+    }, ({ commands }) => {
       for (let index = 0; index < N; index++) {
         ids.push(commands.spawn(Game.Command.spawn([Position, { x: index, y: 0 }], [Velocity, { x: 1, y: 0 }])))
       }
@@ -349,12 +367,16 @@ const hierarchy: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     const roots: Array<Id> = []
-    const SpawnRoots = Game.System("Bench/SpawnRoots", {}, ({ commands }) => {
+    const SpawnRoots = Game.System("Bench/SpawnRoots", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       for (let index = 0; index < 100; index++) {
         roots.push(commands.spawn(Game.Command.spawn([Position, { x: index, y: 0 }])))
       }
     })
-    const SpawnChildren = Game.System("Bench/SpawnChildren", {}, ({ commands }) => {
+    const SpawnChildren = Game.System("Bench/SpawnChildren", {
+      commands: Game.System.commands(Game.System.spawns(Health))
+    }, ({ commands }) => {
       for (const root of roots) {
         for (let index = 0; index < 100; index++) {
           commands.spawn(Game.Command.relate(Game.Command.spawn([Health, index]), ChildOf, root))
@@ -443,13 +465,18 @@ const frame: BenchCase = {
         resources.sum.set(total)
       }))
     const Bullets = Game.Query({ selection: { health: Game.Query.read(Health) }, without: [Velocity] })
-    const SpawnBullets = Game.System("Frame/SpawnBullets", {}, ({ commands }) => {
+    const SpawnBullets = Game.System("Frame/SpawnBullets", {
+      commands: Game.System.commands(Game.System.spawns(Position, Health))
+    }, ({ commands }) => {
       for (let count = 0; count < 100; count++) {
         commands.spawn(Game.Command.spawn([Position, { x: count, y: 0 }], [Health, 1]))
       }
     })
-    const DespawnBullets = Game.System("Frame/DespawnBullets", { queries: { bullets: Bullets } }, ({ queries, commands }) => {
-      for (const match of queries.bullets.each()) commands.despawn(match.entity.id)
+    const DespawnBullets = Game.System("Frame/DespawnBullets", {
+      queries: { bullets: Bullets },
+      commands: Game.System.commands(Game.System.despawns(Health))
+    }, ({ queries, commands }) => {
+      for (const match of queries.bullets.each()) commands.despawn(match.entity)
     })
     const Cleanup = Game.System("Frame/Cleanup", {
       despawned: { entities: Game.System.readDespawned() },

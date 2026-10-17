@@ -30,7 +30,9 @@ const observer = (name: string) => {
 }
 
 const spawner = (values: ReadonlyArray<number>, ids: Array<Id> = []) =>
-  Game.System("Lifecycle/Spawn", {}, ({ commands }) => {
+  Game.System("Lifecycle/Spawn", {
+    commands: Game.System.commands(Game.System.spawns(Position))
+  }, ({ commands }) => {
     for (const x of values) {
       ids.push(commands.spawn(Game.Command.spawn([Position, { x }])))
     }
@@ -74,7 +76,9 @@ describe("Runtime change detection", () => {
   it("counts an insert over an existing component as changed, not added", () => {
     const ids: Array<Id> = []
     const reader = observer("Lifecycle/Reader")
-    const Overwrite = Game.System("Lifecycle/Overwrite", {}, ({ commands }) => {
+    const Overwrite = Game.System("Lifecycle/Overwrite", {
+      commands: Game.System.commands(Game.System.inserts(Position))
+    }, ({ commands }) => {
       commands.insert(ids[0]!, [Position, { x: 9 }])
     })
     const runtime = makeRuntime()
@@ -114,9 +118,13 @@ describe("Runtime change detection", () => {
         despawned: despawned.entities.all().map((id) => id)
       })
     })
-    const Cleanup = Game.System("Lifecycle/Cleanup", {}, ({ commands }) => {
+    const Cleanup = Game.System("Lifecycle/Cleanup", {
+      queries: { positions: Positions },
+      commands: Game.System.commands(Game.System.removes(Position), Game.System.despawns(Position))
+    }, ({ queries, commands }) => {
       commands.remove(ids[0]!, Position)
-      commands.despawn(ids[1]!)
+      const second = queries.positions.get(ids[1]!)
+      if (second.ok) commands.despawn(second.value.entity)
     })
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(spawner([1, 2], ids), Game.Schedule.applyDeferred(), Reader))
@@ -147,8 +155,12 @@ describe("Runtime change detection", () => {
       })
     })
     let next = 0
-    const DespawnNext = Game.System("Lifecycle/DespawnNext", {}, ({ commands }) => {
-      commands.despawn(ids[next++]!)
+    const DespawnNext = Game.System("Lifecycle/DespawnNext", {
+      queries: { positions: Positions },
+      commands: Game.System.commands(Game.System.despawns(Position))
+    }, ({ queries, commands }) => {
+      const match = queries.positions.get(ids[next++]!)
+      if (match.ok) commands.despawn(match.value.entity)
     })
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(spawner([1, 2, 3, 4], ids), Game.Schedule.applyDeferred(), Reader))
@@ -180,8 +192,14 @@ describe("Runtime change detection", () => {
     const Toggle = Game.System("Lifecycle/Toggle", { machines: { flow: Game.System.machine(Flow) }, nextMachines: { flow: Game.System.nextState(Flow) } }, ({ machines, nextMachines }) => {
       nextMachines.flow.set(machines.flow.get() === "On" ? "Off" : "On")
     })
-    const Despawn = Game.System("Lifecycle/DespawnAll", {}, ({ commands }) => {
-      for (const id of ids) commands.despawn(id)
+    const Despawn = Game.System("Lifecycle/DespawnAll", {
+      queries: { positions: Positions },
+      commands: Game.System.commands(Game.System.despawns(Position))
+    }, ({ queries, commands }) => {
+      for (const id of ids) {
+        const match = queries.positions.get(id)
+        if (match.ok) commands.despawn(match.value.entity)
+      }
     })
     const runtime = Game.Runtime.make({
       services: Game.Runtime.services(),
@@ -206,18 +224,23 @@ describe("Runtime change detection", () => {
     }, ({ removed, despawned }) => {
       seen.push({ removed: removed.tags.lagged(), despawned: despawned.entities.lagged() })
     })
-    const SpawnMany = Game.System("Lifecycle/SpawnMany", {}, ({ commands }) => {
-      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn([Tag, {}]))
+    // Each entity keeps a Position after untagging, so the despawn can prove what it removes.
+    const SpawnMany = Game.System("Lifecycle/SpawnMany", {
+      commands: Game.System.commands(Game.System.spawns(Tag, Position))
+    }, ({ commands }) => {
+      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn([Tag, {}], [Position, { x: index }]))
     })
     const Untag = Game.System("Lifecycle/UntagAll", {
-      queries: { tagged: Game.Query({ selection: { tag: Game.Query.read(Tag) } }) }
+      queries: { tagged: Game.Query({ selection: { tag: Game.Query.read(Tag) } }) },
+      commands: Game.System.commands(Game.System.removes(Tag))
     }, ({ queries, commands }) => {
       for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tag)
     })
     const DespawnAll = Game.System("Lifecycle/DespawnAll", {
-      queries: { all: Game.Query({ selection: {} }) }
+      queries: { all: Game.Query({ selection: {}, with: [Position] }) },
+      commands: Game.System.commands(Game.System.despawns(Position))
     }, ({ queries, commands }) => {
-      for (const match of queries.all.each()) commands.despawn(match.entity.id)
+      for (const match of queries.all.each()) commands.despawn(match.entity)
     })
     const read = Game.Schedule(Reader)
     const churn = Game.Schedule(

@@ -27,7 +27,9 @@ const makeRuntime = () => Game.Runtime.make({
 
 const Moving = Game.Query({ selection: { position: Game.Query.write(Position) } })
 
-const Spawn = Game.System("Debug/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Debug/Spawn", {
+  commands: Game.System.commands(Game.System.spawns(Position, Sprite, Tagged))
+}, ({ commands }) => {
   const parent = commands.spawn(Game.Command.spawn([Position, { x: 1 }], [Sprite, { frame: 0 }]))
   commands.spawn(Game.Command.relate(Game.Command.spawn([Tagged, {}]), ChildOf, parent))
 })
@@ -194,7 +196,8 @@ describe("Runtime debug handle", () => {
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
     const Failing = Game.System("Debug/Failing", {
-      queries: { moving: Moving }
+      queries: { moving: Moving },
+      commands: Game.System.commands(Game.System.spawns(Tagged))
     }, ({ queries, commands }) => {
       for (const match of queries.moving.each()) match.data.position.set({ x: 99 })
       commands.spawn(Game.Command.spawn([Tagged, {}]))
@@ -302,7 +305,8 @@ describe("Runtime debug handle", () => {
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
     const ReadRemoved = Game.System("Debug/ReadRemoved", { removed: { tagged: Game.System.readRemoved(Tagged) } }, () => {})
     const Untag = Game.System("Debug/Untag", {
-      queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) }
+      queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) },
+      commands: Game.System.commands(Game.System.removes(Tagged))
     }, ({ queries, commands }) => {
       for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tagged)
     })
@@ -320,13 +324,16 @@ describe("Runtime debug handle", () => {
   it("reports despawned reads dropped at capacity as missed", () => {
     const runtime = makeRuntime()
     const ReadDespawned = Game.System("Debug/ReadDespawned", { despawned: { entities: Game.System.readDespawned() } }, () => {})
-    const SpawnMany = Game.System("Debug/SpawnMany", {}, ({ commands }) => {
-      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn())
+    const SpawnMany = Game.System("Debug/SpawnMany", {
+      commands: Game.System.commands(Game.System.spawns(Tagged))
+    }, ({ commands }) => {
+      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn([Tagged, {}]))
     })
     const DespawnAll = Game.System("Debug/DespawnAll", {
-      queries: { all: Game.Query({ selection: {} }) }
+      queries: { all: Game.Query({ selection: {}, with: [Tagged] }) },
+      commands: Game.System.commands(Game.System.despawns(Tagged))
     }, ({ queries, commands }) => {
-      for (const match of queries.all.each()) commands.despawn(match.entity.id)
+      for (const match of queries.all.each()) commands.despawn(match.entity)
     })
     const read = Game.Schedule(ReadDespawned)
     runtime.tick(read)

@@ -105,7 +105,7 @@ import { Session } from "@typeonce/bevy-ts-devtools"
 
 const Position = Descriptor.ConstructedComponent(Vector2)("Consumer/Position")
 const Game = Schema.bind(Schema.fragment({ components: { Position } }))
-const Spawn = Game.System("Consumer/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Consumer/Spawn", { commands: Game.System.commands(Game.System.spawns(Position)) }, ({ commands }) => {
   const draft = Game.Command.spawn(Game.Command.entryRaw(Position, { x: 1, y: 2 }))
   if (draft.ok) commands.spawn(draft.value)
 })

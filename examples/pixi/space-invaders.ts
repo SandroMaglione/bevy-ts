@@ -188,6 +188,9 @@ const AddedRenderableQuery = Game.Query({
 const idleVelocity = { vx: 0, vy: 0, speed: 6 } as const
 const shootUpVelocity = { vx: 0, vy: -10, speed: 6 } as const
 
+/** The components of the player ship (`makePlayerDraft`). */
+const PlayerParts = [Position, Velocity, RenderBody, Player] as const
+
 const makePlayerDraft = () =>
   Game.Command.spawn(
     [Position, { x: 400, y: PLAYER_START_Y }],
@@ -204,6 +207,9 @@ const makePlayerDraft = () =>
     [Player, {}]
   )
 
+/** The components of a bullet (`makeBulletDraft`). */
+const BulletParts = [Position, Velocity, RenderBody, Bullet] as const
+
 const makeBulletDraft = (position: { x: number; y: number }) =>
   Game.Command.spawn(
     [Position, position],
@@ -219,6 +225,9 @@ const makeBulletDraft = (position: { x: number; y: number }) =>
     }],
     [Bullet, { damage: 10 }]
   )
+
+/** The components of an enemy (`makeEnemyDraft`). */
+const EnemyParts = [Position, RenderBody, Enemy, DescentPattern] as const
 
 const makeEnemyDraft = (position: { x: number; y: number }, pattern: DescentPatternValue) =>
   Game.Command.spawn(
@@ -414,7 +423,9 @@ const createNode = (renderBody: RenderBodyValue): Graphics => {
 
 const SpawnPlayerSystem = Game.System(
   "SpaceInvaders/SpawnPlayer",
-  {},
+  {
+    commands: Game.System.commands(Game.System.spawns(...PlayerParts))
+  },
   ({ commands }) =>
     {
       commands.spawn(makePlayerDraft())
@@ -481,7 +492,8 @@ const ShootingSystem = Game.System(
     },
     services: {
       input: Game.System.service(InputManager)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...BulletParts))
   },
   ({ queries, resources, services, commands }) =>
     {
@@ -515,7 +527,8 @@ const EnemySpawnSystem = Game.System(
     resources: {
       frameDelta: Game.System.readResource(FrameDelta),
       enemySpawnProgress: Game.System.writeResource(EnemySpawnProgress)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(...EnemyParts))
   },
   ({ resources, commands }) =>
     {
@@ -761,7 +774,8 @@ const EnemyDestroySystem = Game.System(
     },
     events: {
       destroyEnemy: Game.System.readEvent(DestroyEnemy)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Bullet, Enemy))
   },
   ({ queries, events, commands }) =>
     {
@@ -772,13 +786,13 @@ const EnemyDestroySystem = Game.System(
         // Re-resolution keeps that failure explicit and typed.
         const bullet = queries.bullets.getHandle(event.bullet)
         if (bullet.ok && !despawned.has(bullet.value.entity.id)) {
-          commands.despawn(bullet.value.entity.id)
+          commands.despawn(bullet.value.entity)
           despawned.add(bullet.value.entity.id)
         }
 
         const enemy = queries.enemies.getHandle(event.enemy)
         if (enemy.ok && !despawned.has(enemy.value.entity.id)) {
-          commands.despawn(enemy.value.entity.id)
+          commands.despawn(enemy.value.entity)
           despawned.add(enemy.value.entity.id)
         }
       }
@@ -791,7 +805,8 @@ const CullingSystem = Game.System(
     queries: {
       bullets: BulletCullingQuery,
       enemies: EnemyCullingQuery
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Bullet, Enemy))
   },
   ({ queries, commands }) =>
     {
@@ -800,7 +815,7 @@ const CullingSystem = Game.System(
           continue
         }
 
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
 
       for (const match of queries.enemies.each()) {
@@ -808,7 +823,7 @@ const CullingSystem = Game.System(
           continue
         }
 
-        commands.despawn(match.entity.id)
+        commands.despawn(match.entity)
       }
     }
 )

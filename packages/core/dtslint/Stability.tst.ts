@@ -91,10 +91,14 @@ describe("stability types", () => {
     const scope = Game.EntityScope("Level")
     expect(scope).type.toBe<EntityScope.EntityScope<"Level", typeof Game.schema>>()
 
-    const system = OtherGame.System("Other/Spawn", {}, ({ commands }) => {
-      // @ts-expect-error Type 'SchemaDefinition<{ readonly Position: Descriptor<"component", "StabilityTypes/Position", { x: number;
-      commands.despawnScope(scope)
+    const otherScope = OtherGame.EntityScope("Level")
+    const system = OtherGame.System("Other/Spawn", {
+      commands: OtherGame.System.commands(OtherGame.System.despawnsScope(otherScope))
+    }, ({ commands }) => {
+      commands.despawnScope(otherScope)
     })
+    // @ts-expect-error is not assignable to parameter of type 'EntityScope<string, RootToken<"Other">>'
+    OtherGame.System.despawnsScope(scope)
     expect(system).type.toBeAssignableTo<Schema.Schema.BoundSystem<typeof OtherGame.schema, Schema.RootToken<"Other">>>()
   })
 

@@ -142,12 +142,21 @@ type EntryValue<T> =
 export type FoldEntries<
   Entries extends ReadonlyArray<SpawnEntry<any>>,
   P extends Entity.ComponentProof = {}
-> = Entries extends readonly [
-  infer Head extends SpawnEntry<any>,
-  ...infer Tail extends Array<SpawnEntry<any>>
-]
-  ? FoldEntries<Tail, Draft.InsertEntry<P, EntryValue<Head>>>
-  : P
+> = number extends Entries["length"]
+  // A widened array (a spread of entries built at runtime): each entry may or may not be there.
+  ? P & MaybeEntries<EntryValue<Entries[number]>>
+  : Entries extends readonly [
+      infer Head extends SpawnEntry<any>,
+      ...infer Tail extends Array<SpawnEntry<any>>
+    ]
+    ? FoldEntries<Tail, Draft.InsertEntry<P, EntryValue<Head>>>
+    : P
+
+/** The proof of entries that may each be present: every component they can hold, optional. */
+type MaybeEntries<Entry> = {
+  readonly [E in Entry as E extends readonly [infer D extends Descriptor<"component", string, any>, unknown] ? Descriptor.Name<D> : never]?:
+    E extends readonly [infer D extends Descriptor<"component", string, any>, unknown] ? Descriptor.Value<D> : never
+}
 
 /**
  * Per-entry failures, aligned with the entries: `null` for entries that
@@ -293,11 +302,14 @@ export const entryRaw = <D extends DescriptorModule.ConstructedDescriptor<"compo
 }
 
 /**
- * Adds entries to a draft. Plain entries return the new draft; if any entry is
- * a `Result`, the draft is returned as a `Result` whose error lists every
- * entry's failure (or `null`).
+ * Adds entries to a draft, a value not yet spawned. Plain entries return the
+ * new draft; if any entry is a `Result`, the draft is returned as a `Result`
+ * whose error lists every entry's failure (or `null`).
+ *
+ * Use this while building what a spawn will hold. Use `commands.insert` to
+ * add or replace components on an entity that already exists.
  */
-export const insert = <
+export const extend = <
   S extends Schema.Any,
   P extends Entity.ComponentProof,
   Root,
@@ -398,78 +410,266 @@ export const relate = <
     }
   ])
 
+/** One permission of `Game.System.commands(...)`: a kind of command, and what it may touch. */
+export interface Permission<out Kind extends PermissionKind, out Value> {
+  readonly permission: Kind
+  readonly values: ReadonlyArray<Value>
+}
+
+export type PermissionKind = "spawns" | "inserts" | "removes" | "despawns" | "despawnsScope" | "relates"
+
+type ComponentDescriptor = Descriptor<"component", string, any>
+
 /**
- * Public command API exposed to systems.
+ * Allows `spawn` / `spawnIn` of drafts whose components are all among `components`.
+ * Use it for entities the system creates; use `extend` on a draft to build one.
+ */
+export const spawns = <const Components extends ReadonlyArray<ComponentDescriptor>>(...components: Components): Permission<"spawns", Components[number]> =>
+  ({ permission: "spawns", values: components })
+
+/**
+ * Allows `insert(entity, [X, value])` with `X` among `components`: add or
+ * replace at the next `applyDeferred()`. To change a value now, on an entity
+ * you matched, write through a query (`Game.Query.write`) instead.
+ */
+export const inserts = <const Components extends ReadonlyArray<ComponentDescriptor>>(...components: Components): Permission<"inserts", Components[number]> =>
+  ({ permission: "inserts", values: components })
+
+/** Allows `remove(entity, X)` with `X` among `components`. */
+export const removes = <const Components extends ReadonlyArray<ComponentDescriptor>>(...components: Components): Permission<"removes", Components[number]> =>
+  ({ permission: "removes", values: components })
+
+/**
+ * Allows `despawn(entity)` where `entity` comes from a query match proving one
+ * of `components` (`match.entity`), never a raw id: the system can only
+ * despawn what it has proven is, for example, an `Enemy`.
+ */
+export const despawns = <const Components extends ReadonlyArray<ComponentDescriptor>>(...components: Components): Permission<"despawns", Components[number]> =>
+  ({ permission: "despawns", values: components })
+
+/** Allows `despawnScope(scope)` for this scope. */
+export const despawnsScope = <const Scope extends EntityScope.EntityScope.Any>(scope: Scope): Permission<"despawnsScope", Scope> =>
+  ({ permission: "despawnsScope", values: [scope] })
+
+/** Allows `relate`, `unrelate`, and `reorderChildren` for these relations. */
+export const relates = <const Relations extends ReadonlyArray<Relation.Relation.Any>>(...relations: Relations): Permission<"relates", Relations[number]> =>
+  ({ permission: "relates", values: relations })
+
+type PermissionValue<Permissions, Kind extends PermissionKind> =
+  Permissions extends Permission<Kind, infer Value> ? Value : never
+
+/**
+ * The commands a system may queue, declared in its spec as
+ * `commands: Game.System.commands(...)`. Without it, the system has no
+ * `commands`.
+ */
+export interface CommandAccess<
+  out Spawns = never,
+  out Inserts = never,
+  out Removes = never,
+  out Despawns = never,
+  out Scopes = never,
+  out Relates = never
+> {
+  readonly kind: "commands"
+  readonly permissions: ReadonlyArray<Permission<PermissionKind, unknown>>
+  readonly __permissions?: (_: never) => readonly [Spawns, Inserts, Removes, Despawns, Scopes, Relates]
+}
+
+export namespace CommandAccess {
+  export type Any = CommandAccess<any, any, any, any, any, any>
+}
+
+/** Declares the commands a system may queue; see the permission builders. */
+export const commands = <const Permissions extends ReadonlyArray<Permission<PermissionKind, unknown>>>(
+  ...permissions: Permissions
+): CommandAccess<
+  PermissionValue<Permissions[number], "spawns">,
+  PermissionValue<Permissions[number], "inserts">,
+  PermissionValue<Permissions[number], "removes">,
+  PermissionValue<Permissions[number], "despawns">,
+  PermissionValue<Permissions[number], "despawnsScope">,
+  PermissionValue<Permissions[number], "relates">
+> => ({ kind: "commands", permissions })
+
+/** The `commands` of a system that declares none. */
+export type NotDeclared =
+  "commands are not declared for this system: add commands: Game.System.commands(...) to its spec, with the permissions it needs (spawns, inserts, removes, despawns, despawnsScope, relates)"
+
+/** A method whose permission is not declared: any call fails with an argument error naming the fix. */
+type MethodNotDeclared<Method extends string, Builder extends string> =
+  (...fix: ReadonlyArray<`${Method} is not declared in this system's commands: add Game.System.${Builder}(...) to Game.System.commands(...)`>) => never
+
+type Fix<Message extends string> = { readonly __fixCommands__: Message }
+
+type Names<D> = D extends { readonly name: infer Name extends string } ? Name : never
+
+/** Every key of every member of a union of proofs (a draft with a conditional entry is a union). */
+type AllKeys<P> = P extends unknown ? keyof P & string : never
+
+type DraftAllowed<P, Spawns> =
+  [Exclude<AllKeys<P>, Names<Spawns>>] extends [never]
+    ? unknown
+    : Fix<`${Exclude<AllKeys<P>, Names<Spawns>>} is not declared in this system's commands: add it to Game.System.spawns(...)`>
+
+type EntriesAllowed<Entries extends ReadonlyArray<readonly [ComponentDescriptor, unknown]>, Inserts> =
+  [Exclude<Entries[number][0], Inserts>] extends [never]
+    ? unknown
+    : Fix<`${Names<Exclude<Entries[number][0], Inserts>>} is not declared in this system's commands: add it to Game.System.inserts(...)`>
+
+type RemoveAllowed<D, Removes> =
+  [D] extends [Removes] ? unknown : Fix<`${Names<D>} is not declared in this system's commands: add it to Game.System.removes(...)`>
+
+type DespawnAllowed<E, Despawns> =
+  E extends { readonly kind: "EntityRef" | "EntityMut"; readonly __proves?: (_: never) => infer Proves }
+    ? [Extract<Proves, Despawns>] extends [never]
+      ? Fix<`despawn needs an entity from a query proving ${Names<Despawns>} (declared in despawns)`>
+      : unknown
+    : E extends { readonly [spawnedTypeId]: (_: never) => infer Spawned }
+      ? [Extract<Spawned, Names<Despawns>>] extends [never]
+        ? Fix<`despawn needs an entity spawned with ${Names<Despawns>} (declared in despawns)`>
+        : unknown
+      : Fix<`despawn needs an entity from a query proving ${Names<Despawns>} (declared in despawns), not a raw id: pass match.entity`>
+
+declare const spawnedTypeId: unique symbol
+
+/**
+ * The id `spawn` / `spawnIn` return: an `EntityId` that also records the
+ * components its draft holds in every case, so the system that queued it can
+ * `despawn` it before the next `applyDeferred()` (no query can match it yet).
+ * Stored as a plain `EntityId`, it is a raw id again.
+ */
+export type SpawnedId<S extends Schema.Any, Root, Components extends string> =
+  Entity.EntityId<S, Root> & { readonly [spawnedTypeId]: (_: never) => Components }
+
+/** The keys every member of a union of proofs requires (what a draft holds in every case). */
+type RequiredKeys<P> = P extends unknown ? { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P] & string : never
+type MissingSomewhere<P, All> = P extends unknown ? Exclude<All, RequiredKeys<P>> : never
+type HeldNames<P> = Exclude<AllKeys<P>, MissingSomewhere<P, AllKeys<P>>>
+
+/**
+ * The command API a system gets for its declared permissions. Commands are
+ * the structural mutation entrypoint: spawns, inserts, removals, despawns,
+ * and relation edits. They are queued in order and applied only at the next
+ * `applyDeferred()` (or `applyStateTransitions(...)`) schedule step.
  *
- * Commands are the structural mutation entrypoint: spawns, inserts, removals,
- * despawns, and relation edits. They are queued in order and applied only at
- * the next `applyDeferred()` (or `applyStateTransitions(...)`) schedule step.
+ * Each method exists only with its permission, and only for what it names:
+ * `spawn` needs `Game.System.spawns(...)` listing every component of the
+ * draft, `insert` needs `inserts`, `remove` needs `removes`, `despawn` needs
+ * `despawns` and an entity from a query proving one of them, `despawnScope`
+ * needs `despawnsScope`, and relation edits need `relates`.
  *
  * Resource and event writes are not commands: they go through the
  * `writeResource(...)` / `writeEvent(...)` access a system declares.
  */
-export interface CommandsApi<S extends Schema.Any, Root = unknown> {
+export interface CommandsApi<
+  S extends Schema.Any,
+  Root = unknown,
+  Spawns = never,
+  Inserts = never,
+  Removes = never,
+  Despawns = never,
+  Scopes = never,
+  Relates = never
+> {
   /**
    * Queues a staged entity for spawning and returns its stable runtime id.
    */
-  readonly spawn: <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root>) => Entity.EntityId<S, Root>
+  readonly spawn: [Spawns] extends [never]
+    ? MethodNotDeclared<"spawn", "spawns">
+    : <P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root> & DraftAllowed<P, Spawns>) => SpawnedId<S, Root, HeldNames<P>>
   /**
-   * Queues an entity spawn owned by one lifetime scope.
-   *
-   * Scoped entities can later be removed together with `despawnScope(...)`.
+   * Queues an entity spawn owned by one lifetime scope (removed together
+   * with `despawnScope(...)`).
    */
-  readonly spawnIn: <P extends Entity.ComponentProof>(
-    scope: EntityScope.EntityScope<string, Root>,
-    draft: Entity.EntityDraft<S, P, Root>
-  ) => Entity.EntityId<S, Root>
+  readonly spawnIn: [Spawns] extends [never]
+    ? MethodNotDeclared<"spawnIn", "spawns">
+    : <P extends Entity.ComponentProof>(
+        scope: EntityScope.EntityScope<string, Root>,
+        draft: Entity.EntityDraft<S, P, Root> & DraftAllowed<P, Spawns>
+      ) => SpawnedId<S, Root, HeldNames<P>>
   /**
-   * Queues component inserts (or replacements) on an existing entity.
+   * Queues component inserts (or replacements) on an existing entity, applied
+   * at the next `applyDeferred()`. To change a value now, on an entity you
+   * matched, write through a query (`Game.Query.write`) instead.
    *
    * Entries must already be valid; validate raw input with
    * `Game.Command.entryRaw(...)` first.
    */
-  readonly insert: (
-    entity: Entity.EntityId<S, Root>,
-    ...entries: ReadonlyArray<SchemaEntry<S>>
-  ) => Entity.EntityId<S, Root>
+  readonly insert: [Inserts] extends [never]
+    ? MethodNotDeclared<"insert", "inserts">
+    : <const Entries extends ReadonlyArray<SchemaEntry<S>>>(
+        entity: Entity.EntityId<S, Root>,
+        ...entries: Entries & EntriesAllowed<Entries, Inserts>
+      ) => Entity.EntityId<S, Root>
   /**
-   * Queues an entity removal.
+   * Queues an entity removal. A despawned entity stays visible to queries
+   * until the next `applyDeferred()`.
+   *
+   * Pass `match.entity` from a query proving one of the `despawns`
+   * components, or the id `spawn` returned in this run (it holds its draft's
+   * components); never a raw id.
    */
-  readonly despawn: (entity: Entity.EntityId<S, Root>) => void
+  readonly despawn: [Despawns] extends [never]
+    ? MethodNotDeclared<"despawn", "despawns">
+    : <const E>(entity: E & DespawnAllowed<E, Despawns>) => void
   /**
    * Queues removal of every entity owned by one lifetime scope.
    */
-  readonly despawnScope: (scope: EntityScope.EntityScope<string, Root>) => void
+  readonly despawnScope: [Scopes] extends [never]
+    ? MethodNotDeclared<"despawnScope", "despawnsScope">
+    : (scope: Scopes) => void
   /**
    * Queues a component removal on an existing entity.
    */
-  readonly remove: <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], Descriptor<"component", string, any>>>(
-    entity: Entity.EntityId<S, Root>,
-    descriptor: D
-  ) => Entity.EntityId<S, Root>
+  readonly remove: [Removes] extends [never]
+    ? MethodNotDeclared<"remove", "removes">
+    : <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], ComponentDescriptor>>(
+        entity: Entity.EntityId<S, Root>,
+        descriptor: D & RemoveAllowed<D, Removes>
+      ) => Entity.EntityId<S, Root>
   /**
    * Queues one live relation mutation for deferred application.
    */
-  readonly relate: <R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
-    entity: Entity.EntityId<S, Root>,
-    relation: R,
-    target: Entity.EntityId<S, Root>
-  ) => void
+  readonly relate: [Relates] extends [never]
+    ? MethodNotDeclared<"relate", "relates">
+    : <R extends Extract<Relates, Relation.Relation.Any>>(
+        entity: Entity.EntityId<S, Root>,
+        relation: R,
+        target: Entity.EntityId<S, Root>
+      ) => void
   /**
    * Queues removal of one outgoing relation when present.
    */
-  readonly unrelate: <R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
-    entity: Entity.EntityId<S, Root>,
-    relation: R
-  ) => void
+  readonly unrelate: [Relates] extends [never]
+    ? MethodNotDeclared<"unrelate", "relates">
+    : <R extends Extract<Relates, Relation.Relation.Any>>(
+        entity: Entity.EntityId<S, Root>,
+        relation: R
+      ) => void
   /**
    * Queues a hierarchy-only reorder of one parent's current children.
    */
-  readonly reorderChildren: <R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
-    entity: Entity.EntityId<S, Root>,
-    relation: R,
-    children: ReadonlyArray<Entity.EntityId<S, Root>>
-  ) => void
+  readonly reorderChildren: [Relates] extends [never]
+    ? MethodNotDeclared<"reorderChildren", "relates">
+    : <R extends Extract<Relates, Relation.Relation.Hierarchy>>(
+        entity: Entity.EntityId<S, Root>,
+        relation: R,
+        children: ReadonlyArray<Entity.EntityId<S, Root>>
+      ) => void
+}
+
+/** The command queue the runtime gives each system: every command, unchecked, and `flush`. */
+export interface CommandQueue<S extends Schema.Any, Root = unknown> {
+  readonly spawn: (draft: Entity.EntityDraft<S, any, Root>) => Entity.EntityId<S, Root>
+  readonly spawnIn: (scope: EntityScope.EntityScope<string, Root>, draft: Entity.EntityDraft<S, any, Root>) => Entity.EntityId<S, Root>
+  readonly insert: (entity: Entity.EntityId<S, Root>, ...entries: ReadonlyArray<SchemaEntry<S>>) => Entity.EntityId<S, Root>
+  readonly despawn: (entity: Entity.EntityId<S, Root> | { readonly id: Entity.EntityId<S, Root> }) => void
+  readonly despawnScope: (scope: EntityScope.EntityScope<string, Root>) => void
+  readonly remove: (entity: Entity.EntityId<S, Root>, descriptor: ComponentDescriptor) => Entity.EntityId<S, Root>
+  readonly relate: (entity: Entity.EntityId<S, Root>, relation: Relation.Relation.Any, target: Entity.EntityId<S, Root>) => void
+  readonly unrelate: (entity: Entity.EntityId<S, Root>, relation: Relation.Relation.Any) => void
+  readonly reorderChildren: (entity: Entity.EntityId<S, Root>, relation: Relation.Relation.Hierarchy, children: ReadonlyArray<Entity.EntityId<S, Root>>) => void
   /**
    * Drains the queued commands in insertion order.
    */
@@ -484,7 +684,7 @@ export interface CommandsApi<S extends Schema.Any, Root = unknown> {
  */
 export const makeCommands = <S extends Schema.Any, Root = unknown>(
   allocateId: () => Entity.EntityId<S, Root>
-): CommandsApi<S, Root> => {
+): CommandQueue<S, Root> => {
   /**
    * The per-system command buffer.
    *
@@ -494,7 +694,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
   const queue: Array<DeferredCommand<S>> = []
 
   return {
-    spawn<P extends Entity.ComponentProof>(draft: Entity.EntityDraft<S, P, Root>): Entity.EntityId<S, Root> {
+    spawn(draft) {
       const id = allocateId()
       queue.push({
         tag: "spawn",
@@ -507,10 +707,7 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       })
       return id
     },
-    spawnIn<P extends Entity.ComponentProof>(
-      scope: EntityScope.EntityScope<string, Root>,
-      draft: Entity.EntityDraft<S, P, Root>
-    ): Entity.EntityId<S, Root> {
+    spawnIn(scope, draft) {
       const id = allocateId()
       queue.push({
         tag: "spawnIn",
@@ -536,10 +733,11 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       return entity
     },
     despawn(entity) {
+      const id = typeof entity === "object" ? entity.id : entity
       queue.push({
         tag: "despawn",
         apply(world) {
-          world.destroyEntity(entity)
+          world.destroyEntity(id)
         }
       })
     },

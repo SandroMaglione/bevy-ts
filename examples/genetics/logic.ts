@@ -343,6 +343,9 @@ export const sampleFoundersFromSurvivors = (
   }
 }
 
+/** The components of a food entity (`spawnFoodDraft`). */
+export const FoodParts = [Position, Velocity, Food, Renderable] as const
+
 export const spawnFoodDraft = (position: { x: number; y: number }) =>
   Game.Command.spawn(
     [Position, position],
@@ -350,6 +353,9 @@ export const spawnFoodDraft = (position: { x: number; y: number }) =>
     [Food, { nutrition: FOOD_ENERGY }],
     [Renderable, deriveRenderable("food")]
   )
+
+/** The components of an agent entity (`spawnAgentDraft`). */
+export const AgentParts = [Position, Velocity, Genes, Agent, Vitals, Behavior, Intent, Renderable] as const
 
 export const spawnAgentDraft = (
   founder: FounderSeed,

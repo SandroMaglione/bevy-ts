@@ -10,6 +10,9 @@ import {
   Wall
 } from "./schema.ts"
 
+/** The components of a wall (`makeWallDraft`). */
+export const WallParts = [Position, Collider, Renderable, Wall] as const
+
 export const makeWallDraft = (x: number, y: number, width: number, height: number) => {
   return Game.Command.spawn(
     Game.Command.entryRaw(Position, { x, y }),
@@ -24,6 +27,9 @@ export const makeWallDraft = (x: number, y: number, width: number, height: numbe
     Game.Command.entry(Wall, {})
   )
 }
+
+/** The components of a pickup (`makePickupDraft`). */
+export const PickupParts = [Position, Collider, Renderable, Collectable] as const
 
 export const makePickupDraft = (x: number, y: number, label: string) => {
   return Game.Command.spawn(
@@ -42,6 +48,9 @@ export const makePickupDraft = (x: number, y: number, label: string) => {
     })
   )
 }
+
+/** The components of the player (`playerDraft`). */
+export const PlayerParts = [Position, Velocity, Collider, Renderable, Player] as const
 
 /**
  * The player draft, validated once at module load through the constructed
