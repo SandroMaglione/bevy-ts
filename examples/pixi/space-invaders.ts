@@ -755,24 +755,28 @@ const EnemyBulletCollisionSystem = Game.System(
 const EnemyDestroySystem = Game.System(
   "SpaceInvaders/EnemyDestroy",
   {
+    queries: {
+      bullets: BulletCollisionQuery,
+      enemies: EnemyCollisionQuery
+    },
     events: {
       destroyEnemy: Game.System.readEvent(DestroyEnemy)
     }
   },
-  ({ events, commands, lookup }) =>
+  ({ queries, events, commands }) =>
     {
       const despawned = new Set<number>()
 
       for (const event of events.destroyEnemy.all()) {
         // The event is readable now, but either entity may already be stale.
         // Re-resolution keeps that failure explicit and typed.
-        const bullet = lookup.getHandle(event.bullet, BulletCollisionQuery)
+        const bullet = queries.bullets.getHandle(event.bullet)
         if (bullet.ok && !despawned.has(bullet.value.entity.id)) {
           commands.despawn(bullet.value.entity.id)
           despawned.add(bullet.value.entity.id)
         }
 
-        const enemy = lookup.getHandle(event.enemy, EnemyCollisionQuery)
+        const enemy = queries.enemies.getHandle(event.enemy)
         if (enemy.ok && !despawned.has(enemy.value.entity.id)) {
           commands.despawn(enemy.value.entity.id)
           despawned.add(enemy.value.entity.id)

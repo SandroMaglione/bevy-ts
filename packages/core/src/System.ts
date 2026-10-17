@@ -245,7 +245,7 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
  *
  * If the payload needs to name an entity for later work, emit a durable
  * `Game.Entity.handle(...)` (optionally with an intent component) and let the later
- * reader re-resolve it through `lookup.getHandle(...)`.
+ * reader re-resolve it through `queries.x.getHandle(...)` (through a declared query).
  *
  * @example
  * ```ts
@@ -583,8 +583,46 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
   each(): ReadonlyArray<QueryMatch<S, Q>>
   /**
    * Retrieves the match for one specific entity id when it satisfies the query.
+   *
+   * Every read and write of an entity goes through a query the system
+   * declares, so its access is visible in the spec: there is no lookup that
+   * takes a query at call time.
    */
   get(entityId: import("./Entity.ts").EntityId<S, Query.Root<Q>>): Result.Result<QueryMatch<S, Q>, Query.LookupError>
+  /**
+   * Resolves a stored durable handle back into this query's access.
+   *
+   * Use this for handles carried in events, resources, or components. A handle
+   * is storage-safe, not proof of liveness, so stale or mismatched handles stay
+   * explicit typed failures. A handle with an intent component needs a query
+   * that proves it (selects or requires it).
+   */
+  getHandle<H extends Entity.Handle<Query.Root<Q>, any>>(
+    handle: [Entity.Handle.Intent<H>] extends [undefined]
+      ? H
+      : Query.ProvesComponent<Q, Entity.Handle.Intent<H> & Descriptor<"component", string, any>> extends true
+        ? H
+        : "this query does not prove the handle's intent component: select it, or add it to with"
+  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
+  /**
+   * The direct children of one hierarchy parent that match this query, in the
+   * stored child order. Children that do not match are skipped; a missing
+   * parent is a `MissingEntity` failure.
+   */
+  children<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: Entity.EntityId<S, Query.Root<Q>>,
+    relation: R
+  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
+  /**
+   * The hierarchy descendants of one entity that match this query, in
+   * `options.order` (depth-first by default). Descendants that do not match
+   * are skipped. `lookup.descendants` returns every descendant's id instead.
+   */
+  descendants<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: Entity.EntityId<S, Query.Root<Q>>,
+    relation: R,
+    options?: { readonly order?: "breadth" | "depth" }
+  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   /**
    * Returns a single match when exactly one entity satisfies the query.
    */
@@ -610,40 +648,19 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
 }
 
 /**
- * Typed entity lookup API exposed to systems.
+ * Relation lookups exposed to systems: entity ids along relation edges.
  *
- * Use this when you already have an entity id and want a validated, typed view
- * over a specific component access specification.
+ * Lookups return ids only. To read or write the entities they lead to, pass
+ * the ids to a declared query (`queries.x.get(id)`), or use the query
+ * handle's `children` / `descendants`, so every access stays in the spec.
  *
  * All lookup methods are total and explicit:
  *
  * - no hidden exceptions
- * - stale handles are treated as normal typed failures
+ * - missing entities are normal typed failures
  * - hierarchy traversal is available only for hierarchy relations
  */
 export interface LookupApi<S extends Schema.Any, Root = unknown> {
-  get<Q extends Query.Any<Root>>(
-    entityId: Entity.EntityId<S, Root>,
-    query: Q
-  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
-  /**
-   * Resolves a stored durable handle back into current-world query access.
-   *
-   * Use this for handles carried in events, resources, or components. A handle is
-   * storage-safe, not proof of liveness, so stale or mismatched handles remain
-   * explicit typed failures.
-   */
-  getHandle<
-    H extends Entity.Handle<Root, any>,
-    Q extends Query.Any<Root>
-  >(
-    handle: [Entity.Handle.Intent<H>] extends [undefined]
-      ? H
-      : Query.ProvesComponent<Q, Entity.Handle.Intent<H> & Descriptor<"component", string, any>> extends true
-        ? H
-        : never,
-    query: Q
-  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
   related<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
@@ -652,21 +669,6 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     entityId: Entity.EntityId<S, Root>,
     relation: R
   ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
-  /**
-   * Reads the direct children of one hierarchy parent as typed query matches.
-   *
-   * This preserves the stored child order for that hierarchy relation and skips
-   * entities that do not satisfy the query. Missing parents remain explicit
-   * `MissingEntity` failures.
-   */
-  childMatches<
-    R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>,
-    Q extends Query.Any<Root>
-  >(
-    entityId: Entity.EntityId<S, Root>,
-    relation: R,
-    query: Q
-  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   parent<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
@@ -682,24 +684,6 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
       readonly order?: "breadth" | "depth"
     }
   ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
-  /**
-   * Traverses hierarchy descendants and resolves only the entities that match
-   * the given query.
-   *
-   * Traversal order stays explicit through `options.order`, and non-matching
-   * descendants are skipped without turning traversal into a failure.
-   */
-  descendantMatches<
-    R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>,
-    Q extends Query.Any<Root>
-  >(
-    entityId: Entity.EntityId<S, Root>,
-    relation: R,
-    query: Q,
-    options?: {
-      readonly order?: "breadth" | "depth"
-    }
-  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   root<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R

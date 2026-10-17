@@ -294,7 +294,7 @@ const scheduleOverhead: BenchCase = {
 
 const lookupGet: BenchCase = {
   name: "lookup/get-10k",
-  description: "Resolve 10k stored entity ids through lookup.get with a 2-component query",
+  description: "Resolve 10k stored entity ids through a declared 2-component query's get",
   setup: () => {
     const runtime = makeRuntime()
     const ids: Array<Id> = []
@@ -304,11 +304,14 @@ const lookupGet: BenchCase = {
       }
     })
     runtime.tick(Game.Schedule(SpawnTracked, Game.Schedule.applyDeferred()))
-    const Resolve = Game.System("Bench/Resolve", { resources: { sum: Game.System.writeResource(Sum) } }, ({ lookup, resources }) =>
+    const Resolve = Game.System("Bench/Resolve", {
+      queries: { movers: ReadMovers },
+      resources: { sum: Game.System.writeResource(Sum) }
+    }, ({ queries, resources }) =>
       {
         let total = 0
         for (const id of ids) {
-          const match = lookup.get(id, ReadMovers)
+          const match = queries.movers.get(id)
           if (match.ok) total += match.value.data.position.get().x
         }
         resources.sum.set(total)

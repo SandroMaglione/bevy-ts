@@ -68,12 +68,13 @@ const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
 ```ts
 const Target = Descriptor.Component<{ readonly enemy: Entity.Handle<typeof Root, typeof Health> }>()("Concepts/Target")
 // ...
-const enemy = lookup.getHandle(data.target.get().enemy, HealthQuery)
+// `enemies` is a query the system declares: queries: { enemies: HealthQuery }
+const enemy = queries.enemies.getHandle(data.target.get().enemy)
 if (enemy.ok) { /* the entity still exists and has Health */ }
 ```
 
 - A handle is safe to store in components, resources and events, but it doesn't prove the entity is still alive.
-- `lookup.getHandle` returns a `Result`.
+- `queries.x.getHandle` returns a `Result`. Every read and write goes through a query the system declares (`get`, `getHandle`, `children`, `descendants` are on the query handle); `lookup` only returns ids along relations.
 - A handle with an intent (`Health` here) can only be resolved through a query that proves that component.
 - Entity ids and handles are branded numbers. Use them directly as `Map` or `Set` keys. `Decode.handle` validates positive integer handles, and snapshots write numbers.
 

@@ -94,13 +94,16 @@ describe("Runtime snapshots", () => {
     let children: Array<string> = []
     let resolved = ""
     const Check = Game.System("Snapshot/Check", {
-      queries: { targets: Game.Query({ selection: { target: Game.Query.read(Target) } }) }
-    }, ({ queries, lookup }) => {
+      queries: {
+        targets: Game.Query({ selection: { target: Game.Query.read(Target) } }),
+        named: Named
+      }
+    }, ({ queries }) => {
       const parent = readWorld(target).names.find(([, name]) => name === "parent")![0]
-      const matches = lookup.childMatches(Entity.makeEntityId(parent), ChildOf, Named)
+      const matches = queries.named.children(Entity.makeEntityId(parent), ChildOf)
       children = matches.ok ? matches.value.map((match) => match.data.name.get()) : []
       const handle = queries.targets.each()[0]!.data.target.get().handle
-      const match = lookup.getHandle(handle, Named)
+      const match = queries.named.getHandle(handle)
       resolved = match.ok ? match.value.data.name.get() : "missing"
     })
     target.tick(Game.Schedule(Check))

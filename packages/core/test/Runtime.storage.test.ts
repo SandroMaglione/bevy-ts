@@ -106,8 +106,10 @@ describe("Runtime storage", () => {
       commands.insert(target!, [Tag, {}])
     })
     let found = true
-    const Lookup = Game.System("Storage/LookupTarget", {}, ({ lookup }) => {
-      found = lookup.get(target!, Game.Query({ selection: { tag: Game.Query.read(Tag) } })).ok
+    const Lookup = Game.System("Storage/LookupTarget", {
+      queries: { tagged: Game.Query({ selection: { tag: Game.Query.read(Tag) } }) }
+    }, ({ queries }) => {
+      found = queries.tagged.get(target!).ok
     })
 
     const runtime = makeRuntime()

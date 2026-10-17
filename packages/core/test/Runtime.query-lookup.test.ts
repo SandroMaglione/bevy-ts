@@ -285,7 +285,7 @@ describe("Runtime query and lookup", () => {
     expect(readResourceValue(runtime, schema, LastError)).toBe("MultipleEntities")
   })
 
-  it("lookup returns MissingEntity and QueryMismatch for the expected cases", () => {
+  it("query get returns MissingEntity and QueryMismatch for the expected cases", () => {
     let existingId: EntityId<typeof schema> | undefined
 
     const spawn = System.System(
@@ -305,26 +305,30 @@ describe("Runtime query and lookup", () => {
       "RuntimeQuery/ObserveLookupFailures",
       {
         schema,
+        queries: {
+          positions: Query.Query({
+            selection: {
+              position: Query.read(Position)
+            }
+          }),
+          velocities: Query.Query({
+            selection: {
+              velocity: Query.read(Velocity)
+            }
+          })
+        },
         resources: {
           lastError: System.writeResource(LastError)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, resources }) =>
         {
           if (!existingId) {
             resources.lastError.set("MissingSetup")
             return
           }
-          const missing = lookup.get(Entity.makeEntityId<typeof schema>(9999), Query.Query({
-            selection: {
-              position: Query.read(Position)
-            }
-          }))
-          const mismatch = lookup.get(existingId, Query.Query({
-            selection: {
-              velocity: Query.read(Velocity)
-            }
-          }))
+          const missing = queries.positions.get(Entity.makeEntityId<typeof schema>(9999))
+          const mismatch = queries.velocities.get(existingId)
           resources.lastError.set(`${missing.ok ? "ok" : missing.error._tag}/${mismatch.ok ? "ok" : mismatch.error._tag}`)
         }
     )
@@ -447,7 +451,7 @@ describe("Runtime query and lookup", () => {
     expect(readResourceValue(runtime, schema, LastX)).toBe(4)
   })
 
-  it("lookup does not fail when only optional components are missing", () => {
+  it("query get does not fail when only optional components are missing", () => {
     let existingId: EntityId<typeof schema> | undefined
 
     const spawn = System.System(
@@ -467,24 +471,27 @@ describe("Runtime query and lookup", () => {
       "RuntimeQuery/ObserveLookupOptional",
       {
         schema,
+        queries: {
+          positioned: Query.Query({
+            selection: {
+              position: Query.read(Position),
+              velocity: Query.optional(Velocity)
+            }
+          })
+        },
         resources: {
           lastX: System.writeResource(LastX),
           lastError: System.writeResource(LastError)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, resources }) =>
         {
           if (!existingId) {
             resources.lastError.set("MissingSetup")
             return
           }
 
-          const result = lookup.get(existingId, Query.Query({
-            selection: {
-              position: Query.read(Position),
-              velocity: Query.optional(Velocity)
-            }
-          }))
+          const result = queries.positioned.get(existingId)
 
           if (!result.ok) {
             resources.lastError.set(result.error._tag)
@@ -592,23 +599,26 @@ describe("Runtime query and lookup", () => {
     const observe = Game.System(
       "RuntimeQuery/ObserveHandle",
       {
+        queries: {
+          positions: Game.Query({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          })
+        },
         resources: {
           lastX: Game.System.writeResource(LastX),
           lastError: Game.System.writeResource(LastError)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, resources }) =>
         {
           if (!currentHandle) {
             resources.lastError.set("MissingSetup")
             return
           }
 
-          const result = lookup.getHandle(currentHandle, Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            }
-          }))
+          const result = queries.positions.getHandle(currentHandle)
 
           if (!result.ok) {
             resources.lastError.set(result.error._tag)
@@ -622,17 +632,21 @@ describe("Runtime query and lookup", () => {
 
     const destroy = Game.System(
       "RuntimeQuery/DestroyHandleTarget",
-      {},
-      ({ lookup, commands }) =>
+      {
+        queries: {
+          positions: Game.Query({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          })
+        },
+      },
+      ({ queries, commands }) =>
         {
           if (!currentHandle) {
             return
           }
-          const result = lookup.getHandle(currentHandle, Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            }
-          }))
+          const result = queries.positions.getHandle(currentHandle)
           if (result.ok) {
             commands.despawn(result.value.entity.id)
           }
@@ -691,6 +705,13 @@ describe("Runtime query and lookup", () => {
     const observe = Game.System(
       "RuntimeQuery/ObserveStoredHandle",
       {
+        queries: {
+          positions: Game.Query({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          })
+        },
         resources: {
           storedHandle: Game.System.readResource(StoredHandle),
           lastX: Game.System.writeResource(LastX),
@@ -700,7 +721,7 @@ describe("Runtime query and lookup", () => {
           followTarget: Game.System.readEvent(FollowTarget)
         }
       },
-      ({ lookup, resources, events }) =>
+      ({ queries, resources, events }) =>
         {
           const resourceHandle = resources.storedHandle.get()
           const eventHandle = events.followTarget.all().at(0)?.target
@@ -710,16 +731,8 @@ describe("Runtime query and lookup", () => {
             return
           }
 
-          const resourceResult = lookup.getHandle(resourceHandle, Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            }
-          }))
-          const eventResult = lookup.getHandle(eventHandle, Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            }
-          }))
+          const resourceResult = queries.positions.getHandle(resourceHandle)
+          const eventResult = queries.positions.getHandle(eventHandle)
 
           if (!resourceResult.ok || !eventResult.ok) {
             resources.lastError.set(`${resourceResult.ok ? "ok" : resourceResult.error._tag}/${eventResult.ok ? "ok" : eventResult.error._tag}`)

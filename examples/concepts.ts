@@ -65,11 +65,14 @@ const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
 
 // 6. Handles are storage-safe; resolving one is explicit and can fail.
 const Attack = Game.System("Concepts/Attack", {
-  queries: { attackers: Game.Query({ selection: { target: Game.Query.read(Target) } }) },
+  queries: {
+    attackers: Game.Query({ selection: { target: Game.Query.read(Target) } }),
+    enemies: Game.Query({ selection: { health: Game.Query.read(Health) } })
+  },
   events: { hit: Game.System.writeEvent(Hit) }
-}, ({ queries, lookup, events }) => {
+}, ({ queries, events }) => {
   for (const { data } of queries.attackers.each()) {
-    const enemy = lookup.getHandle(data.target.get().enemy, Game.Query({ selection: { health: Game.Query.read(Health) } }))
+    const enemy = queries.enemies.getHandle(data.target.get().enemy)
     if (enemy.ok) {
       events.hit.emit({ amount: 1 })
     }

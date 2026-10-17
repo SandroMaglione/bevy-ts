@@ -159,22 +159,25 @@ describe("Runtime commands", () => {
     const lookup = Game.System(
       "RuntimeCommands/LookupDespawned",
       {
+        queries: {
+          positions: Game.Query({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          })
+        },
         resources: {
           count: Game.System.writeResource(Count)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, resources }) =>
         {
           const id = storedId
           if (!id) {
             resources.count.set(-1)
             return
           }
-          const result = lookup.get(id, Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            }
-          }))
+          const result = queries.positions.get(id)
           resources.count.set(result.ok ? 0 : result.error._tag === "MissingEntity" ? 1 : -1)
         }
     )

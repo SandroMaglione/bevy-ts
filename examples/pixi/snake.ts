@@ -490,14 +490,14 @@ const MoveBodySystem = Game.System(
       body: BodyQuery
     }
   },
-  ({ queries, lookup }) =>
+  ({ queries }) =>
     {
       const head = queries.head.singleOptional()
       if (!head.ok || !head.value) {
         return
       }
 
-      const body = lookup.descendantMatches(head.value.entity.id, ChildOf, BodyQuery, { order: "depth" })
+      const body = queries.body.descendants(head.value.entity.id, ChildOf, { order: "depth" })
       if (!body.ok) {
         return
       }
@@ -555,17 +555,20 @@ const ResolveFoodEatenSystem = Game.System(
     events: {
       foodEaten: Game.System.readEvent(FoodEaten)
     },
+    queries: {
+      food: FoodQuery
+    },
     resources: {
       score: Game.System.writeResource(Score),
       pendingGrowth: Game.System.writeResource(PendingGrowth)
     }
   },
-  ({ events, resources, commands, lookup }) =>
+  ({ queries, events, resources, commands }) =>
     {
       for (const event of events.foodEaten.all()) {
         // Event visibility is committed now, but the food entity may already be
         // stale, so re-resolve the durable handle explicitly.
-        const food = lookup.getHandle(event.entity, FoodQuery)
+        const food = queries.food.getHandle(event.entity)
         if (!food.ok) {
           continue
         }

@@ -59,13 +59,16 @@ export const UpdateFocusedCollectableSystem = Game.System(
 export const CollectFocusedCollectableSystem = Game.System(
   "TopDown/CollectFocusedCollectable",
   {
+    queries: {
+      collectables: CollectableQuery
+    },
     resources: {
       input: Game.System.readResource(InputState),
       focused: Game.System.writeResource(FocusedCollectable),
       collectedCount: Game.System.writeResource(CollectedCount)
     }
   },
-  ({ resources, lookup, commands }) =>
+  ({ queries, resources, commands }) =>
     {
       if (!resources.input.get().interact.pressed) {
         return
@@ -76,7 +79,7 @@ export const CollectFocusedCollectableSystem = Game.System(
         return
       }
 
-      const result = lookup.getHandle(focused.current, CollectableQuery)
+      const result = queries.collectables.getHandle(focused.current)
       if (!result.ok) {
         resources.focused.set(makeEmptyFocusedCollectable())
         return

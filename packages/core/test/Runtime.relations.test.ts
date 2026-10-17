@@ -473,23 +473,25 @@ describe("Runtime relationships", () => {
     const observe = Game.System(
       "ObserveHierarchyMatchTraversal",
       {
+        queries: {
+          named: NamedQuery
+        },
         resources: {
           summary: Game.System.writeResource(Summary)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, resources }) =>
         {
           if (!rootId) {
             resources.summary.set("missing-setup")
             return
           }
 
-          const children = lookup.childMatches(rootId, ChildOf, NamedQuery)
-          const descendants = lookup.descendantMatches(rootId, ChildOf, NamedQuery, { order: "breadth" })
-          const missing = lookup.descendantMatches(
+          const children = queries.named.children(rootId, ChildOf)
+          const descendants = queries.named.descendants(rootId, ChildOf, { order: "breadth" })
+          const missing = queries.named.descendants(
             Entity.makeEntityId<typeof schema, typeof Game.schema>(999),
-            ChildOf,
-            NamedQuery
+            ChildOf
           )
 
           resources.summary.set([

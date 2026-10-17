@@ -925,31 +925,12 @@ const makeValidatedRuntime = <
 
   const makeLookup = (reader: ReaderState): LookupApi<S, Root> => {
     const lookup: LookupApi<S, Root> = {
-    get(target, query) {
-      return resolve(target, query, reader)
-    },
-    getHandle(handle, query) {
-      return resolve(handle, query, reader)
-    },
     related: relatedTarget,
     relatedSources(target, relation) {
       if (!world.records.has(target)) {
         return Result.failure(Relation.missingEntityError(target))
       }
       return Result.success(world.relatedSourceIds(relation, target).map(entityId))
-    },
-    childMatches(target, relation, query) {
-      if (!world.records.has(target)) {
-        return Result.failure(Relation.missingEntityError(target))
-      }
-      const matches: Array<QueryMatch<S, typeof query>> = []
-      for (const sourceId of world.relatedSourceIds(relation, target)) {
-        const resolved = resolve(sourceId, query, reader)
-        if (resolved.ok) {
-          matches.push(resolved.value)
-        }
-      }
-      return Result.success(matches)
     },
     parent: relatedTarget,
     ancestors(target, relation) {
@@ -989,20 +970,6 @@ const makeValidatedRuntime = <
       }
       return Result.success(descendants)
     },
-    descendantMatches(target, relation, query, options) {
-      const descendants = lookup.descendants(target, relation, options)
-      if (!descendants.ok) {
-        return descendants
-      }
-      const matches: Array<QueryMatch<S, typeof query>> = []
-      for (const descendantId of descendants.value) {
-        const resolved = resolve(descendantId, query, reader)
-        if (resolved.ok) {
-          matches.push(resolved.value)
-        }
-      }
-      return Result.success(matches)
-    },
     root(target, relation) {
       if (!world.records.has(target)) {
         return Result.failure(Relation.missingEntityError(target))
@@ -1019,12 +986,31 @@ const makeValidatedRuntime = <
     return lookup
   }
 
-  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q, reader: ReaderState): QueryHandle<S, Q> => {
+  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q, reader: ReaderState, lookup: LookupApi<S, Root>): QueryHandle<S, Q> => {
     const each = () => queries.each(query, reader.since) as ReadonlyArray<QueryMatch<S, Q>>
+    const matching = (ids: ReadonlyArray<Entity.EntityId<S, Root>>): Array<QueryMatch<S, Q>> => {
+      const matches: Array<QueryMatch<S, Q>> = []
+      for (const id of ids) {
+        const resolved = resolve(id, query, reader)
+        if (resolved.ok) matches.push(resolved.value)
+      }
+      return matches
+    }
     return {
       each,
       get(target) {
         return resolve(target, query, reader)
+      },
+      getHandle(handle) {
+        return resolve(handle as Entity.Handle<Root, any>, query, reader)
+      },
+      children(target, relation) {
+        if (!world.records.has(target)) return Result.failure(Relation.missingEntityError(target))
+        return Result.success(matching(world.relatedSourceIds(relation, target).map(entityId)))
+      },
+      descendants(target, relation, options) {
+        const ids = lookup.descendants(target, relation, options)
+        return ids.ok ? Result.success(matching(ids.value)) : ids
       },
       single() {
         const matches = each()
@@ -1250,10 +1236,11 @@ const makeValidatedRuntime = <
    */
   const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState): SystemContext<any> => {
     const spec = system.spec
+    const lookup = makeLookup(reader)
     return {
       local: (spec.local as (() => unknown) | undefined)?.(),
-      queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, (query) => makeQueryHandle(query, reader)),
-      lookup: makeLookup(reader),
+      queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, (query) => makeQueryHandle(query, reader, lookup)),
+      lookup,
       resources: mapRecord(spec.resources as Record<string, any>, (access) =>
         access.mode === "read"
           ? Cells.storeRead(resources, access.descriptor.key)

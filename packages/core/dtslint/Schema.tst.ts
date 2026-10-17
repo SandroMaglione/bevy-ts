@@ -451,17 +451,18 @@ describe("Schema", () => {
     const ObserveSystem = Game.System(
       "ObserveRelations",
       {
+        queries: { nodes: query },
         relationFailures: {
           targeting: Game.System.readRelationFailures(Targeting),
           childOf: Game.System.readRelationFailures(ChildOf)
         }
       },
-      ({ lookup, commands, relationFailures }) =>
+      ({ queries, lookup, commands, relationFailures }) =>
         {
           lookup.parent(entityId, ChildOf)
           lookup.ancestors(entityId, ChildOf)
-          lookup.childMatches(entityId, ChildOf, query)
-          lookup.descendantMatches(entityId, ChildOf, query, { order: "depth" })
+          queries.nodes.children(entityId, ChildOf)
+          queries.nodes.descendants(entityId, ChildOf, { order: "depth" })
           lookup.related(entityId, Targeting)
           relationFailures.targeting.all()
           commands.relate(entityId, Targeting, entityId)
@@ -478,11 +479,11 @@ describe("Schema", () => {
             typeof schema,
             typeof Game.schema
           >>>()
-          expect(lookup.childMatches(entityId, ChildOf, query)).type.toBeAssignableTo<Result.Result<
+          expect(queries.nodes.children(entityId, ChildOf)).type.toBeAssignableTo<Result.Result<
             ReadonlyArray<QueryTypes.QueryMatch<typeof schema, typeof query>>,
             Relation.Relation.MissingEntityError
           >>()
-          expect(lookup.descendantMatches(entityId, ChildOf, query, { order: "breadth" })).type.toBeAssignableTo<Result.Result<
+          expect(queries.nodes.descendants(entityId, ChildOf, { order: "breadth" })).type.toBeAssignableTo<Result.Result<
             ReadonlyArray<QueryTypes.QueryMatch<typeof schema, typeof query>>,
             Relation.Relation.MissingEntityError
           >>()
@@ -498,16 +499,16 @@ describe("Schema", () => {
           // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
           lookup.parent(entityId, Targeting)
           // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
-          lookup.childMatches(entityId, Targeting, query)
+          queries.nodes.children(entityId, Targeting)
           // @ts-expect-error Type '"Targeting"' is not assignable to type '"ChildOf"'.
-          lookup.descendantMatches(entityId, Targeting, query)
+          queries.nodes.descendants(entityId, Targeting)
           // @ts-expect-error Type 'Descriptor<"component", "Position", { x: number; y: number; }>' is missing the following properties
           Game.System.readRelationFailures(Position)
         }
     )
   })
 
-  it("rejects undeclared query result fields across system and lookup query-match surfaces", () => {
+  it("rejects undeclared query result fields across every query-handle surface", () => {
     const Root = Schema.defineRoot("ExactQueryRoot")
     const Tagged = Descriptor.Component<{ readonly kind: "tagged" }>()("Tagged")
 
@@ -538,7 +539,7 @@ describe("Schema", () => {
           player: CameraTargetQuery
         }
       },
-      ({ queries, lookup }) =>
+      ({ queries }) =>
         {
           for (const match of queries.player.each()) {
             match.data.position.get()
@@ -560,7 +561,7 @@ describe("Schema", () => {
             singleOptional.value.data.velocity.get()
 
             const handle = Game.Entity.handle(singleOptional.value.entity.id, Position)
-            const fromHandle = lookup.getHandle(handle, CameraTargetQuery)
+            const fromHandle = queries.player.getHandle(handle)
             if (fromHandle.ok) {
               fromHandle.value.data.position.get()
               // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
@@ -568,14 +569,14 @@ describe("Schema", () => {
             }
           }
 
-          const direct = lookup.get(entityId, CameraTargetQuery)
+          const direct = queries.player.get(entityId)
           if (direct.ok) {
             direct.value.data.position.get()
             // @ts-expect-error Property 'velocity' does not exist on type 'Cells<QuerySpec<{ readonly position
             direct.value.data.velocity.get()
           }
 
-          const children = lookup.childMatches(entityId, ChildOf, CameraTargetQuery)
+          const children = queries.player.children(entityId, ChildOf)
           if (children.ok) {
             for (const child of children.value) {
               child.data.position.get()
@@ -584,7 +585,7 @@ describe("Schema", () => {
             }
           }
 
-          const descendants = lookup.descendantMatches(entityId, ChildOf, CameraTargetQuery, { order: "depth" })
+          const descendants = queries.player.descendants(entityId, ChildOf, { order: "depth" })
           if (descendants.ok) {
             for (const descendant of descendants.value) {
               descendant.data.position.get()
@@ -598,7 +599,7 @@ describe("Schema", () => {
     expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, never>>()
   })
 
-  it("supports durable handles with explicit roots and checked lookup resolution", () => {
+  it("supports durable handles with explicit roots, resolved through declared queries", () => {
     const Root = Schema.defineRoot("HandleRoot")
     const Target = Descriptor.Component<{
       target: Entity.Handle<typeof Root, typeof Position> | null
@@ -612,24 +613,23 @@ describe("Schema", () => {
     }), Root)
     const schema = Game.schema
 
-    const PositionQuery = Game.Query({
-      selection: {
-        position: Game.Query.read(Position)
-      }
-    })
-
-    const TargetQuery = Game.Query({
-      selection: {
-        target: Game.Query.read(Target),
-        position: Game.Query.read(Position)
-      }
-    })
+    const PositionQuery = Game.Query({ selection: { position: Game.Query.read(Position) } })
+    const TargetQuery = Game.Query({ selection: { target: Game.Query.read(Target), position: Game.Query.read(Position) } })
+    const WithQuery = Game.Query({ selection: { target: Game.Query.read(Target) }, with: [Position] as const })
+    const WrongQuery = Game.Query({ selection: { target: Game.Query.read(Target) } })
+    const OptionalOnlyQuery = Game.Query({ selection: { target: Game.Query.read(Target), position: Game.Query.optional(Position) } })
+    const LifecycleOnlyQuery = Game.Query({ selection: { target: Game.Query.read(Target) }, filters: [Game.Query.changed(Position)] as const })
 
     const ObserveSystem = Game.System(
       "ObserveHandles",
       {
         queries: {
-          targets: TargetQuery
+          targets: TargetQuery,
+          positions: PositionQuery,
+          withPosition: WithQuery,
+          wrong: WrongQuery,
+          optionalOnly: OptionalOnlyQuery,
+          lifecycleOnly: LifecycleOnlyQuery
         }
       },
       ({ queries, lookup }) =>
@@ -640,74 +640,51 @@ describe("Schema", () => {
               continue
             }
 
-            lookup.getHandle(current, PositionQuery)
+            expect(queries.positions.getHandle(current)).type.toBe<Result.Result<QueryTypes.QueryMatch<typeof schema, typeof PositionQuery>, QueryTypes.Query.LookupError>>()
+            queries.withPosition.getHandle(current)
 
             const unqualified = Game.Entity.handle(match.entity.id)
             expect(unqualified).type.toBe<Entity.Handle<typeof Root>>()
-
             const fromRef = Game.Entity.handle(match.entity)
             expect(fromRef).type.toBe<Entity.Handle<typeof Root>>()
-
             const qualified = Game.Entity.handle(match.entity.id, Position)
             expect(qualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
-
             const fromRefQualified = Game.Entity.handle(match.entity, Position)
             expect(fromRefQualified).type.toBe<Entity.Handle<typeof Root, typeof Position>>()
-
-            const WithQuery = Game.Query({
-              selection: {
-                target: Game.Query.read(Target)
-              },
-              with: [Position] as const
-            })
-
-            lookup.getHandle(current, WithQuery)
+            // A handle without an intent resolves through any declared query.
+            queries.wrong.getHandle(unqualified)
 
             // @ts-expect-error Types of property '__brand' are incompatible.
-            lookup.get(current, PositionQuery)
-
-            const WrongQuery = Game.Query({
-              selection: {
-                target: Game.Query.read(Target)
-              }
-            })
-
-            // @ts-expect-error is not assignable to parameter of type 'never'.
-            lookup.getHandle(current, WrongQuery)
-
-            const OptionalOnlyQuery = Game.Query({
-              selection: {
-                target: Game.Query.read(Target),
-                position: Game.Query.optional(Position)
-              }
-            })
-
-            // @ts-expect-error is not assignable to parameter of type 'never'.
-            lookup.getHandle(current, OptionalOnlyQuery)
-
-            const RelatedOnlyQuery = Game.Query({
-              selection: {
-                target: Game.Query.read(Target)
-              },
-              with: [Target] as const
-            })
-
-            // @ts-expect-error is not assignable to parameter of type 'never'.
-            lookup.getHandle(current, RelatedOnlyQuery)
-
-            const LifecycleOnlyQuery = Game.Query({
-              selection: {
-                target: Game.Query.read(Target)
-              },
-              filters: [Game.Query.changed(Position)] as const
-            })
-
-            // @ts-expect-error is not assignable to parameter of type 'never'.
-            lookup.getHandle(current, LifecycleOnlyQuery)
+            queries.positions.get(current)
+            // @ts-expect-error this query does not prove the handle's intent component: select it, or add it to with
+            queries.wrong.getHandle(current)
+            // @ts-expect-error this query does not prove the handle's intent component: select it, or add it to with
+            queries.optionalOnly.getHandle(current)
+            // @ts-expect-error this query does not prove the handle's intent component: select it, or add it to with
+            queries.lifecycleOnly.getHandle(current)
+            // @ts-expect-error Property 'getHandle' does not exist on type 'LookupApi
+            lookup.getHandle(current, PositionQuery)
           }
         }
     )
 
     expect(ObserveSystem).type.toBeAssignableTo<SchemaTypes.Schema.BoundSystem<typeof schema, typeof Root, any, never>>()
+  })
+
+  it("cannot write through a query the system did not declare", () => {
+    const Hp = Descriptor.Component<number>()("UndeclaredWrite/Hp")
+    const Game = Schema.bind(Schema.fragment({ components: { Hp } }))
+    const entityId = Entity.makeEntityId<typeof Game.schema, typeof Game.schema>(1)
+    Game.System("UndeclaredWrite/Probe", {
+      queries: { readers: Game.Query({ selection: { hp: Game.Query.read(Hp) } }) }
+    }, ({ queries, lookup }) => {
+      const read = queries.readers.get(entityId)
+      if (read.ok) {
+        // @ts-expect-error Property 'set' does not exist on type 'ReadCell<number>'.
+        read.value.data.hp.set(0)
+      }
+      // @ts-expect-error Property 'get' does not exist on type 'LookupApi
+      lookup.get(entityId, Game.Query({ selection: { hp: Game.Query.write(Hp) } }))
+    })
   })
 })

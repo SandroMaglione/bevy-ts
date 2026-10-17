@@ -518,7 +518,8 @@ export const ResolveAgentInteractionsSystem = Game.System(
   {
     when: [Game.Condition.inState(SimulationPhase, "Running")],
     queries: {
-      agents: AgentSnapshotQuery
+      agents: AgentSnapshotQuery,
+      resolve: AgentResolveQuery
     },
     resources: {
       arena: Game.System.readResource(Arena),
@@ -528,7 +529,7 @@ export const ResolveAgentInteractionsSystem = Game.System(
       populationStats: Game.System.writeResource(PopulationStats)
     }
   },
-  ({ queries, resources, commands, lookup }) =>
+  ({ queries, resources, commands }) =>
     {
       const dt = resources.deltaTime.get()
       const arena = resources.arena.get()
@@ -562,8 +563,8 @@ export const ResolveAgentInteractionsSystem = Game.System(
             continue
           }
 
-          const leftLive = lookup.getHandle(left.handle as never, AgentResolveQuery)
-          const rightLive = lookup.getHandle(right.handle as never, AgentResolveQuery)
+          const leftLive = queries.resolve.getHandle(left.handle)
+          const rightLive = queries.resolve.getHandle(right.handle)
           if (!leftLive.ok || !rightLive.ok) {
             continue
           }
