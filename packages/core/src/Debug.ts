@@ -82,6 +82,13 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
    * active only while at least one listener is registered.
    */
   readonly observe: (listener: (event: TraceEvent) => void) => () => void
+  /**
+   * Delivers what the host does to the runtime, until the returned function
+   * is called: each tick's start and end (with the schedule values it runs)
+   * and each `runtime.send`. Unlike `observe`, it turns no tracing on, so a
+   * tool can listen for a whole play session (replay recorders do).
+   */
+  readonly observeHost: (listener: (event: HostEvent<S, Root>) => void) => () => void
   /** Retention and reader state of every stream that has readers or entries. */
   readonly streams: () => ReadonlyArray<StreamStatus>
   /** Live entity count and, per component, how many entities have it. Cheap enough to sample every frame. */
@@ -468,6 +475,24 @@ export interface RestoreEvent {
   readonly tick: number
   readonly ok: boolean
 }
+
+/** What `observeHost` delivers. */
+export type HostEvent<S extends Schema.Any = Schema.Any, Root = unknown> =
+  | {
+      readonly type: "tick.start"
+      /** The schedule values passed to this `tick(...)` (or `tryTick`) call, in order. */
+      readonly schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>
+      readonly frame: number
+    }
+  | {
+      readonly type: "tick.end"
+      readonly schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>
+      readonly frame: number
+      /** `failed`: a system returned `Result.failure`; `defect`: one threw (rethrown after this event). */
+      readonly outcome: "ok" | "failed" | "defect"
+      readonly error?: unknown
+    }
+  | { readonly type: "send"; readonly event: string; readonly value: unknown }
 
 /** Everything `observe` delivers. */
 export type TraceEvent =

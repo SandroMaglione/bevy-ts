@@ -173,6 +173,53 @@ The trace shows what systems wrote, not what they read. When a system writes
 a wrong value from correct inputs, the journal narrows the bug to that
 system (it runs, in order, and writes this value) and the rest is its code.
 
+## Replays
+
+A replay is the last seconds of a play session as a file: a debug artifact
+to open headless, explain, and turn into a test, then delete.
+
+```ts
+// In the game's dev build: record the simulation schedule.
+const recorder = Replay.recorder(runtime, {
+  schedule: simulate, name: "simulate",
+  keep: 30, stepSeconds: STEP_SECONDS,       // seconds kept, seconds per tick
+  sink: ReplayViteSink.make({ fetch: (url, init) => fetch(url, init) }),
+  now: () => Date.now(),
+  saveOn: { failure: true, invariants: [DeadAreGone] } // saves by itself
+})
+Monitor.attach(runtime, { schedules, replay: recorder }) // adds "Save replay"
+
+// vite.config.ts: writes posted replays to .replays/<time>.json and logs them.
+plugins: [ReplayVitePlugin.plugin()]
+```
+
+- The recorded schedule's services must be `snapshot()` sources of plain
+  data (input) or plain data (rules); anything else is a compile error that
+  names the service. Time and randomness live in the world, so the file holds
+  everything the simulation read: periodic snapshots, each tick's source
+  values (as changes), and every `runtime.send`.
+- Sinks deliver files: `Replay.memorySink()` (tests), `ReplayNodeSink`
+  (files, for headless runs), `ReplayViteSink` + `ReplayVitePlugin` (dev
+  server). The generic modules call no platform API; wall time comes from
+  `now`.
+
+```ts
+// In Node: make(playback) builds the game with the recorded input.
+const make = (playback: Replay.Playback) => {
+  const runtime = makeRuntime({ input: playback.source(Input), debug: true })
+  return { runtime, schedules: { simulate } }
+}
+const file = Replay.parse(JSON.parse(readFileSync(".replays/....json", "utf8")))
+const replay = file.ok ? Replay.session(make, file.value) : file
+replay.value.play()                       // run the ticks; reports checkpoint divergence
+replay.value.session.why(12, Position)    // a normal Session over the replayed frames
+Replay.verify(make, file.value)           // replays twice: nondeterminism shows up
+Replay.extract(make, file.value, { from: 1400, to: 1412 }) // a small replay for a test
+```
+
+A replay recorded with another schema fails with "replay recorded with an
+older schema".
+
 ## Recording a browser session
 
 ```ts

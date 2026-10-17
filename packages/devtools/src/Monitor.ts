@@ -70,6 +70,11 @@ export interface Options<S extends Schema.Any, Root> {
   readonly locate?: (entity: number) => { readonly x: number; readonly y: number } | undefined
   /** Milliseconds between panel refreshes. Defaults to 250. */
   readonly refreshMs?: number
+  /**
+   * A replay recorder (`Replay.recorder`): adds a "Save replay" button that
+   * saves the last seconds of play with the reason "Save replay button".
+   */
+  readonly replay?: { readonly save: (reason: string) => unknown }
 }
 
 export interface Monitor {
@@ -264,6 +269,7 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
         <button class="btm-tab" data-tab="overview" type="button">Overview</button>
         <button class="btm-tab" data-tab="systems" type="button">Systems</button>
         <button class="btm-tab" data-tab="entity" type="button">Entity</button>
+        ${options.replay === undefined ? "" : `<button class="btm-save-replay" type="button" title="Save the last seconds of play as a replay">Save replay</button>`}
         <button class="btm-close" type="button" title="Close">×</button>
       </div>
       <div class="btm-status"></div>
@@ -623,6 +629,15 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
   window.addEventListener("keydown", onKey)
   toggleButton.addEventListener("click", () => (panel.hidden ? open() : close()))
   query<HTMLButtonElement>(".btm-close").addEventListener("click", close)
+  const replay = options.replay
+  if (replay !== undefined) {
+    const button = query<HTMLButtonElement>(".btm-save-replay")
+    button.addEventListener("click", () => {
+      replay.save("Save replay button")
+      button.textContent = "Saved"
+      setTimeout(() => { button.textContent = "Save replay" }, 1500)
+    })
+  }
   for (const button of root.querySelectorAll<HTMLButtonElement>(".btm-tab")) {
     button.addEventListener("click", () => setTab(button.dataset["tab"] as Tab))
   }

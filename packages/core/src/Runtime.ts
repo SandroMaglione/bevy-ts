@@ -1723,6 +1723,11 @@ const makeValidatedRuntime = <
 
   const eventsByKey = new Set((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => descriptor.key))
   const externallyWrittenEvents = new Set<string>()
+  /** `debug.observeHost` listeners: ticks and sends, without tracing. Only a debug runtime registers any. */
+  const hostListeners = new Set<(event: Debug.HostEvent<S, Root>) => void>()
+  const emitHost = (event: Debug.HostEvent<S, Root>): void => {
+    for (const listener of hostListeners) listener(event)
+  }
   /** Events declared as sent by the host (`debug.declareHostEvents`). */
   let hostEvents = new Set<string>()
 
@@ -1734,6 +1739,7 @@ const makeValidatedRuntime = <
     // Bound host traffic even when it sends repeatedly without ticking.
     events.trim(0)
     externallyWrittenEvents.add(descriptor.name)
+    if (hostListeners.size > 0) emitHost({ type: "send", event: descriptor.name, value })
     if (tracing) emit({ type: "runtime.sent", frame: frameCount, tick: published, event: descriptor.name, value })
   }
 
@@ -1751,14 +1757,36 @@ const makeValidatedRuntime = <
     ticking = true
     try {
       advanceFrame()
-      for (const schedule of schedules) {
-        const result = runScheduleUnsafe(schedule)
-        if (!result.ok) return result
-      }
-      return succeeded
+      return observedTick(schedules, () => {
+        for (const schedule of schedules) {
+          const result = runScheduleUnsafe(schedule)
+          if (!result.ok) return result
+        }
+        return succeeded
+      })
     } finally {
       ticking = false
     }
+  }
+
+  /** Runs one tick's schedules, telling `observeHost` listeners when it starts and how it ends. */
+  const observedTick = (
+    schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>,
+    run: () => Result.Result<void, SystemFailure>
+  ): Result.Result<void, SystemFailure> => {
+    if (hostListeners.size === 0) return run()
+    emitHost({ type: "tick.start", schedules, frame: frameCount })
+    let result: Result.Result<void, SystemFailure>
+    try {
+      result = run()
+    } catch (defect) {
+      emitHost({ type: "tick.end", schedules, frame: frameCount, outcome: "defect", error: defect })
+      throw defect
+    }
+    emitHost(result.ok
+      ? { type: "tick.end", schedules, frame: frameCount, outcome: "ok" }
+      : { type: "tick.end", schedules, frame: frameCount, outcome: "failed", error: result.error })
+    return result
   }
 
   const hasRequirement = (requirement: Requirement.RequirementValue): boolean => {
@@ -1792,7 +1820,7 @@ const makeValidatedRuntime = <
     }
 
     advanceFrame()
-    return runScheduleUnsafe(schedule) as Result.Result<void, Schedule.FailureOf<Selected>>
+    return observedTick([schedule], () => runScheduleUnsafe(schedule)) as Result.Result<void, Schedule.FailureOf<Selected>>
   }
 
   /**
@@ -2108,6 +2136,12 @@ const makeValidatedRuntime = <
           tracing = false
           world.setHooks(undefined)
         }
+      }
+    },
+    observeHost(listener) {
+      hostListeners.add(listener)
+      return () => {
+        hostListeners.delete(listener)
       }
     },
     streams,

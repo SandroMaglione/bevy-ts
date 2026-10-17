@@ -1,5 +1,5 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { Invariant, Lint, Session } from "@typeonce/bevy-ts-devtools"
+import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Invariant, Lint, Replay, Session } from "@typeonce/bevy-ts-devtools"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DevtoolsTypes/Position")
@@ -97,5 +97,58 @@ describe("Lint.run", () => {
   it("requires a runtime made with debug: true", () => {
     const plain = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Limit: 1 } })
     expect(Lint.run).type.not.toBeCallableWith({ runtime: plain, schedules: { update } })
+  })
+})
+
+describe("Replay.recorder", () => {
+  const Place = Descriptor.ConstructedComponent(Decode.struct({ x: Decode.number }))("DevtoolsTypes/Place")
+  const Keys = Descriptor.Service<Replay.Source<{ readonly left: boolean }>>()("DevtoolsTypes/Keys")
+  const Rules = Descriptor.Service<{ readonly speed: number; readonly names: ReadonlyArray<string> }>()("DevtoolsTypes/Rules")
+  const Page = Descriptor.Service<{ readonly toast: (message: string) => void }>()("DevtoolsTypes/Page")
+  const Mapped = Descriptor.Service<Replay.Source<Map<string, number>>>()("DevtoolsTypes/Mapped")
+  const Saved = Schema.bind(Schema.fragment({ components: { Place } }))
+  const runtime = Saved.Runtime.make({
+    services: Saved.Runtime.services(
+      Saved.Runtime.service(Keys, { snapshot: () => ({ left: false }) }),
+      Saved.Runtime.service(Rules, { speed: 1, names: [] }),
+      Saved.Runtime.service(Page, { toast: () => {} }),
+      Saved.Runtime.service(Mapped, { snapshot: () => new Map() })
+    ),
+    debug: true
+  })
+  const base = { name: "update", keep: 10, stepSeconds: 1, sink: Replay.memorySink(), now: () => 0 }
+
+  it("accepts plain-data sources and plain constants", () => {
+    const update = Saved.Schedule(Saved.System("DevtoolsTypes/Plain", {
+      services: { keys: Saved.System.service(Keys), rules: Saved.System.service(Rules) }
+    }, () => {}))
+    expect(Replay.recorder(runtime, { ...base, schedule: update })).type.toBe<Replay.Recorder>()
+  })
+
+  it("rejects a service that is neither a plain source nor plain data, naming it", () => {
+    const update = Saved.Schedule(Saved.System("DevtoolsTypes/Page", { services: { page: Saved.System.service(Page) } }, () => {}))
+    // @ts-expect-error DevtoolsTypes/Page is neither a snapshot() source of plain data nor plain data
+    Replay.recorder(runtime, { ...base, schedule: update })
+  })
+
+  it("rejects a source whose snapshot is not plain data", () => {
+    const update = Saved.Schedule(Saved.System("DevtoolsTypes/Mapped", { services: { mapped: Saved.System.service(Mapped) } }, () => {}))
+    // @ts-expect-error DevtoolsTypes/Mapped: its snapshot() returns data that is not plain
+    Replay.recorder(runtime, { ...base, schedule: update })
+  })
+
+  it("requires a runtime whose world can be saved", () => {
+    const Loose = Descriptor.Component<{ readonly x: number }>()("DevtoolsTypes/Loose")
+    const Unsaved = Schema.bind(Schema.fragment({ components: { Loose } }))
+    const unsaved = Unsaved.Runtime.make({ services: Unsaved.Runtime.services(), debug: true })
+    const update = Unsaved.Schedule(Unsaved.System("DevtoolsTypes/Unsaved", {}, () => {}))
+    expect(Replay.recorder).type.not.toBeCallableWith(unsaved, { ...base, schedule: update })
+  })
+
+  it("tells plain data from the rest", () => {
+    expect<Replay.IsPlain<{ readonly a: ReadonlyArray<{ readonly b: string | null }> }>>().type.toBe<true>()
+    expect<Replay.IsPlain<{ readonly f: () => void }>>().type.toBe<false>()
+    expect<Replay.IsPlain<Map<string, number>>>().type.toBe<false>()
+    expect<Replay.IsPlain<Set<number>>>().type.toBe<false>()
   })
 })
