@@ -1,5 +1,13 @@
 # @typeonce/ritmo-pixi
 
+## 0.7.0
+
+### Patch Changes
+
+- 358401a: Link the bevy-ts migration guide from each published package README.
+- Updated dependencies [358401a]
+  - @typeonce/ritmo-render@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
