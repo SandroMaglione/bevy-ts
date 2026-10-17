@@ -9,7 +9,7 @@ import * as ReplayVitePlugin from "@typeonce/ritmo-devtools/ReplayVitePlugin"
 import * as ReplayViteSink from "@typeonce/ritmo-devtools/ReplayViteSink"
 
 const file: Replay.ReplayFile = {
-  format: "bevy-ts-replay",
+  format: "ritmo-replay",
   version: 1,
   library: Replay.version,
   schema: "00000000",
@@ -58,7 +58,7 @@ describe("replay sinks", () => {
     const { status, body } = await finished
     expect(status).toBe(201)
     expect(body).toBe(".replays/2026-10-17T12-00-00.000Z-tick-3.json")
-    expect(logged).toEqual(["[bevy-ts] replay saved: .replays/2026-10-17T12-00-00.000Z-tick-3.json (3 ticks): invariant DeadAreGone broke at tick 3"])
+    expect(logged).toEqual(["[ritmo] replay saved: .replays/2026-10-17T12-00-00.000Z-tick-3.json (3 ticks): invariant DeadAreGone broke at tick 3"])
     expect(JSON.parse(readFileSync(join(root, body), "utf8"))).toEqual(file)
   })
 })

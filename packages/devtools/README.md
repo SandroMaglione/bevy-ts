@@ -1,5 +1,20 @@
 # `@typeonce/ritmo-devtools`
 
+`Determinism.check` compares the same scripted simulation twice, including
+transient components that snapshots omit:
+
+```ts
+const result = Determinism.check(({ hostClock }) => makeSimulation(hostClock), {
+  schedule: "update", frames: 1800, hostClock: HostClock.test()
+})
+if (!result.ok) throw new Error(JSON.stringify(result))
+```
+
+The factory returns `{ runtime, schedules }`, with a fresh debug runtime on
+every call. A difference reports its frame, value path, and the first system
+or schedule marker found by a diagnostic rerun. This checks the supplied
+inputs on the current JavaScript engine.
+
 Debug sessions for `ritmo` runtimes: run schedules headless, keep a trace
 history, and ask what happened as text. Built for coding agents first; the
 same data will back human-facing tools.

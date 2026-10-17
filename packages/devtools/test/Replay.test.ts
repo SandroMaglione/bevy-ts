@@ -78,7 +78,7 @@ describe("Replay", () => {
     runtime.send(Bump, 10)
     runtime.tick(update)
     const file = recorder.save("test")
-    expect(file).toMatchObject({ format: "bevy-ts-replay", version: 1, library: Replay.version, schedule: "update", reason: "test", savedAt: 1_000, constants: { "Replay/Config": { scale: 2 } } })
+    expect(file).toMatchObject({ format: "ritmo-replay", version: 1, library: Replay.version, schedule: "update", reason: "test", savedAt: 1_000, constants: { "Replay/Config": { scale: 2 } } })
     expect(file.ticks.find((record) => record.tick === 7)?.sent).toEqual([{ event: "Replay/Bump", value: 10 }])
     // Repeated input is stored once: ticks 4 and 5 both read dx 0, and tick 7 reads the default 0 again.
     expect(file.ticks.find((record) => record.tick === 5)?.services).toBeUndefined()

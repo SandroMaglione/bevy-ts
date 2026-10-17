@@ -26,6 +26,11 @@ describe("Clock.hz", () => {
     const rate: number = 60
     // @ts-expect-error Clock.hz needs a literal
     Clock.hz(rate)
+    const chooseRate = (): 0 | 60 => 60
+    // @ts-expect-error Clock.hz needs one literal rate
+    Clock.hz(chooseRate())
+    // @ts-expect-error Property '[stepBrand]' is missing
+    const forged: Clock.Step<60> = { kind: "ClockStep", hz: 60, dt: 0 }
   })
 })
 
@@ -77,6 +82,8 @@ describe("Clock.duration", () => {
     expect(Clock.every(t, Clock.duration(step, 1))).type.toBe<boolean>()
     expect(Clock.every).type.not.toBeCallableWith(t, Clock.duration(Clock.hz(10), 1))
     expect(Clock.every).type.toBeCallableWith(t, Clock.duration(step, 1))
+    // @ts-expect-error Property '[durationBrand]' is missing
+    Clock.every(t, { kind: "ClockDuration", hz: 60, steps: 0 })
   })
 })
 

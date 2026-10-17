@@ -38,7 +38,7 @@ export interface Plugin {
 }
 
 export const plugin = (options: { readonly directory?: string } = {}): Plugin => ({
-  name: "bevy-ts-replays",
+  name: "ritmo-replays",
   apply: "serve",
   configureServer: (server) => {
     const sink = ReplayNodeSink.make({ directory: `${server.config.root}/${options.directory ?? ".replays"}` })
@@ -65,7 +65,7 @@ export const plugin = (options: { readonly directory?: string } = {}): Plugin =>
         sink.save(parsed.value)
         const path = sink.written.at(-1)!.slice(server.config.root.length + 1)
         const ticks = parsed.value.ticks.length
-        server.config.logger.info(`[bevy-ts] replay saved: ${path} (${ticks} ticks): ${parsed.value.reason}`)
+        server.config.logger.info(`[ritmo] replay saved: ${path} (${ticks} ticks): ${parsed.value.reason}`)
         response.statusCode = 201
         response.end(path)
       })

@@ -1,5 +1,6 @@
 /** Debug sessions, trace history, text reports, and a live browser monitor for ritmo runtimes. */
 export * as Format from "./Format.ts"
+export * as Determinism from "./Determinism.ts"
 export * as Invariant from "./Invariant.ts"
 export * as Lint from "./Lint.ts"
 export * as Monitor from "./Monitor.ts"

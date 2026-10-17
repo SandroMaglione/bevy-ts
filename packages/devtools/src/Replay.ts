@@ -119,7 +119,7 @@ export interface TickRecord {
 
 /** A replay file (JSON). */
 export interface ReplayFile {
-  readonly format: "bevy-ts-replay"
+  readonly format: "ritmo-replay"
   readonly version: 1
   /** The `@typeonce/ritmo-devtools` version that recorded it. */
   readonly library: string
@@ -291,7 +291,7 @@ export const recorder = <S extends Schema.Any, Root, const Recorded extends AnyS
   const save = (reason: string): ReplayFile => {
     const start = points[0]!
     const file: ReplayFile = {
-      format: "bevy-ts-replay",
+      format: "ritmo-replay",
       version: 1,
       library: libraryVersion,
       schema: schemaHash(runtime.debug),
@@ -379,7 +379,7 @@ export type ReplayError =
 /** Checks the shape of untrusted replay data (`JSON.parse` output). */
 export const parse = (data: unknown): Result.Result<ReplayFile, ReplayError> => {
   const invalid = (message: string) => Result.failure<ReplayError>({ _tag: "InvalidReplay", message })
-  if (!isRecord(data) || data["format"] !== "bevy-ts-replay") return invalid("not a bevy-ts replay (format)")
+  if (!isRecord(data) || data["format"] !== "ritmo-replay") return invalid("not a ritmo replay (format)")
   if (data["version"] !== 1) return invalid(`unsupported replay version ${JSON.stringify(data["version"])}`)
   for (const key of ["library", "schema", "schedule", "reason"] as const) {
     if (typeof data[key] !== "string") return invalid(`${key} must be a string`)

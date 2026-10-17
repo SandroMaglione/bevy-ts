@@ -36,8 +36,14 @@ import type * as System from "./System.ts"
 
 // ── The step ────────────────────────────────────────────────────────────
 
+declare const stepBrand: unique symbol
+declare const durationBrand: unique symbol
+declare const resourceBrand: unique symbol
+type IsUnion<T, Whole = T> = T extends Whole ? [Whole] extends [T] ? false : true : never
+
 /** A fixed step: `hz` steps per second, `dt = 1 / hz` seconds each. */
 export interface Step<Hz extends number = number> {
+  readonly [stepBrand]: Hz
   readonly kind: "ClockStep"
   readonly hz: Hz
   readonly dt: number
@@ -48,6 +54,7 @@ type HzMessage = "Clock.hz needs a positive whole number of steps per second"
 /** `N` when it is a literal positive whole number; otherwise the message naming what is wrong. */
 export type ValidHz<N extends number> =
   number extends N ? "Clock.hz needs a literal"
+  : true extends IsUnion<N> ? "Clock.hz needs one literal rate"
   : `${N}` extends `-${string}` | `${string}.${string}` | `${string}e${string}` | "0" ? HzMessage
   : N
 
@@ -58,8 +65,8 @@ export type ValidHz<N extends number> =
  */
 export const hz = <const N extends number>(hz: ValidHz<N>): Step<N> => {
   const value = hz as number
-  if (!Number.isInteger(value) || value <= 0) throw new Error(`Clock.hz needs a positive whole number of steps per second, got ${value}`)
-  return { kind: "ClockStep", hz: value as N, dt: 1 / value }
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Clock.hz needs a positive whole number of steps per second, got ${value}`)
+  return { kind: "ClockStep", hz: value as N, dt: 1 / value } as Step<N>
 }
 
 // ── The time value and its resource ─────────────────────────────────────
@@ -91,7 +98,7 @@ const timeOf = <Hz extends number>(step: Step<Hz>, raw: unknown): Result.Result<
       message: typeof value.hz === "number" ? `saved at ${value.hz} Hz, this game runs at ${step.hz} Hz` : `hz must be ${step.hz}`
     })
   }
-  if (typeof value.step !== "number" || !Number.isInteger(value.step) || value.step < 0) {
+  if (typeof value.step !== "number" || !Number.isSafeInteger(value.step) || value.step < 0) {
     return Result.failure({ _tag: "InvalidTime", message: "step must be a whole number of steps, 0 or more" })
   }
   if (value.dt !== 0 && value.dt !== step.dt) return Result.failure({ _tag: "InvalidTime", message: `dt must be 0 or 1/${step.hz}` })
@@ -100,7 +107,7 @@ const timeOf = <Hz extends number>(step: Step<Hz>, raw: unknown): Result.Result<
 
 /** The descriptor `Clock.resource` returns: a validated resource holding `Time<Hz>`. */
 export type ClockResource<Name extends string, Hz extends number> =
-  DescriptorModule.DecodableDescriptor<"resource", Name, Time<Hz>, Time<Hz>, InvalidTime>
+  DescriptorModule.DecodableDescriptor<"resource", Name, Time<Hz>, Time<Hz>, InvalidTime> & { readonly [resourceBrand]: Hz }
 
 /**
  * A resource holding a clock that runs at `step`. Its validator rejects a
@@ -180,6 +187,7 @@ export const system = <
 
 /** A span of simulation time in whole steps of one clock rate. */
 export interface Duration<Hz extends number = number> {
+  readonly [durationBrand]: Hz
   readonly kind: "ClockDuration"
   readonly steps: number
   readonly hz: Hz
@@ -243,6 +251,7 @@ type FractionReachesStep<Fraction extends string, Hz extends number> =
 /** `Seconds` when it is a literal, non-negative, and at least one step at `Hz`; otherwise the message. */
 export type ValidDuration<Hz extends number, Seconds extends number> =
   number extends Seconds ? "Clock.duration needs a literal number of seconds: use Clock.durationRaw for data"
+  : true extends IsUnion<Seconds> ? "Clock.duration needs one literal duration: use Clock.durationRaw for data"
   : number extends Hz ? "Clock.duration needs a step built with Clock.hz(literal)"
   : `${Seconds}` extends `-${string}` ? "Clock.duration needs a non-negative number of seconds"
   : `${Seconds}` extends `${string}e-${string}` | "0" ? `${Seconds}s is shorter than one step (1/${Hz}s)`
@@ -258,7 +267,9 @@ const stepsOf = (hz: number, seconds: number): Result.Result<number, InvalidDura
   if (seconds * hz < 1 - 1e-9) {
     return Result.failure({ _tag: "InvalidDuration", seconds, message: `${seconds}s is shorter than one step (1/${hz}s)` })
   }
-  return Result.success(Math.max(1, Math.round(seconds * hz)))
+  const steps = Math.max(1, Math.round(seconds * hz))
+  if (!Number.isSafeInteger(steps)) return Result.failure({ _tag: "InvalidDuration", seconds, message: "a duration must fit in a safe whole number of steps" })
+  return Result.success(steps)
 }
 
 /**
@@ -271,13 +282,13 @@ const stepsOf = (hz: number, seconds: number): Result.Result<number, InvalidDura
 export const duration = <Hz extends number, const Seconds extends number>(step: Step<Hz>, seconds: ValidDuration<Hz, Seconds>): Duration<Hz> => {
   const steps = stepsOf(step.hz, seconds as number)
   if (!steps.ok) throw new Error(steps.error.message)
-  return { kind: "ClockDuration", steps: steps.value, hz: step.hz }
+  return { kind: "ClockDuration", steps: steps.value, hz: step.hz } as Duration<Hz>
 }
 
 /** Seconds from data as whole steps of `step`, the same rules as `duration`, as a `Result`. */
 export const durationRaw = <Hz extends number>(step: Step<Hz>, seconds: number): Result.Result<Duration<Hz>, InvalidDuration> => {
   const steps = stepsOf(step.hz, seconds)
-  return steps.ok ? Result.success({ kind: "ClockDuration", steps: steps.value, hz: step.hz }) : steps
+  return steps.ok ? Result.success({ kind: "ClockDuration", steps: steps.value, hz: step.hz } as Duration<Hz>) : steps
 }
 
 /** The whole steps a duration spans. */

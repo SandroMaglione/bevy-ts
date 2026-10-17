@@ -18,6 +18,8 @@
 - Packages never draw. Drawing, particles, and effects stay in games.
 - Bridge code that hands a renderer or the platform what it needs (nodes, positions, input, timing) and glue that would otherwise repeat in every game belong in the support packages.
 - Hand the game the data it needs to draw (like `Touch`'s `view()`), never the drawing itself.
+- Core and generic package modules never call a platform API (`performance`, `window`, `document`, timers, file system, network). A platform detail is a generic contract in the owning package with platform implementations injected (like `NodeRegistry` / `PixiNodeRegistry`, `HostClock` / `BrowserHostClock`). A default may use only what JavaScript itself guarantees in every engine.
+- Simulation code reads time from `Clock` and randomness from `Random`; host time (`HostClock`) is for hosts, tools, and debug timing, never for systems.
 
 ## Core Principles
 - Type safety is the first and absolute priority.
