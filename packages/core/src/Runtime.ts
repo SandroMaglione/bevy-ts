@@ -805,8 +805,11 @@ const makeValidatedRuntime = <
     options.machineDefinitions.map((machine, index) => [machine.key, index] as const)
   )
 
+  /** Machines the runtime was given an initial value for. */
+  const providedMachineKeys = new Set<symbol>()
   for (const provision of machineEntries) {
     currentMachines.set(provision.machine.key, provision.initial)
+    providedMachineKeys.add(provision.machine.key)
   }
 
   /**
@@ -2375,6 +2378,8 @@ const makeValidatedRuntime = <
       schema: options.schema,
       machines: [...new Set(machinesByName.values())],
       currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
+      providesMachine: (machine) => providedMachineKeys.has(machine.key),
+      scopes: options.scopeDefinitions,
       providedServices: Object.keys(providedServices),
       externallyWrittenEvents: new Set([...externallyWrittenEvents, ...hostEvents]),
       relationMutations,

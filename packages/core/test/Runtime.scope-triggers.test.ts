@@ -98,6 +98,38 @@ describe("entity scopes despawned by state transitions", () => {
     expect(runtime.inspect(Names)).toEqual(["late"])
   })
 
+  it("describes scope triggers and lints one that can never fire", () => {
+    const scopeLints = (runtime: { readonly debug: { readonly describe: () => Debug.Description } }) =>
+      runtime.debug.describe().lints.filter((lint) => lint.code === "scope-trigger-never-applied").map((lint) => lint.message)
+
+    const unprovided = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock: HostClock.test() } })
+    expect(unprovided.debug.describe().scopes).toEqual([
+      { name: "ScopeTriggers/Run", despawnOn: ["onExit(ScopeTriggers/Flow=Playing)"] },
+      { name: "ScopeTriggers/Overlay", despawnOn: ["onEnter(ScopeTriggers/Flow=Menu)"] }
+    ])
+    expect(scopeLints(unprovided)).toEqual([
+      "ScopeTriggers/Run is despawned on onExit(ScopeTriggers/Flow=Playing), but the runtime does not provide ScopeTriggers/Flow, so its state never changes and the scope is never despawned",
+      "ScopeTriggers/Overlay is despawned on onEnter(ScopeTriggers/Flow=Menu), but the runtime does not provide ScopeTriggers/Flow, so its state never changes and the scope is never despawned"
+    ])
+
+    const noMarker = makeRuntime()
+    noMarker.debug.nameSchedules({ update: Game.Schedule(goTo("Playing")) })
+    expect(scopeLints(noMarker)).toEqual([
+      "ScopeTriggers/Run is despawned on onExit(ScopeTriggers/Flow=Playing), but no described schedule has an applyStateTransitions() marker, so the scope is never despawned",
+      "ScopeTriggers/Overlay is despawned on onEnter(ScopeTriggers/Flow=Menu), but no described schedule has an applyStateTransitions() marker, so the scope is never despawned"
+    ])
+
+    const noQueuer = makeRuntime()
+    noQueuer.debug.nameSchedules({ update: Game.Schedule(ObserveOnExit, Game.Schedule.applyStateTransitions(transitions)) })
+    expect(scopeLints(noQueuer)[0]).toBe(
+      "ScopeTriggers/Run is despawned on onExit(ScopeTriggers/Flow=Playing), but no described system queues a next state of ScopeTriggers/Flow, so the scope is never despawned"
+    )
+
+    const applied = makeRuntime()
+    applied.debug.nameSchedules({ update: Game.Schedule(goTo("Playing"), Game.Schedule.applyStateTransitions(transitions)) })
+    expect(scopeLints(applied)).toEqual([])
+  })
+
   it("rejects a duplicate scope name", () => {
     expect(() => Game.EntityScope("ScopeTriggers/Run")).toThrow("Duplicate entity scope name: ScopeTriggers/Run")
   })

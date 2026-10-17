@@ -144,6 +144,13 @@ export interface MachineDescription {
   readonly current: Machine.StateValue | undefined
 }
 
+/** An entity scope and the state changes that despawn it (`Game.EntityScope(name, { despawnOnExit, despawnOnEnter })`). */
+export interface ScopeDescription {
+  readonly name: string
+  /** Triggers as `onExit(Flow=Playing)` / `onEnter(Flow=Menu)`; empty when only `commands.despawnScope` ends it. */
+  readonly despawnOn: ReadonlyArray<string>
+}
+
 export interface ServiceDescription {
   readonly name: string
   readonly provided: boolean
@@ -230,7 +237,8 @@ export interface ScheduleDescription {
  * have tried to relate or reorder (which can fail) while no described system
  * reads its failures, and `requirement-violated` lists commands skipped
  * because they would have broken a `Schema.requires` requirement, so
- * describe after the game has run for a while.
+ * describe after the game has run for a while. `scope-trigger-never-applied`
+ * also reads which machines the runtime provides.
  */
 export interface Lint {
   readonly severity: "warning" | "info"
@@ -245,6 +253,7 @@ export interface Lint {
     | "this-tick-order"
     | "command-permission-unused"
     | "requirement-violated"
+    | "scope-trigger-never-applied"
   readonly message: string
   readonly subject: string
   /** What to change to resolve it (or, for `info`, when it is fine as it is). */
@@ -265,6 +274,8 @@ export interface Description {
   readonly events: ReadonlyArray<{ readonly name: string }>
   readonly relations: ReadonlyArray<RelationDescription>
   readonly machines: ReadonlyArray<MachineDescription>
+  /** Scopes defined through the game, in definition order. */
+  readonly scopes: ReadonlyArray<ScopeDescription>
   readonly services: ReadonlyArray<ServiceDescription>
   readonly schedules: ReadonlyArray<ScheduleDescription>
   readonly systems: ReadonlyArray<SystemDescription>

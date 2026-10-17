@@ -173,6 +173,12 @@ export const description = (input: Debug.Description): string => {
       lines.push(`${machine.name} = ${machine.current === undefined ? "(not provided)" : String(machine.current)}  [${machine.states.join(" | ")}]`)
     }
   }
+  if (input.scopes.length > 0) {
+    lines.push("", "# Scopes")
+    for (const scope of input.scopes) {
+      lines.push(`${scope.name}${scope.despawnOn.length > 0 ? ` (despawned on ${scope.despawnOn.join(", ")})` : ""}`)
+    }
+  }
   if (input.services.length > 0) {
     lines.push("", "# Services")
     for (const service of input.services) lines.push(`${service.name}${service.provided ? "" : " (not provided)"}`)

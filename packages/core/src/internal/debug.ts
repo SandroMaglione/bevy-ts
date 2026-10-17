@@ -6,6 +6,7 @@
 import type * as Debug from "../Debug.ts"
 import * as DescriptorModule from "../Descriptor.ts"
 import type { Descriptor } from "../Descriptor.ts"
+import type * as EntityScope from "../EntityScope.ts"
 import type * as Inspector from "../Inspector.ts"
 import type * as Machine from "../Machine.ts"
 import type * as Query from "../Query.ts"
@@ -267,6 +268,10 @@ export interface DescribeInput {
   readonly schema: Schema.Any
   readonly machines: ReadonlyArray<Machine.StateMachine.Any>
   readonly currentMachine: (machine: Machine.StateMachine.Any) => Machine.StateValue | undefined
+  /** Whether the runtime was given an initial value for the machine. */
+  readonly providesMachine: (machine: Machine.StateMachine.Any) => boolean
+  /** Every scope defined through the game, with its despawn triggers. */
+  readonly scopes: ReadonlyArray<EntityScope.EntityScope.Any>
   readonly providedServices: ReadonlyArray<string>
   readonly externallyWrittenEvents: ReadonlySet<string>
   /** Relations commands have tried to relate or reorder, by the queuing systems. */
@@ -334,6 +339,20 @@ export const describe = (input: DescribeInput): Debug.Description => {
     schedule.steps.some((step) => !Schedule.isSystemStep(step) && step.kind === "applyStateTransitions"))
 
   const lints: Array<Omit<Debug.Lint, "fix">> = []
+  const triggerName = (trigger: EntityScope.Trigger) =>
+    `${trigger.phase === "exit" ? "onExit" : "onEnter"}(${trigger.machine.name}=${String(trigger.state)})`
+  for (const scope of input.scopes) {
+    for (const trigger of scope.despawnOn) {
+      const machine = input.machines.find((candidate) => candidate.key === trigger.machine.key)
+      if (machine !== undefined && input.providesMachine(machine)) continue
+      lints.push({
+        severity: "warning",
+        code: "scope-trigger-never-applied",
+        subject: scope.name,
+        message: `${scope.name} is despawned on ${triggerName(trigger)}, but the runtime does not provide ${trigger.machine.name}, so its state never changes and the scope is never despawned`
+      })
+    }
+  }
   if (schedules.length > 0) {
     for (const entry of events.list()) {
       if (entry.writers.length > 0 && entry.readers.length === 0) {
@@ -360,6 +379,24 @@ export const describe = (input: DescribeInput): Debug.Description => {
           code: "next-state-never-applied",
           subject: name,
           message: `next states of ${name} are queued by ${queuers.join("; ")}, but no described schedule has an applyStateTransitions() marker, so they never take effect`
+        })
+      }
+    }
+    for (const scope of input.scopes) {
+      for (const trigger of scope.despawnOn) {
+        const machine = input.machines.find((candidate) => candidate.key === trigger.machine.key)
+        if (machine === undefined || !input.providesMachine(machine)) continue
+        const reason = !appliesTransitions
+          ? "no described schedule has an applyStateTransitions() marker"
+          : !queuedWithParents(machine, nextStates)
+            ? `no described system queues a next state of ${machine.name}`
+            : undefined
+        if (reason === undefined) continue
+        lints.push({
+          severity: "warning",
+          code: "scope-trigger-never-applied",
+          subject: scope.name,
+          message: `${scope.name} is despawned on ${triggerName(trigger)}, but ${reason}, so the scope is never despawned`
         })
       }
     }
@@ -464,6 +501,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
       states: machine.values,
       current: input.currentMachine(machine)
     })),
+    scopes: input.scopes.map((scope) => ({ name: scope.name, despawnOn: scope.despawnOn.map(triggerName) })),
     services: describeServices(input.providedServices, systems),
     schedules: schedules.map(([name, schedule]) => ({ name, steps: schedule.steps.map(describeStep) })),
     systems,
@@ -476,6 +514,10 @@ export const describe = (input: DescribeInput): Debug.Description => {
   }
 }
 
+/** Whether a described system queues a next state of `machine`. */
+const queuedWithParents = (machine: Machine.StateMachine.Any, nextStates: ReadonlyMap<string, unknown>): boolean =>
+  nextStates.has(machine.name)
+
 /** The fix each lint names, by code. */
 const fixFor = (code: Debug.Lint["code"], subject: string): string => {
   switch (code) {
@@ -487,6 +529,8 @@ const fixFor = (code: Debug.Lint["code"], subject: string): string => {
       return `add Game.Schedule.applyStateTransitions(...) to a schedule that runs after the system that queues ${subject}`
     case "resource-changed-never-written":
       return `write ${subject} from a system with Game.System.writeResource, or read it with Game.System.readResource; if only a render schedule writes it, pass that schedule as describe-only`
+    case "scope-trigger-never-applied":
+      return `provide the machine of ${subject}'s trigger in Game.Runtime.make({ machines }), queue its next state from a system, and apply it with Game.Schedule.applyStateTransitions(...); or despawn ${subject} with commands.despawnScope(...) instead`
     case "relation-failure-never-read":
       return `read the failures with Game.System.readRelationFailures(${subject}) in a system and handle them`
     case "this-tick-order":
