@@ -7,13 +7,14 @@
  *
  * ```ts
  * const keyboard = Keyboard.scripted(inputBindings, [{ frame: 0, press: ["right"] }])
- * const simulation = createTopDownSimulation({ keyboard })
+ * const simulation = createTopDownSimulation({ keyboard, hostClock: HostClock.test() })
  * if (simulation.ok) {
  *   simulation.value.runtime.tick(simulation.value.setup)
  *   simulation.value.runtime.tick(simulation.value.update)
  * }
  * ```
  */
+import type { HostClock } from "@typeonce/ritmo"
 import * as Result from "@typeonce/ritmo/Result"
 
 import { FIXED_STEP_SECONDS } from "./constants.ts"
@@ -24,6 +25,8 @@ import type { FrameContextValue, KeyboardInput as KeyboardInputValue } from "./t
 
 export interface TopDownSimulationOptions {
   readonly keyboard: KeyboardInputValue
+  /** Times the debug traces; `HostClock.test()` keeps every timing at 0. Pass the same clock to `Session.make`. */
+  readonly hostClock: HostClock.HostClock
   /** Defaults to one fixed step on a 1280x720 viewport. */
   readonly frame?: FrameContextValue
 }
@@ -42,7 +45,7 @@ export const createTopDownSimulation = (options: TopDownSimulationOptions) => {
     ),
     resources: initialResources(frame),
     machines: initialMachines(),
-    debug: true
+    debug: { hostClock: options.hostClock }
   })
   return Result.match(made, {
     onSuccess: (runtime) => {

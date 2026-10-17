@@ -1,7 +1,7 @@
 /**
  * Opt-in runtime introspection for tools, tests, and coding agents.
  *
- * A runtime made with `debug: true` carries a `debug` handle. Runtimes made
+ * A runtime made with `debug: { hostClock }` carries a `debug` handle. Runtimes made
  * without it have no handle at all, so production code cannot reach into
  * internals by accident and pays nothing for them.
  *
@@ -35,7 +35,7 @@
  *
  * @example
  * ```ts
- * const runtime = Game.Runtime.make({ services, resources, debug: true })
+ * const runtime = Game.Runtime.make({ services, resources, debug: { hostClock: HostClock.standard } })
  * runtime.debug.nameSchedules({ setup: setupSchedule, update: updateSchedule })
  *
  * const stop = runtime.debug.observe((event) => {
@@ -46,15 +46,16 @@
  * stop()
  * ```
  */
+import type { HostClock } from "./HostClock.ts"
 import type * as Machine from "./Machine.ts"
-import type { ExecutableScheduleDefinition } from "./Schedule.ts"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "./Schedule.ts"
 import type { Schema } from "./Schema.ts"
 
 /** Version of the description, dump, and trace formats. */
 export const formatVersion = 1 as const
 
 /**
- * The debug handle of a runtime made with `debug: true`.
+ * The debug handle of a runtime made with `debug: { hostClock }`.
  */
 export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
   /**
@@ -64,8 +65,15 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
    * `onEnter(Game/Flow=Playing)`. Naming again replaces earlier names.
    */
   readonly nameSchedules: (
-    schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+    schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   ) => void
+  /**
+   * Declares the events the host publishes with `runtime.send`, so
+   * `describe()` counts them as written (`event-never-written`) before the
+   * first send happens. Events actually sent count as well. Declaring again
+   * replaces the list.
+   */
+  readonly declareHostEvents: (events: ReadonlyArray<Schema.EventDescriptor<S>>) => void
   /** The static description of the schema and the named schedules. */
   readonly describe: () => Description
   /** The current world as plain data. */
@@ -75,6 +83,21 @@ export interface Handle<S extends Schema.Any = Schema.Any, Root = unknown> {
    * active only while at least one listener is registered.
    */
   readonly observe: (listener: (event: TraceEvent) => void) => () => void
+  /**
+   * Delivers what the host does to the runtime, until the returned function
+   * is called: each tick's start and end (with the schedule values it runs)
+   * and each `runtime.send`. Unlike `observe`, it turns no tracing on, so a
+   * tool can listen for a whole play session (replay recorders do).
+   */
+  readonly observeHost: (listener: (event: HostEvent<S, Root>) => void) => () => void
+  /**
+   * Reports the last failed tick result if nobody read its `ok`, as a
+   * `failure.ignored` event (to `observe` and `observeHost` listeners), with
+   * `when: "session-end"`. Call it when a session ends; the start of the
+   * next tick checks the same with `when: "next-tick"`. Emits nothing to a
+   * console.
+   */
+  readonly checkIgnoredFailures: () => void
   /** Retention and reader state of every stream that has readers or entries. */
   readonly streams: () => ReadonlyArray<StreamStatus>
   /** Live entity count and, per component, how many entities have it. Cheap enough to sample every frame. */
@@ -153,13 +176,31 @@ export interface SystemDescription {
   readonly removed: ReadonlyArray<string>
   readonly despawned: boolean
   readonly relationFailures: ReadonlyArray<string>
+  /** Events and resources read with `Game.System.thisTick`, and query slots as `queries.<slot>`. */
+  readonly thisTick: ReadonlyArray<string>
   readonly services: ReadonlyArray<string>
+  /**
+   * The declared command permissions (`Game.System.commands(...)`), by
+   * kind: component names for spawns, inserts, removes and despawns, scope
+   * names for despawnsScope, relation names for relates.
+   */
+  readonly commands: CommandPermissions
   /** Run conditions, rendered, for example `stateChanged(Game/Flow)`. */
   readonly when: ReadonlyArray<string>
   /** Pause conditions, rendered: while one fails the system waits and holds its stream entries. */
   readonly pauseWhen: ReadonlyArray<string>
   /** Whether the system declares `local` scratch state. */
   readonly local: boolean
+}
+
+/** Declared command permissions of one system, by kind. Empty lists when it declares none. */
+export interface CommandPermissions {
+  readonly spawns: ReadonlyArray<string>
+  readonly inserts: ReadonlyArray<string>
+  readonly removes: ReadonlyArray<string>
+  readonly despawns: ReadonlyArray<string>
+  readonly despawnsScope: ReadonlyArray<string>
+  readonly relates: ReadonlyArray<string>
 }
 
 export type StepDescription =
@@ -175,17 +216,28 @@ export interface ScheduleDescription {
 /**
  * A finding about the described schedules. `warning` is almost certainly a
  * bug; `info` is worth a look but can be intentional.
+ *
+ * Most lints read declarations only. Two also use what the runtime has seen
+ * so far: events sent with `runtime.send(...)` count as written, and
+ * `relation-failure-never-read` fires for a relation that applied commands
+ * have tried to relate or reorder (which can fail) while no described system
+ * reads its failures, so describe after the game has run for a while.
  */
 export interface Lint {
   readonly severity: "warning" | "info"
   readonly code:
     | "event-never-read"
+    | "relation-failure-never-read"
     | "event-never-written"
     | "next-state-never-applied"
     | "component-never-read"
     | "read-before-write"
+    | "this-tick-order"
+    | "command-permission-unused"
   readonly message: string
   readonly subject: string
+  /** What to change to resolve it (or, for `info`, when it is fine as it is). */
+  readonly fix: string
 }
 
 /** Readers and writers of one component, resource, or event. */
@@ -207,7 +259,8 @@ export interface Description {
   readonly systems: ReadonlyArray<SystemDescription>
   /**
    * Readers and writers across the named schedules. Component writers are
-   * systems with a write query slot; command inserts are not static.
+   * systems with a write query slot or a declared `spawns`, `inserts`, or
+   * `removes` permission for it.
    */
   readonly access: {
     readonly components: ReadonlyArray<AccessIndexEntry>
@@ -450,6 +503,45 @@ export interface RestoreEvent {
   readonly ok: boolean
 }
 
+/** What `observeHost` delivers. */
+export type HostEvent<S extends Schema.Any = Schema.Any, Root = unknown> =
+  | {
+      readonly type: "tick.start"
+      /** The schedule values passed to this `tick(...)` (or `tryTick`) call, in order. */
+      readonly schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>
+      readonly frame: number
+    }
+  | {
+      readonly type: "tick.end"
+      readonly schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>
+      readonly frame: number
+      /** `failed`: a system returned `Result.failure`; `defect`: one threw (rethrown after this event). */
+      readonly outcome: "ok" | "failed" | "defect"
+      readonly error?: unknown
+    }
+  | { readonly type: "send"; readonly event: string; readonly value: unknown }
+  | FailureIgnoredEvent
+
+/**
+ * A failed `tick` / `tryTick` result whose `ok` nobody read: the failure
+ * went unnoticed, and the systems after the failing one did not run that
+ * tick. Found at the start of the next tick (`when: "next-tick"`) or by
+ * `checkIgnoredFailures()` (`when: "session-end"`). Debug runtimes only.
+ */
+export interface FailureIgnoredEvent {
+  readonly type: "failure.ignored"
+  /** The frame of the failed tick. */
+  readonly frame: number
+  /** The schedule holding the failing system (the first one for a tick that ran nothing). */
+  readonly schedule: string
+  /** The failing system; `undefined` when `tryTick` ran nothing (missing requirements, order). */
+  readonly system: string | undefined
+  readonly error: unknown
+  /** The systems of the tick that did not run because of the failure, in order. */
+  readonly skipped: ReadonlyArray<string>
+  readonly when: "next-tick" | "session-end"
+}
+
 /** Everything `observe` delivers. */
 export type TraceEvent =
   | FrameEvent
@@ -461,14 +553,21 @@ export type TraceEvent =
   | DeferredEvent
   | TransitionEvent
   | RestoreEvent
+  | FailureIgnoredEvent
 
 /**
- * The `debug` runtime option: `true` attaches a handle.
+ * The `debug` runtime option: `{ hostClock }` attaches a handle, timing
+ * traces with that clock. A value that may be `undefined`
+ * (`import.meta.env.DEV ? { hostClock } : undefined`) attaches it when
+ * present and types `debug` as optional, so code checks it before use.
  */
-export type Option = true
+export interface Option {
+  /** Times trace events (`ms`); see `HostClock`. */
+  readonly hostClock: HostClock
+}
 
 /**
- * The member a runtime made with `debug: true` carries.
+ * The member a runtime made with `debug: { hostClock }` carries.
  */
 export interface Member<S extends Schema.Any, Root> {
   readonly debug: Handle<S, Root>
@@ -476,4 +575,6 @@ export interface Member<S extends Schema.Any, Root> {
 
 /** Resolves the extra runtime member for a `debug` option type. */
 export type MemberFor<Enabled, S extends Schema.Any, Root> =
-  [Enabled] extends [Option] ? Member<S, Root> : {}
+  [Enabled] extends [true] ? Member<S, Root>
+  : [Enabled] extends [false | undefined] ? {}
+  : Partial<Member<S, Root>>

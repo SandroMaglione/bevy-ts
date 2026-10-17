@@ -2,7 +2,6 @@ import * as Scalar from "@typeonce/ritmo-math/Scalar"
 import * as Vector2 from "@typeonce/ritmo-math/Vector2"
 import { RenderSync } from "@typeonce/ritmo-render"
 import { PICKUP_POINTS } from "./content.ts"
-import { playerSpawn } from "./definitions.ts"
 import {
   COUNTDOWN_DURATION_SECONDS,
   NOTICE_DURATION_SECONDS,
@@ -57,6 +56,9 @@ const distanceSquared = (left: Vector, right: Vector): number => {
   return Vector2.lengthSquared(Vector2.subtract(left, right))
 }
 
+/** The components of a pickup (`makePickupDraft`). */
+const PickupParts = [Position, Actor, Pickup] as const
+
 const makePickupDraft = (position: { readonly x: number; readonly y: number }) => {
   return Game.Command.spawn(
     Game.Command.entryRaw(Position, position),
@@ -65,16 +67,26 @@ const makePickupDraft = (position: { readonly x: number; readonly y: number }) =
   )
 }
 
+/** The components of the player (`playerDraft`). */
+const PlayerParts = [Position, Actor, Player] as const
+
+/**
+ * The player draft, validated once at module load through the constructed
+ * `Position` descriptor.
+ */
+const playerDraft = Game.Command.spawn(
+  Game.Command.entryRaw(Position, { x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 }),
+  Game.Command.entry(Actor, { kind: "player" }),
+  Game.Command.entry(Player, {})
+)
+
 export const SpawnPlayerSystem = Game.System(
   "StateMachineExample/SpawnPlayer",
-  {},
+  {
+    commands: Game.System.commands(Game.System.spawns(...PlayerParts))
+  },
   ({ commands }) =>
     {
-      const playerDraft = Game.Command.spawn(
-        Game.Command.entryResult(Position, playerSpawn),
-        Game.Command.entry(Actor, { kind: "player" }),
-        Game.Command.entry(Player, {})
-      )
       if (!playerDraft.ok) {
         return
       }
@@ -256,7 +268,8 @@ export const CollectPickupsSystem = Game.System(
     },
     resources: {
       score: Game.System.writeResource(Score)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Pickup))
   },
   ({ queries, resources, commands }) =>
     {
@@ -268,7 +281,7 @@ export const CollectPickupsSystem = Game.System(
       const playerPosition = player.value.data.position.get()
       for (const pickup of queries.pickups.each()) {
         if (distanceSquared(playerPosition, pickup.data.position.get()) <= (PLAYER_RADIUS + PICKUP_RADIUS) ** 2) {
-          commands.despawn(pickup.entity.id)
+          commands.despawn(pickup.entity)
           resources.score.update((value) => value + 1)
         }
       }
@@ -329,17 +342,18 @@ export const ResetRoundOnCountdownEnterSystem = Game.System(
       countdown: Game.System.writeResource(CountdownRemaining),
       goal: Game.System.readResource(PickupGoal),
       cursor: Game.System.writeResource(SpawnCursor)
-    }
+    },
+    commands: Game.System.commands(Game.System.despawns(Pickup), Game.System.spawns(...PickupParts))
   },
   ({ queries, resources, commands }) =>
     {
       const player = queries.player.singleOptional()
       if (player.ok && player.value) {
-        player.value.data.position.setResult(playerSpawn)
+        player.value.data.position.setRaw({ x: STAGE_WIDTH * 0.5, y: STAGE_HEIGHT * 0.5 })
       }
 
       for (const pickup of queries.pickups.each()) {
-        commands.despawn(pickup.entity.id)
+        commands.despawn(pickup.entity)
       }
 
       const cursor = resources.cursor.get()

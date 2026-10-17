@@ -49,7 +49,9 @@ const MovingQuery = Game.Query({
 
 const SetupSystem = Game.System(
   "Smoke/Setup",
-  {},
+  {
+    commands: Game.System.commands(Game.System.spawns(Position, Velocity))
+  },
   ({ commands }) =>
     {
       commands.spawn(
@@ -77,7 +79,8 @@ const MoveSystem = Game.System(
     },
     services: {
       logger: Game.System.service(Logger)
-    }
+    },
+    commands: Game.System.commands(Game.System.spawns(Position, Velocity))
   },
   ({ queries, resources, events, services, commands }) =>
     {

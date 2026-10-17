@@ -7,7 +7,7 @@ runtime. Browser timing and rendering stay outside the ECS.
 ## 1. Define the world
 
 ```ts
-import { Descriptor, Fx, Result, Schema } from "@typeonce/ritmo"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Game/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Game/Velocity")
@@ -76,12 +76,12 @@ const SpendHealth = Game.System(
   ({ queries }) => {
     const target = queries.target.single()
     if (!target.ok) {
-      return Fx.fail("TargetMissing" as const)
+      return Result.failure("TargetMissing" as const)
     }
 
     const health = target.value.data.health.get()
     if (health <= 0) {
-      return Fx.fail("AlreadyDead" as const)
+      return Result.failure("AlreadyDead" as const)
     }
 
     target.value.data.health.set(health - 1)
@@ -108,7 +108,7 @@ systems remain committed. External service effects, such as network or audio
 calls, cannot be rolled back by the ECS.
 
 Thrown exceptions remain defects and are rethrown after ECS writes from that
-system are rolled back. `Fx.fail` is for expected game outcomes.
+system are rolled back. `Result.failure` is for expected game outcomes.
 
 ## 4. Own scene entities as a group
 
@@ -118,7 +118,9 @@ only to delete a level. Entity scopes model ownership directly.
 ```ts
 const Level = Game.EntityScope("Game/Level")
 
-const LoadLevel = Game.System("Game/LoadLevel", {}, ({ commands }) =>
+const LoadLevel = Game.System("Game/LoadLevel", {
+  commands: Game.System.commands(Game.System.spawns(Position, Health))
+}, ({ commands }) =>
   {
     commands.spawnIn(Level, Game.Command.spawn(
       Game.Command.entry(Position, { x: 10, y: 20 }),
@@ -127,7 +129,9 @@ const LoadLevel = Game.System("Game/LoadLevel", {}, ({ commands }) =>
   }
 )
 
-const UnloadLevel = Game.System("Game/UnloadLevel", {}, ({ commands }) =>
+const UnloadLevel = Game.System("Game/UnloadLevel", {
+  commands: Game.System.commands(Game.System.despawnsScope(Level))
+}, ({ commands }) =>
   { commands.despawnScope(Level) }
 )
 ```
@@ -207,18 +211,21 @@ as despawns and spawns to change detection, so renderer sync rebuilds itself.
 
 ## Debug a run
 
-A runtime made with `debug: true` carries a read-only `debug` handle:
+A runtime made with `debug: { hostClock }` carries a read-only `debug` handle:
 `describe()` for schedules and declared access, `dump()` for the current
 world, `observe(listener)` for a trace of every system run, applied command,
 and transition, and `streams()` for event retention. Runtimes made without it
-have no handle.
+have no handle. The host clock times traces: `HostClock.test()` (every timing
+0) in tests and headless scripts, `BrowserHostClock.make(window)` in the
+browser, `HostClock.standard` in Node tools that want real timings.
 
 `@typeonce/ritmo-devtools` wraps the handle in a session that runs schedules headless
 and answers questions as text:
 
 ```ts
-const runtime = Game.Runtime.make({ services, resources, debug: true })
-const session = Session.make(runtime, { schedules: { setup, update }, invariants: [HealthNeverNegative] })
+const hostClock = HostClock.test()
+const runtime = Game.Runtime.make({ services, resources, debug: { hostClock } })
+const session = Session.make(runtime, { hostClock, schedules: { setup, update }, invariants: [HealthNeverNegative] })
 
 session.run("setup")
 console.log(session.run("update", { frames: 300 }))  // stops at the first violated invariant
@@ -245,12 +252,12 @@ import { FixedLoop } from "@typeonce/ritmo-browser"
 const source = FixedLoop.animationFrames(window)
 const loop = FixedLoop.start({
   source,
-  stepSeconds: 1 / 60,
+  step: Clock.hz(60),
   maxFrameSeconds: 0.1,
   maxStepsPerFrame: 5,
   update: (stepSeconds) => {
     // A capture system can copy this host value into DeltaTime first.
-    hostClock.deltaSeconds = stepSeconds
+    frameTime.deltaSeconds = stepSeconds
     return runtime.tick(gameplay)
   },
   render: ({ alpha, droppedSeconds }) => {

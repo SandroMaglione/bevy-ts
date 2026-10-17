@@ -13,8 +13,11 @@
  * 3. bind one `Game` with `Schema.bind(...)`
  * 4. build a runtime from that bound `Game`
  *
- * `Schema.Feature` composes fragments and their schedules before binding; see
- * the `feature` module.
+ * There is no plugin or feature object. A reusable slice of a game is a
+ * fragment (its descriptors) plus plain functions `(Game, options) => System |
+ * Schedule` that build its systems from the bound `Game`, like
+ * `RenderSync.system(Game, ...)` and `InputCapture.system(Game, ...)`. List
+ * every fragment in one `Schema.bind(...)` call.
  *
  * @module Schema
  * @docGroup core
@@ -64,8 +67,6 @@ import type * as Debug from "./Debug.ts"
 import type * as Runtime from "./Runtime.ts"
 import type * as Schedule from "./Schedule.ts"
 import type * as System from "./System.ts"
-
-export { Feature } from "./Feature.ts"
 
 /**
  * A mapping from schema keys to nominal descriptors.
@@ -247,20 +248,6 @@ export const fragment = <
   }) as SchemaDefinition<Components, Resources, Events, Relations>
 
 /**
- * Merges two schema fragments into a larger closed schema.
- *
- * Duplicate keys and descriptor names are rejected at the type level and at
- * runtime.
- */
-export const merge = <
-  A extends Schema.Any,
-  B extends Schema.Any
->(
-  left: A,
-  right: B & ValidateFragments<[A, B]>
-): MergeSchemaDefinitions<A, B> => mergeSchemas(left, right) as MergeSchemaDefinitions<A, B>
-
-/**
  * Composes one or more fragments and returns one bound `Game` surface.
  *
  * Everything created from the returned object carries the same hidden root
@@ -322,6 +309,7 @@ interface BoundSystemAccess<S extends Schema.Any, Root> extends System.SystemAcc
   readonly pauseWhen?: ReadonlyArray<Machine.Condition<Root>>
   readonly transitions?: Record<string, Machine.TransitionRead<Schema.BoundStateMachine<Root>>>
   readonly local?: () => unknown
+  readonly commands?: Command.CommandAccess<ComponentDescriptor<S>, ComponentDescriptor<S>, ComponentDescriptor<S>, ComponentDescriptor<S>, EntityScope.EntityScope<string, Root>, RelationDescriptor<S>>
 }
 
 interface BoundCheckAccess<S extends Schema.Any, Root> extends Condition.CheckAccessInput {
@@ -341,10 +329,10 @@ interface BoundInspectorAccess<S extends Schema.Any, Root> extends Inspector.Ins
 }
 
 type BoundScheduleEntry<S extends Schema.Any, Root> =
-  | Schema.BoundSystem<S, Root, any, any, any>
+  | Schema.BoundSystem<S, Root, any, any>
   | Schedule.ApplyDeferredStep
   | Schedule.ApplyStateTransitionsStep<any, Root>
-  | Schema.BoundSchedule<S, Root, any, any>
+  | Schedule.ScheduleDefinition<S, any, Root, any, any, Schedule.AnyScheduleOrder>
 
 type BoundTransitionEntry<S extends Schema.Any, Root> =
   Exclude<BoundScheduleEntry<S, Root>, Schedule.ApplyStateTransitionsStep<any, Root>>
@@ -359,7 +347,8 @@ type BoundTransitionScheduleResult<
   M,
   Schedule.CompositionExactRequirements<Entries>,
   Root,
-  Schedule.CompositionFailure<Entries>
+  Schedule.CompositionFailure<Entries>,
+  Schedule.CompositionOrder<Entries>
 >
 
 type BoundTransitionBundleInput<S extends Schema.Any, Root> =
@@ -376,7 +365,8 @@ type BoundTransitionBundleResult<
   Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
   Root,
   Schedule.TransitionBundleRequirements<Schedule.FlattenTransitionEntries<Entries>>,
-  Schedule.TransitionBundleFailure<Schedule.FlattenTransitionEntries<Entries>>
+  Schedule.TransitionBundleFailure<Schedule.FlattenTransitionEntries<Entries>>,
+  Schedule.CompositionOrder<Entries>
 >
 
 /**
@@ -413,11 +403,10 @@ export namespace Schema {
     S extends Any,
     Root,
     Spec extends System.AnySystemSpec = System.AnySystemSpec,
-    A = void,
     E = never,
     Name extends string = string,
     Needs extends Requirement.Requirement = Requirement.Requirement
-  > = System.SystemDefinition<Spec & { readonly schema: S }, A, E, Root, Name, Needs>
+  > = System.SystemDefinition<Spec & { readonly schema: S }, E, Root, Name, Needs>
 
   /** A schema-bound read-only world projection. */
   export type BoundInspector<
@@ -437,7 +426,7 @@ export namespace Schema {
     Root,
     Needs extends Requirement.Requirement = Requirement.Requirement,
     Failure extends System.SystemFailure = never
-  > = Schedule.ScheduleDefinition<S, Needs, Root, Needs, Failure>
+  > = Schedule.ScheduleDefinition<S, Needs, Root, Needs, Failure, Schedule.ScheduleOrder>
 
   /**
    * A schema-bound finite-state machine.
@@ -453,16 +442,18 @@ export namespace Schema {
     Root,
     M extends BoundStateMachine<Root> = BoundStateMachine<Root>,
     Needs extends Requirement.Requirement = Requirement.Requirement,
-    Failure extends System.SystemFailure = never
-  > = Machine.TransitionScheduleDefinition<S, M, Needs, Root, Failure>
+    Failure extends System.SystemFailure = never,
+    Order extends Schedule.AnyScheduleOrder = Schedule.AnyScheduleOrder
+  > = Machine.TransitionScheduleDefinition<S, M, Needs, Root, Failure, Order>
 
   export type BoundTransitionBundle<
     S extends Any,
     Root,
     Entries extends ReadonlyArray<BoundTransitionSchedule<S, Root, any, any, any>> = ReadonlyArray<BoundTransitionSchedule<S, Root, any, any, any>>,
     Needs extends Requirement.Requirement = Requirement.Requirement,
-    Failure extends System.SystemFailure = never
-  > = Schedule.TransitionBundleDefinition<S, Entries, Needs, Root, Needs, Failure>
+    Failure extends System.SystemFailure = never,
+    Order extends Schedule.AnyScheduleOrder = Schedule.AnyScheduleOrder
+  > = Schedule.TransitionBundleDefinition<S, Entries, Needs, Root, Needs, Failure, Order>
 
   /**
    * A schema-bound runtime branded to one bound schema root.
@@ -480,7 +471,12 @@ export namespace Schema {
    */
   export interface Game<S extends Any, Root = S> {
     readonly schema: S
-    /** Creates a typed ownership scope for scene or level entities. */
+    /**
+     * Creates a typed ownership scope for scene or level entities: a flat
+     * group despawned together with `commands.despawnScope(...)`. Use
+     * `Descriptor.Hierarchy` instead for a parent-child tree with ordered
+     * children, traversal, and recursive despawn.
+     */
     readonly EntityScope: <const Name extends string>(name: Name) => EntityScope.EntityScope<Name, Root>
     /** Declares a reusable, requirement-checked read-only world projection. */
     readonly Inspector: <
@@ -521,7 +517,8 @@ export namespace Schema {
         readonly withoutRelations?: WithoutRelations
         readonly withRelated?: WithRelated
         readonly withoutRelated?: WithoutRelated
-      }): QueryModule.QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root>
+        // Uninferred: an omitted list is `[]`, never inferred from the spec it is written in (`queries: { ... }`).
+      }): QueryModule.QuerySpec<Selection, QueryModule.Uninferred<With, ReadonlyArray<ComponentDescriptor<S>>>, QueryModule.Uninferred<Without, ReadonlyArray<ComponentDescriptor<S>>>, QueryModule.Uninferred<Filters, ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>>>, QueryModule.Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>, Root>
       read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
       write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
       optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
@@ -537,16 +534,15 @@ export namespace Schema {
       spawn: <const Entries extends ReadonlyArray<Command.SpawnEntry<S>> = readonly []>(
         ...entries: Entries
       ) => Command.DraftFor<S, Entries, {}, Root>
-      /** Adds entries to a draft. */
-      insert: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SpawnEntry<S>>>(
+      /**
+       * Adds entries to a draft (a value not yet spawned). Use
+       * `commands.insert` for an entity that already exists.
+       */
+      extend: <P extends Entity.ComponentProof, const Entries extends ReadonlyArray<Command.SpawnEntry<S>>>(
         draft: Entity.EntityDraft<S, P, Root>,
         ...entries: Entries
       ) => Command.DraftFor<S, Entries, P, Root>
       entry: <D extends ComponentDescriptor<S>>(descriptor: D, value: Descriptor.Value<D>) => Command.Entry<D>
-      entryResult: <D extends ComponentDescriptor<S>, E>(
-        descriptor: D,
-        result: Result.Result<Descriptor.Value<D>, E>
-      ) => Result.Result<Command.Entry<D>, E>
       entryRaw: <D extends Extract<ComponentDescriptor<S>, ConstructedDescriptor<"component", string, any, any, any>>>(
         descriptor: D,
         raw: Descriptor.Raw<D>
@@ -557,6 +553,12 @@ export namespace Schema {
         target: Entity.EntityId<S, Root>
       ) => Entity.EntityDraft<S, P, Root>
     }
+    /**
+     * Declares one game-wide mode (menu, playing, paused): queued with
+     * `nextState`, committed at `applyStateTransitions(...)`, gating systems
+     * with `Game.Condition.inState(...)`. Use `Descriptor.EntityState(...)`
+     * instead for a state each entity has on its own.
+     */
     readonly StateMachine: {
       <
         const Name extends string,
@@ -584,17 +586,24 @@ export namespace Schema {
       <
         const Name extends string,
         const Access extends BoundSystemAccess<S, Root>,
-        A = void,
         E = never
       >(
         name: Name,
         spec: System.ExactAccess<Access>,
-        run: System.SystemRun<System.SystemSpec<S, Access, Root>, A, E>
-      ): BoundSystem<S, Root, System.SystemSpec<S, Access, Root>, A, E, Name, System.SystemAccessNeeds<Access>>
+        run: System.SystemRun<System.SystemSpec<S, Access, Root>, E>
+      ): BoundSystem<S, Root, System.SystemSpec<S, Access, Root>, E, Name, System.SystemAccessNeeds<Access>>
       readResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceRead<D>
       writeResource: <D extends ResourceDescriptor<S>>(descriptor: D) => System.ResourceWrite<D>
       readEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventRead<D>
       writeEvent: <D extends EventDescriptor<S>>(descriptor: D) => System.EventWrite<D>
+      /**
+       * Requires every writer of this event or resource to run earlier in the
+       * same `runtime.tick(...)` call; checked at compile time by `tick`.
+       * Accepts `readEvent(...)`, `readResource(...)`, or a query.
+       */
+      thisTick: <Read extends System.EventRead<EventDescriptor<S>> | System.ResourceRead<ResourceDescriptor<S>> | Query.Any<Root>>(
+        read: Read
+      ) => Read & System.ThisTick
       service: typeof System.service
       machine: <M extends BoundStateMachine<Root>>(machine: M) => Machine.MachineRead<M>
       nextState: <M extends BoundStateMachine<Root>>(machine: M) => Machine.NextMachineWrite<M>
@@ -603,6 +612,23 @@ export namespace Schema {
       readRemoved: <D extends ComponentDescriptor<S>>(descriptor: D) => System.RemovedRead<D>
       readDespawned: () => System.DespawnedRead
       readRelationFailures: <R extends RelationDescriptor<S>>(relation: R) => System.RelationFailureRead<R>
+      /**
+       * Declares the commands a system may queue, for its spec's `commands`:
+       * `Game.System.commands(Game.System.spawns(Enemy, Position), Game.System.despawns(Enemy))`.
+       */
+      commands: typeof Command.commands
+      /** Allows spawning drafts whose components are all among these; see `Command.spawns`. */
+      spawns: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"spawns", Components[number]>
+      /** Allows `insert` (add or replace at the next `applyDeferred()`) of these; see `Command.inserts`. */
+      inserts: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"inserts", Components[number]>
+      /** Allows `remove` of these. */
+      removes: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"removes", Components[number]>
+      /** Allows `despawn` of entities a query proves have one of these; see `Command.despawns`. */
+      despawns: <const Components extends ReadonlyArray<ComponentDescriptor<S>>>(...components: Components) => Command.Permission<"despawns", Components[number]>
+      /** Allows `despawnScope` of this scope. */
+      despawnsScope: <const Scope extends EntityScope.EntityScope<string, Root>>(scope: Scope) => Command.Permission<"despawnsScope", Scope>
+      /** Allows `relate`, `unrelate`, and `reorderChildren` of these relations. */
+      relates: <const Relations extends ReadonlyArray<RelationDescriptor<S>>>(...relations: Relations) => Command.Permission<"relates", Relations[number]>
     }
     readonly Schedule: {
       /**
@@ -633,7 +659,9 @@ export namespace Schema {
       /**
        * Builds a schedule whose systems run only while every condition
        * passes (in addition to their own `when`). Nested schedules are
-       * gated too; marker steps still run.
+       * gated too; marker steps still run. Gated systems drop the events
+       * published while gated; use `pauseWhen` to keep them. For one system,
+       * use `when` in its spec.
        */
       when: <
         const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],
@@ -647,6 +675,7 @@ export namespace Schema {
        * fails: unlike `when`, a paused system keeps its place in the event
        * streams it reads and sees everything published meanwhile once it
        * runs again. For freezes whose events stay valid (hit-stop, pause).
+       * For one system, use `pauseWhen` in its spec.
        */
       pauseWhen: <
         const Conditions extends readonly [Machine.Condition<Root>, ...Array<Machine.Condition<Root>>],

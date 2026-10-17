@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@typeonce/ritmo"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
 import * as Runtime from "@typeonce/ritmo/Runtime"
 
 const Ping = Descriptor.Event<{ value: number }>()("Ping")
@@ -62,16 +62,16 @@ describe("Runtime events", () => {
     const log: Array<ReadonlyArray<number>> = []
     const failingEmit = Game.System("Events/FailingEmit", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events }) => {
       events.ping.emit({ value: 9 })
-      return Fx.fail("Boom" as const)
+      return Result.failure("Boom" as const)
     })
     let fail = true
     const flakyRead = Game.System("Events/FlakyRead", { events: { ping: Game.System.readEvent(Ping) } }, ({ events }) => {
       log.push(events.ping.all().map((event) => event.value))
       if (fail) {
         fail = false
-        return Fx.fail("NotYet" as const)
+        return Result.failure("NotYet" as const)
       }
-      return Fx.succeed(undefined)
+      return Result.success(undefined)
     })
     const runtime = makeRuntime()
     expect(runtime.tick(Game.Schedule(failingEmit)).ok).toBe(false)

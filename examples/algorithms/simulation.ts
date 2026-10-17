@@ -31,7 +31,8 @@ export const room = [
 const chaser = { radius: 10, speed: 120 }
 
 const Spawn = Game.System("Algorithms/Spawn", {
-  resources: { rng: Game.System.writeResource(Rng) }
+  resources: { rng: Game.System.writeResource(Rng) },
+  commands: Game.System.commands(Game.System.spawns(Position, Body, Player, Chaser))
 }, ({ resources, commands }) => {
   const random = Random.make(resources.rng.get().state)
   commands.spawn(Game.Command.spawn([Position, { x: 450, y: 100 }], [Body, { radius: 12, speed: 0 }], [Player, {}]))
@@ -90,7 +91,8 @@ const MoveShots = Game.System("Algorithms/MoveShots", {
     chasers: Game.Query({ selection: { position: Game.Query.read(Position), body: Game.Query.read(Body) }, with: [Chaser] })
   },
   resources: { walls: Game.System.readResource(Walls), hits: Game.System.writeResource(Hits) },
-  services: { frame: Game.System.service(Frame) }
+  services: { frame: Game.System.service(Frame) },
+  commands: Game.System.commands(Game.System.despawns(Shot))
 }, ({ queries, resources, services, commands }) => {
   const walls = resources.walls.get()
   for (const { entity, data } of queries.shots.each()) {
@@ -111,7 +113,7 @@ const MoveShots = Game.System("Algorithms/MoveShots", {
     }
     const hit = { shot: entity.id, ...first }
     resources.hits.update((hits) => [...hits, hit])
-    commands.despawn(entity.id)
+    commands.despawn(entity)
   }
 })
 
@@ -128,7 +130,9 @@ export const makeSimulation = (seed: number) => {
     runtime,
     /** Fires a shot from `at` with `velocity` (units per second). */
     fire: (at: Vec2.Vec2, velocity: Vec2.Vec2) => {
-      const Fire = Game.System("Algorithms/Fire", {}, ({ commands }) => {
+      const Fire = Game.System("Algorithms/Fire", {
+        commands: Game.System.commands(Game.System.spawns(Position, Shot))
+      }, ({ commands }) => {
         commands.spawn(Game.Command.spawn([Position, at], [Shot, { velocity, radius: 3 }]))
       })
       runtime.tick(Game.Schedule(Fire, Game.Schedule.applyDeferred()))

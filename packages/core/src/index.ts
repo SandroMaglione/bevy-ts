@@ -5,7 +5,8 @@
  * small number of stable namespaces instead of many deep internal paths.
  */
 /**
- * Branding helpers for validated values.
+ * Branding helpers for packages that author validated value types (like
+ * `@typeonce/ritmo-math`). Game code validates through descriptors instead.
  */
 export * as Brand from "./Brand.ts"
 /**
@@ -17,13 +18,13 @@ export * as Decode from "./Decode.ts"
  */
 export * as Debug from "./Debug.ts"
 /**
+ * Simulation time: the fixed step, the clock resource, durations in whole steps.
+ */
+export * as Clock from "./Clock.ts"
+/**
  * Descriptor authoring helpers.
  */
 export * as Descriptor from "./Descriptor.ts"
-/**
- * Reusable validated authored definitions.
- */
-export * as Definition from "./Definition.ts"
 /**
  * Entity identity and proof helpers.
  */
@@ -33,9 +34,9 @@ export * as Entity from "./Entity.ts"
  */
 export * as EntityScope from "./EntityScope.ts"
 /**
- * Minimal effect-style computation type.
+ * The host's wall clock as an injected contract (`standard`, `test()`).
  */
-export * as Fx from "./Fx.ts"
+export * as HostClock from "./HostClock.ts"
 /**
  * Read-only typed world projections.
  */

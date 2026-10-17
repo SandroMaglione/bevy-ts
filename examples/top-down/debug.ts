@@ -10,6 +10,7 @@
  * changes to the player's position, and the world dump. Copy it and change
  * the timeline, the invariants, and the questions.
  */
+import { HostClock } from "@typeonce/ritmo"
 import { Keyboard } from "@typeonce/ritmo-browser"
 import { Invariant, Session } from "@typeonce/ritmo-devtools"
 
@@ -27,23 +28,26 @@ const keyboard = Keyboard.scripted(inputBindings, [
   { frame: 50, press: ["interact"], release: ["interact"] }
 ])
 
-const simulation = createTopDownSimulation({ keyboard })
+// A test clock keeps every timing at 0, so the output is the same on every run.
+const hostClock = HostClock.test()
+const simulation = createTopDownSimulation({ keyboard, hostClock })
 if (!simulation.ok) throw new Error(simulation.error.message)
 const { runtime, setup, update } = simulation.value
 
-const PlayerPositions = Game.Inspector("Debug/PlayerPositions", { queries: { player: PlayerCameraQuery } }, ({ queries }) =>
-  queries.player.each().map((match) => match.data.position.get()))
-
-const PlayerInsideWorld = Invariant.make("player inside world", () => {
-  for (const position of runtime.inspect(PlayerPositions)) {
+// An invariant is an inspector that returns a violation message, or
+// `undefined` while it holds. It declares its reads like a system, so
+// `Session.make` rejects one that reads what the runtime does not provide.
+const PlayerInsideWorld = Invariant.fromInspector(Game.Inspector("player inside world", { queries: { player: PlayerCameraQuery } }, ({ queries }) => {
+  for (const match of queries.player.each()) {
+    const position = match.data.position.get()
     if (position.x < 0 || position.x > WORLD_WIDTH || position.y < 0 || position.y > WORLD_HEIGHT) {
       return `player at (${position.x}, ${position.y})`
     }
   }
   return undefined
-})
+}))
 
-const session = Session.make(runtime, { schedules: { setup, update }, invariants: [PlayerInsideWorld] })
+const session = Session.make(runtime, { hostClock, schedules: { setup, update }, invariants: [PlayerInsideWorld] })
 
 console.log(session.run("setup"))
 console.log(session.run("update", { frames: 120 }))

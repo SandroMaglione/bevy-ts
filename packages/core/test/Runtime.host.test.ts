@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Decode, Descriptor, Entity, Fx, Schema } from "@typeonce/ritmo"
+import { Decode, Descriptor, Entity, HostClock, Result, Schema } from "@typeonce/ritmo"
 import * as Runtime from "@typeonce/ritmo/Runtime"
+
+const hostClock = HostClock.test()
 
 const Ping = Descriptor.Event<number>()("Host/Ping")
 const Ready = Descriptor.TransientResource<boolean>()("Host/Ready")
@@ -14,7 +16,7 @@ const make = () => {
     services: Game.Runtime.services(),
     resources: { Ready: true, Count: 0 },
     machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Playing")),
-    debug: true
+    debug: { hostClock }
   })
   if (!made.ok) throw new Error("invalid fixture")
   return made.value
@@ -193,7 +195,7 @@ describe("system local state", () => {
     }, ({ local, resources }) => {
       seen.push(++local.runs)
       resources.count.set(99)
-      return Fx.fail("retry" as const)
+      return Result.failure("retry" as const)
     })
     const first = make()
     const second = make()

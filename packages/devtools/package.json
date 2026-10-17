@@ -29,6 +29,9 @@
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "ritmo-devtools": "./src/cli.ts"
+  },
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -57,6 +60,9 @@
       },
       "./internal/*": null,
       "./*/index": null
+    },
+    "bin": {
+      "ritmo-devtools": "./dist/cli.js"
     }
   },
   "scripts": {

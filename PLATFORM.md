@@ -4,6 +4,10 @@
 
 Extra packages are allowed when they stay platform-specific and encapsulate a stable integration boundary that user code would otherwise have to rewrite in every project. These packages must be composable lego blocks: they own lifecycle and plumbing, while callers keep control over schema, resources, services, schedules, and game semantics.
 
+## The plugin rule
+
+A plugin is a function `(Game, options) => System | Schedule`. It takes the game's bound `Game` and typed options (descriptors, services, conditions) and returns ordinary systems or schedules that the game places in its own schedules. `RenderSync.system(Game, ...)` and `InputCapture.system(Game, ...)` are the pattern. There is no plugin object, registry, or composition step: descriptors a plugin needs are declared by the game (or exported as a `Schema.fragment(...)` the game lists in `Schema.bind(...)`), and the returned systems carry their requirements like any other, so `runtime.tick(...)` checks them.
+
 ## Good Packages
 
 ### `@typeonce/ritmo-browser`
@@ -66,7 +70,7 @@ Own debugging infrastructure over the core `Debug` handle:
 - bounded trace history and text rendering for terminals and agents
 - invariants checked between frames
 
-This package reads the world; it must not mutate it or require games to change their runtime shape beyond `debug: true`.
+This package reads the world; it must not mutate it or require games to change their runtime shape beyond `debug: { hostClock }`.
 
 ## Bad Packages
 

@@ -69,7 +69,7 @@
  * Query authoring helpers for selecting components and declaring explicit filters.
  */
 import type { DecodeError } from "./Decode.ts"
-import type { Descriptor, StateValue } from "./Descriptor.ts"
+import type { Descriptor, EntityStateValue } from "./Descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./Entity.ts"
 import type * as Result from "./Result.ts"
 import type * as Relation from "./Relation.ts"
@@ -384,6 +384,9 @@ export namespace Query {
     ? false
     : true
 
+  /** The component descriptors a query proves its matches have: required selection slots and `with`. */
+  export type Proven<T extends Any> = RequiredSelectionDescriptors<T> | T["with"][number]
+
   /**
    * The readable proof produced by a query.
    */
@@ -488,6 +491,10 @@ export interface ReadCell<T> {
  * A mutable cell returned from query or resource access.
  *
  * This gives a narrow mutation surface instead of exposing raw storage objects.
+ * Values written here are already valid. Data that still needs validation
+ * goes through its descriptor's own validator: declare the descriptor with
+ * `Descriptor.ConstructedComponent` / `ConstructedResource` and write with
+ * `setRaw` / `updateRaw` on its {@link ConstructedWriteCell}.
  */
 export interface WriteCell<T> extends ReadCell<T> {
   /**
@@ -495,17 +502,9 @@ export interface WriteCell<T> extends ReadCell<T> {
    */
   set(value: T): void
   /**
-   * Replaces the current value from an explicit result.
-   */
-  setResult<E>(result: Result.Result<T, E>): Result.Result<void, E>
-  /**
    * Updates the current value based on the previous one.
    */
   update(f: (current: ReadonlyValue<T>) => T): void
-  /**
-   * Updates the current value from an explicit result-producing callback.
-   */
-  updateResult<E>(f: (current: ReadonlyValue<T>) => Result.Result<T, E>): Result.Result<void, E>
 }
 
 /**
@@ -540,13 +539,13 @@ export interface ConstructedWriteCell<T, Raw, Error> extends WriteCell<T> {
 }
 
 /**
- * A `transition(from, to)` found the state component in another state, so
+ * A `transition(from, to)` found the entity state in another state, so
  * nothing was written.
  */
-export interface StateMismatchError<T> {
-  readonly _tag: "StateMismatch"
-  /** Name of the state component. */
-  readonly state: string
+export interface EntityStateMismatchError<T> {
+  readonly _tag: "EntityStateMismatch"
+  /** Name of the `Descriptor.EntityState` component. */
+  readonly component: string
   /** The `from` state the transition expected. */
   readonly expected: T
   /** The state the component was actually in. */
@@ -554,20 +553,20 @@ export interface StateMismatchError<T> {
 }
 
 /**
- * Writable cell for a state component (`Descriptor.State`).
+ * Writable cell for an entity state component (`Descriptor.EntityState`).
  *
  * `transition(from, to)` is a compare-and-set: it writes `to` only while the
- * current state is `from`, and otherwise returns `StateMismatch` without
+ * current state is `from`, and otherwise returns `EntityStateMismatch` without
  * writing. With a transition graph, `to` must be one of the moves the graph
  * allows from `from`; without one, any pair of states is accepted.
  */
-export interface StateWriteCell<T, Transitions> extends ConstructedWriteCell<T, T, DecodeError> {
+export interface EntityStateWriteCell<T, Transitions> extends ConstructedWriteCell<T, T, DecodeError> {
   /**
    * Moves from `from` to `to` if the component is still in `from`.
    *
    * @example
    * ```ts
-   * const moved = data.phase.transition("windup", "active")
+   * const moved = data.attack.transition("windup", "active")
    * if (!moved.ok) {
    *   // moved.error.actual is the state some earlier write left
    * }
@@ -575,19 +574,19 @@ export interface StateWriteCell<T, Transitions> extends ConstructedWriteCell<T, 
    */
   transition<const From extends T & keyof Transitions>(
     from: From,
-    to: StateTarget<T, Transitions, From>
-  ): Result.Result<void, StateMismatchError<T>>
+    to: EntityStateTarget<T, Transitions, From>
+  ): Result.Result<void, EntityStateMismatchError<T>>
 }
 
-type StateTarget<T, Transitions, From extends keyof Transitions> =
+type EntityStateTarget<T, Transitions, From extends keyof Transitions> =
   Transitions[From] extends ReadonlyArray<infer To> ? To & T : never
 
 /**
  * Write-cell surface produced for one queried component descriptor.
  */
 export type WriteCellForDescriptor<D extends ComponentDescriptor> =
-  D extends import("./Descriptor.ts").StateDescriptor<string, infer States extends readonly [StateValue, ...Array<StateValue>], any>
-    ? StateWriteCell<States[number], D["transitions"] extends undefined ? { readonly [K in States[number]]: States } : D["transitions"]>
+  D extends import("./Descriptor.ts").EntityStateDescriptor<string, infer States extends readonly [EntityStateValue, ...Array<EntityStateValue>], any>
+    ? EntityStateWriteCell<States[number], D["transitions"] extends undefined ? { readonly [K in States[number]]: States } : D["transitions"]>
     : D extends import("./Descriptor.ts").ConstructedDescriptor<"component", string, infer Value, infer Raw, infer Error>
     ? ConstructedWriteCell<Value, Raw, Error>
     : WriteCell<Descriptor.Value<D>>
@@ -622,11 +621,11 @@ export type OptionalReadCell<T> = PresentOptionalReadCell<T> | AbsentOptionalRea
 export type QueryMatch<S extends Schema.Any, Q extends Query.Any> =
   keyof Query.WriteProof<Q> extends never
     ? {
-        readonly entity: EntityRef<S, Query.ReadProof<Q>, Query.Root<Q>>
+        readonly entity: EntityRef<S, Query.ReadProof<Q>, Query.Root<Q>, Query.Proven<Q>>
         readonly data: Query.Cells<Q>
       }
     : {
-        readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>, Query.Root<Q>>
+        readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>, Query.Root<Q>, Query.Proven<Q>>
         readonly data: Query.Cells<Q>
       }
 
@@ -685,6 +684,14 @@ export const multipleEntitiesError = (count: number): Query.MultipleEntitiesErro
  * })
  * ```
  */
+/**
+ * `T` itself, but not a place inference reads from: a list a query omits
+ * stays `[]` even when the call sits where a wider query type is expected
+ * (`queries: { ... }` in a spec). Unlike `NoInfer`, it prints as `T`.
+ */
+// `T` appears only as the check type, which inference never reads.
+export type Uninferred<T, Bound> = [T] extends [infer U extends Bound] ? U : never
+
 export const Query = <
   const Selection extends Record<string, SelectionAccess<any, Root>>,
   const With extends ReadonlyArray<ComponentDescriptor> = [],
@@ -704,14 +711,15 @@ export const Query = <
   readonly withoutRelations?: WithoutRelations
   readonly withRelated?: WithRelated
   readonly withoutRelated?: WithoutRelated
-}): QuerySpec<Selection, With, Without, Filters, WithRelations, WithoutRelations, WithRelated, WithoutRelated, Root> => ({
+  // Uninferred: an omitted list is `[]`, never inferred from the spec it is written in (`queries: { ... }`).
+}): QuerySpec<Selection, Uninferred<With, ReadonlyArray<ComponentDescriptor>>, Uninferred<Without, ReadonlyArray<ComponentDescriptor>>, Uninferred<Filters, ReadonlyArray<Filter<ComponentDescriptor>>>, Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>, Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>, Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>, Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>, Root> => ({
   selection: spec.selection,
-  with: (spec.with ?? []) as With,
-  without: (spec.without ?? []) as Without,
-  filters: (spec.filters ?? []) as Filters,
-  withRelations: (spec.withRelations ?? []) as WithRelations,
-  withoutRelations: (spec.withoutRelations ?? []) as WithoutRelations,
-  withRelated: (spec.withRelated ?? []) as WithRelated,
-  withoutRelated: (spec.withoutRelated ?? []) as WithoutRelated,
+  with: (spec.with ?? []) as unknown as Uninferred<With, ReadonlyArray<ComponentDescriptor>>,
+  without: (spec.without ?? []) as unknown as Uninferred<Without, ReadonlyArray<ComponentDescriptor>>,
+  filters: (spec.filters ?? []) as unknown as Uninferred<Filters, ReadonlyArray<Filter<ComponentDescriptor>>>,
+  withRelations: (spec.withRelations ?? []) as unknown as Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>,
+  withoutRelations: (spec.withoutRelations ?? []) as unknown as Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>,
+  withRelated: (spec.withRelated ?? []) as unknown as Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>,
+  withoutRelated: (spec.withoutRelated ?? []) as unknown as Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>,
   __schemaRoot: undefined as unknown as Root
 })

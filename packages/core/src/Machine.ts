@@ -9,6 +9,10 @@
  * run around that boundary. Menus, rounds, encounter phases, pause flows, and
  * restart/reset pipelines are the canonical cases.
  *
+ * A machine holds one value for the whole game. A state that each entity has
+ * on its own (an enemy's attack windup, a door's open/closed) is not a
+ * machine: use a `Descriptor.EntityState(...)` component instead.
+ *
  * @example
  * ```ts
  * // Model a gameplay phase whose transition timing matters.
@@ -33,7 +37,7 @@
  * @groupDescription Functions
  * Public constructors for machines, conditions, and explicit transition bundles.
  */
-import type { Schedule } from "./Schedule.ts"
+import type { AnyScheduleOrder, Schedule } from "./Schedule.ts"
 import * as Requirement from "./Requirement.ts"
 import type { Schema } from "./Schema.ts"
 import type { SystemFailure } from "./System.ts"
@@ -235,13 +239,16 @@ export interface TransitionScheduleDefinition<
   M extends StateMachineDefinition = StateMachineDefinition,
   Needs extends Requirement.Requirement = Requirement.Requirement,
   Root = unknown,
-  Failure extends SystemFailure = never
+  Failure extends SystemFailure = never,
+  Order extends AnyScheduleOrder = AnyScheduleOrder
 > {
   readonly steps: ReadonlyArray<Schedule.Step>
   readonly systems: ReadonlyArray<unknown>
   readonly schema: S
   readonly requirements: ReadonlyArray<Needs>
   readonly __failure?: (_: never) => Failure
+  /** The plan's order, for `Game.System.thisTick` checks of the tick that applies it. */
+  readonly __order?: (_: never) => Order
   readonly __schemaRoot?: Root | undefined
   readonly transition: {
     readonly machine: M
@@ -293,7 +300,7 @@ export type MachineNeedsFromConditions<C extends ReadonlyArray<Condition>> =
   MachineNeedsFromCondition<C[number]>
 
 /**
- * Creates a schema-bound finite-state machine definition.
+ * Creates a schema-bound finite-state machine definition: one game-wide mode.
  *
  * This is the intended default for gameplay phases and other discrete modes
  * where the transition boundary itself matters.
@@ -304,6 +311,9 @@ export type MachineNeedsFromConditions<C extends ReadonlyArray<Condition>> =
  * - explicit `applyStateTransitions(...)`
  * - `inState(...)` gating
  * - transition events or enter/exit schedules
+ *
+ * Use `Descriptor.EntityState(...)` instead when every entity carries its own
+ * state (per-entity, written immediately, no enter/exit schedules).
  */
 export const StateMachine = <
   const Name extends string,

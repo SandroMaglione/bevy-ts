@@ -3,7 +3,7 @@
  * run by `packages/core/test/Concepts.test.ts`, so the guide cannot drift from
  * the API.
  */
-import { Decode, Descriptor, Fx, Schema } from "@typeonce/ritmo"
+import { Decode, Descriptor, Result, Schema } from "@typeonce/ritmo"
 import type { Query } from "@typeonce/ritmo/Query"
 
 // 1. Descriptors name the data a world can hold. Constructed descriptors carry
@@ -53,7 +53,9 @@ const Move = Game.System("Concepts/Move", {
 })
 
 // 5. Structural changes are commands, applied at `applyDeferred()`.
-const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Concepts/Spawn", {
+  commands: Game.System.commands(Game.System.spawns(Health, Position, Velocity, Target))
+}, ({ commands }) => {
   const enemy = commands.spawn(Game.Command.spawn([Health, 3], [Position, { x: 10, y: 0 }]))
   commands.spawn(Game.Command.spawn(
     [Position, { x: 0, y: 0 }],
@@ -65,11 +67,14 @@ const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
 
 // 6. Handles are storage-safe; resolving one is explicit and can fail.
 const Attack = Game.System("Concepts/Attack", {
-  queries: { attackers: Game.Query({ selection: { target: Game.Query.read(Target) } }) },
+  queries: {
+    attackers: Game.Query({ selection: { target: Game.Query.read(Target) } }),
+    enemies: Game.Query({ selection: { health: Game.Query.read(Health) } })
+  },
   events: { hit: Game.System.writeEvent(Hit) }
-}, ({ queries, lookup, events }) => {
+}, ({ queries, events }) => {
   for (const { data } of queries.attackers.each()) {
-    const enemy = lookup.getHandle(data.target.get().enemy, Game.Query({ selection: { health: Game.Query.read(Health) } }))
+    const enemy = queries.enemies.getHandle(data.target.get().enemy)
     if (enemy.ok) {
       events.hit.emit({ amount: 1 })
     }
@@ -84,7 +89,7 @@ const ApplyHits = Game.System("Concepts/ApplyHits", {
 }, ({ events, resources, nextMachines }) => {
   const total = events.hit.all().reduce((sum, hit) => sum + hit.amount, 0)
   if (total > 100) {
-    return Fx.fail("ImpossibleDamage" as const)
+    return Result.failure("ImpossibleDamage" as const)
   }
   resources.score.update((score) => score + total)
   if (resources.score.get() >= 3) {

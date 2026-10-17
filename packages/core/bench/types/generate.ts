@@ -100,6 +100,68 @@ emit("})")
 emit()
 emit("runtime.tick(Update)")
 emit()
+// A long schedule with thisTick reads: runtime.tick checks the order of every
+// read against every writer that follows it.
+const ORDER_WRITERS = 48
+const ORDER_READERS = 8
+for (let index = 0; index < ORDER_WRITERS; index++) {
+  emit(`const W${pad(index)} = Game.System("Stress/W${pad(index)}", { events: { out: Game.System.writeEvent(E${pad(index % EVENTS)}) } }, ({ events }) => {`)
+  emit(`  events.out.emit({ e${index % EVENTS}: ${index} })`)
+  emit("})")
+}
+for (let index = 0; index < ORDER_READERS; index++) {
+  emit(`const T${pad(index)} = Game.System("Stress/T${pad(index)}", { events: { in: Game.System.thisTick(Game.System.readEvent(E${pad(index % EVENTS)})) } }, ({ events }) => {`)
+  emit("  void events.in.all()")
+  emit("})")
+}
+const writers = Array.from({ length: ORDER_WRITERS }, (_, index) => `W${pad(index)}`)
+const readers = Array.from({ length: ORDER_READERS }, (_, index) => `T${pad(index)}`)
+emit(`const Ordered = Game.Schedule(${writers.join(", ")}, ${readers.join(", ")})`)
+emit("runtime.tick(Ordered)")
+emit(`// @ts-expect-error a writer after a thisTick reader is a compile error`)
+emit(`runtime.tick(Game.Schedule(${readers.join(", ")}, ${writers.join(", ")}))`)
+emit()
+// A 150-system schedule with markers and thisTick reads of events and
+// queries: 120 command writers in groups of 10, each group followed by an
+// applyDeferred(), and 30 readers after the groups they need.
+const LONG_GROUPS = 12
+const LONG_GROUP_SIZE = 10
+const long: Array<string> = []
+for (let group = 0; group < LONG_GROUPS; group++) {
+  for (let slot = 0; slot < LONG_GROUP_SIZE; slot++) {
+    const index = group * LONG_GROUP_SIZE + slot
+    const name = `L${index.toString().padStart(3, "0")}`
+    // Each group owns one component (C16 + group) that only its writers spawn and insert.
+    const a = `C${pad(index % 16)}`
+    const b = `C${pad(16 + group)}`
+    emit(`const ${name} = Game.System("Stress/${name}", { commands: Game.System.commands(Game.System.spawns(${a}, ${b}), Game.System.inserts(${b})) }, ({ commands }) => {`)
+    emit(`  commands.spawn(Game.Command.spawn([${a}, { v${index % 16}: 0 }], [${b}, { v${16 + group}: 0 }]))`)
+    emit("})")
+    long.push(name)
+  }
+  long.push("Game.Schedule.applyDeferred()")
+  for (let reader = 0; reader < 2; reader++) {
+    const index = group * 2 + reader
+    const name = `Q${pad(index)}`
+    const c = `C${pad(16 + group)}`
+    emit(`const ${name} = Game.System("Stress/${name}", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(${c}) } })) } }, ({ queries }) => {`)
+    emit("  void queries.seen.each()")
+    emit("})")
+    long.push(name)
+  }
+  if (group % 2 === 0) {
+    const name = `X${pad(group / 2)}`
+    emit(`const ${name} = Game.System("Stress/${name}", { events: { in: Game.System.thisTick(Game.System.readEvent(E${pad(group % EVENTS)})) } }, ({ events }) => {`)
+    emit("  void events.in.all()")
+    emit("})")
+    long.push(name)
+  }
+}
+emit(`const Long = Game.Schedule(${long.join(", ")})`)
+emit("runtime.tick(Long)")
+emit("// @ts-expect-error a command writer with no applyDeferred() before a thisTick query reader is a compile error")
+emit(`runtime.tick(Game.Schedule(${long.filter((entry) => !entry.startsWith("Game.Schedule")).join(", ")}))`)
+emit()
 emit("const incomplete = Game.Runtime.make({ services: Game.Runtime.services() })")
 emit("// @ts-expect-error missing services, resources and machines are compile errors")
 emit("incomplete.tick(Update)")

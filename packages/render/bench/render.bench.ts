@@ -73,7 +73,7 @@ const makeRuntime = () => Game.Runtime.make({
   )
 })
 
-const SpawnSprites = (count: number) => Game.System("RenderBench/SpawnSprites", {}, ({ commands }) => {
+const SpawnSprites = (count: number) => Game.System("RenderBench/SpawnSprites", { commands: Game.System.commands(Game.System.spawns(Position, Previous, Frame, Sprite)) }, ({ commands }) => {
   for (let index = 0; index < count; index++) {
     commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: index }],
@@ -116,11 +116,11 @@ const churn: BenchCase = {
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(SpawnSprites(5_000), Game.Schedule.applyDeferred(), Sync))
     const Rendered = Game.Query({ selection: { sprite: Game.Query.read(Sprite) } })
-    const Despawn = Game.System("RenderBench/Despawn", { queries: { rendered: Rendered } }, ({ queries, commands }) => {
+    const Despawn = Game.System("RenderBench/Despawn", { queries: { rendered: Rendered }, commands: Game.System.commands(Game.System.despawns(Sprite)) }, ({ queries, commands }) => {
       let count = 0
       for (const { entity } of queries.rendered.each()) {
         if (count++ === 500) break
-        commands.despawn(entity.id)
+        commands.despawn(entity)
       }
     })
     const schedule = Game.Schedule(Despawn, SpawnSprites(500), Game.Schedule.applyDeferred(), Sync)

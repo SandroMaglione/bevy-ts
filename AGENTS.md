@@ -1,3 +1,10 @@
+## Vision
+- This library is agent-first: coding agents write all code that uses it; a human directs the game and does not read the code.
+- The library is the agent's guardrail. Guarantees come in three layers: (1) compile time, a wrong call does not compile and the error names the fix; (2) runtime inspection via headless devtools sessions (lints, invariants, why/journal); (3) lock-in, every found bug becomes a test.
+- One way to do each thing. Two APIs for one job is a safety bug: an agent will pick both.
+- Names and JSDoc are part of the API: each export says what it is for, when to use it, and which neighbouring API to use instead.
+- The library is early: breaking changes, removals, and renames are welcome. Do NOT keep deprecated aliases or re-exports. Long-term clean API first.
+
 ## Repo Structure
 - [`packages/core`](./packages/core/): strict public ECS/runtime library surface.
 - [`packages/browser`](./packages/browser/): browser timing (FixedLoop) and keyboard, pointer, and touch input.
@@ -11,6 +18,8 @@
 - Packages never draw. Drawing, particles, and effects stay in games.
 - Bridge code that hands a renderer or the platform what it needs (nodes, positions, input, timing) and glue that would otherwise repeat in every game belong in the support packages.
 - Hand the game the data it needs to draw (like `Touch`'s `view()`), never the drawing itself.
+- Core and generic package modules never call a platform API (`performance`, `window`, `document`, timers, file system, network). A platform detail is a generic contract in the owning package with platform implementations injected (like `NodeRegistry` / `PixiNodeRegistry`, `HostClock` / `BrowserHostClock`). A default may use only what JavaScript itself guarantees in every engine.
+- Simulation code reads time from `Clock` and randomness from `Random`; host time (`HostClock`) is for hosts, tools, and debug timing, never for systems.
 
 ## Core Principles
 - Type safety is the first and absolute priority.

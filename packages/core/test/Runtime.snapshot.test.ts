@@ -46,11 +46,12 @@ const readWorld = (runtime: ReturnType<typeof makeRuntime>) => {
 const populate = (runtime: ReturnType<typeof makeRuntime>) => {
   const Setup = Game.System("Snapshot/Setup", {
     nextMachines: { flow: Game.System.nextState(Flow) },
-    resources: { score: Game.System.writeResource(Score) }
+    resources: { score: Game.System.writeResource(Score) },
+    commands: Game.System.commands(Game.System.spawns(Name, Position, Sprite, Target))
   }, ({ commands, nextMachines, resources }) => {
     const parentDraft = Game.Command.spawn([Name, "parent"], Game.Command.entryRaw(Position, { x: 1, y: 2 }))
     if (!parentDraft.ok) throw new Error("invalid fixture")
-    const parent = commands.spawn(Game.Command.insert(parentDraft.value, [Sprite, { frame: 3 }]))
+    const parent = commands.spawn(Game.Command.extend(parentDraft.value, [Sprite, { frame: 3 }]))
     const first = commands.spawn(Game.Command.relate(Game.Command.spawn([Name, "first"]), ChildOf, parent))
     commands.spawn(Game.Command.relate(Game.Command.spawn([Name, "second"]), ChildOf, parent))
     commands.spawn(Game.Command.spawn([Target, { handle: Game.Entity.handle(first, Name) }]))
@@ -94,13 +95,16 @@ describe("Runtime snapshots", () => {
     let children: Array<string> = []
     let resolved = ""
     const Check = Game.System("Snapshot/Check", {
-      queries: { targets: Game.Query({ selection: { target: Game.Query.read(Target) } }) }
-    }, ({ queries, lookup }) => {
+      queries: {
+        targets: Game.Query({ selection: { target: Game.Query.read(Target) } }),
+        named: Named
+      }
+    }, ({ queries }) => {
       const parent = readWorld(target).names.find(([, name]) => name === "parent")![0]
-      const matches = lookup.childMatches(Entity.makeEntityId(parent), ChildOf, Named)
+      const matches = queries.named.children(Entity.makeEntityId(parent), ChildOf)
       children = matches.ok ? matches.value.map((match) => match.data.name.get()) : []
       const handle = queries.targets.each()[0]!.data.target.get().handle
-      const match = lookup.getHandle(handle, Named)
+      const match = queries.named.getHandle(handle)
       resolved = match.ok ? match.value.data.name.get() : "missing"
     })
     target.tick(Game.Schedule(Check))
@@ -115,7 +119,9 @@ describe("Runtime snapshots", () => {
     const target = makeRuntime(0)
     target.restore(JSON.parse(JSON.stringify(source.snapshot())))
 
-    const Spawn = Game.System("Snapshot/SpawnMore", {}, ({ commands }) => {
+    const Spawn = Game.System("Snapshot/SpawnMore", {
+      commands: Game.System.commands(Game.System.spawns(Name))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Name, "later"]))
     })
     target.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))

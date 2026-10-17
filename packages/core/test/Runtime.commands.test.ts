@@ -9,11 +9,16 @@ const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
 const Count = Descriptor.Resource<number>()("Count")
 const LastX = Descriptor.Resource<number>()("LastX")
 const SafePosition = Descriptor.ConstructedComponent(Vector2)("SafePosition")
+const SafeVelocity = Descriptor.ConstructedComponent({
+  result: (raw: { x: number; y: number }) =>
+    Number.isFinite(raw.x) && Number.isFinite(raw.y) ? Result.success(raw) : Result.failure("bad-velocity" as const)
+})("SafeVelocity")
 
 const Game = Schema.bind(Schema.fragment({
   components: {
     Position,
-    Velocity
+    Velocity,
+    SafeVelocity
   },
   resources: {
     Count,
@@ -42,7 +47,7 @@ describe("Runtime commands", () => {
   it("insertMany applies entries in order with last-write-wins semantics", () => {
     const spawn = Game.System(
       "RuntimeCommands/SpawnInsertMany",
-      {},
+      { commands: Game.System.commands(Game.System.spawns(Position), Game.System.inserts(Position, Velocity)) },
       ({ commands }) =>
         {
           const id = commands.spawn(Game.Command.spawn(
@@ -94,7 +99,7 @@ describe("Runtime commands", () => {
   it("remove causes later queries to stop matching", () => {
     const spawn = Game.System(
       "RuntimeCommands/SpawnForRemove",
-      {},
+      { commands: Game.System.commands(Game.System.spawns(Position, Velocity), Game.System.removes(Velocity)) },
       ({ commands }) =>
         {
           const id = commands.spawn(Game.Command.spawn(
@@ -140,45 +145,87 @@ describe("Runtime commands", () => {
 
     const spawn = Game.System(
       "RuntimeCommands/SpawnAndStoreId",
-      {},
+      { commands: Game.System.commands(Game.System.spawns(Position)) },
       ({ commands }) =>
         {
-          const id = commands.spawn(Game.Command.spawn(
+          storedId = commands.spawn(Game.Command.spawn(
             [Position, { x: 1, y: 2 }] as const
           ))
-          storedId = id
-          commands.despawn(id)
+        }
+    )
+
+    const despawn = Game.System(
+      "RuntimeCommands/DespawnStoredId",
+      {
+        queries: { positions: Game.Query({ selection: { position: Game.Query.read(Position) } }) },
+        commands: Game.System.commands(Game.System.despawns(Position))
+      },
+      ({ queries, commands }) =>
+        {
+          if (!storedId) return
+          const match = queries.positions.get(storedId)
+          if (match.ok) commands.despawn(match.value.entity)
         }
     )
 
     const lookup = Game.System(
       "RuntimeCommands/LookupDespawned",
       {
+        queries: {
+          positions: Game.Query({
+            selection: {
+              position: Game.Query.read(Position)
+            }
+          })
+        },
         resources: {
           count: Game.System.writeResource(Count)
         }
       },
-      ({ lookup, resources }) =>
+      ({ queries, resources }) =>
         {
           const id = storedId
           if (!id) {
             resources.count.set(-1)
             return
           }
-          const result = lookup.get(id, Game.Query({
-            selection: {
-              position: Game.Query.read(Position)
-            }
-          }))
+          const result = queries.positions.get(id)
           resources.count.set(result.ok ? 0 : result.error._tag === "MissingEntity" ? 1 : -1)
         }
     )
 
     const runtime = makeRuntime()
     runtime.tick(
-      Game.Schedule(spawn, Game.Schedule.applyDeferred()),
+      Game.Schedule(spawn, Game.Schedule.applyDeferred(), despawn, Game.Schedule.applyDeferred()),
       Game.Schedule(lookup)
     )
+
+    expect(readResourceValue(runtime, schema, Count)).toBe(1)
+  })
+
+  it("despawn of an id spawned in the same run cancels the spawn at applyDeferred", () => {
+    const spawnAndCancel = Game.System(
+      "RuntimeCommands/SpawnAndCancel",
+      { commands: Game.System.commands(Game.System.spawns(Position, Velocity), Game.System.despawns(Velocity)) },
+      ({ commands }) => {
+        commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }] as const))
+        const moving = commands.spawn(Game.Command.spawn([Position, { x: 1, y: 1 }] as const, [Velocity, { x: 1, y: 0 }] as const))
+        commands.despawn(moving)
+      }
+    )
+    const count = Game.System(
+      "RuntimeCommands/CountAfterCancel",
+      {
+        queries: { positions: Game.Query({ selection: { position: Game.Query.read(Position) } }) },
+        resources: { count: Game.System.writeResource(Count) }
+      },
+      ({ queries, resources }) => {
+        resources.count.set(queries.positions.each().length)
+      }
+    )
+
+    const runtime = makeRuntime()
+    runtime.tick(Game.Schedule(spawnAndCancel, Game.Schedule.applyDeferred(), count))
 
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })
@@ -196,7 +243,7 @@ describe("Runtime commands", () => {
       return
     }
 
-    const inserted = ConstructedGame.Command.insert(
+    const inserted = ConstructedGame.Command.extend(
       spawned.value, ConstructedGame.Command.entryRaw(SafePosition, { x: 3, y: 4 }))
 
     expect(inserted.ok).toBe(true)
@@ -207,7 +254,7 @@ describe("Runtime commands", () => {
 
     const spawn = Game.System(
       "RuntimeCommands/SpawnStoreForInsert",
-      {},
+      { commands: Game.System.commands(Game.System.spawns(Position)) },
       ({ commands }) =>
         {
           const id = commands.spawn(Game.Command.spawn(
@@ -219,7 +266,7 @@ describe("Runtime commands", () => {
 
     const insertVelocity = Game.System(
       "RuntimeCommands/InsertVelocity",
-      {},
+      { commands: Game.System.commands(Game.System.inserts(Velocity)) },
       ({ commands }) =>
         {
           const id = storedId
@@ -259,10 +306,11 @@ describe("Runtime commands", () => {
     expect(readResourceValue(runtime, schema, Count)).toBe(1)
   })
 
-  it("spawnWithResult returns tuple-shaped failures and applies successful drafts", () => {
+  it("spawn with raw entries returns tuple-shaped failures and applies successful drafts", () => {
     const spawn = Game.System(
       "RuntimeCommands/SpawnWithResult",
       {
+        commands: Game.System.commands(Game.System.spawns(Position, SafeVelocity)),
         resources: {
           count: Game.System.writeResource(Count),
           lastX: Game.System.writeResource(LastX)
@@ -271,15 +319,15 @@ describe("Runtime commands", () => {
       ({ commands, resources }) =>
         {
           const invalidDraft = Game.Command.spawn(
-            Game.Command.entryResult(Position, Result.success({ x: 1, y: 2 })),
-            Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
+            Game.Command.entry(Position, { x: 1, y: 2 }),
+            Game.Command.entryRaw(SafeVelocity, { x: Number.NaN, y: 0 })
           )
 
           expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
 
           const validDraft = Game.Command.spawn(
-            Game.Command.entryResult(Position, Result.success({ x: 4, y: 5 })),
-            Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
+            Game.Command.entry(Position, { x: 4, y: 5 }),
+            Game.Command.entryRaw(SafeVelocity, { x: 6, y: 7 })
           )
 
           if (!validDraft.ok) {
@@ -300,7 +348,7 @@ describe("Runtime commands", () => {
           moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
-              velocity: Game.Query.read(Velocity)
+              velocity: Game.Query.read(SafeVelocity)
             }
           })
         },
@@ -327,10 +375,11 @@ describe("Runtime commands", () => {
     expect(readResourceValue(runtime, schema, LastX)).toBe(4)
   })
 
-  it("spawnWithMixed accepts plain and validated entries together", () => {
+  it("spawn accepts plain and raw entries together", () => {
     const spawn = Game.System(
       "RuntimeCommands/SpawnWithMixed",
       {
+        commands: Game.System.commands(Game.System.spawns(Position, SafeVelocity)),
         resources: {
           count: Game.System.writeResource(Count),
           lastX: Game.System.writeResource(LastX)
@@ -340,14 +389,14 @@ describe("Runtime commands", () => {
         {
           const invalidDraft = Game.Command.spawn(
             Game.Command.entry(Position, { x: 1, y: 2 }),
-            Game.Command.entryResult(Velocity, Result.failure("bad-velocity"))
+            Game.Command.entryRaw(SafeVelocity, { x: Number.NaN, y: 0 })
           )
 
           expect(invalidDraft).toEqual(Result.failure([null, "bad-velocity"]))
 
           const validDraft = Game.Command.spawn(
             Game.Command.entry(Position, { x: 4, y: 5 }),
-            Game.Command.entryResult(Velocity, Result.success({ x: 6, y: 7 }))
+            Game.Command.entryRaw(SafeVelocity, { x: 6, y: 7 })
           )
 
           if (!validDraft.ok) {
@@ -368,7 +417,7 @@ describe("Runtime commands", () => {
           moving: Game.Query({
             selection: {
               position: Game.Query.read(Position),
-              velocity: Game.Query.read(Velocity)
+              velocity: Game.Query.read(SafeVelocity)
             }
           })
         },

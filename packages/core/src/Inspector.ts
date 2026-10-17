@@ -6,6 +6,12 @@
  * They run on demand through `runtime.inspect(...)` and return a value without
  * advancing schedule visibility.
  *
+ * An inspector is the one typed read-only view of the world: tests, saves, UI,
+ * `Game.Condition.check(...)` projections, and devtools invariants
+ * (`Invariant.fromInspector(...)`) are all built from it. `runtime.inspect`
+ * rejects at compile time an inspector that reads a resource, service, or
+ * machine the runtime was not given.
+ *
  * @module Inspector
  * @docGroup runtime
  */
@@ -74,7 +80,7 @@ export interface InspectorDefinition<
 > {
   readonly kind: "inspector"
   readonly name: Name
-  readonly system: System.SystemDefinition<Spec, void, never, Root, Name, Needs>
+  readonly system: System.SystemDefinition<Spec, never, Root, Name, Needs>
   readonly requirements: ReadonlyArray<Needs>
   readonly read: (context: InspectorContext<Spec>) => Value
   readonly __schemaRoot?: Root | undefined
@@ -111,7 +117,6 @@ export const make = <
     () => undefined
   ) as unknown as System.SystemDefinition<
     System.SystemSpec<S, Access, Root>,
-    void,
     never,
     Root,
     Name,

@@ -1,6 +1,10 @@
 {
   "$schema": "http://json.schemastore.org/tsconfig",
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // For the `ritmo-devtools` CLI (src/cli.ts); its declarations export nothing that needs them.
+    "types": ["node"]
+  },
   "include": ["src"],
   "references": [
     { "path": "../core" }

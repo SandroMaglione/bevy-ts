@@ -1,3 +1,4 @@
+import { Clock } from "@typeonce/ritmo"
 import type { FacingValue } from "./types.ts"
 
 export const WORLD_WIDTH = 2200
@@ -7,7 +8,8 @@ export const PLAYER_SIZE = 36
 export const PLAYER_INTERACT_RADIUS = 72
 export const PLAYER_FRAME_SECONDS = 0.1
 export const PLAYER_FRAME_SIZE = 16
-export const FIXED_STEP_SECONDS = 1 / 60
+export const FIXED_STEP = Clock.hz(60)
+export const FIXED_STEP_SECONDS = FIXED_STEP.dt
 export const MAX_FRAME_SECONDS = 0.1
 export const MAX_STEPS_PER_FRAME = 5
 export const PLAYER_SHEET_URL = new URL("../../assets/spr_player.png", import.meta.url).href

@@ -66,9 +66,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Wall-clock numbers only compare on the same machine, so the base commit
-      # is measured in this job with the head's benchmark suite. If the base
-      # cannot run that suite (for example before the suite existed), runtime
-      # cases are reported without gating.
+      # is measured in this job using its own public-API benchmark suite.
+      # Copying the head's suite would make a breaking API addition fail on
+      # the base and silently disable the comparison for every runtime case.
+      # Matching case names compare; new cases start with no runtime reference.
       - name: Benchmark base commit
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -77,12 +78,6 @@ jobs:
           if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             git worktree add --detach .bench/base "$BASE_SHA"
             ln -s "$PWD/node_modules" .bench/base/node_modules
-            for suite in packages/*/bench; do
-              if [ -d ".bench/base/$(dirname "$suite")" ]; then
-                rm -rf ".bench/base/$suite"
-                cp -r "$suite" ".bench/base/$suite"
-              fi
-            done
             cp scripts/bench.ts .bench/base/scripts/bench.ts
             (cd .bench/base && node --expose-gc --import tsx scripts/bench.ts --json ../base.json) \
               || echo "::warning::Base commit could not run the benchmark suite; runtime cases are not gated."

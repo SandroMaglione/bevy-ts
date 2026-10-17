@@ -5,6 +5,7 @@
  * module functions; the precise public types live on `Schema.Game`.
  */
 import * as Command from "../Command.ts"
+import type * as Debug from "../Debug.ts"
 import * as Condition from "../Condition.ts"
 import * as Entity from "../Entity.ts"
 import * as EntityScope from "../EntityScope.ts"
@@ -57,9 +58,8 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
     }),
     Command: {
       spawn: Command.spawn,
-      insert: Command.insert,
+      extend: Command.extend,
       entry: Command.entry,
-      entryResult: Command.entryResult,
       entryRaw: Command.entryRaw,
       relate: Command.relate
     },
@@ -81,6 +81,14 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         writeResource: System.writeResource,
         readEvent: System.readEvent,
         writeEvent: System.writeEvent,
+        thisTick: System.thisTick,
+        commands: Command.commands,
+        spawns: Command.spawns,
+        inserts: Command.inserts,
+        removes: Command.removes,
+        despawns: Command.despawns,
+        despawnsScope: Command.despawnsScope,
+        relates: Command.relates,
         service: System.service,
         machine: System.machine,
         nextState: System.nextState,
@@ -117,7 +125,7 @@ export const makeGame = <S extends Schema.Any, Root>(schema: S, _root: Root): Sc
         readonly services: Runtime.RuntimeServices<any>
         readonly resources?: object
         readonly machines?: Runtime.RuntimeMachines<any>
-        readonly debug?: true
+        readonly debug?: Debug.Option
       }) => Runtime.make({ schema, ...options, machineDefinitions: definedMachines } as never),
       service: Runtime.service,
       services: Runtime.services,

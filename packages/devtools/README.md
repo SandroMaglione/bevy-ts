@@ -1,5 +1,20 @@
 # `@typeonce/ritmo-devtools`
 
+`Determinism.check` compares the same scripted simulation twice, including
+transient components that snapshots omit:
+
+```ts
+const result = Determinism.check(({ hostClock }) => makeSimulation(hostClock), {
+  schedule: "update", frames: 1800, hostClock: HostClock.test()
+})
+if (!result.ok) throw new Error(JSON.stringify(result))
+```
+
+The factory returns `{ runtime, schedules }`, with a fresh debug runtime on
+every call. A difference reports its frame, value path, and the first system
+or schedule marker found by a diagnostic rerun. This checks the supplied
+inputs on the current JavaScript engine.
+
 Debug sessions for `ritmo` runtimes: run schedules headless, keep a trace
 history, and ask what happened as text. Built for coding agents first; the
 same data will back human-facing tools.
@@ -9,18 +24,33 @@ pnpm add -D @typeonce/ritmo-devtools
 ```
 
 The package reads the core `Debug` handle, which exists only on runtimes made
-with `debug: true`. Production runtimes carry no handle and pay nothing.
+with `debug: { hostClock }`. Production runtimes carry no handle and pay
+nothing. The modules read no platform globals: give the runtime and the
+session the same `HostClock` (`HostClock.test()` headless, so every timing is
+0 and text output is identical across runs; `BrowserHostClock.make(window)`
+in the browser).
+
+A dev-only debug handle in a browser game:
+
+```ts
+const runtime = Game.Runtime.make({
+  services,
+  debug: import.meta.env.DEV ? { hostClock: BrowserHostClock.make(window) } : undefined
+})
+if (runtime.debug !== undefined) Monitor.attach({ debug: runtime.debug }, { schedules, host: window })
+```
 
 ## The debugging loop
 
 1. **Get a headless runtime.** Build the game's simulation schedules on a
-   runtime that needs no renderer, with `debug: true` and scripted input. The
+   runtime that needs no renderer, with `debug: { hostClock: HostClock.test() }`
+   and scripted input. The
    top-down example's [`simulation.ts`](../../examples/top-down/simulation.ts)
    is the reference; its [`debug.ts`](../../examples/top-down/debug.ts) is a
    script to copy.
 2. **Read the lints, then orient.** `session.describe()` starts with lints
-   (events nobody reads, next states no marker applies, ...); a warning there
-   is often the whole answer. Then it lists every schedule step, each
+   (events nobody reads, next states no marker applies, relations whose
+   failures nobody reads, ...); a warning there is often the whole answer. Then it lists every schedule step, each
    system's declared reads and writes, and who reads and writes each
    component, resource, and event. `run()` also prints the lint warning count.
    Info-level `read-before-write` lints list systems that run before the
@@ -28,12 +58,14 @@ with `debug: true`. Production runtimes carry no handle and pay nothing.
    value. That is often intended (input before movement), but it is a
    one-frame lag worth checking when a reaction looks late.
 3. **Reproduce.** Script the input with `Keyboard.scripted(bindings, timeline)`
-   (or replay a recorded browser session), add an `Invariant` that encodes the
-   bug, and `session.run("update", { frames: 600 })`. The run stops at the
+   (or replay a recorded browser session), add an invariant that encodes the
+   bug (`Invariant.fromInspector(Game.Inspector(...))`, returning a message
+   when violated), and `session.run("update", { frames: 600 })`. The run stops at the
    first frame the invariant fails, a system fails, or a system throws.
 4. **Explain.** `session.why(entity, Component)` and
    `session.whyResource(Resource)` show the latest changes and which system
-   made them. `session.journal({ frames: [from, to], entity })`
+   made them; `why` also names the systems whose declared `spawns` could
+   have spawned the entity. `session.journal({ frames: [from, to], entity })`
    shows everything that touched an entity around the failure.
    `session.report()` lists warnings the trace collected and the current
    entity counts per component. `run()` prints the warnings it raised.
@@ -55,21 +87,21 @@ const keyboard = Keyboard.scripted(bindings, [
   { frame: 30, release: ["left"] },
   { frame: 32, press: ["jump"], release: ["jump"] } // a tap within one frame
 ])
-const runtime = Game.Runtime.make({ services, resources, machines, debug: true })
-// Invariants read the world through a typed, read-only Inspector.
-const PlayerHealth = Game.Inspector("Debug/PlayerHealth", {
-  queries: { player: Game.Query({ selection: { health: Game.Query.read(Health) }, with: [Player] }) },
-  resources: { score: Game.System.readResource(Score) }
-}, ({ queries, resources }) => ({
-  health: queries.player.each().map((match) => match.data.health.get()),
-  score: resources.score.get()
+const hostClock = HostClock.test()           // every timing 0: identical text on every run
+const runtime = Game.Runtime.make({ services, resources, machines, debug: { hostClock } })
+// An invariant is a typed, read-only Inspector that returns a violation
+// message, or undefined while it holds. It declares its reads like a system:
+// Session.make rejects at compile time one that reads a resource, service,
+// or machine the runtime does not provide.
+const HealthNeverNegative = Invariant.fromInspector(Game.Inspector("health >= 0", {
+  queries: { player: Game.Query({ selection: { health: Game.Query.read(Health) }, with: [Player] }) }
+}, ({ queries }) => {
+  const health = queries.player.each().map((match) => match.data.health.get())
+  return health.some((value) => value < 0) ? `health ${health.join(", ")}` : undefined
 }))
-const HealthNeverNegative = Invariant.make("health >= 0", () => {
-  const { health } = runtime.inspect(PlayerHealth)
-  return health.some((value) => value < 0) ? `health ${health.join(", ")}` : undefined // message, or undefined when it holds
-})
 
 const session = Session.make(runtime, {
+  hostClock,                              // times run(); the runtime's clock
   schedules: { setup, update },           // names used by run() and in traces
   describe: { render },                   // described and linted, never run (needs a renderer)
   invariants: [HealthNeverNegative],      // checked after every frame of every run
@@ -80,7 +112,7 @@ session.run("setup")
 const run = session.run("update", { frames: 300, until: (frame) => frame === 120 })
 run.data.ok                               // true when completed or `until` returned true
 run.data.stop                             // { reason: "completed" | "until" | "failure" | "defect"
-                                          //   | "invariant" | "missingRequirements", frame, ... }
+                                          //   | "invariant" | "missingRequirements" | "tickOrder", frame, ... }
 
 session.describe()                        // schema, schedules, access, lints
 session.dump({ with: [Player], limit: 5 })// entities, resources, machines, pending commands
@@ -126,7 +158,7 @@ f186 update  -                   transition Game/Flow Playing -> Paused applied
 
 ## Live monitor (browser)
 
-`Monitor.attach(runtime, { schedules })` adds a panel to a running game for
+`Monitor.attach(runtime, { schedules, host: window })` adds a panel to a running game for
 people who want to see how it works without reading its code. Toggle it
 with the backslash key or the corner button. It observes the runtime only while it is
 open, so a closed monitor costs nothing.
@@ -134,6 +166,7 @@ open, so a closed monitor costs nothing.
 ```ts
 const monitor = Monitor.attach(runtime, {
   schedules: { fixedUpdate: step, frame },           // the schedule objects you tick
+  host: window,                                      // its document, timers, events, and clock
   pick: (event) => entityUnderPointer(event),        // optional: "Pick on screen"
   locate: (entity) => clientPositionOf(entity)       // optional: ring on the selected entity
 })
@@ -165,6 +198,7 @@ data without DOM, for a custom UI.
 | `discarded-messages` | A skipped system discarded messages published while it was skipped. |
 | `transition-failed` | An exit or transition schedule failed (queued again), or an enter schedule failed. |
 | `system-failed` | A system returned an expected failure or threw. |
+| `ignored-failure` | A `tick` / `tryTick` result failed and nobody read its `ok` before the next tick (or the session's `report()`): the failure went unnoticed and later systems did not run. `run` stops on it with `reason: "ignored-failure"`. |
 | `non-finite-value` | A system wrote NaN or an infinity into a component, resource, event, or spawned entity. The message names the entity and path; `why()` shows the history. |
 | `population-growing` | A component's count rose through every quarter of a run of 60+ frames: its lowest count in each quarter was higher than in the quarter before. Bursts that are cleaned up do not trigger it; entities that are never despawned do. `run()` returns the counts in `growing`. |
 
@@ -173,6 +207,54 @@ The report also starts with the static lints from `describe()`.
 The trace shows what systems wrote, not what they read. When a system writes
 a wrong value from correct inputs, the journal narrows the bug to that
 system (it runs, in order, and writes this value) and the rest is its code.
+
+## Replays
+
+A replay is the last seconds of a play session as a file: a debug artifact
+to open headless, explain, and turn into a test, then delete.
+
+```ts
+// In the game's dev build: record the simulation schedule.
+const recorder = Replay.recorder(runtime, {
+  schedule: simulate, name: "simulate",
+  keep: 30, step: STEP,                      // seconds kept, the fixed step (Clock.hz)
+  sink: ReplayViteSink.make({ fetch: (url, init) => fetch(url, init) }),
+  hostClock: BrowserHostClock.make(window),  // for savedAt
+  saveOn: { failure: true, invariants: [DeadAreGone] } // saves by itself
+})
+Monitor.attach(runtime, { schedules, host: window, replay: recorder }) // adds "Save replay"
+
+// vite.config.ts: writes posted replays to .replays/<time>.json and logs them.
+plugins: [ReplayVitePlugin.plugin()]
+```
+
+- The recorded schedule's services must be `snapshot()` sources of plain
+  data (input) or plain data (rules); anything else is a compile error that
+  names the service. Time and randomness live in the world, so the file holds
+  everything the simulation read: periodic snapshots, each tick's source
+  values (as changes), and every `runtime.send`.
+- Sinks deliver files: `Replay.memorySink()` (tests), `ReplayNodeSink`
+  (files, for headless runs), `ReplayViteSink` + `ReplayVitePlugin` (dev
+  server). The generic modules call no platform API; wall time comes from
+  `hostClock`.
+
+```ts
+// In Node: make(playback) builds the game with the recorded input.
+const make = (playback: Replay.Playback) => {
+  const hostClock = HostClock.test()       // replay text is identical on every run
+  const runtime = makeRuntime({ input: playback.source(Input), debug: { hostClock } })
+  return { runtime, schedules: { simulate }, hostClock }
+}
+const file = Replay.parse(JSON.parse(readFileSync(".replays/....json", "utf8")))
+const replay = file.ok ? Replay.session(make, file.value) : file
+replay.value.play()                       // run the ticks; reports checkpoint divergence
+replay.value.session.why(12, Position)    // a normal Session over the replayed frames
+Replay.verify(make, file.value)           // replays twice: nondeterminism shows up
+Replay.extract(make, file.value, { from: 1400, to: 1412 }) // a small replay for a test
+```
+
+A replay recorded with another schema fails with "replay recorded with an
+older schema".
 
 ## Recording a browser session
 

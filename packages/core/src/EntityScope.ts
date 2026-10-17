@@ -7,6 +7,12 @@
  * build scenes without teaching the ECS runtime about menus, levels, overlays,
  * or any other game-specific scene model.
  *
+ * Use a scope when a set of entities shares one lifetime and nothing else: a
+ * level's walls, a menu's buttons. Membership is flat, unordered, and not
+ * queryable. Use `Descriptor.Hierarchy(...)` instead when entities form a
+ * parent-child tree: ordered children, `lookup.parent` / `descendants`
+ * traversal, and children despawned with their parent.
+ *
  * @module EntityScope
  * @docGroup core
  */

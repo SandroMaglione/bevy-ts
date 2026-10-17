@@ -57,7 +57,6 @@
  */
 import type { Descriptor } from "./Descriptor.ts"
 import type * as Entity from "./Entity.ts"
-import type { Fx } from "./Fx.ts"
 import * as Machine from "./Machine.ts"
 import type * as Relation from "./Relation.ts"
 import type { Query, QueryMatch } from "./Query.ts"
@@ -65,7 +64,7 @@ import type { ConstructedWriteCell, ReadCell, ReadonlyValue, WriteCell } from ".
 import * as Requirement from "./Requirement.ts"
 import type * as Result from "./Result.ts"
 import type { Schema } from "./Schema.ts"
-import type { CommandsApi } from "./Command.ts"
+import type { CommandAccess, CommandsApi, NotDeclared } from "./Command.ts"
 
 /**
  * System declarations, typed execution context, and runtime requirements.
@@ -246,7 +245,7 @@ export const readEvent = <D extends Descriptor<"event", string, any>>(
  *
  * If the payload needs to name an entity for later work, emit a durable
  * `Game.Entity.handle(...)` (optionally with an intent component) and let the later
- * reader re-resolve it through `lookup.getHandle(...)`.
+ * reader re-resolve it through `queries.x.getHandle(...)` (through a declared query).
  *
  * @example
  * ```ts
@@ -265,6 +264,58 @@ export const writeEvent = <D extends Descriptor<"event", string, any>>(
   mode: "write",
   descriptor
 })
+
+/** The marker `thisTick(...)` adds to a read. */
+export interface ThisTick {
+  readonly thisTick: true
+}
+
+/**
+ * Requires that every system writing this event or resource runs earlier in
+ * the same `runtime.tick(...)` call than the reading system: the reader then
+ * sees this tick's data, never last tick's. The library never reorders
+ * anything; it only checks.
+ *
+ * `runtime.tick(...)` checks it at compile time over everything passed to that
+ * call, in order (gated groups count by position), and rejects a writer that
+ * runs after the reader and a call whose order is not statically known. A
+ * read with no writer in the call compiles (a reader reused in several
+ * ticks); the `event-never-written` lint reports data nobody writes.
+ * `tryTick` checks the same at runtime.
+ *
+ * Use it on reads whose correctness depends on running after their writers
+ * (damage applied the tick it is dealt). A plain read is right when last
+ * tick's data is acceptable.
+ *
+ * On a query (`queries: { enemies: Game.System.thisTick(Enemies) }`), the
+ * writers are systems whose declared commands can change what it matches:
+ * `spawns` covering every component it requires, or `inserts` / `removes` of
+ * any component it names (selection slots, optional ones included, `with`,
+ * `without`, filters). Each must run earlier with an `applyDeferred()` (or
+ * `applyStateTransitions(...)`) between it and the reader, since commands
+ * apply only there. `despawns` never count: a despawned entity stays visible
+ * to queries until the next `applyDeferred()`. Nested schedules are
+ * flattened, gated groups count by position, and a transition bundle counts
+ * at its `applyStateTransitions(...)` step (which applies queued commands
+ * first), as if every schedule in it runs, markers inside included.
+ *
+ * @example
+ * ```ts
+ * const ApplyDamage = Game.System("ApplyDamage", {
+ *   events: { damage: Game.System.thisTick(Game.System.readEvent(Damage)) }
+ * }, ({ events }) => { ... })
+ *
+ * runtime.tick(Game.Schedule(DealDamage, ApplyDamage)) // compiles
+ * runtime.tick(Game.Schedule(ApplyDamage, DealDamage)) // "ApplyDamage needs Damage from this tick, but its writer DealDamage runs after it"
+ *
+ * const AimAtNewest = Game.System("AimAtNewest", { queries: { enemies: Game.System.thisTick(Enemies) } }, ...)
+ * runtime.tick(Game.Schedule(SpawnWave, Game.Schedule.applyDeferred(), AimAtNewest)) // compiles
+ * runtime.tick(Game.Schedule(SpawnWave, AimAtNewest)) // "AimAtNewest needs this tick's commands for queries.enemies, but SpawnWave queues them with no applyDeferred() in between"
+ * ```
+ */
+export const thisTick = <
+  Read extends EventRead<Descriptor<"event", string, any>> | ResourceRead<Descriptor<"resource", string, any>> | Query.Any<any>
+>(read: Read): Read & ThisTick => ({ ...read, thisTick: true })
 
 /**
  * Declares read access to the current committed value of a finite-state machine.
@@ -307,7 +358,7 @@ export const transition = <M extends Machine.StateMachine.Any>(
  * normal events: each run sees those published since its previous run.
  *
  * This is one of the clearest signs that the modeled value should be a machine
- * rather than a plain state descriptor.
+ * rather than a resource or a `Descriptor.EntityState` component.
  */
 export const readTransitionEvent = <M extends Machine.StateMachine.Any>(
   stateMachine: M
@@ -430,8 +481,9 @@ export interface RelationFailureRead<R extends Relation.Relation.Any> {
  * ticked less often than the one that removes (rendering after several fixed
  * updates) still sees every removal. A system skipped by its run conditions
  * keeps its position, like `added`/`changed`, and sees the removals when it
- * runs again. Each log is capped at `Runtime.streamCapacity` entries; drops
- * show up as `missed` reads in the debug trace. Systems usually pair this
+ * runs again. Each log is capped at `Runtime.streamCapacity` entries; a
+ * reader that missed dropped ones sees `lagged() === true` (and a `missed`
+ * read in the debug trace). Systems usually pair this
  * with host cleanup such as removing renderer-owned nodes. {@link readDespawned}
  * complements this for whole-entity teardown.
  *
@@ -493,6 +545,14 @@ export const readDespawned = (): DespawnedRead => ({
  */
 export interface RemovedReadView<S extends Schema.Any, Root = unknown> {
   all(): ReadonlyArray<import("./Entity.ts").EntityId<S, Root>>
+  /**
+   * Whether records published since this system's previous run were dropped
+   * before it read them. Records wait for every reading system, so this only
+   * happens when a reader has not run for so long that the log exceeded its
+   * capacity (see `Runtime.streamCapacity`). Check it where a missed record
+   * would leak host state (a renderer node never destroyed).
+   */
+  lagged(): boolean
 }
 
 /**
@@ -500,6 +560,14 @@ export interface RemovedReadView<S extends Schema.Any, Root = unknown> {
  */
 export interface DespawnedReadView<S extends Schema.Any, Root = unknown> {
   all(): ReadonlyArray<import("./Entity.ts").EntityId<S, Root>>
+  /**
+   * Whether records published since this system's previous run were dropped
+   * before it read them. Records wait for every reading system, so this only
+   * happens when a reader has not run for so long that the log exceeded its
+   * capacity (see `Runtime.streamCapacity`). Check it where a missed record
+   * would leak host state (a renderer node never destroyed).
+   */
+  lagged(): boolean
 }
 
 /**
@@ -531,8 +599,46 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
   each(): ReadonlyArray<QueryMatch<S, Q>>
   /**
    * Retrieves the match for one specific entity id when it satisfies the query.
+   *
+   * Every read and write of an entity goes through a query the system
+   * declares, so its access is visible in the spec: there is no lookup that
+   * takes a query at call time.
    */
   get(entityId: import("./Entity.ts").EntityId<S, Query.Root<Q>>): Result.Result<QueryMatch<S, Q>, Query.LookupError>
+  /**
+   * Resolves a stored durable handle back into this query's access.
+   *
+   * Use this for handles carried in events, resources, or components. A handle
+   * is storage-safe, not proof of liveness, so stale or mismatched handles stay
+   * explicit typed failures. A handle with an intent component needs a query
+   * that proves it (selects or requires it).
+   */
+  getHandle<H extends Entity.Handle<Query.Root<Q>, any>>(
+    handle: [Entity.Handle.Intent<H>] extends [undefined]
+      ? H
+      : Query.ProvesComponent<Q, Entity.Handle.Intent<H> & Descriptor<"component", string, any>> extends true
+        ? H
+        : "this query does not prove the handle's intent component: select it, or add it to with"
+  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
+  /**
+   * The direct children of one hierarchy parent that match this query, in the
+   * stored child order. Children that do not match are skipped; a missing
+   * parent is a `MissingEntity` failure.
+   */
+  children<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: Entity.EntityId<S, Query.Root<Q>>,
+    relation: R
+  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
+  /**
+   * The hierarchy descendants of one entity that match this query, in
+   * `options.order` (depth-first by default). Descendants that do not match
+   * are skipped. `lookup.descendants` returns every descendant's id instead.
+   */
+  descendants<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
+    entityId: Entity.EntityId<S, Query.Root<Q>>,
+    relation: R,
+    options?: { readonly order?: "breadth" | "depth" }
+  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   /**
    * Returns a single match when exactly one entity satisfies the query.
    */
@@ -558,40 +664,19 @@ export interface QueryHandle<S extends Schema.Any, Q extends Query.Any> {
 }
 
 /**
- * Typed entity lookup API exposed to systems.
+ * Relation lookups exposed to systems: entity ids along relation edges.
  *
- * Use this when you already have an entity id and want a validated, typed view
- * over a specific component access specification.
+ * Lookups return ids only. To read or write the entities they lead to, pass
+ * the ids to a declared query (`queries.x.get(id)`), or use the query
+ * handle's `children` / `descendants`, so every access stays in the spec.
  *
  * All lookup methods are total and explicit:
  *
  * - no hidden exceptions
- * - stale handles are treated as normal typed failures
+ * - missing entities are normal typed failures
  * - hierarchy traversal is available only for hierarchy relations
  */
 export interface LookupApi<S extends Schema.Any, Root = unknown> {
-  get<Q extends Query.Any<Root>>(
-    entityId: Entity.EntityId<S, Root>,
-    query: Q
-  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
-  /**
-   * Resolves a stored durable handle back into current-world query access.
-   *
-   * Use this for handles carried in events, resources, or components. A handle is
-   * storage-safe, not proof of liveness, so stale or mismatched handles remain
-   * explicit typed failures.
-   */
-  getHandle<
-    H extends Entity.Handle<Root, any>,
-    Q extends Query.Any<Root>
-  >(
-    handle: [Entity.Handle.Intent<H>] extends [undefined]
-      ? H
-      : Query.ProvesComponent<Q, Entity.Handle.Intent<H> & Descriptor<"component", string, any>> extends true
-        ? H
-        : never,
-    query: Q
-  ): Result.Result<QueryMatch<S, Q>, Query.LookupError>
   related<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Any>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
@@ -600,21 +685,6 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
     entityId: Entity.EntityId<S, Root>,
     relation: R
   ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
-  /**
-   * Reads the direct children of one hierarchy parent as typed query matches.
-   *
-   * This preserves the stored child order for that hierarchy relation and skips
-   * entities that do not satisfy the query. Missing parents remain explicit
-   * `MissingEntity` failures.
-   */
-  childMatches<
-    R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>,
-    Q extends Query.Any<Root>
-  >(
-    entityId: Entity.EntityId<S, Root>,
-    relation: R,
-    query: Q
-  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   parent<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
@@ -630,24 +700,6 @@ export interface LookupApi<S extends Schema.Any, Root = unknown> {
       readonly order?: "breadth" | "depth"
     }
   ): Result.Result<ReadonlyArray<Entity.EntityId<S, Root>>, Relation.Relation.MissingEntityError>
-  /**
-   * Traverses hierarchy descendants and resolves only the entities that match
-   * the given query.
-   *
-   * Traversal order stays explicit through `options.order`, and non-matching
-   * descendants are skipped without turning traversal into a failure.
-   */
-  descendantMatches<
-    R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>,
-    Q extends Query.Any<Root>
-  >(
-    entityId: Entity.EntityId<S, Root>,
-    relation: R,
-    query: Q,
-    options?: {
-      readonly order?: "breadth" | "depth"
-    }
-  ): Result.Result<ReadonlyArray<QueryMatch<S, Q>>, Relation.Relation.MissingEntityError>
   root<R extends Extract<Schema.Relations<S>[keyof Schema.Relations<S>], Relation.Relation.Hierarchy>>(
     entityId: Entity.EntityId<S, Root>,
     relation: R
@@ -686,6 +738,25 @@ export interface SystemAccessInput {
   readonly removed?: Record<string, RemovedRead<Descriptor<"component", string, any>>>
   readonly despawned?: Record<string, DespawnedRead>
   readonly relationFailures?: Record<string, RelationFailureRead<Relation.Relation.Any>>
+  /**
+   * The commands the system may queue: `Game.System.commands(...)` with
+   * `spawns`, `inserts`, `removes`, `despawns`, `despawnsScope`, and
+   * `relates` permissions. Without it the system has no `commands`.
+   */
+  readonly commands?: CommandAccess.Any
+  /**
+   * Run conditions that skip the system: while one fails, the system does not
+   * run and the events, transition events, and relation failures published
+   * meanwhile are dropped for it. Use it for a mode change after which those
+   * messages are stale (menu, game over); use `pauseWhen` instead for a freeze
+   * whose messages stay valid. `Schedule.when(...)` adds conditions to a whole
+   * group.
+   *
+   * Four gating forms, one rule: `when` drops the events published while
+   * gated (the system resumes on fresh messages), `pauseWhen` keeps them (the
+   * system resumes and reads the backlog). Put them on one system's spec, or
+   * on a group with `Schedule.when(...)` / `Schedule.pauseWhen(...)`.
+   */
   readonly when?: ReadonlyArray<Machine.Condition>
   /**
    * Run conditions that pause the system instead of skipping it: while one
@@ -763,6 +834,7 @@ export type SystemSpec<
   readonly pauseWhen: AccessField<Access, "pauseWhen", readonly []>
   readonly transitions: AccessField<Access, "transitions", {}>
   readonly local: LocalFactory<Access>
+  readonly commands: "commands" extends keyof Access ? NonNullable<Access["commands"]> : undefined
   readonly schema: S
   readonly __schemaRoot: Root
 }
@@ -857,6 +929,11 @@ type QueryContext<Spec extends AnySystemSpec> = {
 type LocalValue<Factory> = Factory extends () => infer Local ? Local : undefined
 type LocalContext<Spec extends AnySystemSpec> = LocalValue<Spec["local"]>
 
+type CommandsContext<Spec extends AnySystemSpec> =
+  Spec["commands"] extends CommandAccess<infer Spawns, infer Inserts, infer Removes, infer Despawns, infer Scopes, infer Relates>
+    ? CommandsApi<Spec["schema"], Spec["__schemaRoot"], Spawns, Inserts, Removes, Despawns, Scopes, Relates>
+    : NotDeclared
+
 /**
  * The implementation context derived from a system spec.
  *
@@ -876,15 +953,11 @@ export interface SystemContext<Spec extends AnySystemSpec> {
   readonly relationFailures: RelationFailureContext<Spec>
   readonly transitions: TransitionContext<Spec>
   readonly services: ServiceContext<Spec>
-  readonly commands: CommandsApi<Spec["schema"], Spec["__schemaRoot"]>
+  /** The commands the spec declares (`commands: Game.System.commands(...)`). */
+  readonly commands: CommandsContext<Spec>
   /** The system's own scratch state (see `local` in the spec); `undefined` when it declares none. */
   readonly local: LocalContext<Spec>
 }
-
-/**
- * The service environment required by a system.
- */
-export type SystemDependencies<Spec extends AnySystemSpec> = ServiceContext<Spec>
 
 type DescriptorFromAccess<Access> =
   Access extends { readonly descriptor: infer D extends Requirement.Requirement } ? D : never
@@ -949,7 +1022,7 @@ export interface SystemFailure<
 
 /** Extracts the normalized failure carried by one system definition. */
 export type FailureOf<Value> =
-  Value extends SystemDefinition<any, any, infer Error, any, infer Name, any>
+  Value extends SystemDefinition<any, infer Error, any, infer Name, any>
     ? [Error] extends [never] ? never : SystemFailure<Name, Error>
     : never
 
@@ -958,7 +1031,6 @@ export type FailureOf<Value> =
  */
 export interface SystemDefinition<
   Spec extends AnySystemSpec,
-  out A = void,
   out E = never,
   out Root = unknown,
   out Name extends string = string,
@@ -991,32 +1063,46 @@ export interface SystemDefinition<
   /**
    * The executable implementation of the system.
    */
-  readonly run: SystemRun<Spec, A, E>
+  readonly run: SystemRun<Spec, E>
   /**
    * The system this one is a gated copy of, made by `Schedule.when(...)`:
    * the same system with extra run conditions. The runtime keys per-system
    * state (change detection, event cursors) by the original, so a system and
    * its gated copies are one reader.
    */
-  readonly base?: SystemDefinition<any, any, any, any, any, any> | undefined
+  readonly base?: SystemDefinition<any, any, any, any, any> | undefined
 }
 
 /**
  * A system implementation.
  *
- * Return nothing for a system that cannot fail. Return an `Fx` when the system
- * has an expected failure (`Fx.fail(...)`) or wants to compose effects; the
- * failure type becomes part of every schedule that contains the system.
+ * Return nothing for a system that cannot fail. Return
+ * `Result.failure(error)` for an expected failure: the system's ECS writes
+ * are rolled back, its commands and events are dropped, and the tick stops
+ * with a typed `SystemFailure` whose `error` is inferred from every
+ * `Result.failure(...)` the body returns. A returned success
+ * (`Result.success(...)`) behaves like returning nothing. Exceptions are
+ * defects, not failures: they roll back the same way and are rethrown.
+ *
+ * @example
+ * ```ts
+ * const Spend = Game.System("Spend", {
+ *   resources: { gold: Game.System.writeResource(Gold) }
+ * }, ({ resources }) => {
+ *   if (resources.gold.get() < 10) return Result.failure("NotEnoughGold" as const)
+ *   resources.gold.update((gold) => gold - 10)
+ * })
+ * ```
  */
-export type SystemRun<Spec extends AnySystemSpec, A = void, E = never> =
-  (context: SystemContext<Spec>) => Fx<A, E, SystemDependencies<Spec>> | void
+export type SystemRun<Spec extends AnySystemSpec, E = never> =
+  (context: SystemContext<Spec>) => Result.Result<unknown, E> | void
 
 /**
  * Defines a system from an explicit spec and a typed implementation.
  *
  * This is the public entrypoint for authoring systems. The implementation only
- * receives the capabilities declared in the spec, and the returned effect keeps
- * service dependencies tracked in the type system.
+ * receives the capabilities declared in the spec; return
+ * `Result.failure(error)` for an expected failure (see {@link SystemRun}).
  *
  * Use the string-name overload in normal code. The name is turned into an
  * internal ordering token automatically, so the system can participate in
@@ -1075,7 +1161,6 @@ const collectSystemRequirements = (
 
 export function System<
   const Access extends SystemAccessInput & { readonly schema: Schema.Any },
-  A = void,
   E = never,
   Root = unknown,
   const Name extends string = string
@@ -1084,14 +1169,14 @@ export function System<
   spec: Access & {
     readonly [Key in Exclude<keyof Access, keyof SystemAccessInput | "schema">]: never
   },
-  run: SystemRun<SystemSpec<Access["schema"], Access, Root>, A, E>
-): SystemDefinition<SystemSpec<Access["schema"], Access, Root>, A, E, Root, Name, SystemAccessNeeds<Access>>
+  run: SystemRun<SystemSpec<Access["schema"], Access, Root>, E>
+): SystemDefinition<SystemSpec<Access["schema"], Access, Root>, E, Root, Name, SystemAccessNeeds<Access>>
 
 export function System(
   name: string,
   spec: { readonly schema: Schema.Any } & SystemAccessInput,
-  run: (context: any) => Fx<any, any, any> | void
-): SystemDefinition<any, any, any, any, any, any> {
+  run: (context: any) => Result.Result<any, any> | void
+): SystemDefinition<any, any, any, any, any> {
   type Spec = SystemSpec<Schema.Any, SystemAccessInput, unknown>
 
   const normalizedSpec = {
@@ -1110,6 +1195,7 @@ export function System(
     pauseWhen: spec.pauseWhen ?? [],
     transitions: spec.transitions ?? {},
     local: spec.local,
+    commands: spec.commands,
     __schemaRoot: undefined
   } as Spec
 
@@ -1123,5 +1209,5 @@ export function System(
     },
     spec: normalizedSpec,
     run
-  } as SystemDefinition<any, any, any, any, any, any>
+  } as SystemDefinition<any, any, any, any, any>
 }

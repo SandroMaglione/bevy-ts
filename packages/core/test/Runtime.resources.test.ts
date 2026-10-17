@@ -102,39 +102,6 @@ describe("Runtime resources", () => {
     expect(readResourceValue(runtime, schema, Phase)).toBe("Running")
   })
 
-  it("setResult and updateResult only write successful values", () => {
-    const applyValidatedWrites = System.System(
-      "RuntimeResources/ApplyValidatedWrites",
-      {
-        schema,
-        resources: {
-          counter: System.writeResource(Counter),
-          phase: System.writeResource(Phase)
-        }
-      },
-      ({ resources }) =>
-        {
-          const failedSet = resources.counter.setResult(Result.failure("invalid"))
-          expect(failedSet).toEqual(Result.failure("invalid"))
-
-          const successfulSet = resources.counter.setResult(Result.success(3))
-          expect(successfulSet).toEqual(Result.success(undefined))
-
-          const failedUpdate = resources.phase.updateResult(() => Result.failure("blocked"))
-          expect(failedUpdate).toEqual(Result.failure("blocked"))
-
-          const successfulUpdate = resources.phase.updateResult(() => Result.success("Running" as const))
-          expect(successfulUpdate).toEqual(Result.success(undefined))
-        }
-    )
-
-    const runtime = makeRuntime()
-    runtime.tick(Schedule.Schedule(applyValidatedWrites))
-
-    expect(readResourceValue(runtime, schema, Counter)).toBe(3)
-    expect(readResourceValue(runtime, schema, Phase)).toBe("Running")
-  })
-
   it("setRaw and updateRaw only write successful constructed values", () => {
     const applyConstructedWrites = System.System(
       "RuntimeResources/ApplyConstructedWrites",

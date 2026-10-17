@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Fx, Schema } from "@typeonce/ritmo"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
 
-const Phase = Descriptor.State("State/Phase", ["ready", "windup", "active"] as const, {
+const Phase = Descriptor.EntityState("State/Phase", ["ready", "windup", "active"] as const, {
   transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }
 })
-const Mode = Descriptor.State("State/Mode", [0, 1, 2] as const)
+const Mode = Descriptor.EntityState("State/Mode", [0, 1, 2] as const)
 
 const Game = Schema.bind(Schema.fragment({ components: { Phase, Mode } }))
 
@@ -15,14 +15,16 @@ const ReadPhases = Game.Inspector("State/ReadPhases", {
 
 const makeRuntime = () => {
   const runtime = Game.Runtime.make({ services: Game.Runtime.services() })
-  const Spawn = Game.System("State/Spawn", {}, ({ commands }) => {
+  const Spawn = Game.System("State/Spawn", {
+    commands: Game.System.commands(Game.System.spawns(Phase, Mode))
+  }, ({ commands }) => {
     commands.spawn(Game.Command.spawn([Phase, "ready"], [Mode, 0]))
   })
   runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
   return runtime
 }
 
-describe("Descriptor.State", () => {
+describe("Descriptor.EntityState", () => {
   it("moves between states with a compare-and-set", () => {
     const runtime = makeRuntime()
     const results: Array<unknown> = []
@@ -37,7 +39,7 @@ describe("Descriptor.State", () => {
     runtime.tick(Game.Schedule(Advance))
     expect(results).toEqual([
       { ok: true, value: undefined },
-      { ok: false, error: { _tag: "StateMismatch", state: "State/Phase", expected: "ready", actual: "windup" } },
+      { ok: false, error: { _tag: "EntityStateMismatch", component: "State/Phase", expected: "ready", actual: "windup" } },
       { ok: true, value: undefined }
     ])
     expect(runtime.inspect(ReadPhases)).toEqual(["active"])
@@ -62,13 +64,10 @@ describe("Descriptor.State", () => {
 
   it("is an ordinary write: change detection sees it and a failed system rolls it back", () => {
     const runtime = makeRuntime()
-    const Fail = Game.System("State/Fail", { queries: { phases: Phases } }, ({ queries }) =>
-      Fx.flatMap(
-        Fx.sync(() => {
-          for (const { data } of queries.phases.each()) data.phase.transition("ready", "windup")
-        }),
-        () => Fx.fail("Rejected" as const)
-      ))
+    const Fail = Game.System("State/Fail", { queries: { phases: Phases } }, ({ queries }) => {
+      for (const { data } of queries.phases.each()) data.phase.transition("ready", "windup")
+      return Result.failure("Rejected" as const)
+    })
     expect(runtime.tick(Game.Schedule(Fail)).ok).toBe(false)
     expect(runtime.inspect(ReadPhases)).toEqual(["ready"])
 

@@ -8,8 +8,9 @@
  * Scores are normalized by the `calibration` case in `harness.ts` (see
  * `scripts/bench.ts`).
  */
-import { Decode, Descriptor, Schema } from "@typeonce/ritmo"
+import { Clock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
 import type * as Entity from "@typeonce/ritmo/Entity"
+import type { ScheduleEntry } from "@typeonce/ritmo/Schedule"
 import type { BenchCase } from "./harness.ts"
 
 const N = 10_000
@@ -44,7 +45,9 @@ const makeRuntime = () => Game.Runtime.make({
 
 type BenchRuntime = ReturnType<typeof makeRuntime>
 
-const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {}, ({ commands }) => {
+const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {
+  commands: Game.System.commands(Game.System.spawns(Position, Velocity, Health))
+}, ({ commands }) => {
   for (let index = 0; index < count; index++) {
     commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: index }],
@@ -54,7 +57,9 @@ const spawnMovers = (count: number) => Game.System("Bench/SpawnMovers", {}, ({ c
   }
 })
 
-const spawnStatics = (count: number) => Game.System("Bench/SpawnStatics", {}, ({ commands }) => {
+const spawnStatics = (count: number) => Game.System("Bench/SpawnStatics", {
+  commands: Game.System.commands(Game.System.spawns(Position, Static))
+}, ({ commands }) => {
   for (let index = 0; index < count; index++) {
     commands.spawn(Game.Command.spawn(
       [Position, { x: index, y: 0 }],
@@ -104,10 +109,13 @@ const despawn: BenchCase = {
   name: "despawn/10k",
   description: "Despawn 10k entities through commands + applyDeferred",
   setup: () => {
-    const DespawnAll = Game.System("Bench/DespawnAll", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
+    const DespawnAll = Game.System("Bench/DespawnAll", {
+      queries: { movers: ReadMovers },
+      commands: Game.System.commands(Game.System.despawns(Position))
+    }, ({ queries, commands }) =>
       {
         for (const match of queries.movers.each()) {
-          commands.despawn(match.entity.id)
+          commands.despawn(match.entity)
         }
       })
     const schedule = Game.Schedule(DespawnAll, Game.Schedule.applyDeferred())
@@ -166,7 +174,9 @@ const sparseSingle: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, N)
-    const SpawnPlayer = Game.System("Bench/SpawnPlayer", {}, ({ commands }) => {
+    const SpawnPlayer = Game.System("Bench/SpawnPlayer", {
+      commands: Game.System.commands(Game.System.spawns(Position, Player))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Player, {}]))
     })
     runtime.tick(Game.Schedule(SpawnPlayer, Game.Schedule.applyDeferred()))
@@ -198,7 +208,10 @@ const changedFilter: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
-    const TagHot = Game.System("Bench/TagHot", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
+    const TagHot = Game.System("Bench/TagHot", {
+      queries: { movers: ReadMovers },
+      commands: Game.System.commands(Game.System.inserts(Hot))
+    }, ({ queries, commands }) =>
       {
         let tagged = 0
         for (const match of queries.movers.each()) {
@@ -244,7 +257,10 @@ const churn: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     populate(runtime, N, 0)
-    const TagHot = Game.System("Bench/TagChurn", { queries: { movers: ReadMovers } }, ({ queries, commands }) =>
+    const TagHot = Game.System("Bench/TagChurn", {
+      queries: { movers: ReadMovers },
+      commands: Game.System.commands(Game.System.inserts(Hot))
+    }, ({ queries, commands }) =>
       {
         let tagged = 0
         for (const match of queries.movers.each()) {
@@ -257,7 +273,8 @@ const churn: BenchCase = {
       queries: {
         unmarked: Game.Query({ selection: { hot: Game.Query.read(Hot) }, without: [Marker] }),
         marked: Game.Query({ selection: { hot: Game.Query.read(Hot), marker: Game.Query.read(Marker) } })
-      }
+      },
+      commands: Game.System.commands(Game.System.inserts(Marker), Game.System.removes(Marker))
     }, ({ queries, commands }) => {
       for (const match of queries.unmarked.each()) {
         commands.insert(match.entity.id, [Marker, {}])
@@ -292,23 +309,67 @@ const scheduleOverhead: BenchCase = {
   }
 }
 
+const longOrdered: BenchCase = {
+  name: "schedule/150-systems-thistick-x10",
+  description: "tryTick a 150-system schedule (12 groups of 10 command writers, each followed by applyDeferred(), and 30 thisTick query and event readers) 10 times: the runtime order check plus the run",
+  setup: () => {
+    const runtime = makeRuntime()
+    const entries: Array<ScheduleEntry> = []
+    for (let group = 0; group < 12; group++) {
+      for (let slot = 0; slot < 10; slot++) {
+        // Only the first group changes what the readers match; the check still weighs every writer.
+        entries.push(group === 0
+          ? Game.System(`Bench/Long${group}_${slot}`, { commands: Game.System.commands(Game.System.inserts(Hot), Game.System.removes(Hot)) }, () => {})
+          : Game.System(`Bench/Long${group}_${slot}`, { commands: Game.System.commands(Game.System.inserts(Static), Game.System.removes(Static)) }, () => {}))
+      }
+      entries.push(Game.Schedule.applyDeferred())
+      for (let reader = 0; reader < 2; reader++) {
+        entries.push(Game.System(`Bench/LongRead${group}_${reader}`, {
+          queries: { hot: Game.System.thisTick(Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Hot] })) }
+        }, ({ queries }) => {
+          if (queries.hot.each().length < 0) throw new Error("unreachable")
+        }))
+      }
+      if (group % 2 === 0) {
+        entries.push(Game.System(`Bench/LongPing${group}`, { events: { ping: Game.System.thisTick(Game.System.readEvent(Ping)) } }, ({ events }) => {
+          if (events.ping.all().length < 0) throw new Error("unreachable")
+        }))
+      }
+    }
+    const schedule = Game.Schedule(...entries)
+    return {
+      run: () => {
+        for (let index = 0; index < 10; index++) {
+          const result = runtime.tryTick(schedule)
+          if (!result.ok) throw new Error(JSON.stringify(result.error))
+        }
+      }
+    }
+  }
+}
+
 const lookupGet: BenchCase = {
   name: "lookup/get-10k",
-  description: "Resolve 10k stored entity ids through lookup.get with a 2-component query",
+  description: "Resolve 10k stored entity ids through a declared 2-component query's get",
   setup: () => {
     const runtime = makeRuntime()
     const ids: Array<Id> = []
-    const SpawnTracked = Game.System("Bench/SpawnTracked", {}, ({ commands }) => {
+    const SpawnTracked = Game.System("Bench/SpawnTracked", {
+      commands: Game.System.commands(Game.System.spawns(Position, Velocity))
+    }, ({ commands }) => {
       for (let index = 0; index < N; index++) {
         ids.push(commands.spawn(Game.Command.spawn([Position, { x: index, y: 0 }], [Velocity, { x: 1, y: 0 }])))
       }
     })
     runtime.tick(Game.Schedule(SpawnTracked, Game.Schedule.applyDeferred()))
-    const Resolve = Game.System("Bench/Resolve", { resources: { sum: Game.System.writeResource(Sum) } }, ({ lookup, resources }) =>
+    const Resolve = Game.System("Bench/Resolve", {
+      queries: { movers: ReadMovers },
+      resources: { sum: Game.System.writeResource(Sum) }
+    }, ({ queries, resources }) =>
       {
         let total = 0
         for (const id of ids) {
-          const match = lookup.get(id, ReadMovers)
+          const match = queries.movers.get(id)
           if (match.ok) total += match.value.data.position.get().x
         }
         resources.sum.set(total)
@@ -346,12 +407,16 @@ const hierarchy: BenchCase = {
   setup: () => {
     const runtime = makeRuntime()
     const roots: Array<Id> = []
-    const SpawnRoots = Game.System("Bench/SpawnRoots", {}, ({ commands }) => {
+    const SpawnRoots = Game.System("Bench/SpawnRoots", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       for (let index = 0; index < 100; index++) {
         roots.push(commands.spawn(Game.Command.spawn([Position, { x: index, y: 0 }])))
       }
     })
-    const SpawnChildren = Game.System("Bench/SpawnChildren", {}, ({ commands }) => {
+    const SpawnChildren = Game.System("Bench/SpawnChildren", {
+      commands: Game.System.commands(Game.System.spawns(Health))
+    }, ({ commands }) => {
       for (const root of roots) {
         for (let index = 0; index < 100; index++) {
           commands.spawn(Game.Command.relate(Game.Command.spawn([Health, index]), ChildOf, root))
@@ -440,13 +505,18 @@ const frame: BenchCase = {
         resources.sum.set(total)
       }))
     const Bullets = Game.Query({ selection: { health: Game.Query.read(Health) }, without: [Velocity] })
-    const SpawnBullets = Game.System("Frame/SpawnBullets", {}, ({ commands }) => {
+    const SpawnBullets = Game.System("Frame/SpawnBullets", {
+      commands: Game.System.commands(Game.System.spawns(Position, Health))
+    }, ({ commands }) => {
       for (let count = 0; count < 100; count++) {
         commands.spawn(Game.Command.spawn([Position, { x: count, y: 0 }], [Health, 1]))
       }
     })
-    const DespawnBullets = Game.System("Frame/DespawnBullets", { queries: { bullets: Bullets } }, ({ queries, commands }) => {
-      for (const match of queries.bullets.each()) commands.despawn(match.entity.id)
+    const DespawnBullets = Game.System("Frame/DespawnBullets", {
+      queries: { bullets: Bullets },
+      commands: Game.System.commands(Game.System.despawns(Health))
+    }, ({ queries, commands }) => {
+      for (const match of queries.bullets.each()) commands.despawn(match.entity)
     })
     const Cleanup = Game.System("Frame/Cleanup", {
       despawned: { entities: Game.System.readDespawned() },
@@ -472,7 +542,22 @@ const frame: BenchCase = {
   }
 }
 
+const clockAdvance: BenchCase = {
+  name: "clock/advance-1000",
+  description: "Advance the validated simulation clock through 1000 fixed steps",
+  setup: () => {
+    const step = Clock.hz(60)
+    const Time = Clock.resource("ClockBench/Time", step)
+    const Game = Schema.bind(Schema.fragment({ resources: { Time } }))
+    const made = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Time: Clock.start(step) } })
+    if (!made.ok) throw new Error("initial clock is valid")
+    const update = Game.Schedule(Clock.system(Game, { name: "ClockBench/Advance", resource: Time }))
+    return { run: () => { for (let index = 0; index < 1000; index++) made.value.tick(update) } }
+  }
+}
+
 export const cases: ReadonlyArray<BenchCase> = [
+  clockAdvance,
   spawn,
   despawn,
   iterateRead,
@@ -481,6 +566,7 @@ export const cases: ReadonlyArray<BenchCase> = [
   changedFilter,
   churn,
   scheduleOverhead,
+  longOrdered,
   lookupGet,
   events,
   hierarchy,

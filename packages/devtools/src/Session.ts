@@ -1,5 +1,5 @@
 /**
- * A debug session around a runtime made with `debug: true`.
+ * A debug session around a runtime made with `debug: { hostClock }`.
  *
  * The session names the schedules it drives, keeps a bounded history of
  * trace events, and answers questions about it as text and data:
@@ -8,7 +8,8 @@
  *   at the first system failure, thrown defect, or violated invariant.
  * - `journal(filter)` lists what happened, one fact per line, filtered by
  *   frames, entity, component, resource, event, machine, system, or kind.
- * - `why(entity, component)` lists the latest changes to one component.
+ * - `why(entity, component)` lists the latest changes to one component, and
+ *   the systems whose declared `spawns` could have spawned the entity.
  * - `system(name)` shows one system's declared access and recent activity.
  * - `describe()`, `dump(filter)`, `streams()` render the core debug handle.
  * - `report()` summarizes per-system timing and warnings accumulated while
@@ -34,10 +35,13 @@
  * console.log(session.journal({ frames: [180, 185], entity: 1 }))
  * ```
  */
+import { HostClock } from "@typeonce/ritmo"
 import type * as Debug from "@typeonce/ritmo/Debug"
+import type * as Inspector from "@typeonce/ritmo/Inspector"
 import type * as Machine from "@typeonce/ritmo/Machine"
 import type * as Result from "@typeonce/ritmo/Result"
-import type { ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type * as Runtime from "@typeonce/ritmo/Runtime"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
 import type { Schema } from "@typeonce/ritmo/Schema"
 
 import * as Format from "./Format.ts"
@@ -46,17 +50,58 @@ import * as Rendered from "./Rendered.ts"
 import { nonFinitePath } from "./internal/values.ts"
 
 /**
- * What a session needs from a runtime: its debug handle and the dynamic
- * `tryTick`, which reports missing requirements as data.
+ * What a session needs from a runtime: its debug handle, the dynamic
+ * `tryTick`, which reports missing requirements as data, `inspect` for
+ * invariants, and what it was provided with, which invariants are checked
+ * against.
  */
-export interface Target<S extends Schema.Any, Root> {
+export interface Target<
+  S extends Schema.Any,
+  Root,
+  Services extends Record<string, unknown> = Record<string, unknown>,
+  Resources extends object = object,
+  Machines extends Record<string, unknown> = Record<string, unknown>
+> {
   readonly debug: Debug.Handle<S, Root>
-  readonly tryTick: (schedule: ExecutableScheduleDefinition<S, any, any, any, any>) => Result.Result<void, unknown>
+  readonly tryTick: (schedule: ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>) => Result.Result<void, unknown>
+  readonly inspect: (inspector: never) => unknown
+  readonly services: Services
+  readonly resourceValues: Resources
+  readonly machineValues: Machines
 }
 
-export interface Options<S extends Schema.Any, Root, Names extends string> {
+type InvariantRequirementErrors<
+  Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Machines extends Record<string, unknown>
+> = Runtime.ValidateInspector<Invariants[number]["inspector"], Services, Resources, Machines> extends {
+  readonly __fixRuntimeRequirements__: infer Errors
+}
+  ? Errors
+  : never
+
+/**
+ * Rejects invariants whose inspectors read a resource, service, or machine
+ * the runtime does not provide, naming each one.
+ */
+export type ValidateInvariants<
+  Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>>,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Machines extends Record<string, unknown>
+> = [InvariantRequirementErrors<Invariants, Services, Resources, Machines>] extends [never]
+  ? unknown
+  : { readonly __fixInvariantRequirements__: InvariantRequirementErrors<Invariants, Services, Resources, Machines> }
+
+export interface Options<
+  S extends Schema.Any,
+  Root,
+  Names extends string,
+  Invariants extends ReadonlyArray<Invariant<Invariant.CheckInspector>> = readonly []
+> {
   /** The schedules `run` can drive, by name. Also names them in traces. */
-  readonly schedules: Readonly<Record<Names, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  readonly schedules: Readonly<Record<Names, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   /**
    * More schedules to include in `describe()`, its lints, and the access
    * maps, without making them runnable: typically a render schedule that
@@ -64,11 +109,22 @@ export interface Options<S extends Schema.Any, Root, Names extends string> {
    * and components only those schedules read are reported as never read.
    * Their services show as not provided, which is not a lint.
    */
-  readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
-  /** Checked after every frame of every run. */
-  readonly invariants?: ReadonlyArray<Invariant>
+  readonly describe?: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
+  /** Events the host publishes with `runtime.send`: written, for the lints (see `Debug.Handle.declareHostEvents`). */
+  readonly hostEvents?: ReadonlyArray<Schema.EventDescriptor<S>>
+  /**
+   * Checked after every frame of every run, in order; the first violation
+   * stops the run. Built with `Invariant.fromInspector(Game.Inspector(...))`.
+   */
+  readonly invariants?: Invariants
   /** Frames of trace history kept for `journal` and `why`. Defaults to 600. */
   readonly history?: number
+  /**
+   * Times runs (`RunResult.ms`). `HostClock.test()` makes every timing 0,
+   * so text output is identical across runs (give the runtime's
+   * `debug: { hostClock }` a test clock too).
+   */
+  readonly hostClock: HostClock.HostClock
   /** Value formatting for all text output. */
   readonly format?: Format.ValueOptions
 }
@@ -86,8 +142,24 @@ export type Stop =
   | { readonly reason: "until"; readonly frame: number }
   | { readonly reason: "failure"; readonly frame: number; readonly system: string; readonly error: unknown }
   | { readonly reason: "missingRequirements"; readonly frame: number; readonly requirements: unknown }
+  /** A `Game.System.thisTick` read whose writer runs after it, or that has none; nothing ran. */
+  | { readonly reason: "tickOrder"; readonly frame: number; readonly issues: ReadonlyArray<string> }
   | { readonly reason: "defect"; readonly frame: number; readonly error: unknown }
   | { readonly reason: "invariant"; readonly frame: number; readonly invariant: string; readonly message: string }
+  /**
+   * A failed tick result nobody read (for example a setup tick the game ran
+   * before this run): `frame` is the failed tick's, `skipped` the systems
+   * that did not run then.
+   */
+  | {
+      readonly reason: "ignored-failure"
+      readonly frame: number
+      readonly schedule: string
+      readonly system: string | undefined
+      readonly error: unknown
+      readonly skipped: ReadonlyArray<string>
+      readonly when: "next-tick" | "session-end"
+    }
 
 export interface RunResult {
   readonly schedule: string
@@ -165,6 +237,7 @@ export interface Warning {
     | "system-failed"
     | "non-finite-value"
     | "population-growing"
+    | "ignored-failure"
   readonly message: string
   readonly count: number
   readonly firstFrame: number
@@ -237,22 +310,32 @@ const growsSteadily = (samples: ReadonlyArray<number>): boolean => {
   return true
 }
 
-const describeError = (error: unknown): { readonly kind?: unknown; readonly system?: unknown; readonly error?: unknown; readonly requirements?: unknown } =>
+const describeError = (error: unknown): { readonly kind?: unknown; readonly system?: unknown; readonly error?: unknown; readonly requirements?: unknown; readonly issues?: ReadonlyArray<{ readonly message: string }> } =>
   typeof error === "object" && error !== null ? error : {}
 
-export const make = <S extends Schema.Any, Root, const Names extends string>(
-  runtime: Target<S, Root>,
-  options: Options<S, Root, Names>
+export const make = <
+  S extends Schema.Any,
+  Root,
+  Services extends Record<string, unknown>,
+  Resources extends object,
+  Machines extends Record<string, unknown>,
+  const Names extends string,
+  const Invariants extends ReadonlyArray<Invariant<Inspector.InspectorDefinition<any, string | undefined, Root, any, any>>> = readonly []
+>(
+  runtime: Target<S, Root, Services, Resources, Machines>,
+  options: Options<S, Root, Names, Invariants> & ValidateInvariants<Invariants, Services, Resources, Machines>
 ): Session<S, Names> => {
+  const inspect = runtime.inspect as (inspector: Inspector.Inspector.Any) => string | undefined
   const debug = runtime.debug
   const capacity = options.history ?? 600
   const format = options.format ?? {}
-  const schedules = options.schedules as Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
+  const schedules = options.schedules as Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
   const described = options.describe ?? {}
   for (const name of Object.keys(described)) {
     if (name in schedules) throw new Error(`Session: "${name}" is both a runnable and a described-only schedule`)
   }
   debug.nameSchedules({ ...described, ...schedules })
+  debug.declareHostEvents(options.hostEvents ?? [])
 
   const history: Array<FrameRecord> = []
   let current: FrameRecord = { frame: debug.frame(), events: [] }
@@ -387,6 +470,10 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
           }
         }
         break
+      case "failure.ignored":
+        ignored = event
+        warn("ignored-failure", `ignored:${event.frame}`, Format.ignoredFailure(event, format), event.frame)
+        break
       case "transition":
         if (event.outcome !== "failed") pendingStates.delete(event.machine)
         if (event.outcome === "failed" || event.outcome === "enterFailed") {
@@ -394,6 +481,13 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
         }
         break
     }
+  }
+  /** The last `failure.ignored` event seen, for `run` to stop on. */
+  let ignored: Debug.FailureIgnoredEvent | undefined
+  const takeIgnored = (): Debug.FailureIgnoredEvent | undefined => {
+    const found = ignored
+    ignored = undefined
+    return found
   }
   const stopObserving = debug.observe(record)
 
@@ -405,7 +499,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
   const run = (name: Names, runOptions: RunOptions = {}): Rendered.Rendered<RunResult> => {
     const schedule = schedules[name]!
     const frames = runOptions.frames ?? 1
-    const started = performance.now()
+    const started = options.hostClock.now()
     const warningsBefore = new Map([...warnings].map(([key, warning]) => [key, warning.count]))
     const initial = debug.population()
     const entityCounts: Array<number> = []
@@ -418,6 +512,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     let first: number | undefined
     let last: number | undefined
     let stop: Stop = { reason: "completed" }
+    takeIgnored()
     for (let index = 0; index < frames; index++) {
       let result: Result.Result<void, unknown>
       try {
@@ -433,17 +528,25 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       first ??= frame
       last = frame
       sample()
+      const unread = takeIgnored()
+      if (unread !== undefined) {
+        const { type: _type, ...found } = unread
+        stop = { reason: "ignored-failure", ...found }
+        break
+      }
       if (!result.ok) {
         const error = describeError(result.error)
         stop = error.kind === "MissingRuntimeRequirements"
           ? { reason: "missingRequirements", frame, requirements: error.requirements }
-          : { reason: "failure", frame, system: typeof error.system === "string" ? error.system : "(unknown)", error: error.error }
+          : error.kind === "TickOrderViolation"
+            ? { reason: "tickOrder", frame, issues: (error.issues ?? []).map((issue) => issue.message) }
+            : { reason: "failure", frame, system: typeof error.system === "string" ? error.system : "(unknown)", error: error.error }
         break
       }
       const violation = (options.invariants ?? []).reduce<{ readonly invariant: string; readonly message: string } | undefined>(
         (found, invariant) => {
           if (found) return found
-          const message = invariant.check()
+          const message = inspect(invariant.inspector)
           return message === undefined ? undefined : { invariant: invariant.name, message }
         },
         undefined
@@ -488,7 +591,7 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       frames: first === undefined || last === undefined ? 0 : last - first + 1,
       range: first === undefined || last === undefined ? undefined : [first, last],
       stop,
-      ms: performance.now() - started,
+      ms: HostClock.elapsed(started, options.hostClock.now()),
       lintWarnings: lintWarnings.length,
       warnings: raised,
       entities: range(initial.entities, entityCounts),
@@ -554,10 +657,28 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
       : component.name in currentValue.components
         ? `e${entity} ${component.name} is now ${Format.value(currentValue.components[component.name], format)}`
         : `e${entity} has no ${component.name} now`
-    const header = lines.length === 0
+    const changes = lines.length === 0
       ? `${now}; no change to it in ${rangeText()}`
       : `${now}; last ${lines.length} changes (oldest first):`
+    const spawners = spawnersOf(currentValue === undefined ? [component.name] : Object.keys(currentValue.components), component.name)
+    const header = `${changes}\n${spawners.length === 0
+      ? `no described system declares spawns of ${component.name}`
+      : `could have spawned it: ${spawners.join(", ")}`}`
     return Rendered.make(lines, renderLines(header, lines))
+  }
+
+  /**
+   * The described systems whose declared `spawns` include `component` and
+   * cover every component the entity has that no described system may
+   * insert (so it can only have come from the spawn).
+   */
+  const spawnersOf = (has: ReadonlyArray<string>, component: string): Array<string> => {
+    const systems = debug.describe().systems
+    const insertable = new Set(systems.flatMap((system) => system.commands.inserts))
+    const fromSpawn = has.filter((name) => !insertable.has(name))
+    return systems
+      .filter((system) => system.commands.spawns.includes(component) && fromSpawn.every((name) => system.commands.spawns.includes(name)))
+      .map((system) => system.name)
   }
 
   const whyResource = (resource: Schema.ResourceDescriptor<S>, whyOptions: { readonly limit?: number } = {}) => {
@@ -597,6 +718,8 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
   }
 
   const report = () => {
+    // The report is where a session ends: a failure still unread shows here.
+    debug.checkIgnoredFailures()
     const systems = [...stats.keys()].map((name) => statsFor(name)!).sort((left, right) => right.totalMs - left.totalMs)
     const data: Report = {
       frames: debug.frame(),
@@ -644,7 +767,10 @@ export const make = <S extends Schema.Any, Root, const Names extends string>(
     },
     report,
     frame: () => debug.frame(),
-    close: stopObserving
+    close: () => {
+      debug.checkIgnoredFailures()
+      stopObserving()
+    }
   }
 }
 
@@ -665,5 +791,9 @@ const renderRun = (result: RunResult, format: Format.ValueOptions): string => {
       return `${head}, DEFECT at f${stop.frame}: ${stop.error instanceof Error ? stop.error.stack ?? stop.error.message : Format.value(stop.error, format)}`
     case "invariant":
       return `${head}, INVARIANT "${stop.invariant}" violated at f${stop.frame}: ${stop.message}`
+    case "tickOrder":
+      return `${head}, NOT RUN after f${stop.frame}: ${stop.issues.join("; ")}`
+    case "ignored-failure":
+      return `${head}, STOPPED: ${Format.ignoredFailure({ type: "failure.ignored", ...stop }, format)}, at f${stop.frame}`
   }
 }

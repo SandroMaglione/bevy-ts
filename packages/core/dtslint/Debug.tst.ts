@@ -1,4 +1,4 @@
-import { Debug, Descriptor, Schema } from "@typeonce/ritmo"
+import { Debug, Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DebugTypes/Position")
@@ -12,7 +12,7 @@ describe("Runtime debug option", () => {
     const plain = Game.Runtime.make({ services: Game.Runtime.services() })
     expect(plain).type.not.toHaveProperty("debug")
 
-    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const debugged = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock: HostClock.standard } })
     expect(debugged).type.toHaveProperty("debug")
     expect(debugged.debug.describe()).type.toBe<Debug.Description>()
   })
@@ -20,28 +20,58 @@ describe("Runtime debug option", () => {
   it("keeps the handle inside the Result of fallible runtimes", () => {
     const Viewport = Descriptor.ConstructedResource({ result: (raw: number) => ({ ok: true as const, value: raw }) })("DebugTypes/Viewport")
     const Fallible = Schema.bind(Schema.fragment({ resources: { Viewport } }))
-    const made = Fallible.Runtime.make({ services: Fallible.Runtime.services(), resources: { Viewport: 1 }, debug: true })
+    const made = Fallible.Runtime.make({ services: Fallible.Runtime.services(), resources: { Viewport: 1 }, debug: { hostClock: HostClock.standard } })
     if (made.ok) {
       expect(made.value.debug.frame()).type.toBe<number>()
     }
   })
 
-  it("rejects non-literal debug flags", () => {
-    expect(Game.Runtime.make).type.not.toBeCallableWith({ services: Game.Runtime.services(), debug: false })
+  it("types the handle as optional when the option may be undefined (a dev build)", () => {
+    const dev: boolean = Math.random() > 2
+    const maybe = Game.Runtime.make({ services: Game.Runtime.services(), debug: dev ? { hostClock: HostClock.standard } : undefined })
+    expect(maybe.debug).type.toBe<Debug.Handle<typeof Game.schema, typeof Game.schema> | undefined>()
+    // @ts-expect-error 'maybe.debug' is possibly 'undefined'.
+    maybe.debug.describe()
+    const off = Game.Runtime.make({ services: Game.Runtime.services(), debug: undefined })
+    expect(off).type.not.toHaveProperty("debug")
+  })
+
+  it("rejects the removed boolean form and a debug option without a host clock", () => {
+    // @ts-expect-error Type 'boolean' is not assignable to type 'Option'.
+    Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    // @ts-expect-error Property 'hostClock' is missing
+    Game.Runtime.make({ services: Game.Runtime.services(), debug: {} })
   })
 
   it("filters dumps by the runtime's own components", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock: HostClock.standard } })
     expect(runtime.debug.dump).type.toBeCallableWith({ with: [Position] })
     expect(runtime.debug.dump).type.not.toBeCallableWith({ with: [Other] })
     expect(OtherGame.schema.components.Other).type.toBe<typeof Other>()
   })
 
   it("names only schedules of the runtime's schema", () => {
-    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: true })
+    const runtime = Game.Runtime.make({ services: Game.Runtime.services(), debug: { hostClock: HostClock.standard } })
     const own = Game.Schedule(Game.System("DebugTypes/Own", {}, () => {}))
     const foreign = OtherGame.Schedule(OtherGame.System("DebugTypes/Foreign", {}, () => {}))
     expect(runtime.debug.nameSchedules).type.toBeCallableWith({ own })
     expect(runtime.debug.nameSchedules).type.not.toBeCallableWith({ foreign })
+  })
+})
+
+describe("Debug descriptions", () => {
+  it("describe each system's declared command permissions by kind", () => {
+    expect<Debug.SystemDescription["commands"]>().type.toBe<Debug.CommandPermissions>()
+    expect<Debug.CommandPermissions["spawns"]>().type.toBe<ReadonlyArray<string>>()
+    expect<Extract<Debug.Lint["code"], "command-permission-unused">>().type.toBe<"command-permission-unused">()
+  })
+})
+
+describe("Ignored tick failures", () => {
+  it("are trace and host events, and a session end checks them", () => {
+    expect<Extract<Debug.TraceEvent, { readonly type: "failure.ignored" }>>().type.toBe<Debug.FailureIgnoredEvent>()
+    expect<Extract<Debug.HostEvent, { readonly type: "failure.ignored" }>>().type.toBe<Debug.FailureIgnoredEvent>()
+    expect<Debug.FailureIgnoredEvent["when"]>().type.toBe<"next-tick" | "session-end">()
+    expect<Debug.Handle["checkIgnoredFailures"]>().type.toBe<() => void>()
   })
 })

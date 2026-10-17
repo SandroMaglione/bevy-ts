@@ -15,7 +15,7 @@ const Names = Game.Inspector("SnapshotScopes/Names", {
 }, ({ queries }) => queries.named.each().map((match) => match.data.name.get()).sort())
 
 const despawn = (runtime: Runtime, scope: typeof Level | typeof Menu) =>
-  runtime.tick(Game.Schedule(Game.System("SnapshotScopes/Despawn", {}, ({ commands }) => {
+  runtime.tick(Game.Schedule(Game.System("SnapshotScopes/Despawn", { commands: Game.System.commands(Game.System.despawnsScope(Level), Game.System.despawnsScope(Menu)) }, ({ commands }) => {
     commands.despawnScope(scope)
   }), Game.Schedule.applyDeferred()))
 
@@ -29,7 +29,7 @@ const roundTrip = (runtime: Runtime): Runtime => {
 describe("snapshots keep entity scopes", () => {
   it("despawns a restored scope's entities", () => {
     const runtime = makeRuntime()
-    runtime.tick(Game.Schedule(Game.System("SnapshotScopes/Spawn", {}, ({ commands }) => {
+    runtime.tick(Game.Schedule(Game.System("SnapshotScopes/Spawn", { commands: Game.System.commands(Game.System.spawns(Name)) }, ({ commands }) => {
       commands.spawnIn(Level, Game.Command.spawn([Name, "wall"]))
     }), Game.Schedule.applyDeferred()))
     expect(runtime.inspect(Names)).toEqual(["wall"])
@@ -42,7 +42,7 @@ describe("snapshots keep entity scopes", () => {
 
   it("keeps several scopes apart, and unscoped entities and scoped children as they were", () => {
     const runtime = makeRuntime()
-    runtime.tick(Game.Schedule(Game.System("SnapshotScopes/SpawnMany", {}, ({ commands }) => {
+    runtime.tick(Game.Schedule(Game.System("SnapshotScopes/SpawnMany", { commands: Game.System.commands(Game.System.spawns(Name)) }, ({ commands }) => {
       const level = commands.spawnIn(Level, Game.Command.spawn([Name, "level"]))
       // A child of a scoped entity, in another scope: despawned with its parent (hierarchy) or its own scope.
       commands.spawnIn(Menu, Game.Command.relate(Game.Command.spawn([Name, "level child in menu"]), ChildOf, level))
@@ -60,7 +60,7 @@ describe("snapshots keep entity scopes", () => {
 
   it("rejects scope members that are not saved entities, or are in two scopes", () => {
     const runtime = makeRuntime()
-    runtime.tick(Game.Schedule(Game.System("SnapshotScopes/SpawnOne", {}, ({ commands }) => {
+    runtime.tick(Game.Schedule(Game.System("SnapshotScopes/SpawnOne", { commands: Game.System.commands(Game.System.spawns(Name)) }, ({ commands }) => {
       commands.spawnIn(Level, Game.Command.spawn([Name, "wall"]))
     }), Game.Schedule.applyDeferred()))
     const saved = runtime.snapshot()

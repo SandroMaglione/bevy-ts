@@ -32,7 +32,9 @@ const ReadLog = (sink: { value: ReadonlyArray<string> }) => Game.System("Storage
 describe("Runtime storage", () => {
   it("keeps queued commands pending across schedule runs until applyDeferred()", () => {
     const ids: Array<Id> = []
-    const Spawn = Game.System("Storage/Spawn", {}, ({ commands }) => {
+    const Spawn = Game.System("Storage/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Position, { x: 1 }])))
     })
     const counts: Array<number> = []
@@ -50,12 +52,16 @@ describe("Runtime storage", () => {
 
   it("returns matches in spawn order even when components are added out of order", () => {
     const ids: Array<Id> = []
-    const Spawn = Game.System("Storage/SpawnMany", {}, ({ commands }) => {
+    const Spawn = Game.System("Storage/SpawnMany", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       for (let index = 0; index < 5; index++) {
         ids.push(commands.spawn(Game.Command.spawn([Position, { x: index }])))
       }
     })
-    const TagReversed = Game.System("Storage/TagReversed", {}, ({ commands }) => {
+    const TagReversed = Game.System("Storage/TagReversed", {
+      commands: Game.System.commands(Game.System.inserts(Tag))
+    }, ({ commands }) => {
       for (const id of [...ids].reverse()) {
         commands.insert(id, [Tag, {}])
       }
@@ -72,7 +78,9 @@ describe("Runtime storage", () => {
   })
 
   it("reuses matches across runs while cells and proofs read live values", () => {
-    const Spawn = Game.System("Storage/SpawnOne", {}, ({ commands }) => {
+    const Spawn = Game.System("Storage/SpawnOne", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Position, { x: 0 }]))
     })
     const matches: Array<unknown> = []
@@ -98,16 +106,24 @@ describe("Runtime storage", () => {
 
   it("ignores commands addressed to entities despawned earlier in the same flush", () => {
     let target: Id | undefined
-    const Spawn = Game.System("Storage/SpawnTarget", {}, ({ commands }) => {
+    const Spawn = Game.System("Storage/SpawnTarget", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       target = commands.spawn(Game.Command.spawn([Position, { x: 1 }]))
     })
-    const DespawnThenInsert = Game.System("Storage/DespawnThenInsert", {}, ({ commands }) => {
-      commands.despawn(target!)
+    const DespawnThenInsert = Game.System("Storage/DespawnThenInsert", {
+      queries: { positions: Positions },
+      commands: Game.System.commands(Game.System.despawns(Position), Game.System.inserts(Tag))
+    }, ({ queries, commands }) => {
+      const match = queries.positions.get(target!)
+      if (match.ok) commands.despawn(match.value.entity)
       commands.insert(target!, [Tag, {}])
     })
     let found = true
-    const Lookup = Game.System("Storage/LookupTarget", {}, ({ lookup }) => {
-      found = lookup.get(target!, Game.Query({ selection: { tag: Game.Query.read(Tag) } })).ok
+    const Lookup = Game.System("Storage/LookupTarget", {
+      queries: { tagged: Game.Query({ selection: { tag: Game.Query.read(Tag) } }) }
+    }, ({ queries }) => {
+      found = queries.tagged.get(target!).ok
     })
 
     const runtime = makeRuntime()
@@ -124,11 +140,15 @@ describe("Runtime storage", () => {
 
   it("keeps staged relations when components are inserted after relate()", () => {
     let parent: Id | undefined
-    const SpawnParent = Game.System("Storage/SpawnParent", {}, ({ commands }) => {
+    const SpawnParent = Game.System("Storage/SpawnParent", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       parent = commands.spawn(Game.Command.spawn([Position, { x: 0 }]))
     })
-    const SpawnChild = Game.System("Storage/SpawnChild", {}, ({ commands }) => {
-      const draft = Game.Command.insert(Game.Command.relate(Game.Command.spawn(), ChildOf, parent!), [Tag, {}])
+    const SpawnChild = Game.System("Storage/SpawnChild", {
+      commands: Game.System.commands(Game.System.spawns(Tag))
+    }, ({ commands }) => {
+      const draft = Game.Command.extend(Game.Command.relate(Game.Command.spawn(), ChildOf, parent!), [Tag, {}])
       commands.spawn(draft)
     })
     let children = -1

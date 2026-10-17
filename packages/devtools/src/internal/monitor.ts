@@ -45,7 +45,7 @@ export interface Sample {
 }
 
 export interface Alert {
-  readonly code: "system-failed" | "non-finite-value" | "discarded-messages"
+  readonly code: "system-failed" | "non-finite-value" | "discarded-messages" | "ignored-failure"
   readonly message: string
   readonly count: number
   readonly firstFrame: number
@@ -100,16 +100,20 @@ export class Collector {
   private readonly maxLines: number
   private readonly population: () => Debug.Population
 
-  constructor(population: () => Debug.Population, now: number, options: CollectorOptions = {}) {
+  private readonly clock: () => number
+
+  /** `now` reads the host clock (milliseconds); the collector times its own work with it. */
+  constructor(population: () => Debug.Population, now: () => number, options: CollectorOptions = {}) {
     this.population = population
-    this.windowStart = now
+    this.clock = now
+    this.windowStart = now()
     this.maxHistory = options.history ?? 60
     this.maxLines = options.entityLines ?? 40
   }
 
   /** Folds one trace event. Pass it to `debug.observe`. */
   readonly observe = (event: Debug.TraceEvent): void => {
-    const started = performance.now()
+    const started = this.clock()
     switch (event.type) {
       case "system":
         this.onSystem(event)
@@ -130,6 +134,9 @@ export class Collector {
       case "deferred":
         this.onDeferred(event)
         break
+      case "failure.ignored":
+        this.alert("ignored-failure", `ignored:${event.frame}`, Format.ignoredFailure(event), event.frame)
+        break
       case "schedule.end":
         if (!event.schedule.includes(" > ")) {
           const schedule = this.scheduleOf(event.schedule)
@@ -139,7 +146,7 @@ export class Collector {
         }
         break
     }
-    this.overhead += performance.now() - started
+    this.overhead += Math.max(0, this.clock() - started)
   }
 
   private windowOf(system: string): MutableWindow {

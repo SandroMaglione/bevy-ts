@@ -5,10 +5,15 @@
  * input without changing their runtime representation. Constructors built with
  * this module are always explicit and non-throwing.
  *
- * This matters in game code whenever one plain structural shape is too weak to
- * express a guarantee. Helpers like `Vector2`, `Size2`, `Scalar`, and `Aabb`
- * all build on this module so validated values can move through the ECS
- * without losing the fact that they were checked once already.
+ * This module is for packages that author validated value types, like
+ * `@typeonce/ritmo-math`: `Vector2`, `Size2`, `Scalar`, and `Aabb` all build
+ * on it so validated values can move through the ECS without losing the fact
+ * that they were checked once already.
+ *
+ * Game code does not brand values. It validates through descriptors: a
+ * descriptor owns its validator (`Descriptor.ConstructedComponent(Vector2)`,
+ * a `Decode` validator, or `Descriptor.fromStandardSchema(...)`), and raw
+ * input goes through it with `Game.Command.entryRaw(...)` or `setRaw(...)`.
  *
  * @example
  * ```ts

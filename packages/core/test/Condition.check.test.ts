@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/ritmo"
+import { Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 import * as Runtime from "@typeonce/ritmo/Runtime"
+
+const hostClock = HostClock.test()
 
 const Freeze = Descriptor.Resource<{ readonly remaining: number }>()("Check/Freeze")
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("Check/Log")
@@ -15,7 +17,7 @@ const makeRuntime = (freeze = 0, flow: "Playing" | "Over" = "Playing") =>
     services: Runtime.services(),
     resources: { Freeze: { remaining: freeze }, Log: [] },
     machines: Runtime.machines(Runtime.machine(Flow, flow)),
-    debug: true
+    debug: { hostClock }
   })
 
 const ReadLog = Game.Inspector("Check/ReadLog", { resources: { log: Game.System.readResource(Log) } }, ({ resources }) => resources.log.get())
@@ -72,7 +74,9 @@ describe("Condition.check", () => {
     const enemiesLeft = Game.Condition.check("enemiesLeft", {
       queries: { enemies: Game.Query({ selection: { enemy: Game.Query.read(Enemy) } }) }
     }, ({ queries }) => queries.enemies.each().length > 0)
-    const Spawn = Game.System("Check/SpawnEnemy", {}, ({ commands }) => {
+    const Spawn = Game.System("Check/SpawnEnemy", {
+      commands: Game.System.commands(Game.System.spawns(Enemy))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Enemy, {}]))
     })
     const runtime = makeRuntime()
@@ -86,7 +90,10 @@ describe("Condition.check", () => {
     const seenEvents: Array<ReadonlyArray<number>> = []
     const seenAdded: Array<number> = []
     const always = Game.Condition.check("always", { resources: { freeze: Game.System.readResource(Freeze) } }, () => true)
-    const Emit = Game.System("Check/Emit", { events: { ping: Game.System.writeEvent(Ping) } }, ({ events, commands }) => {
+    const Emit = Game.System("Check/Emit", {
+      events: { ping: Game.System.writeEvent(Ping) },
+      commands: Game.System.commands(Game.System.spawns(Enemy))
+    }, ({ events, commands }) => {
       events.ping.emit(1)
       commands.spawn(Game.Command.spawn([Enemy, {}]))
     })

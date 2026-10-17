@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Descriptor, Fx, Schema } from "@typeonce/ritmo"
+import { Descriptor, Result, Schema } from "@typeonce/ritmo"
 
 describe("Runtime stabilization APIs", () => {
   it("rolls back ECS writes and commands from an expected system failure", () => {
@@ -19,7 +19,9 @@ describe("Runtime stabilization APIs", () => {
       }
     })
 
-    const spawn = Game.System("Stability/Spawn", {}, ({ commands }) =>
+    const spawn = Game.System("Stability/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) =>
       {
         commands.spawn(Game.Command.spawn([Position, { x: 1 }]))
       }
@@ -30,22 +32,20 @@ describe("Runtime stabilization APIs", () => {
         queries: { positions: Positions },
         resources: { count: Game.System.writeResource(Count) },
         events: { signal: Game.System.writeEvent(Signal) },
-        nextMachines: { mode: Game.System.nextState(Mode) }
+        nextMachines: { mode: Game.System.nextState(Mode) },
+        commands: Game.System.commands(Game.System.spawns(Position))
       },
-      ({ queries, resources, events, nextMachines, commands }) =>
-        Fx.flatMap(
-          Fx.sync(() => {
-            const position = queries.positions.single()
-            if (position.ok) {
-              position.value.data.position.set({ x: 99 })
-            }
-            resources.count.set(99)
-            events.signal.emit(99)
-            nextMachines.mode.set("Broken")
-            commands.spawn(Game.Command.spawn([Position, { x: 99 }]))
-          }),
-          () => Fx.fail("Rejected" as const)
-        )
+      ({ queries, resources, events, nextMachines, commands }) => {
+        const position = queries.positions.single()
+        if (position.ok) {
+          position.value.data.position.set({ x: 99 })
+        }
+        resources.count.set(99)
+        events.signal.emit(99)
+        nextMachines.mode.set("Broken")
+        commands.spawn(Game.Command.spawn([Position, { x: 99 }]))
+        return Result.failure("Rejected" as const)
+      }
     )
 
     let observedPosition = -1
@@ -103,11 +103,15 @@ describe("Runtime stabilization APIs", () => {
       selection: { actor: Game.Query.read(Actor) }
     })
 
-    const spawn = Game.System("Scopes/Spawn", {}, ({ commands }) => {
+    const spawn = Game.System("Scopes/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Actor))
+    }, ({ commands }) => {
       commands.spawnIn(Level, Game.Command.spawn([Actor, { name: "level" }]))
       commands.spawn(Game.Command.spawn([Actor, { name: "persistent" }]))
     })
-    const clear = Game.System("Scopes/Clear", {}, ({ commands }) => {
+    const clear = Game.System("Scopes/Clear", {
+      commands: Game.System.commands(Game.System.despawnsScope(Level))
+    }, ({ commands }) => {
       commands.despawnScope(Level)
     })
     let names: ReadonlyArray<string> = []
@@ -134,7 +138,9 @@ describe("Runtime stabilization APIs", () => {
       resources: { Score }
     }))
 
-    const spawn = Game.System("Inspector/Spawn", {}, ({ commands }) => {
+    const spawn = Game.System("Inspector/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Position))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Position, { x: 4 }]))
     })
     const snapshot = Game.Inspector(
@@ -174,7 +180,7 @@ describe("Runtime stabilization APIs", () => {
     const load = Game.System(
       "TransitionFailure/Load",
       {},
-      () => Fx.fail("LoadFailed" as const)
+      () => Result.failure("LoadFailed" as const)
     )
     const transitions = Game.Schedule.transitions(
       Game.Schedule.onEnter(Mode, "Playing", [load])

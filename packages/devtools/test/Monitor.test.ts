@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/ritmo"
+import { Descriptor, HostClock, Schema } from "@typeonce/ritmo"
 import { Collector, recentSchedule, recentSystem } from "@typeonce/ritmo-devtools/Monitor"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Mon/Position")
 const Shot = Descriptor.Component<{ readonly speed: number }>()("Mon/Shot")
@@ -13,22 +15,22 @@ const Move = Game.System("Mon/Move", { queries: { movers: Movers }, events: { hi
   for (const { data } of queries.movers.each()) data.position.update((position) => ({ x: position.x + 1 }))
   events.hit.emit(1)
 })
-const Fire = Game.System("Mon/Fire", {}, ({ commands }) => {
+const Fire = Game.System("Mon/Fire", { commands: Game.System.commands(Game.System.spawns(Shot)) }, ({ commands }) => {
   commands.spawn(Game.Command.spawn([Shot, { speed: Number.NaN }]))
 })
-const Spawn = Game.System("Mon/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Mon/Spawn", { commands: Game.System.commands(Game.System.spawns(Position)) }, ({ commands }) => {
   commands.spawn(Game.Command.spawn([Position, { x: 0 }]))
 })
 const paused = Game.Condition.check("paused", { resources: { paused: Game.System.readResource(Paused) } }, ({ resources }) => resources.paused.get())
 const Idle = Game.System("Mon/Idle", { when: [paused] }, () => {})
 
 const setup = () => {
-  const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Paused: false }, debug: true })
+  const runtime = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Paused: false }, debug: { hostClock } })
   const update = Game.Schedule(Move, Fire, Idle, Game.Schedule.applyDeferred())
   runtime.debug.nameSchedules({ update })
   runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
   let now = 0
-  const collector = new Collector(() => runtime.debug.population(), now)
+  const collector = new Collector(() => runtime.debug.population(), () => now)
   const stop = runtime.debug.observe(collector.observe)
   const run = (frames: number) => {
     for (let index = 0; index < frames; index++) runtime.tick(update)

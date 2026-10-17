@@ -56,7 +56,8 @@ import * as Result from "./Result.ts"
  * @example
  * ```ts
  * const handle = Game.Entity.handle(playerId, Player)
- * const resolved = lookup.getHandle(handle, PlayerQuery)
+ * // `players` is a query the system declares: queries: { players: PlayerQuery }
+ * const resolved = queries.players.getHandle(handle)
  * if (!resolved.ok) return
  * ```
  */
@@ -167,11 +168,17 @@ export type StagedComponent = readonly [Descriptor<"component", string, any>, un
  *
  * Query execution is the main source of `EntityRef` values.
  */
-export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown> {
+export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown, out Proves = unknown> {
   /**
    * Runtime tag for debugging and pattern matching.
    */
   readonly kind: "EntityRef"
+  /**
+   * The component descriptors the query that produced this ref proves (its
+   * required slots and `with`): what `commands.despawn` checks against the
+   * system's `despawns` permission. Type-level only.
+   */
+  readonly __proves?: (_: never) => Proves
   /**
    * The schema-bound entity identity.
    */
@@ -193,12 +200,15 @@ export interface EntityMut<
   S extends Schema.Any,
   out P extends ComponentProof,
   out W extends ComponentProof,
-  Root = unknown
+  Root = unknown,
+  out Proves = unknown
 > {
   /**
    * Runtime tag for debugging and pattern matching.
    */
   readonly kind: "EntityMut"
+  /** The component descriptors the producing query proves; see `EntityRef`. */
+  readonly __proves?: (_: never) => Proves
   /**
    * The schema-bound entity identity.
    */
@@ -247,7 +257,7 @@ export type HandleTarget<S extends Schema.Any, Root = unknown> =
  * Converts a current entity into a durable handle for storage.
  *
  * The handle is storage-safe, not a proof of liveness: resolve it later with
- * `lookup.getHandle(...)`, which fails explicitly when the entity is gone.
+ * `queries.x.getHandle(...)` (through a declared query), which fails explicitly when the entity is gone.
  *
  * Pass an `intent` component when later code assumes a role such as "player"
  * or "damage source". An intent does not prove the component is still present;
@@ -283,7 +293,7 @@ export interface InvalidHandle {
  * handles, so restoring validates them like any other value.
  *
  * A handle only names an entity; it never proves the entity exists. Resolving
- * it with `lookup.getHandle(...)` stays the checked step, so any positive
+ * it with `queries.x.getHandle(...)` (through a declared query) stays the checked step, so any positive
  * integer id decodes. Object-shaped handles and other non-numeric values
  * are rejected.
  *

@@ -14,7 +14,7 @@
  *
  * The monitor observes the runtime only while it is open, so a closed monitor
  * costs nothing. While open it reduces trace events to counts and shows its
- * own cost per tick. It needs a runtime made with `debug: true`.
+ * own cost per tick. It needs a runtime made with `debug: { hostClock }`, and the page passed as `host`.
  *
  * @module Monitor
  * @docGroup devtools
@@ -22,6 +22,7 @@
  * @example
  * ```ts
  * const monitor = Monitor.attach(runtime, {
+ *   host: window,
  *   schedules: { fixedUpdate: step, frame },
  *   pick: (event) => entityUnderPointer(event),
  *   locate: (entity) => screenPositionOf(entity)
@@ -30,7 +31,7 @@
  * ```
  */
 import type * as Debug from "@typeonce/ritmo/Debug"
-import type { ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "@typeonce/ritmo/Schedule"
 import type { Schema } from "@typeonce/ritmo/Schema"
 
 import * as Format from "./Format.ts"
@@ -57,8 +58,14 @@ export interface Options<S extends Schema.Any, Root> {
    * panel and make up the system map. Name the schedule objects actually
    * passed to `tick`: nested schedules are flattened into them.
    */
-  readonly schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any>>>
-  /** Where the panel is added. Defaults to `document.body`. */
+  readonly schedules: Readonly<Record<string, ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>
+  /**
+   * The page the panel lives in, passed explicitly (`window`): its
+   * `document`, timers, animation frames, keyboard events, and
+   * `performance` clock. The monitor reads no globals.
+   */
+  readonly host: Window
+  /** Where the panel is added. Defaults to `host.document.body`. */
   readonly mount?: HTMLElement
   /** `KeyboardEvent.code` that toggles the panel. Defaults to `Backslash`. */
   readonly key?: string
@@ -70,6 +77,11 @@ export interface Options<S extends Schema.Any, Root> {
   readonly locate?: (entity: number) => { readonly x: number; readonly y: number } | undefined
   /** Milliseconds between panel refreshes. Defaults to 250. */
   readonly refreshMs?: number
+  /**
+   * A replay recorder (`Replay.recorder`): adds a "Save replay" button that
+   * saves the last seconds of play with the reason "Save replay button".
+   */
+  readonly replay?: { readonly save: (reason: string) => unknown }
 }
 
 export interface Monitor {
@@ -243,18 +255,19 @@ const STYLE = `
 export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, options: Options<S, Root>): Monitor => {
   const debug = runtime.debug
   debug.nameSchedules(options.schedules)
-  const mount = options.mount ?? document.body
+  const host = options.host
+  const mount = options.mount ?? host.document.body
   const key = options.key ?? "Backslash"
   const refreshMs = options.refreshMs ?? 250
 
-  if (document.getElementById("btm-style") === null) {
-    const style = document.createElement("style")
+  if (host.document.getElementById("btm-style") === null) {
+    const style = host.document.createElement("style")
     style.id = "btm-style"
     style.textContent = STYLE
-    document.head.append(style)
+    host.document.head.append(style)
   }
 
-  const root = document.createElement("div")
+  const root = host.document.createElement("div")
   root.className = "btm"
   root.innerHTML = `
     <button class="btm-toggle" type="button" title="Toggle the Ritmo monitor">◉ monitor</button>
@@ -264,6 +277,7 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
         <button class="btm-tab" data-tab="overview" type="button">Overview</button>
         <button class="btm-tab" data-tab="systems" type="button">Systems</button>
         <button class="btm-tab" data-tab="entity" type="button">Entity</button>
+        ${options.replay === undefined ? "" : `<button class="btm-save-replay" type="button" title="Save the last seconds of play as a replay">Save replay</button>`}
         <button class="btm-close" type="button" title="Close">×</button>
       </div>
       <div class="btm-status"></div>
@@ -294,7 +308,7 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
   let tab: Tab = "overview"
   let collector: Collector | undefined
   let stopObserving: (() => void) | undefined
-  let timer: ReturnType<typeof setInterval> | undefined
+  let timer: number | undefined
   let openedAt = 0
   let description: Debug.Description | undefined
   /** How many systems read each component, to name what systems spawn. */
@@ -515,20 +529,20 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
 
   const render = () => {
     if (collector === undefined) return
-    const started = performance.now()
+    const started = host.performance.now()
     const history = collector.history
     const latest = history.slice(-RECENT)
     const overhead = latest.reduce((total, sample) => total + sample.overheadMs, 0)
     const ticks = latest.reduce((total, sample) => total + [...sample.schedules.values()].reduce((sum, window) => sum + window.ticks, 0), 0)
-    status.textContent = `observing for ${Math.round((performance.now() - openedAt) / 1000)}s · frame ${debug.frame()} · panel ${ticks === 0 ? "–" : number(overhead / ticks, 3)} ms/tick + ${number(renderMs, 1)} ms/refresh`
+    status.textContent = `observing for ${Math.round((host.performance.now() - openedAt) / 1000)}s · frame ${debug.frame()} · panel ${ticks === 0 ? "–" : number(overhead / ticks, 3)} ms/tick + ${number(renderMs, 1)} ms/refresh`
     status.title = "The panel's own work. Tracing (on only while the panel is open) also slows every system run a little, and the times shown include it: compare them with each other, not with a closed-monitor run."
     body.innerHTML = tab === "overview" ? renderOverview(history) : tab === "systems" ? renderSystems(history) : renderEntity()
-    renderMs = performance.now() - started
+    renderMs = host.performance.now() - started
   }
 
   const refresh = () => {
     if (collector === undefined) return
-    collector.sample(performance.now())
+    collector.sample(host.performance.now())
     render()
   }
 
@@ -539,7 +553,7 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
       ring.style.left = `${at.x}px`
       ring.style.top = `${at.y}px`
     }
-    if (!panel.hidden) requestAnimationFrame(placeRing)
+    if (!panel.hidden) host.requestAnimationFrame(placeRing)
   }
 
   const setTab = (next: Tab) => {
@@ -555,14 +569,14 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
     readers = new Map(description.access.components.map((entry) => [entry.name, entry.readers.length]))
     prefix = commonPrefix([...description.systems.map((system) => system.name), ...description.components.map((component) => component.name)])
     browse.replaceChildren(new Option("browse by component…", ""), ...description.components.map((component) => new Option(short(component.name), component.name)))
-    collector = new Collector(() => debug.population(), performance.now())
+    collector = new Collector(() => debug.population(), () => host.performance.now())
     collector.select(selected)
     stopObserving = debug.observe(collector.observe)
-    openedAt = performance.now()
+    openedAt = host.performance.now()
     panel.hidden = false
-    timer = setInterval(refresh, refreshMs)
+    timer = host.setInterval(refresh, refreshMs)
     setTab(tab)
-    requestAnimationFrame(placeRing)
+    host.requestAnimationFrame(placeRing)
   }
 
   const close = () => {
@@ -571,7 +585,7 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
     ring.hidden = true
     stopObserving?.()
     stopObserving = undefined
-    if (timer !== undefined) clearInterval(timer)
+    if (timer !== undefined) host.clearInterval(timer)
     timer = undefined
     collector = undefined
     setPicking(false)
@@ -603,9 +617,9 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
     picking = on
     pickButton.classList.toggle("is-on", on)
     pickButton.textContent = on ? "Click an entity… (Esc)" : "Pick on screen"
-    document.documentElement.classList.toggle("btm-picking", on)
-    if (on) window.addEventListener("pointerdown", onPick, { capture: true })
-    else window.removeEventListener("pointerdown", onPick, { capture: true })
+    host.document.documentElement.classList.toggle("btm-picking", on)
+    if (on) host.addEventListener("pointerdown", onPick, { capture: true })
+    else host.removeEventListener("pointerdown", onPick, { capture: true })
   }
 
   // ── Events ─────────────────────────────────────────────────────────────
@@ -620,9 +634,18 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
       setPicking(false)
     }
   }
-  window.addEventListener("keydown", onKey)
+  host.addEventListener("keydown", onKey)
   toggleButton.addEventListener("click", () => (panel.hidden ? open() : close()))
   query<HTMLButtonElement>(".btm-close").addEventListener("click", close)
+  const replay = options.replay
+  if (replay !== undefined) {
+    const button = query<HTMLButtonElement>(".btm-save-replay")
+    button.addEventListener("click", () => {
+      replay.save("Save replay button")
+      button.textContent = "Saved"
+      host.setTimeout(() => { button.textContent = "Save replay" }, 1500)
+    })
+  }
   for (const button of root.querySelectorAll<HTMLButtonElement>(".btm-tab")) {
     button.addEventListener("click", () => setTab(button.dataset["tab"] as Tab))
   }
@@ -681,7 +704,7 @@ export const attach = <S extends Schema.Any, Root>(runtime: Target<S, Root>, opt
     select,
     detach: () => {
       close()
-      window.removeEventListener("keydown", onKey)
+      host.removeEventListener("keydown", onKey)
       root.remove()
     }
   }

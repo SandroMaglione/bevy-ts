@@ -55,6 +55,7 @@
  * @groupDescription Functions
  * Public runtime constructors and helpers for services, machines, and bootstrap input.
  */
+import * as HostClockModule from "./HostClock.ts"
 import * as Command from "./Command.ts"
 import type * as Debug from "./Debug.ts"
 import * as DescriptorModule from "./Descriptor.ts"
@@ -74,9 +75,10 @@ import * as Relation from "./Relation.ts"
 import type * as Requirement from "./Requirement.ts"
 import * as Result from "./Result.ts"
 import * as Schedule from "./Schedule.ts"
+import * as OrderInternal from "./internal/order.ts"
 import * as EntityScopeModule from "./EntityScope.ts"
 import * as Snapshot from "./Snapshot.ts"
-import type { ExecutableScheduleDefinition } from "./Schedule.ts"
+import type { AnyScheduleOrder, ExecutableScheduleDefinition } from "./Schedule.ts"
 import type { Registry, Schema } from "./Schema.ts"
 import type {
   DespawnedReadView,
@@ -179,10 +181,13 @@ export type RuntimeConstructionError<S extends Schema.Any, Provided> = Simplify<
 }>
 
 /**
- * A runtime plus the `debug` handle when it was made with `debug: true`.
+ * A runtime plus the `debug` handle when it was made with `debug: { hostClock }`
+ * (optional when the option may be `undefined`).
  */
 export type WithDebug<R, Enabled, S extends Schema.Any, Root> =
-  [Enabled] extends [Debug.Option] ? R & Debug.Member<S, Root> : R
+  [Enabled] extends [undefined] ? R
+  : [Enabled] extends [Debug.Option] ? R & Debug.Member<S, Root>
+  : R & Partial<Debug.Member<S, Root>>
 
 /**
  * The runtime returned by `make`, wrapped in a `Result` exactly when a
@@ -367,23 +372,23 @@ type RequirementErrorsFor<
   : never
 
 type RequirementErrorsOfSchedule<
-  Selected extends ExecutableScheduleDefinition<any, any, any, any, any>,
+  Selected extends ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
-> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any, any>
+> = Selected extends ExecutableScheduleDefinition<infer S, any, any, any, any, AnyScheduleOrder>
   ? RequirementErrorsFor<Requirement.Of<Selected>, S, Services, Resources, Machines>
   : never
 
 export type ValidateSchedules<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
 > = {
   readonly [K in keyof Schedules]:
     Schedules[K] & ValidateSchedule<
-      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any, any>>,
+      Extract<Schedules[K], ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
       Services,
       Resources,
       Machines
@@ -391,7 +396,7 @@ export type ValidateSchedules<
 }
 
 export type ValidateScheduleArray<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
@@ -402,18 +407,23 @@ export type ValidateScheduleArray<
     }
 
 type ValidateScheduleArgs<
-  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any>>,
+  Schedules extends ReadonlyArray<ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
 > = [RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, Machines>] extends [never]
-  ? Schedules
+  ? [Schedule.TickOrderErrors<NoInfer<Schedules>>] extends [never]
+    ? Schedules
+    : Schedules & {
+        /** `Game.System.thisTick` reads whose writers do not all run earlier in this call. */
+        readonly __fixTickOrder__: Schedule.TickOrderErrors<NoInfer<Schedules>>
+      }
   : Schedules & {
       readonly __fixRuntimeRequirements__: RequirementErrorsOfSchedule<NoInfer<Schedules[number]>, Services, Resources, Machines>
     }
 
 type ValidateSchedule<
-  Schedule extends ExecutableScheduleDefinition<any, any, any, any, any>,
+  Schedule extends ExecutableScheduleDefinition<any, any, any, any, any, AnyScheduleOrder>,
   Services extends Record<string, unknown>,
   Resources extends object,
   Machines extends object
@@ -432,7 +442,13 @@ type RequirementErrorsOfInspector<
   ? RequirementErrorsFor<Needs, Spec["schema"], Services, Resources, Machines>
   : never
 
-type ValidateInspector<
+/**
+ * Resolves to `unknown` when the runtime provides every resource, service,
+ * and machine the inspector reads, otherwise to an object naming each
+ * missing or incompatible one. `runtime.inspect(...)` uses it; tools that
+ * run inspectors on a runtime they receive (devtools invariants) reuse it.
+ */
+export type ValidateInspector<
   Selected extends Inspector.Inspector.Any,
   Services extends Record<string, unknown>,
   Resources extends object,
@@ -449,6 +465,15 @@ export type AnyRequirements = Requirement.Requirement
 export interface MissingRuntimeRequirement {
   readonly kind: Requirement.RequirementValue["kind"]
   readonly name: string
+}
+
+/**
+ * Returned by `tryTick` when a `Game.System.thisTick` read has a writer that
+ * runs after it in the schedule. Nothing ran.
+ */
+export interface TickOrderViolation {
+  readonly kind: "TickOrderViolation"
+  readonly issues: ReadonlyArray<Schedule.OrderIssue>
 }
 
 /** Explicit failure returned by the dynamic schedule execution path. */
@@ -584,20 +609,22 @@ export interface Runtime<
    * system's ECS writes are rolled back and earlier systems stay committed.
    */
   readonly tick: {
-    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any>>>(
+    <const Schedules extends ReadonlyArray<ExecutableScheduleDefinition<S, any, Root, any, any, AnyScheduleOrder>>>(
       ...schedules: ValidateScheduleArgs<Schedules, Services, Resources, Machines>
     ): Result.Result<void, Schedule.FailureOf<Schedules[number]>>
   }
   /**
-   * Runs a schedule whose exact requirements are not statically known, for
-   * example one loaded through a plugin boundary.
+   * Runs a schedule whose exact requirements are not statically known: for
+   * tools that hold schedules with erased types, such as devtools sessions.
+   * Games use `tick(...)`, which rejects missing requirements at compile time.
    *
    * Requirements are checked against current provisioning first and missing
-   * ones are returned as data.
+   * ones are returned as data, then `Game.System.thisTick` reads are checked
+   * against the schedule's order (`TickOrderViolation`).
    */
-  readonly tryTick: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
+  readonly tryTick: <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>(
     schedule: Selected
-  ) => Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>>
+  ) => Result.Result<void, MissingRuntimeRequirements | TickOrderViolation | Schedule.FailureOf<Selected>>
   /**
    * Captures the world as plain data: entities with their ids, components,
    * relation edges, resources, and committed machine values.
@@ -678,7 +705,7 @@ const makeValidatedRuntime = <
   readonly resources: Partial<Record<string, unknown>>
   readonly machines: RuntimeMachines<any> | undefined
   readonly machineDefinitions: ReadonlyArray<Machine.StateMachine.Any>
-  readonly debug: boolean
+  readonly debug: Debug.Option | undefined
 }): Runtime<S, Services, Resources, Root, Machines> => {
   const world = makeWorld(options.schema, streamCapacity)
   const queries = makeQueryEngine(world)
@@ -723,12 +750,12 @@ const makeValidatedRuntime = <
   const pendingCommands: Array<Command.DeferredCommand<S>> = []
 
   /**
-   * Debug state. With `debug: true`, `pendingOrigins` names the system that
+   * Debug state. With `debug`, `pendingOrigins` names the system that
    * queued each pending command, in step with `pendingCommands`. Tracing is
    * on only while `observe` listeners are registered; untraced runs pay one
    * boolean check at each system, schedule, and marker boundary.
    */
-  const debugEnabled = options.debug
+  const debugEnabled = options.debug !== undefined
   const pendingOrigins: Array<string> = []
   const traceListeners = new Set<(event: Debug.TraceEvent) => void>()
   let tracing = false
@@ -740,7 +767,9 @@ const makeValidatedRuntime = <
   const scheduleNames = new Map<object, string>()
   const anonymousScheduleNames = new WeakMap<object, string>()
   let anonymousScheduleCount = 0
-  const now = (): number => performance.now()
+  // Only a debug runtime times anything; the clock is the one it was given.
+  const hostClock: HostClockModule.HostClock = options.debug?.hostClock ?? { now: () => 0 }
+  const now = (): number => hostClock.now()
   const emit = (event: Debug.TraceEvent): void => {
     for (const listener of traceListeners) listener(event)
   }
@@ -798,28 +827,75 @@ const makeValidatedRuntime = <
   }
 
   /**
+   * With `debug`, the relations commands have tried to relate or
+   * reorder, with the systems that queued those commands, for the
+   * `relation-failure-never-read` lint. `commandOrigin` names the system whose
+   * command is being applied.
+   */
+  const relationMutations = new Map<string, Set<string>>()
+  let commandOrigin = "(unknown)"
+  /**
+   * With `debug`, what each system's applied commands did, as
+   * `kind:name` (`spawns:Enemy`, `despawns:Enemy` for every component the
+   * despawned entity had), and the systems that ran: for the
+   * `command-permission-unused` lint.
+   */
+  const commandUses = new Map<string, Set<string>>()
+  const ranSystems = new Set<string>()
+  const noteCommand = (kind: string, name: string): void => {
+    let uses = commandUses.get(commandOrigin)
+    if (uses === undefined) {
+      uses = new Set()
+      commandUses.set(commandOrigin, uses)
+    }
+    uses.add(`${kind}:${name}`)
+  }
+  const noteRelationMutation = (relation: Relation.Relation.Any): void => {
+    let systems = relationMutations.get(relation.name)
+    if (systems === undefined) {
+      systems = new Set()
+      relationMutations.set(relation.name, systems)
+    }
+    systems.add(commandOrigin)
+  }
+
+  /**
    * World adapter used by deferred commands.
    */
   const commandWorld: Command.InternalWorld<S> = {
     spawnEntity(id, components) {
+      if (debugEnabled) for (const [descriptor] of components) noteCommand("spawns", descriptor.name)
       world.spawnEntity(id, components)
     },
     destroyEntity(id) {
+      if (debugEnabled) {
+        const record = world.records.get(id)
+        record?.values.forEach((value, ordinal) => {
+          if (value !== ABSENT) noteCommand("despawns", world.descriptorAt(ordinal).name)
+        })
+      }
       world.destroyEntity(id)
     },
     assignEntityScope(id, scope) {
       world.assignEntityScope(id, scope.key)
     },
     destroyEntityScope(scope) {
+      if (debugEnabled) noteCommand("despawnsScope", scope.name)
       world.destroyEntityScope(scope.key)
     },
     removeComponent(id, descriptor) {
+      if (debugEnabled) noteCommand("removes", descriptor.name)
       world.removeComponent(id, descriptor)
     },
     writeComponent(id, descriptor, value) {
+      if (debugEnabled) noteCommand("inserts", descriptor.name)
       world.writeComponent(id, descriptor, value)
     },
     tryRelate(id, relation, target) {
+      if (debugEnabled) {
+        noteRelationMutation(relation)
+        noteCommand("relates", relation.name)
+      }
       const result = world.tryRelate(id, relation, target)
       if (!result.ok) {
         appendRelationFailure(relation, "relate", id, target, result.error)
@@ -827,9 +903,14 @@ const makeValidatedRuntime = <
       return result
     },
     unrelate(id, relation) {
+      if (debugEnabled) noteCommand("relates", relation.name)
       world.unrelate(id, relation)
     },
     reorderChildren(id, relation, children) {
+      if (debugEnabled) {
+        noteRelationMutation(relation)
+        noteCommand("relates", relation.name)
+      }
       const result = world.reorderChildren(id, relation, children.map((child) => child))
       if (!result.ok) {
         const targetId = result.error._tag === "MissingChildEntity"
@@ -882,31 +963,12 @@ const makeValidatedRuntime = <
 
   const makeLookup = (reader: ReaderState): LookupApi<S, Root> => {
     const lookup: LookupApi<S, Root> = {
-    get(target, query) {
-      return resolve(target, query, reader)
-    },
-    getHandle(handle, query) {
-      return resolve(handle, query, reader)
-    },
     related: relatedTarget,
     relatedSources(target, relation) {
       if (!world.records.has(target)) {
         return Result.failure(Relation.missingEntityError(target))
       }
       return Result.success(world.relatedSourceIds(relation, target).map(entityId))
-    },
-    childMatches(target, relation, query) {
-      if (!world.records.has(target)) {
-        return Result.failure(Relation.missingEntityError(target))
-      }
-      const matches: Array<QueryMatch<S, typeof query>> = []
-      for (const sourceId of world.relatedSourceIds(relation, target)) {
-        const resolved = resolve(sourceId, query, reader)
-        if (resolved.ok) {
-          matches.push(resolved.value)
-        }
-      }
-      return Result.success(matches)
     },
     parent: relatedTarget,
     ancestors(target, relation) {
@@ -946,20 +1008,6 @@ const makeValidatedRuntime = <
       }
       return Result.success(descendants)
     },
-    descendantMatches(target, relation, query, options) {
-      const descendants = lookup.descendants(target, relation, options)
-      if (!descendants.ok) {
-        return descendants
-      }
-      const matches: Array<QueryMatch<S, typeof query>> = []
-      for (const descendantId of descendants.value) {
-        const resolved = resolve(descendantId, query, reader)
-        if (resolved.ok) {
-          matches.push(resolved.value)
-        }
-      }
-      return Result.success(matches)
-    },
     root(target, relation) {
       if (!world.records.has(target)) {
         return Result.failure(Relation.missingEntityError(target))
@@ -976,12 +1024,31 @@ const makeValidatedRuntime = <
     return lookup
   }
 
-  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q, reader: ReaderState): QueryHandle<S, Q> => {
+  const makeQueryHandle = <Q extends Query.Query.Any<Root>>(query: Q, reader: ReaderState, lookup: LookupApi<S, Root>): QueryHandle<S, Q> => {
     const each = () => queries.each(query, reader.since) as ReadonlyArray<QueryMatch<S, Q>>
+    const matching = (ids: ReadonlyArray<Entity.EntityId<S, Root>>): Array<QueryMatch<S, Q>> => {
+      const matches: Array<QueryMatch<S, Q>> = []
+      for (const id of ids) {
+        const resolved = resolve(id, query, reader)
+        if (resolved.ok) matches.push(resolved.value)
+      }
+      return matches
+    }
     return {
       each,
       get(target) {
         return resolve(target, query, reader)
+      },
+      getHandle(handle) {
+        return resolve(handle as Entity.Handle<Root, any>, query, reader)
+      },
+      children(target, relation) {
+        if (!world.records.has(target)) return Result.failure(Relation.missingEntityError(target))
+        return Result.success(matching(world.relatedSourceIds(relation, target).map(entityId)))
+      },
+      descendants(target, relation, options) {
+        const ids = lookup.descendants(target, relation, options)
+        return ids.ok ? Result.success(matching(ids.value)) : ids
       },
       single() {
         const matches = each()
@@ -1115,6 +1182,9 @@ const makeValidatedRuntime = <
     return {
       all() {
         return world.removedSince(ordinal, reader.since).map(entityId)
+      },
+      lagged() {
+        return world.removedLagged(ordinal, reader.since, reader.registeredAt)
       }
     }
   }
@@ -1122,6 +1192,9 @@ const makeValidatedRuntime = <
   const makeDespawnedReadView = (reader: ReaderState): DespawnedReadView<S, Root> => ({
     all() {
       return world.despawnedSince(reader.since).map(entityId)
+    },
+    lagged() {
+      return world.despawnedLagged(reader.since, reader.registeredAt)
     }
   })
 
@@ -1199,12 +1272,13 @@ const makeValidatedRuntime = <
    * views the implementation is allowed to see. Views read live storage, so
    * one context is built per system and reused for every run.
    */
-  const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState): SystemContext<any> => {
+  const makeContext = (system: SystemDefinition<any, any, any>, reader: ReaderState, queue: Command.CommandQueue<S, Root>): SystemContext<any> => {
     const spec = system.spec
+    const lookup = makeLookup(reader)
     return {
       local: (spec.local as (() => unknown) | undefined)?.(),
-      queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, (query) => makeQueryHandle(query, reader)),
-      lookup: makeLookup(reader),
+      queries: mapRecord(spec.queries as Record<string, Query.Query.Any<Root>>, (query) => makeQueryHandle(query, reader, lookup)),
+      lookup,
       resources: mapRecord(spec.resources as Record<string, any>, (access) =>
         access.mode === "read"
           ? Cells.storeRead(resources, access.descriptor.key)
@@ -1222,12 +1296,15 @@ const makeValidatedRuntime = <
       relationFailures: mapRecord(spec.relationFailures as Record<string, any>, (access) => makeRelationFailureReadView(access.relation, reader)),
       services: mapRecord(spec.services as Record<string, any>, (access) =>
         providedServices[access.descriptor.name as keyof Services]),
-      commands: Command.makeCommands<S, Root>(() => world.allocateEntity() as Entity.EntityId<S, Root>)
+      // The queue serves every declared permission set; the spec's types narrow it.
+      commands: queue as unknown
     } as SystemContext<any>
   }
 
   interface SystemSlot {
     readonly context: SystemContext<any>
+    /** The system's command queue (its context's `commands`, unchecked). */
+    readonly commands: Command.CommandQueue<S, Root>
     readonly reader: ReaderState
   }
 
@@ -1316,7 +1393,7 @@ const makeValidatedRuntime = <
       system: system.name,
       outcome,
       ...(outcome === "ok" ? {} : { error }),
-      ms: now() - started,
+      ms: HostClockModule.elapsed(started, now()),
       writes,
       resources: resourceWrites,
       events: emitted,
@@ -1383,7 +1460,8 @@ const makeValidatedRuntime = <
     let slot = slots.get(stateKey(system))
     if (!slot) {
       const reader: ReaderState = { since: 0, lastRun: 0, streamSince: 0, streamLastRun: 0, registeredAt: world.currentTick() }
-      slot = { context: makeContext(system, reader), reader }
+      const commands = Command.makeCommands<S, Root>(() => world.allocateEntity() as Entity.EntityId<S, Root>)
+      slot = { context: makeContext(system, reader, commands), commands, reader }
       slots.set(stateKey(system), slot)
       if (holdsStreams) registerStreamReader(system, slot.reader)
       const make = system.spec.local as (() => unknown) | undefined
@@ -1422,7 +1500,8 @@ const makeValidatedRuntime = <
         return succeeded
       }
     }
-    const { context, reader } = slotOf(system, true)
+    const { context, commands, reader } = slotOf(system, true)
+    if (debugEnabled) ranSystems.add(system.name)
     // Changes stamped after the previous completed run are visible to this run.
     reader.since = reader.lastRun
     reader.streamSince = reader.streamLastRun
@@ -1431,23 +1510,21 @@ const makeValidatedRuntime = <
     beginSystemTransaction()
     let outcome: Result.Result<unknown, unknown>
     try {
-      // A system that returns nothing cannot fail. Otherwise run its effect,
-      // equivalent to `Fx.runSync(Fx.provide(effect, services))` without the wrapper allocations.
-      const effect = system.run(context)
-      outcome = effect === undefined ? succeeded : effect.run(context.services)
+      // A system that returns nothing cannot fail; otherwise it returned a `Result`.
+      outcome = system.run(context) ?? succeeded
     } catch (defect) {
-      if (tracing) emit(traceSystem(system, reader, thisRun, started, "defect", defect, context.commands.flush()))
+      if (tracing) emit(traceSystem(system, reader, thisRun, started, "defect", defect, commands.flush()))
       rollbackSystemTransaction()
-      context.commands.flush()
+      commands.flush()
       throw defect
     }
     if (!outcome.ok) {
-      if (tracing) emit(traceSystem(system, reader, thisRun, started, "failed", outcome.error, context.commands.flush()))
+      if (tracing) emit(traceSystem(system, reader, thisRun, started, "failed", outcome.error, commands.flush()))
       rollbackSystemTransaction()
-      context.commands.flush()
+      commands.flush()
       return Result.failure({ kind: "SystemFailure", system: system.name, error: outcome.error })
     }
-    const queued = context.commands.flush()
+    const queued = commands.flush()
     const traced = tracing ? traceSystem(system, reader, thisRun, started, "ok", undefined, queued) : undefined
     commitSystemTransaction()
     // A failed run leaves `lastRun` unchanged, so the next run sees the same changes again.
@@ -1469,8 +1546,15 @@ const makeValidatedRuntime = <
     const origins = pendingOrigins.splice(0, pendingOrigins.length)
     world.advanceTick()
     if (!tracing) {
-      for (const command of commands) {
-        command.apply(commandWorld)
+      if (!debugEnabled) {
+        for (const command of commands) {
+          command.apply(commandWorld)
+        }
+        return
+      }
+      for (let index = 0; index < commands.length; index++) {
+        commandOrigin = origins[index] ?? "(unknown)"
+        commands[index]!.apply(commandWorld)
       }
       return
     }
@@ -1479,6 +1563,7 @@ const makeValidatedRuntime = <
       const command = commands[index]!
       const effects: Array<Debug.Effect> = []
       commandEffects = effects
+      commandOrigin = origins[index] ?? "(unknown)"
       try {
         command.apply(commandWorld)
       } finally {
@@ -1503,7 +1588,7 @@ const makeValidatedRuntime = <
     } finally {
       schedulePath.pop()
     }
-    emit({ type: "schedule.end", frame: frameCount, schedule: scheduleLabel, ok: result.ok, ms: now() - started })
+    emit({ type: "schedule.end", frame: frameCount, schedule: scheduleLabel, ok: result.ok, ms: HostClockModule.elapsed(started, now()) })
     return result
   }
 
@@ -1661,7 +1746,7 @@ const makeValidatedRuntime = <
    * Runs one schedule. A failing system stops the schedule; systems that
    * already succeeded stay committed, and their pending work stays pending.
    */
-  const runScheduleUnsafe = (schedule: ExecutableScheduleDefinition<S, any, any, any, any>): Result.Result<void, SystemFailure> => {
+  const runScheduleUnsafe = (schedule: ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>): Result.Result<void, SystemFailure> => {
     changedMachines = new Set()
     return tracing
       ? traceSchedule(scheduleName(schedule), () => runSteps(schedule.steps))
@@ -1670,6 +1755,13 @@ const makeValidatedRuntime = <
 
   const eventsByKey = new Set((Object.values(options.schema.events) as ReadonlyArray<Descriptor.Any>).map((descriptor) => descriptor.key))
   const externallyWrittenEvents = new Set<string>()
+  /** `debug.observeHost` listeners: ticks and sends, without tracing. Only a debug runtime registers any. */
+  const hostListeners = new Set<(event: Debug.HostEvent<S, Root>) => void>()
+  const emitHost = (event: Debug.HostEvent<S, Root>): void => {
+    for (const listener of hostListeners) listener(event)
+  }
+  /** Events declared as sent by the host (`debug.declareHostEvents`). */
+  let hostEvents = new Set<string>()
 
   const send = (descriptor: Descriptor<"event", string, any>, value: unknown): void => {
     if (ticking) throw new Error(`runtime.send(${descriptor.name}) was called while a schedule is running: emit from a system instead`)
@@ -1679,6 +1771,7 @@ const makeValidatedRuntime = <
     // Bound host traffic even when it sends repeatedly without ticking.
     events.trim(0)
     externallyWrittenEvents.add(descriptor.name)
+    if (hostListeners.size > 0) emitHost({ type: "send", event: descriptor.name, value })
     if (tracing) emit({ type: "runtime.sent", frame: frameCount, tick: published, event: descriptor.name, value })
   }
 
@@ -1691,19 +1784,89 @@ const makeValidatedRuntime = <
     relationFailures.trim(boundary)
   }
 
-  const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any>>): Result.Result<void, SystemFailure> => {
+  /**
+   * With debug: the last failed tick result, until its `ok` is read. The
+   * result handed back is a copy whose `ok` getter marks it read.
+   */
+  let unread: { read: boolean; readonly event: Omit<Debug.FailureIgnoredEvent, "type" | "when"> } | undefined
+  const reportUnread = (when: Debug.FailureIgnoredEvent["when"]): void => {
+    const pending = unread
+    unread = undefined
+    if (pending === undefined || pending.read) return
+    const event: Debug.FailureIgnoredEvent = { type: "failure.ignored", ...pending.event, when }
+    emit(event)
+    emitHost(event)
+  }
+  const watchResult = <R extends Result.Result<void, unknown>>(
+    result: R,
+    schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>
+  ): R => {
+    if (!debugEnabled || result.ok) return result
+    const error = result.error
+    const system = typeof error === "object" && error !== null && (error as { readonly kind?: unknown }).kind === "SystemFailure"
+      ? (error as SystemFailure).system
+      : undefined
+    const names = schedules.flatMap((schedule) => schedule.steps.filter(Schedule.isSystemStep).map((step) => (step as SystemDefinition<any, any, any>).name))
+    const at = system === undefined ? -1 : names.indexOf(system)
+    const holder = system === undefined
+      ? schedules[0]
+      : schedules.find((schedule) => schedule.steps.some((step) => Schedule.isSystemStep(step) && (step as SystemDefinition<any, any, any>).name === system)) ?? schedules[0]
+    const entry = {
+      read: false,
+      event: {
+        frame: frameCount,
+        schedule: holder === undefined ? "(none)" : scheduleName(holder),
+        system,
+        error,
+        skipped: [...new Set(names.slice(at + 1))]
+      }
+    }
+    unread = entry
+    return {
+      get ok() {
+        entry.read = true
+        return false
+      },
+      error
+    } as unknown as R
+  }
+
+  const tickUnsafe = (schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>): Result.Result<void, SystemFailure> => {
     if (ticking) throw new Error("runtime.tick cannot run inside another tick")
+    if (debugEnabled) reportUnread("next-tick")
     ticking = true
     try {
       advanceFrame()
-      for (const schedule of schedules) {
-        const result = runScheduleUnsafe(schedule)
-        if (!result.ok) return result
-      }
-      return succeeded
+      return watchResult(observedTick(schedules, () => {
+        for (const schedule of schedules) {
+          const result = runScheduleUnsafe(schedule)
+          if (!result.ok) return result
+        }
+        return succeeded
+      }), schedules)
     } finally {
       ticking = false
     }
+  }
+
+  /** Runs one tick's schedules, telling `observeHost` listeners when it starts and how it ends. */
+  const observedTick = (
+    schedules: ReadonlyArray<ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>,
+    run: () => Result.Result<void, SystemFailure>
+  ): Result.Result<void, SystemFailure> => {
+    if (hostListeners.size === 0) return run()
+    emitHost({ type: "tick.start", schedules, frame: frameCount })
+    let result: Result.Result<void, SystemFailure>
+    try {
+      result = run()
+    } catch (defect) {
+      emitHost({ type: "tick.end", schedules, frame: frameCount, outcome: "defect", error: defect })
+      throw defect
+    }
+    emitHost(result.ok
+      ? { type: "tick.end", schedules, frame: frameCount, outcome: "ok" }
+      : { type: "tick.end", schedules, frame: frameCount, outcome: "failed", error: result.error })
+    return result
   }
 
   const hasRequirement = (requirement: Requirement.RequirementValue): boolean => {
@@ -1717,22 +1880,28 @@ const makeValidatedRuntime = <
     }
   }
 
-  const tryRunSchedule = <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any>>(
+  const tryRunSchedule = <const Selected extends ExecutableScheduleDefinition<S, any, any, any, any, AnyScheduleOrder>>(
     schedule: Selected
-  ): Result.Result<void, MissingRuntimeRequirements | Schedule.FailureOf<Selected>> => {
+  ): Result.Result<void, MissingRuntimeRequirements | TickOrderViolation | Schedule.FailureOf<Selected>> => {
+    if (debugEnabled) reportUnread("next-tick")
     const missing = schedule.requirements
       .filter((requirement) => !hasRequirement(requirement))
       .map(({ kind, name }) => ({ kind, name }))
 
     if (missing.length > 0) {
-      return Result.failure({
-        kind: "MissingRuntimeRequirements",
+      return watchResult(Result.failure({
+        kind: "MissingRuntimeRequirements" as const,
         requirements: missing
-      })
+      }), [schedule])
+    }
+
+    const issues = OrderInternal.tickOrderIssues(schedule.steps)
+    if (issues.length > 0) {
+      return watchResult(Result.failure({ kind: "TickOrderViolation" as const, issues }), [schedule])
     }
 
     advanceFrame()
-    return runScheduleUnsafe(schedule) as Result.Result<void, Schedule.FailureOf<Selected>>
+    return watchResult(observedTick([schedule], () => runScheduleUnsafe(schedule)), [schedule]) as Result.Result<void, Schedule.FailureOf<Selected>>
   }
 
   /**
@@ -2041,12 +2210,18 @@ const makeValidatedRuntime = <
       scheduleNames.clear()
       for (const [name, schedule] of Object.entries(named)) scheduleNames.set(schedule, name)
     },
+    declareHostEvents(declared) {
+      hostEvents = new Set(declared.map((descriptor) => descriptor.name))
+    },
     describe: () => DebugInternal.describe({
       schema: options.schema,
       machines: [...new Set(machinesByName.values())],
       currentMachine: (machine) => currentMachines.get(machine.key) as Machine.StateValue | undefined,
       providedServices: Object.keys(providedServices),
-      externallyWrittenEvents,
+      externallyWrittenEvents: new Set([...externallyWrittenEvents, ...hostEvents]),
+      relationMutations,
+      commandUses,
+      ranSystems,
       hasResource: (descriptor) => resources.has(descriptor.key),
       schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)
     }),
@@ -2063,6 +2238,13 @@ const makeValidatedRuntime = <
         }
       }
     },
+    observeHost(listener) {
+      hostListeners.add(listener)
+      return () => {
+        hostListeners.delete(listener)
+      }
+    },
+    checkIgnoredFailures: () => reportUnread("session-end"),
     streams,
     population: () => {
       const components: Record<string, number> = {}
@@ -2110,7 +2292,7 @@ export const make = <
   readonly resources?: Resources
   readonly machines?: ProvidedMachines
   readonly machineDefinitions?: ReadonlyArray<Machine.StateMachine.Any>
-  /** Attaches a `debug` handle to the runtime; see the `Debug` module. */
+  /** Attaches a `debug` handle to the runtime, timed by `hostClock`; see the `Debug` module. */
   readonly debug?: Enabled
 }): MakeRuntimeResult<S, Simplify<RuntimeServicesOf<ProvidedServices>>, Resources, Root, RuntimeMachinesOf<ProvidedMachines>, Enabled> => {
   const fallible = Object.entries(options.schema.resources).some(([key, descriptor]) =>
@@ -2128,7 +2310,7 @@ export const make = <
     resources: validated.value,
     machines: options.machines,
     machineDefinitions: options.machineDefinitions ?? [],
-    debug: options.debug === true
+    debug: options.debug
   })
   return (fallible ? Result.success(runtime) : runtime) as never
 }

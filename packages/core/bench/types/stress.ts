@@ -1168,6 +1168,634 @@ const runtime = Game.Runtime.make({
 
 runtime.tick(Update)
 
+const W00 = Game.System("Stress/W00", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 0 })
+})
+const W01 = Game.System("Stress/W01", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 1 })
+})
+const W02 = Game.System("Stress/W02", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 2 })
+})
+const W03 = Game.System("Stress/W03", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 3 })
+})
+const W04 = Game.System("Stress/W04", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 4 })
+})
+const W05 = Game.System("Stress/W05", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 5 })
+})
+const W06 = Game.System("Stress/W06", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 6 })
+})
+const W07 = Game.System("Stress/W07", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 7 })
+})
+const W08 = Game.System("Stress/W08", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 8 })
+})
+const W09 = Game.System("Stress/W09", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 9 })
+})
+const W10 = Game.System("Stress/W10", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 10 })
+})
+const W11 = Game.System("Stress/W11", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 11 })
+})
+const W12 = Game.System("Stress/W12", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 12 })
+})
+const W13 = Game.System("Stress/W13", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 13 })
+})
+const W14 = Game.System("Stress/W14", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 14 })
+})
+const W15 = Game.System("Stress/W15", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 15 })
+})
+const W16 = Game.System("Stress/W16", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 16 })
+})
+const W17 = Game.System("Stress/W17", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 17 })
+})
+const W18 = Game.System("Stress/W18", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 18 })
+})
+const W19 = Game.System("Stress/W19", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 19 })
+})
+const W20 = Game.System("Stress/W20", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 20 })
+})
+const W21 = Game.System("Stress/W21", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 21 })
+})
+const W22 = Game.System("Stress/W22", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 22 })
+})
+const W23 = Game.System("Stress/W23", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 23 })
+})
+const W24 = Game.System("Stress/W24", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 24 })
+})
+const W25 = Game.System("Stress/W25", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 25 })
+})
+const W26 = Game.System("Stress/W26", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 26 })
+})
+const W27 = Game.System("Stress/W27", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 27 })
+})
+const W28 = Game.System("Stress/W28", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 28 })
+})
+const W29 = Game.System("Stress/W29", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 29 })
+})
+const W30 = Game.System("Stress/W30", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 30 })
+})
+const W31 = Game.System("Stress/W31", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 31 })
+})
+const W32 = Game.System("Stress/W32", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 32 })
+})
+const W33 = Game.System("Stress/W33", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 33 })
+})
+const W34 = Game.System("Stress/W34", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 34 })
+})
+const W35 = Game.System("Stress/W35", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 35 })
+})
+const W36 = Game.System("Stress/W36", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 36 })
+})
+const W37 = Game.System("Stress/W37", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 37 })
+})
+const W38 = Game.System("Stress/W38", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 38 })
+})
+const W39 = Game.System("Stress/W39", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 39 })
+})
+const W40 = Game.System("Stress/W40", { events: { out: Game.System.writeEvent(E00) } }, ({ events }) => {
+  events.out.emit({ e0: 40 })
+})
+const W41 = Game.System("Stress/W41", { events: { out: Game.System.writeEvent(E01) } }, ({ events }) => {
+  events.out.emit({ e1: 41 })
+})
+const W42 = Game.System("Stress/W42", { events: { out: Game.System.writeEvent(E02) } }, ({ events }) => {
+  events.out.emit({ e2: 42 })
+})
+const W43 = Game.System("Stress/W43", { events: { out: Game.System.writeEvent(E03) } }, ({ events }) => {
+  events.out.emit({ e3: 43 })
+})
+const W44 = Game.System("Stress/W44", { events: { out: Game.System.writeEvent(E04) } }, ({ events }) => {
+  events.out.emit({ e4: 44 })
+})
+const W45 = Game.System("Stress/W45", { events: { out: Game.System.writeEvent(E05) } }, ({ events }) => {
+  events.out.emit({ e5: 45 })
+})
+const W46 = Game.System("Stress/W46", { events: { out: Game.System.writeEvent(E06) } }, ({ events }) => {
+  events.out.emit({ e6: 46 })
+})
+const W47 = Game.System("Stress/W47", { events: { out: Game.System.writeEvent(E07) } }, ({ events }) => {
+  events.out.emit({ e7: 47 })
+})
+const T00 = Game.System("Stress/T00", { events: { in: Game.System.thisTick(Game.System.readEvent(E00)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T01 = Game.System("Stress/T01", { events: { in: Game.System.thisTick(Game.System.readEvent(E01)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T02 = Game.System("Stress/T02", { events: { in: Game.System.thisTick(Game.System.readEvent(E02)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T03 = Game.System("Stress/T03", { events: { in: Game.System.thisTick(Game.System.readEvent(E03)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T04 = Game.System("Stress/T04", { events: { in: Game.System.thisTick(Game.System.readEvent(E04)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T05 = Game.System("Stress/T05", { events: { in: Game.System.thisTick(Game.System.readEvent(E05)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T06 = Game.System("Stress/T06", { events: { in: Game.System.thisTick(Game.System.readEvent(E06)) } }, ({ events }) => {
+  void events.in.all()
+})
+const T07 = Game.System("Stress/T07", { events: { in: Game.System.thisTick(Game.System.readEvent(E07)) } }, ({ events }) => {
+  void events.in.all()
+})
+const Ordered = Game.Schedule(W00, W01, W02, W03, W04, W05, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20, W21, W22, W23, W24, W25, W26, W27, W28, W29, W30, W31, W32, W33, W34, W35, W36, W37, W38, W39, W40, W41, W42, W43, W44, W45, W46, W47, T00, T01, T02, T03, T04, T05, T06, T07)
+runtime.tick(Ordered)
+// @ts-expect-error a writer after a thisTick reader is a compile error
+runtime.tick(Game.Schedule(T00, T01, T02, T03, T04, T05, T06, T07, W00, W01, W02, W03, W04, W05, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20, W21, W22, W23, W24, W25, W26, W27, W28, W29, W30, W31, W32, W33, W34, W35, W36, W37, W38, W39, W40, W41, W42, W43, W44, W45, W46, W47))
+
+const L000 = Game.System("Stress/L000", { commands: Game.System.commands(Game.System.spawns(C00, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C16, { v16: 0 }]))
+})
+const L001 = Game.System("Stress/L001", { commands: Game.System.commands(Game.System.spawns(C01, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C16, { v16: 0 }]))
+})
+const L002 = Game.System("Stress/L002", { commands: Game.System.commands(Game.System.spawns(C02, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C16, { v16: 0 }]))
+})
+const L003 = Game.System("Stress/L003", { commands: Game.System.commands(Game.System.spawns(C03, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C16, { v16: 0 }]))
+})
+const L004 = Game.System("Stress/L004", { commands: Game.System.commands(Game.System.spawns(C04, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C16, { v16: 0 }]))
+})
+const L005 = Game.System("Stress/L005", { commands: Game.System.commands(Game.System.spawns(C05, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C16, { v16: 0 }]))
+})
+const L006 = Game.System("Stress/L006", { commands: Game.System.commands(Game.System.spawns(C06, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C16, { v16: 0 }]))
+})
+const L007 = Game.System("Stress/L007", { commands: Game.System.commands(Game.System.spawns(C07, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C16, { v16: 0 }]))
+})
+const L008 = Game.System("Stress/L008", { commands: Game.System.commands(Game.System.spawns(C08, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C16, { v16: 0 }]))
+})
+const L009 = Game.System("Stress/L009", { commands: Game.System.commands(Game.System.spawns(C09, C16), Game.System.inserts(C16)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C16, { v16: 0 }]))
+})
+const Q00 = Game.System("Stress/Q00", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C16) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q01 = Game.System("Stress/Q01", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C16) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const X00 = Game.System("Stress/X00", { events: { in: Game.System.thisTick(Game.System.readEvent(E00)) } }, ({ events }) => {
+  void events.in.all()
+})
+const L010 = Game.System("Stress/L010", { commands: Game.System.commands(Game.System.spawns(C10, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C17, { v17: 0 }]))
+})
+const L011 = Game.System("Stress/L011", { commands: Game.System.commands(Game.System.spawns(C11, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C17, { v17: 0 }]))
+})
+const L012 = Game.System("Stress/L012", { commands: Game.System.commands(Game.System.spawns(C12, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C17, { v17: 0 }]))
+})
+const L013 = Game.System("Stress/L013", { commands: Game.System.commands(Game.System.spawns(C13, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C17, { v17: 0 }]))
+})
+const L014 = Game.System("Stress/L014", { commands: Game.System.commands(Game.System.spawns(C14, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C17, { v17: 0 }]))
+})
+const L015 = Game.System("Stress/L015", { commands: Game.System.commands(Game.System.spawns(C15, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C17, { v17: 0 }]))
+})
+const L016 = Game.System("Stress/L016", { commands: Game.System.commands(Game.System.spawns(C00, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C17, { v17: 0 }]))
+})
+const L017 = Game.System("Stress/L017", { commands: Game.System.commands(Game.System.spawns(C01, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C17, { v17: 0 }]))
+})
+const L018 = Game.System("Stress/L018", { commands: Game.System.commands(Game.System.spawns(C02, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C17, { v17: 0 }]))
+})
+const L019 = Game.System("Stress/L019", { commands: Game.System.commands(Game.System.spawns(C03, C17), Game.System.inserts(C17)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C17, { v17: 0 }]))
+})
+const Q02 = Game.System("Stress/Q02", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C17) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q03 = Game.System("Stress/Q03", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C17) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const L020 = Game.System("Stress/L020", { commands: Game.System.commands(Game.System.spawns(C04, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C18, { v18: 0 }]))
+})
+const L021 = Game.System("Stress/L021", { commands: Game.System.commands(Game.System.spawns(C05, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C18, { v18: 0 }]))
+})
+const L022 = Game.System("Stress/L022", { commands: Game.System.commands(Game.System.spawns(C06, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C18, { v18: 0 }]))
+})
+const L023 = Game.System("Stress/L023", { commands: Game.System.commands(Game.System.spawns(C07, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C18, { v18: 0 }]))
+})
+const L024 = Game.System("Stress/L024", { commands: Game.System.commands(Game.System.spawns(C08, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C18, { v18: 0 }]))
+})
+const L025 = Game.System("Stress/L025", { commands: Game.System.commands(Game.System.spawns(C09, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C18, { v18: 0 }]))
+})
+const L026 = Game.System("Stress/L026", { commands: Game.System.commands(Game.System.spawns(C10, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C18, { v18: 0 }]))
+})
+const L027 = Game.System("Stress/L027", { commands: Game.System.commands(Game.System.spawns(C11, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C18, { v18: 0 }]))
+})
+const L028 = Game.System("Stress/L028", { commands: Game.System.commands(Game.System.spawns(C12, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C18, { v18: 0 }]))
+})
+const L029 = Game.System("Stress/L029", { commands: Game.System.commands(Game.System.spawns(C13, C18), Game.System.inserts(C18)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C18, { v18: 0 }]))
+})
+const Q04 = Game.System("Stress/Q04", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C18) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q05 = Game.System("Stress/Q05", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C18) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const X01 = Game.System("Stress/X01", { events: { in: Game.System.thisTick(Game.System.readEvent(E02)) } }, ({ events }) => {
+  void events.in.all()
+})
+const L030 = Game.System("Stress/L030", { commands: Game.System.commands(Game.System.spawns(C14, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C19, { v19: 0 }]))
+})
+const L031 = Game.System("Stress/L031", { commands: Game.System.commands(Game.System.spawns(C15, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C19, { v19: 0 }]))
+})
+const L032 = Game.System("Stress/L032", { commands: Game.System.commands(Game.System.spawns(C00, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C19, { v19: 0 }]))
+})
+const L033 = Game.System("Stress/L033", { commands: Game.System.commands(Game.System.spawns(C01, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C19, { v19: 0 }]))
+})
+const L034 = Game.System("Stress/L034", { commands: Game.System.commands(Game.System.spawns(C02, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C19, { v19: 0 }]))
+})
+const L035 = Game.System("Stress/L035", { commands: Game.System.commands(Game.System.spawns(C03, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C19, { v19: 0 }]))
+})
+const L036 = Game.System("Stress/L036", { commands: Game.System.commands(Game.System.spawns(C04, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C19, { v19: 0 }]))
+})
+const L037 = Game.System("Stress/L037", { commands: Game.System.commands(Game.System.spawns(C05, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C19, { v19: 0 }]))
+})
+const L038 = Game.System("Stress/L038", { commands: Game.System.commands(Game.System.spawns(C06, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C19, { v19: 0 }]))
+})
+const L039 = Game.System("Stress/L039", { commands: Game.System.commands(Game.System.spawns(C07, C19), Game.System.inserts(C19)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C19, { v19: 0 }]))
+})
+const Q06 = Game.System("Stress/Q06", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C19) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q07 = Game.System("Stress/Q07", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C19) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const L040 = Game.System("Stress/L040", { commands: Game.System.commands(Game.System.spawns(C08, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C20, { v20: 0 }]))
+})
+const L041 = Game.System("Stress/L041", { commands: Game.System.commands(Game.System.spawns(C09, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C20, { v20: 0 }]))
+})
+const L042 = Game.System("Stress/L042", { commands: Game.System.commands(Game.System.spawns(C10, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C20, { v20: 0 }]))
+})
+const L043 = Game.System("Stress/L043", { commands: Game.System.commands(Game.System.spawns(C11, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C20, { v20: 0 }]))
+})
+const L044 = Game.System("Stress/L044", { commands: Game.System.commands(Game.System.spawns(C12, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C20, { v20: 0 }]))
+})
+const L045 = Game.System("Stress/L045", { commands: Game.System.commands(Game.System.spawns(C13, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C20, { v20: 0 }]))
+})
+const L046 = Game.System("Stress/L046", { commands: Game.System.commands(Game.System.spawns(C14, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C20, { v20: 0 }]))
+})
+const L047 = Game.System("Stress/L047", { commands: Game.System.commands(Game.System.spawns(C15, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C20, { v20: 0 }]))
+})
+const L048 = Game.System("Stress/L048", { commands: Game.System.commands(Game.System.spawns(C00, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C20, { v20: 0 }]))
+})
+const L049 = Game.System("Stress/L049", { commands: Game.System.commands(Game.System.spawns(C01, C20), Game.System.inserts(C20)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C20, { v20: 0 }]))
+})
+const Q08 = Game.System("Stress/Q08", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C20) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q09 = Game.System("Stress/Q09", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C20) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const X02 = Game.System("Stress/X02", { events: { in: Game.System.thisTick(Game.System.readEvent(E04)) } }, ({ events }) => {
+  void events.in.all()
+})
+const L050 = Game.System("Stress/L050", { commands: Game.System.commands(Game.System.spawns(C02, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C21, { v21: 0 }]))
+})
+const L051 = Game.System("Stress/L051", { commands: Game.System.commands(Game.System.spawns(C03, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C21, { v21: 0 }]))
+})
+const L052 = Game.System("Stress/L052", { commands: Game.System.commands(Game.System.spawns(C04, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C21, { v21: 0 }]))
+})
+const L053 = Game.System("Stress/L053", { commands: Game.System.commands(Game.System.spawns(C05, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C21, { v21: 0 }]))
+})
+const L054 = Game.System("Stress/L054", { commands: Game.System.commands(Game.System.spawns(C06, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C21, { v21: 0 }]))
+})
+const L055 = Game.System("Stress/L055", { commands: Game.System.commands(Game.System.spawns(C07, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C21, { v21: 0 }]))
+})
+const L056 = Game.System("Stress/L056", { commands: Game.System.commands(Game.System.spawns(C08, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C21, { v21: 0 }]))
+})
+const L057 = Game.System("Stress/L057", { commands: Game.System.commands(Game.System.spawns(C09, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C21, { v21: 0 }]))
+})
+const L058 = Game.System("Stress/L058", { commands: Game.System.commands(Game.System.spawns(C10, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C21, { v21: 0 }]))
+})
+const L059 = Game.System("Stress/L059", { commands: Game.System.commands(Game.System.spawns(C11, C21), Game.System.inserts(C21)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C21, { v21: 0 }]))
+})
+const Q10 = Game.System("Stress/Q10", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C21) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q11 = Game.System("Stress/Q11", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C21) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const L060 = Game.System("Stress/L060", { commands: Game.System.commands(Game.System.spawns(C12, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C22, { v22: 0 }]))
+})
+const L061 = Game.System("Stress/L061", { commands: Game.System.commands(Game.System.spawns(C13, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C22, { v22: 0 }]))
+})
+const L062 = Game.System("Stress/L062", { commands: Game.System.commands(Game.System.spawns(C14, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C22, { v22: 0 }]))
+})
+const L063 = Game.System("Stress/L063", { commands: Game.System.commands(Game.System.spawns(C15, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C22, { v22: 0 }]))
+})
+const L064 = Game.System("Stress/L064", { commands: Game.System.commands(Game.System.spawns(C00, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C22, { v22: 0 }]))
+})
+const L065 = Game.System("Stress/L065", { commands: Game.System.commands(Game.System.spawns(C01, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C22, { v22: 0 }]))
+})
+const L066 = Game.System("Stress/L066", { commands: Game.System.commands(Game.System.spawns(C02, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C22, { v22: 0 }]))
+})
+const L067 = Game.System("Stress/L067", { commands: Game.System.commands(Game.System.spawns(C03, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C22, { v22: 0 }]))
+})
+const L068 = Game.System("Stress/L068", { commands: Game.System.commands(Game.System.spawns(C04, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C22, { v22: 0 }]))
+})
+const L069 = Game.System("Stress/L069", { commands: Game.System.commands(Game.System.spawns(C05, C22), Game.System.inserts(C22)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C22, { v22: 0 }]))
+})
+const Q12 = Game.System("Stress/Q12", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C22) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q13 = Game.System("Stress/Q13", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C22) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const X03 = Game.System("Stress/X03", { events: { in: Game.System.thisTick(Game.System.readEvent(E06)) } }, ({ events }) => {
+  void events.in.all()
+})
+const L070 = Game.System("Stress/L070", { commands: Game.System.commands(Game.System.spawns(C06, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C23, { v23: 0 }]))
+})
+const L071 = Game.System("Stress/L071", { commands: Game.System.commands(Game.System.spawns(C07, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C23, { v23: 0 }]))
+})
+const L072 = Game.System("Stress/L072", { commands: Game.System.commands(Game.System.spawns(C08, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C23, { v23: 0 }]))
+})
+const L073 = Game.System("Stress/L073", { commands: Game.System.commands(Game.System.spawns(C09, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C23, { v23: 0 }]))
+})
+const L074 = Game.System("Stress/L074", { commands: Game.System.commands(Game.System.spawns(C10, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C23, { v23: 0 }]))
+})
+const L075 = Game.System("Stress/L075", { commands: Game.System.commands(Game.System.spawns(C11, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C23, { v23: 0 }]))
+})
+const L076 = Game.System("Stress/L076", { commands: Game.System.commands(Game.System.spawns(C12, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C23, { v23: 0 }]))
+})
+const L077 = Game.System("Stress/L077", { commands: Game.System.commands(Game.System.spawns(C13, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C23, { v23: 0 }]))
+})
+const L078 = Game.System("Stress/L078", { commands: Game.System.commands(Game.System.spawns(C14, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C23, { v23: 0 }]))
+})
+const L079 = Game.System("Stress/L079", { commands: Game.System.commands(Game.System.spawns(C15, C23), Game.System.inserts(C23)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C23, { v23: 0 }]))
+})
+const Q14 = Game.System("Stress/Q14", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C23) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q15 = Game.System("Stress/Q15", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C23) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const L080 = Game.System("Stress/L080", { commands: Game.System.commands(Game.System.spawns(C00, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C24, { v24: 0 }]))
+})
+const L081 = Game.System("Stress/L081", { commands: Game.System.commands(Game.System.spawns(C01, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C24, { v24: 0 }]))
+})
+const L082 = Game.System("Stress/L082", { commands: Game.System.commands(Game.System.spawns(C02, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C24, { v24: 0 }]))
+})
+const L083 = Game.System("Stress/L083", { commands: Game.System.commands(Game.System.spawns(C03, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C24, { v24: 0 }]))
+})
+const L084 = Game.System("Stress/L084", { commands: Game.System.commands(Game.System.spawns(C04, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C24, { v24: 0 }]))
+})
+const L085 = Game.System("Stress/L085", { commands: Game.System.commands(Game.System.spawns(C05, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C24, { v24: 0 }]))
+})
+const L086 = Game.System("Stress/L086", { commands: Game.System.commands(Game.System.spawns(C06, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C24, { v24: 0 }]))
+})
+const L087 = Game.System("Stress/L087", { commands: Game.System.commands(Game.System.spawns(C07, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C24, { v24: 0 }]))
+})
+const L088 = Game.System("Stress/L088", { commands: Game.System.commands(Game.System.spawns(C08, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C24, { v24: 0 }]))
+})
+const L089 = Game.System("Stress/L089", { commands: Game.System.commands(Game.System.spawns(C09, C24), Game.System.inserts(C24)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C24, { v24: 0 }]))
+})
+const Q16 = Game.System("Stress/Q16", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C24) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q17 = Game.System("Stress/Q17", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C24) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const X04 = Game.System("Stress/X04", { events: { in: Game.System.thisTick(Game.System.readEvent(E00)) } }, ({ events }) => {
+  void events.in.all()
+})
+const L090 = Game.System("Stress/L090", { commands: Game.System.commands(Game.System.spawns(C10, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C25, { v25: 0 }]))
+})
+const L091 = Game.System("Stress/L091", { commands: Game.System.commands(Game.System.spawns(C11, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C25, { v25: 0 }]))
+})
+const L092 = Game.System("Stress/L092", { commands: Game.System.commands(Game.System.spawns(C12, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C25, { v25: 0 }]))
+})
+const L093 = Game.System("Stress/L093", { commands: Game.System.commands(Game.System.spawns(C13, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C25, { v25: 0 }]))
+})
+const L094 = Game.System("Stress/L094", { commands: Game.System.commands(Game.System.spawns(C14, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C25, { v25: 0 }]))
+})
+const L095 = Game.System("Stress/L095", { commands: Game.System.commands(Game.System.spawns(C15, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C25, { v25: 0 }]))
+})
+const L096 = Game.System("Stress/L096", { commands: Game.System.commands(Game.System.spawns(C00, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C25, { v25: 0 }]))
+})
+const L097 = Game.System("Stress/L097", { commands: Game.System.commands(Game.System.spawns(C01, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C25, { v25: 0 }]))
+})
+const L098 = Game.System("Stress/L098", { commands: Game.System.commands(Game.System.spawns(C02, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C25, { v25: 0 }]))
+})
+const L099 = Game.System("Stress/L099", { commands: Game.System.commands(Game.System.spawns(C03, C25), Game.System.inserts(C25)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C25, { v25: 0 }]))
+})
+const Q18 = Game.System("Stress/Q18", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C25) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q19 = Game.System("Stress/Q19", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C25) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const L100 = Game.System("Stress/L100", { commands: Game.System.commands(Game.System.spawns(C04, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C26, { v26: 0 }]))
+})
+const L101 = Game.System("Stress/L101", { commands: Game.System.commands(Game.System.spawns(C05, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C26, { v26: 0 }]))
+})
+const L102 = Game.System("Stress/L102", { commands: Game.System.commands(Game.System.spawns(C06, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C26, { v26: 0 }]))
+})
+const L103 = Game.System("Stress/L103", { commands: Game.System.commands(Game.System.spawns(C07, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C26, { v26: 0 }]))
+})
+const L104 = Game.System("Stress/L104", { commands: Game.System.commands(Game.System.spawns(C08, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C08, { v8: 0 }], [C26, { v26: 0 }]))
+})
+const L105 = Game.System("Stress/L105", { commands: Game.System.commands(Game.System.spawns(C09, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C09, { v9: 0 }], [C26, { v26: 0 }]))
+})
+const L106 = Game.System("Stress/L106", { commands: Game.System.commands(Game.System.spawns(C10, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C10, { v10: 0 }], [C26, { v26: 0 }]))
+})
+const L107 = Game.System("Stress/L107", { commands: Game.System.commands(Game.System.spawns(C11, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C11, { v11: 0 }], [C26, { v26: 0 }]))
+})
+const L108 = Game.System("Stress/L108", { commands: Game.System.commands(Game.System.spawns(C12, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C12, { v12: 0 }], [C26, { v26: 0 }]))
+})
+const L109 = Game.System("Stress/L109", { commands: Game.System.commands(Game.System.spawns(C13, C26), Game.System.inserts(C26)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C13, { v13: 0 }], [C26, { v26: 0 }]))
+})
+const Q20 = Game.System("Stress/Q20", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C26) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q21 = Game.System("Stress/Q21", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C26) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const X05 = Game.System("Stress/X05", { events: { in: Game.System.thisTick(Game.System.readEvent(E02)) } }, ({ events }) => {
+  void events.in.all()
+})
+const L110 = Game.System("Stress/L110", { commands: Game.System.commands(Game.System.spawns(C14, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C14, { v14: 0 }], [C27, { v27: 0 }]))
+})
+const L111 = Game.System("Stress/L111", { commands: Game.System.commands(Game.System.spawns(C15, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C15, { v15: 0 }], [C27, { v27: 0 }]))
+})
+const L112 = Game.System("Stress/L112", { commands: Game.System.commands(Game.System.spawns(C00, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C00, { v0: 0 }], [C27, { v27: 0 }]))
+})
+const L113 = Game.System("Stress/L113", { commands: Game.System.commands(Game.System.spawns(C01, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C01, { v1: 0 }], [C27, { v27: 0 }]))
+})
+const L114 = Game.System("Stress/L114", { commands: Game.System.commands(Game.System.spawns(C02, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C02, { v2: 0 }], [C27, { v27: 0 }]))
+})
+const L115 = Game.System("Stress/L115", { commands: Game.System.commands(Game.System.spawns(C03, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C03, { v3: 0 }], [C27, { v27: 0 }]))
+})
+const L116 = Game.System("Stress/L116", { commands: Game.System.commands(Game.System.spawns(C04, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C04, { v4: 0 }], [C27, { v27: 0 }]))
+})
+const L117 = Game.System("Stress/L117", { commands: Game.System.commands(Game.System.spawns(C05, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C05, { v5: 0 }], [C27, { v27: 0 }]))
+})
+const L118 = Game.System("Stress/L118", { commands: Game.System.commands(Game.System.spawns(C06, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C06, { v6: 0 }], [C27, { v27: 0 }]))
+})
+const L119 = Game.System("Stress/L119", { commands: Game.System.commands(Game.System.spawns(C07, C27), Game.System.inserts(C27)) }, ({ commands }) => {
+  commands.spawn(Game.Command.spawn([C07, { v7: 0 }], [C27, { v27: 0 }]))
+})
+const Q22 = Game.System("Stress/Q22", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C27) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Q23 = Game.System("Stress/Q23", { queries: { seen: Game.System.thisTick(Game.Query({ selection: { c: Game.Query.read(C27) } })) } }, ({ queries }) => {
+  void queries.seen.each()
+})
+const Long = Game.Schedule(L000, L001, L002, L003, L004, L005, L006, L007, L008, L009, Game.Schedule.applyDeferred(), Q00, Q01, X00, L010, L011, L012, L013, L014, L015, L016, L017, L018, L019, Game.Schedule.applyDeferred(), Q02, Q03, L020, L021, L022, L023, L024, L025, L026, L027, L028, L029, Game.Schedule.applyDeferred(), Q04, Q05, X01, L030, L031, L032, L033, L034, L035, L036, L037, L038, L039, Game.Schedule.applyDeferred(), Q06, Q07, L040, L041, L042, L043, L044, L045, L046, L047, L048, L049, Game.Schedule.applyDeferred(), Q08, Q09, X02, L050, L051, L052, L053, L054, L055, L056, L057, L058, L059, Game.Schedule.applyDeferred(), Q10, Q11, L060, L061, L062, L063, L064, L065, L066, L067, L068, L069, Game.Schedule.applyDeferred(), Q12, Q13, X03, L070, L071, L072, L073, L074, L075, L076, L077, L078, L079, Game.Schedule.applyDeferred(), Q14, Q15, L080, L081, L082, L083, L084, L085, L086, L087, L088, L089, Game.Schedule.applyDeferred(), Q16, Q17, X04, L090, L091, L092, L093, L094, L095, L096, L097, L098, L099, Game.Schedule.applyDeferred(), Q18, Q19, L100, L101, L102, L103, L104, L105, L106, L107, L108, L109, Game.Schedule.applyDeferred(), Q20, Q21, X05, L110, L111, L112, L113, L114, L115, L116, L117, L118, L119, Game.Schedule.applyDeferred(), Q22, Q23)
+runtime.tick(Long)
+// @ts-expect-error a command writer with no applyDeferred() before a thisTick query reader is a compile error
+runtime.tick(Game.Schedule(L000, L001, L002, L003, L004, L005, L006, L007, L008, L009, Q00, Q01, X00, L010, L011, L012, L013, L014, L015, L016, L017, L018, L019, Q02, Q03, L020, L021, L022, L023, L024, L025, L026, L027, L028, L029, Q04, Q05, X01, L030, L031, L032, L033, L034, L035, L036, L037, L038, L039, Q06, Q07, L040, L041, L042, L043, L044, L045, L046, L047, L048, L049, Q08, Q09, X02, L050, L051, L052, L053, L054, L055, L056, L057, L058, L059, Q10, Q11, L060, L061, L062, L063, L064, L065, L066, L067, L068, L069, Q12, Q13, X03, L070, L071, L072, L073, L074, L075, L076, L077, L078, L079, Q14, Q15, L080, L081, L082, L083, L084, L085, L086, L087, L088, L089, Q16, Q17, X04, L090, L091, L092, L093, L094, L095, L096, L097, L098, L099, Q18, Q19, L100, L101, L102, L103, L104, L105, L106, L107, L108, L109, Q20, Q21, X05, L110, L111, L112, L113, L114, L115, L116, L117, L118, L119, Q22, Q23))
+
 const incomplete = Game.Runtime.make({ services: Game.Runtime.services() })
 // @ts-expect-error missing services, resources and machines are compile errors
 incomplete.tick(Update)

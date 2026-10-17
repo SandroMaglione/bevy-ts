@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { FixedLoop, packageTag } from "@typeonce/ritmo-browser"
-import { Result } from "@typeonce/ritmo"
+import { Clock, Result } from "@typeonce/ritmo"
 
 describe("@typeonce/ritmo-browser", () => {
   it("resolves through the workspace package entrypoint", () => {
@@ -19,7 +19,7 @@ describe("@typeonce/ritmo-browser", () => {
         tick = onTick
         return { stop: () => { stopped = true } }
       }),
-      stepSeconds: 0.01,
+      step: Clock.hz(100),
       maxFrameSeconds: 0.1,
       maxStepsPerFrame: 3,
       update: (step) => {
@@ -57,7 +57,7 @@ describe("@typeonce/ritmo-browser", () => {
         tick = onTick
         return { stop: () => { stopCount += 1 } }
       }),
-      stepSeconds: 0.01,
+      step: Clock.hz(100),
       maxFrameSeconds: 0.1,
       maxStepsPerFrame: 3,
       update: () => {
@@ -87,8 +87,8 @@ describe("@typeonce/ritmo-browser", () => {
         subscribed = true
         return { stop() {} }
       }),
-      stepSeconds: 0,
-      maxFrameSeconds: 0.1,
+      step: Clock.hz(60),
+      maxFrameSeconds: 0,
       maxStepsPerFrame: 3,
       update: () => Result.success(undefined),
       render: () => {},
@@ -99,7 +99,7 @@ describe("@typeonce/ritmo-browser", () => {
       ok: false,
       error: {
         kind: "InvalidFixedLoopOptions",
-        field: "stepSeconds",
+        field: "maxFrameSeconds",
         reason: "mustBeFiniteAndPositive",
         value: 0
       }

@@ -40,7 +40,7 @@ describe("Command", () => {
   })
 
   it("insertMany widens an existing draft proof", () => {
-    const draft = Command.insert(
+    const draft = Command.extend(
       Command.spawn<typeof schema>(),
       [Position, { x: 0, y: 0 }] as const,
       [Velocity, { x: 1, y: 1 }] as const
@@ -62,27 +62,23 @@ describe("Command", () => {
     Command.entry(Time, 1)
   })
 
-  it("entryResult preserves the descriptor-bound value type", () => {
-    const entry = Command.entryResult(
-      Position,
-      Result.success({ x: 0, y: 0 })
-    )
-
-    expect(entry).type.toBe<Result.Result<Command.Entry<typeof Position>, unknown>>()
-  })
-
-  it("spawnWithMixed preserves proof typing and plain entry slots", () => {
+  it("spawn with plain and raw entries preserves proof typing and plain entry slots", () => {
     const Game = Schema.bind(schema)
 
     const draft = Game.Command.spawn(
       Game.Command.entry(Position, { x: 0, y: 0 }),
-      Game.Command.entryResult(Velocity, Result.success({ x: 1, y: 1 }))
+      Game.Command.entryRaw(SafePosition, { x: 1, y: 1 })
     )
 
     expect(draft).type.toBe<Result.Result<Entity.EntityDraft<typeof schema, {
       readonly Position: { x: number; y: number }
-      readonly Velocity: { x: number; y: number }
-    }, typeof schema>, readonly [null, unknown]>>()
+      readonly SafePosition: Vector2.Vector2
+    }, typeof schema>, readonly [null, Vector2.Error | null]>>()
+  })
+
+  it("has no entryResult: validation goes through the descriptor", () => {
+    expect(Game.Command).type.not.toHaveProperty("entryResult")
+    expect(Command).type.not.toHaveProperty("entryResult")
   })
 
   it("entryRaw entries make insert return a Result with per-entry errors", () => {
@@ -91,7 +87,7 @@ describe("Command", () => {
     const entry = Game.Command.entryRaw(SafePosition, { x: 0, y: 0 })
     expect(entry).type.toBe<Result.Result<Command.Entry<typeof SafePosition>, Vector2.Error>>()
 
-    const inserted = Game.Command.insert(
+    const inserted = Game.Command.extend(
       Game.Command.spawn([Position, { x: 1, y: 1 }]), Game.Command.entryRaw(SafePosition, { x: 2, y: 3 }))
 
     expect(inserted).type.toBe<Result.Result<Entity.EntityDraft<typeof schema, {

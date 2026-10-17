@@ -76,7 +76,7 @@ export interface Options<
  * The generated system. It requires the source service and the resource.
  */
 export type CaptureSystem<S extends Schema.Any, Root, Needs extends ServiceDescriptor | ResourceDescriptor | ConditionNeedsFromConditions<ReadonlyArray<Condition>>> =
-  Schema.BoundSystem<S, Root, any, void, never, string, Needs>
+  Schema.BoundSystem<S, Root, any, never, string, Needs>
 
 /**
  * Builds the system that writes `source.snapshot()` into `resource`.

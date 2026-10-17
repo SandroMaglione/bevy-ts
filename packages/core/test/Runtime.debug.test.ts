@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { Debug, Descriptor, Fx, Schema } from "@typeonce/ritmo"
+import { Debug, Descriptor, HostClock, Result, Schema } from "@typeonce/ritmo"
+
+const hostClock = HostClock.test()
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Debug/Position")
 const Tagged = Descriptor.Component<{}>()("Debug/Tagged")
@@ -22,12 +24,14 @@ const makeRuntime = () => Game.Runtime.make({
   services: Game.Runtime.services(Game.Runtime.service(Clock, { now: () => 0 })),
   resources: { Score: 0 },
   machines: Game.Runtime.machines(Game.Runtime.machine(Flow, "Menu")),
-  debug: true
+  debug: { hostClock }
 })
 
 const Moving = Game.Query({ selection: { position: Game.Query.write(Position) } })
 
-const Spawn = Game.System("Debug/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Debug/Spawn", {
+  commands: Game.System.commands(Game.System.spawns(Position, Sprite, Tagged))
+}, ({ commands }) => {
   const parent = commands.spawn(Game.Command.spawn([Position, { x: 1 }], [Sprite, { frame: 0 }]))
   commands.spawn(Game.Command.relate(Game.Command.spawn([Tagged, {}]), ChildOf, parent))
 })
@@ -117,6 +121,88 @@ describe("Runtime debug handle", () => {
     ])
   })
 
+  it("lints relations that commands relate when no described system reads their failures", () => {
+    const runtime = makeRuntime()
+    const setup = Game.Schedule(Spawn, Game.Schedule.applyDeferred())
+    runtime.debug.nameSchedules({ setup })
+    const relationLints = () => runtime.debug.describe().lints.filter((lint) => lint.code === "relation-failure-never-read")
+    // Nothing has been related yet: the lint is based on applied commands.
+    expect(relationLints()).toEqual([])
+
+    runtime.tick(setup)
+    expect(relationLints()).toEqual([{
+      severity: "warning",
+      code: "relation-failure-never-read",
+      subject: "Debug/ChildOf",
+      message: "Debug/ChildOf is related by commands from Debug/Spawn, but no described system reads its failures (Game.System.readRelationFailures(Debug/ChildOf)), so a failed relate or reorder is dropped silently",
+      fix: "read the failures with Game.System.readRelationFailures(Debug/ChildOf) in a system and handle them"
+    }])
+
+    const ReadFailures = Game.System("Debug/ReadChildOfFailures", {
+      relationFailures: { childOf: Game.System.readRelationFailures(ChildOf) }
+    }, () => {})
+    runtime.debug.nameSchedules({ setup, failures: Game.Schedule(ReadFailures) })
+    expect(relationLints()).toEqual([])
+  })
+
+  it("lints a relation a system may relate (declared relates) before any command ran, and not once its failures are read", () => {
+    const runtime = makeRuntime()
+    const Adopt = Game.System("Debug/Adopt", { commands: Game.System.commands(Game.System.relates(ChildOf)) }, () => {})
+    runtime.debug.nameSchedules({ adopt: Game.Schedule(Adopt) })
+    const relationLints = () => runtime.debug.describe().lints.filter((lint) => lint.code === "relation-failure-never-read")
+    expect(relationLints().map((lint) => lint.message)).toEqual([
+      "Debug/ChildOf is related by commands from Debug/Adopt, but no described system reads its failures (Game.System.readRelationFailures(Debug/ChildOf)), so a failed relate or reorder is dropped silently"
+    ])
+    const ReadFailures = Game.System("Debug/ReadAdoptFailures", {
+      relationFailures: { childOf: Game.System.readRelationFailures(ChildOf) }
+    }, () => {})
+    runtime.debug.nameSchedules({ adopt: Game.Schedule(Adopt), failures: Game.Schedule(ReadFailures) })
+    expect(relationLints()).toEqual([])
+  })
+
+  it("lints declared command permissions a system that ran never used, and none it used", () => {
+    const runtime = makeRuntime()
+    const Place = Game.System("Debug/Place", {
+      commands: Game.System.commands(Game.System.spawns(Position, Tagged), Game.System.inserts(Tagged), Game.System.removes(Tagged))
+    }, ({ commands }) => {
+      const id = commands.spawn(Game.Command.spawn([Position, { x: 0 }], [Tagged, {}]))
+      commands.remove(id, Tagged)
+    })
+    const setup = Game.Schedule(Place, Game.Schedule.applyDeferred())
+    runtime.debug.nameSchedules({ setup })
+    const unused = () => runtime.debug.describe().lints.filter((lint) => lint.code === "command-permission-unused")
+    // A system that has not run reports nothing.
+    expect(unused()).toEqual([])
+    runtime.tick(setup)
+    expect(unused()).toEqual([{
+      severity: "info",
+      code: "command-permission-unused",
+      subject: "Debug/Place",
+      message: "Debug/Place may insert Debug/Tagged but never did in this session",
+      fix: "fine if the session did not reach the case where Debug/Place uses it; otherwise drop the permission from its Game.System.commands(...)"
+    }])
+    expect(runtime.debug.describe().systems.find((system) => system.name === "Debug/Place")?.commands).toEqual({
+      spawns: ["Debug/Position", "Debug/Tagged"],
+      inserts: ["Debug/Tagged"],
+      removes: ["Debug/Tagged"],
+      despawns: [],
+      despawnsScope: [],
+      relates: []
+    })
+  })
+
+  it("indexes declared spawns, inserts, and removes as component writers", () => {
+    const runtime = makeRuntime()
+    const Place = Game.System("Debug/PlaceTagged", { commands: Game.System.commands(Game.System.spawns(Tagged)) }, () => {})
+    runtime.debug.nameSchedules({ setup: Game.Schedule(Place) })
+    const described = runtime.debug.describe()
+    expect(described.access.components.find((entry) => entry.name === "Debug/Tagged")?.writers).toEqual(["Debug/PlaceTagged"])
+    expect(described.lints.filter((lint) => lint.code === "component-never-read").map((lint) => lint.subject)).toContain("Debug/Tagged")
+    const ReadTagged = Game.System("Debug/ReadTagged", { queries: { tagged: Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Tagged] }) } }, () => {})
+    runtime.debug.nameSchedules({ setup: Game.Schedule(Place, ReadTagged) })
+    expect(runtime.debug.describe().lints.filter((lint) => lint.code === "component-never-read").map((lint) => lint.subject)).not.toContain("Debug/Tagged")
+  })
+
   it("traces system writes with before and after values, and commands with their effects", () => {
     const runtime = makeRuntime()
     const setup = Game.Schedule(Spawn, Game.Schedule.applyDeferred())
@@ -170,11 +256,12 @@ describe("Runtime debug handle", () => {
     const runtime = makeRuntime()
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
     const Failing = Game.System("Debug/Failing", {
-      queries: { moving: Moving }
+      queries: { moving: Moving },
+      commands: Game.System.commands(Game.System.spawns(Tagged))
     }, ({ queries, commands }) => {
       for (const match of queries.moving.each()) match.data.position.set({ x: 99 })
       commands.spawn(Game.Command.spawn([Tagged, {}]))
-      return Fx.fail("Nope" as const)
+      return Result.failure("Nope" as const)
     })
     const { events } = collect(runtime)
     expect(runtime.tick(Game.Schedule(Failing)).ok).toBe(false)
@@ -278,7 +365,8 @@ describe("Runtime debug handle", () => {
     runtime.tick(Game.Schedule(Spawn, Game.Schedule.applyDeferred()))
     const ReadRemoved = Game.System("Debug/ReadRemoved", { removed: { tagged: Game.System.readRemoved(Tagged) } }, () => {})
     const Untag = Game.System("Debug/Untag", {
-      queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) }
+      queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) },
+      commands: Game.System.commands(Game.System.removes(Tagged))
     }, ({ queries, commands }) => {
       for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tagged)
     })
@@ -296,13 +384,16 @@ describe("Runtime debug handle", () => {
   it("reports despawned reads dropped at capacity as missed", () => {
     const runtime = makeRuntime()
     const ReadDespawned = Game.System("Debug/ReadDespawned", { despawned: { entities: Game.System.readDespawned() } }, () => {})
-    const SpawnMany = Game.System("Debug/SpawnMany", {}, ({ commands }) => {
-      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn())
+    const SpawnMany = Game.System("Debug/SpawnMany", {
+      commands: Game.System.commands(Game.System.spawns(Tagged))
+    }, ({ commands }) => {
+      for (let index = 0; index < 40_000; index++) commands.spawn(Game.Command.spawn([Tagged, {}]))
     })
     const DespawnAll = Game.System("Debug/DespawnAll", {
-      queries: { all: Game.Query({ selection: {} }) }
+      queries: { all: Game.Query({ selection: {}, with: [Tagged] }) },
+      commands: Game.System.commands(Game.System.despawns(Tagged))
     }, ({ queries, commands }) => {
-      for (const match of queries.all.each()) commands.despawn(match.entity.id)
+      for (const match of queries.all.each()) commands.despawn(match.entity)
     })
     const read = Game.Schedule(ReadDespawned)
     runtime.tick(read)

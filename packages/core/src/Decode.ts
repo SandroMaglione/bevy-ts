@@ -188,7 +188,7 @@ export const struct = <const Fields extends Readonly<Record<string, Codec<any>>>
 /**
  * A stored entity handle for schema root `Root`, optionally with an intent
  * component. Decoding never proves the entity exists; resolve it with
- * `lookup.getHandle(...)` as usual.
+ * `queries.x.getHandle(...)` (through a declared query) as usual.
  */
 export const handle = <
   Root,

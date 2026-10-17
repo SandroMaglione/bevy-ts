@@ -1,5 +1,7 @@
+import type { Entity } from "@typeonce/ritmo"
 import type { NodeRegistry } from "@typeonce/ritmo-render"
 import type { Application, Container, Graphics } from "pixi.js"
+import type { Agent, Root } from "./schema.ts"
 
 export type GeneValue = number
 
@@ -71,7 +73,7 @@ export type BrowserHostValue = {
 }
 
 export type AgentSnapshot = {
-  handle: unknown
+  handle: Entity.Handle<typeof Root, typeof Agent>
   entityId: number
   position: { x: number; y: number }
   genes: GenesValue

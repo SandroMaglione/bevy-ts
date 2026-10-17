@@ -43,7 +43,9 @@ describe("Decode", () => {
     const made = Game.Runtime.make({ services: Game.Runtime.services(), resources: { Score: 1 } })
     if (!made.ok) throw new Error("invalid fixture")
     const runtime = made.value
-    runtime.tick(Game.Schedule(Game.System("DecodeTest/Spawn", {}, ({ commands }) => {
+    runtime.tick(Game.Schedule(Game.System("DecodeTest/Spawn", {
+      commands: Game.System.commands(Game.System.spawns(Player))
+    }, ({ commands }) => {
       commands.spawn(Game.Command.spawn([Player, {}]))
     }), Game.Schedule.applyDeferred()))
 

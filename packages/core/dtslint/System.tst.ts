@@ -72,7 +72,7 @@ describe("System", () => {
               readonly velocity: Query.ReadonlyValue<{ x: number; y: number }>
             }, {
               readonly position: Query.ReadonlyValue<Vector2.Vector2>
-            }>
+            }, unknown, typeof SafePosition | typeof Velocity>
             readonly data: QueryTypes.Cells<typeof query>
           }>>()
 
@@ -85,8 +85,10 @@ describe("System", () => {
           }))).type.toBe<Result.Result<void, Size2.Error>>()
           expect(services.logger).type.toBe<{ log: (message: string) => void }>()
           expect(events.tick.emit).type.toBe<(value: { dt: number }) => void>()
-          expect(resources.phase.setResult(Result.success("Running"))).type.toBe<Result.Result<void, unknown>>()
-          expect(resources.phase.updateResult(() => Result.success("Paused" as const))).type.toBe<Result.Result<void, unknown>>()
+          // Plain write cells take valid values only; validation belongs to constructed descriptors.
+          expect(resources.phase).type.not.toHaveProperty("setResult")
+          expect(resources.phase).type.not.toHaveProperty("updateResult")
+          expect(resources.phase).type.not.toHaveProperty("setRaw")
           expect(resources.camera.setRaw({ x: 0, y: 0 })).type.toBe<Result.Result<void, Vector2.Error>>()
           expect(resources.camera.updateRaw((camera) => ({
             x: camera.x + 1,
@@ -100,7 +102,14 @@ describe("System", () => {
         }
     )
 
-    expect(system).type.toBeAssignableTo<System.SystemDefinition<any, void, never>>()
+    expect(system).type.toBeAssignableTo<System.SystemDefinition<any, never>>()
+  })
+
+  it("carries only the failure type, not a success value", () => {
+    type Failing = System.SystemDefinition<any, "Rejected">
+    expect<System.FailureOf<Failing>>().type.toBe<System.SystemFailure<string, "Rejected">>()
+    // @ts-expect-error requires between 1 and 5 type arguments
+    type _WithSuccess = System.SystemDefinition<any, void, never, unknown, string, never>
   })
 
   it("accepts reusable plain object access fragments without a wrapper", () => {
@@ -138,7 +147,7 @@ describe("System", () => {
               readonly velocity: Query.ReadonlyValue<{ x: number; y: number }>
             }, {
               readonly position: Query.ReadonlyValue<Vector2.Vector2>
-            }>
+            }, unknown, typeof SafePosition | typeof Velocity>
             readonly data: QueryTypes.Cells<typeof query>
           }>>()
 

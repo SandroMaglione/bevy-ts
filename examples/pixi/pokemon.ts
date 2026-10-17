@@ -132,6 +132,9 @@ const setNodeTilePosition = (
 
 const INITIAL_PLAYER_POSITION = { col: 3, row: 3 } as const
 
+/** The components of the player (`makePlayerDraft`). */
+const PlayerParts = [Position, Movement, Renderable, Player] as const
+
 const makePlayerDraft = () =>
   Game.Command.spawn(
     [Position, INITIAL_PLAYER_POSITION],
@@ -148,6 +151,9 @@ const makePlayerDraft = () =>
     [Player, {}]
   )
 
+/** The components of a solid tile (`makeSolidDraft`). */
+const SolidParts = [Position, Renderable, Solid] as const
+
 const makeSolidDraft = (position: TilePosition) =>
   Game.Command.spawn(
     [Position, position],
@@ -159,7 +165,9 @@ const makeSolidDraft = (position: TilePosition) =>
 
 const SetupSystem = Game.System(
   "Pokemon/Setup",
-  {},
+  {
+    commands: Game.System.commands(Game.System.spawns(...PlayerParts, ...SolidParts))
+  },
   ({ commands }) =>
     {
       commands.spawn(makePlayerDraft())

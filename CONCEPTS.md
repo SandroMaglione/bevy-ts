@@ -53,13 +53,17 @@ const Move = Game.System("Concepts/Move", {
 ## 4. Structural changes are commands
 
 ```ts
-const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
+const Spawn = Game.System("Concepts/Spawn", {
+  commands: Game.System.commands(Game.System.spawns(Health, Position))
+}, ({ commands }) => {
   const enemy = commands.spawn(Game.Command.spawn([Health, 3], [Position, { x: 10, y: 0 }]))
   commands.spawn(Game.Command.relate(Game.Command.spawn([Health, 1]), ChildOf, enemy))
 })
 ```
 
-- `commands` covers spawn, insert, remove, despawn, relate, and scope-based cleanup (`spawnIn` / `despawnScope`).
+- A system has `commands` only when its spec declares them, and only for what it names: `spawns(...)` (every component of the draft), `inserts(...)`, `removes(...)`, `despawns(...)`, `despawnsScope(scope)`, and `relates(...)`. Without the declaration, `commands` is a type naming the fix.
+- `despawn` takes `match.entity` from a query that proves one of the `despawns` components, never a raw id. With only an id, resolve it first: `const enemy = queries.enemies.get(id); if (enemy.ok) commands.despawn(enemy.value.entity)`.
+- `Game.Command.extend(draft, ...entries)` adds entries to a draft before it is spawned; `commands.insert` changes an entity that already exists.
 - Commands are applied only when a schedule reaches `applyDeferred()`. `commands.spawn` returns the entity id immediately.
 - `Game.Command.spawn(...)` returns a draft, or a `Result` of one if any entry can fail validation (for example `Game.Command.entryRaw(Position, raw)`).
 
@@ -68,12 +72,13 @@ const Spawn = Game.System("Concepts/Spawn", {}, ({ commands }) => {
 ```ts
 const Target = Descriptor.Component<{ readonly enemy: Entity.Handle<typeof Root, typeof Health> }>()("Concepts/Target")
 // ...
-const enemy = lookup.getHandle(data.target.get().enemy, HealthQuery)
+// `enemies` is a query the system declares: queries: { enemies: HealthQuery }
+const enemy = queries.enemies.getHandle(data.target.get().enemy)
 if (enemy.ok) { /* the entity still exists and has Health */ }
 ```
 
 - A handle is safe to store in components, resources and events, but it doesn't prove the entity is still alive.
-- `lookup.getHandle` returns a `Result`.
+- `queries.x.getHandle` returns a `Result`. Every read and write goes through a query the system declares (`get`, `getHandle`, `children`, `descendants` are on the query handle); `lookup` only returns ids along relations.
 - A handle with an intent (`Health` here) can only be resolved through a query that proves that component.
 - Entity ids and handles are branded numbers. Use them directly as `Map` or `Set` keys. `Decode.handle` validates positive integer handles, and snapshots write numbers.
 
@@ -134,12 +139,12 @@ without changing it or parsing a debug dump.
 
 ```ts
 if (total > 100) {
-  return Fx.fail("ImpossibleDamage" as const)
+  return Result.failure("ImpossibleDamage" as const)
 }
 resources.score.update((score) => score + total)
 ```
 
-- A system that can't fail returns nothing. A system that returns `Fx.fail(...)` has its ECS writes rolled back and its commands dropped.
+- A system that can't fail returns nothing. A system that returns `Result.failure(error)` has its ECS writes rolled back and its commands and events dropped. There is no effect type: a system returns nothing or a `Result`.
 - `runtime.tick(...)` returns `Result<void, SystemFailure<"Concepts/ApplyHits", "ImpossibleDamage">>`, a union built from every system in the schedule.
 - Thrown exceptions are treated as bugs: the system's writes are rolled back and the exception is rethrown.
 
@@ -193,20 +198,20 @@ the next one. Caches must validate all inputs against the current world. Timers,
 RNG state, and progress that changes gameplay belong in resources. GPU objects,
 listeners, and other values needing cleanup belong in host-managed services.
 
-Per-entity modes (an enemy's attack phase, a door's open/closed) are components, not machines. `Descriptor.State` makes one from a closed set of states and an optional graph of allowed moves:
+A state each entity has on its own (an enemy's attack windup, a door's open/closed) is an entity state, a component, not a machine. Use `Game.StateMachine` for one game-wide mode (menu, playing, paused); use `Descriptor.EntityState` for per-entity states. It is built from a closed set of states and an optional graph of allowed moves:
 
 ```ts
-const Phase = Descriptor.State("Phase", ["ready", "windup", "active"] as const, {
+const Attack = Descriptor.EntityState("Attack", ["ready", "windup", "active"] as const, {
   transitions: { ready: ["windup"], windup: ["active", "ready"], active: ["ready"] }
 })
-Game.Command.spawn([Phase, "ready"])
-// write slot `phase`:
-const moved = data.phase.transition("windup", "active") // "ready" -> "active" does not compile
-if (!moved.ok) moved.error.actual // some earlier write already changed the phase
+Game.Command.spawn([Attack, "ready"])
+// write slot `attack`:
+const moved = data.attack.transition("windup", "active") // "ready" -> "active" does not compile
+if (!moved.ok) moved.error.actual // some earlier write already changed the state
 ```
 
 - It is an ordinary component: queried, change-detected, rolled back, and validated on restore (unknown states are rejected).
-- `transition(from, to)` writes immediately, and only while the state is still `from`. Otherwise it returns `StateMismatch` and writes nothing. The graph lists every state (`[]` for one with no way out), and it is checked at compile time only. `set` still writes any state.
+- `transition(from, to)` writes immediately, and only while the state is still `from`. Otherwise it returns `EntityStateMismatch` and writes nothing. The graph lists every state (`[]` for one with no way out), and it is checked at compile time only. `set` still writes any state.
 - There are no per-state schedules or filters. Branch on `get()` in the system that owns the component, and emit an event on a transition that other systems react to.
 
 ## 10. Schedules make every boundary visible
@@ -218,6 +223,8 @@ const update = Game.Schedule(Move, Attack, ApplyHits, Game.Schedule.applyStateTr
 - Steps run in the order written. Nested schedules are flattened in place.
 - Only markers apply queued work: `applyDeferred` (commands) and `applyStateTransitions` (commands, then machine transitions). Reads (change detection, events, relation failures) are per system and need no marker.
 - Nothing is flushed when a schedule ends.
+- `Game.System.thisTick(Game.System.readEvent(Damage))` (or `readResource`) declares that a read needs this tick's data: every system writing it must run earlier in the same `runtime.tick(...)` call. The library never reorders; `tick` rejects at compile time a writer after the reader ("ApplyDamage needs Damage from this tick, but its writer UpdateFrostFields runs after it: move ...") and a call whose order is not statically known. A read with no writer in the call compiles (`event-never-written` reports data nobody writes). `tryTick` checks the same at runtime; the `this-tick-order` lint reports it for named schedules. Plugin systems with erased specs (render sync, input capture) are not counted as writers.
+- `Game.System.thisTick(Query)` declares that a query needs this tick's command changes. Its writers are systems whose declared commands can change what it matches (`spawns` covering every component it requires, or `inserts` / `removes` of a component it names); each must run earlier with an `applyDeferred()` before the reader ("AimAtNewest needs this tick's commands for queries.enemies, but SpawnWave queues them with no applyDeferred() in between"). `despawns` never count: a despawned entity stays visible until the next `applyDeferred()`. A transition bundle counts at its `applyStateTransitions(...)` step, as if every schedule in it runs.
 
 ## 11. The runtime is driven by your host
 
@@ -234,7 +241,7 @@ runtime.inspect(SomeInspector)       // read-only projection for UI, tests, debu
 runtime.restore(JSON.parse(JSON.stringify(runtime.snapshot())))
 ```
 
-- Ticking a schedule whose systems need a resource, service or machine the runtime wasn't given is a compile error. `tryTick` is the checked-at-runtime path for schedules whose types were lost.
+- Ticking a schedule whose systems need a resource, service or machine the runtime wasn't given is a compile error. `tryTick` is the checked-at-runtime path for tools (devtools sessions) that hold schedules whose types were erased; games use `tick`.
 - Resources with constructed descriptors take raw input, and `make` then returns a `Result`.
 - Snapshots are plain data. `restore` validates untrusted input and leaves the world unchanged on failure.
 - `snapshot` and `restore` only compile when every component and resource is transient or constructed with a validator that accepts untrusted input (`result(raw: unknown)`, or a `decode` such as `Vector2.decode`), so nothing unvalidated can load. Stored handles are validated with `Decode.handle(Root, Intent)`.
