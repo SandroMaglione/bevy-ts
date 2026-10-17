@@ -100,6 +100,10 @@ export const system = (input: Debug.SystemDescription): string => {
       query.without.length > 0 ? `without ${query.without.join(", ")}` : undefined,
       query.added.length > 0 ? `added ${query.added.join(", ")}` : undefined,
       query.changed.length > 0 ? `changed ${query.changed.join(", ")}` : undefined,
+      ...query.anyOf.map((members) => `any of (${[
+        ...members.added.map((name) => `added ${name}`),
+        ...members.changed.map((name) => `changed ${name}`)
+      ].join(", ")})`),
       query.relations.length > 0 ? query.relations.join(", ") : undefined
     ].filter((part) => part !== undefined)
     lines.push(`  query ${query.slot}: ${parts.join("; ")}`)

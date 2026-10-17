@@ -72,6 +72,9 @@ export const transitionScheduleName = (schedule: TransitionSchedule): string => 
 const names = <A>(record: Record<string, A>, name: (value: A) => string): Array<string> =>
   Object.values(record).map(name)
 
+const lifecycleNames = (filters: ReadonlyArray<Query.Filter<any>>, kind: "added" | "changed"): Array<string> =>
+  filters.flatMap((filter) => filter.kind === kind ? [filter.descriptor.name] : [])
+
 const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDescription => {
   const reads: Array<string> = []
   const writes: Array<string> = []
@@ -102,8 +105,11 @@ const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDe
     optional,
     with: query.with.map((descriptor) => descriptor.name),
     without: query.without.map((descriptor) => descriptor.name),
-    added: query.filters.filter((filter) => filter.kind === "added").map((filter) => filter.descriptor.name),
-    changed: query.filters.filter((filter) => filter.kind === "changed").map((filter) => filter.descriptor.name),
+    added: lifecycleNames(query.filters, "added"),
+    changed: lifecycleNames(query.filters, "changed"),
+    anyOf: query.filters.flatMap((filter) => filter.kind === "anyOf"
+      ? [{ added: lifecycleNames(filter.filters, "added"), changed: lifecycleNames(filter.filters, "changed") }]
+      : []),
     relations: [
       ...relations,
       ...relationNames(query.withRelations, "with"),

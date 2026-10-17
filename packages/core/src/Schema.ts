@@ -524,6 +524,13 @@ export namespace Schema {
       optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
       added: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.AddedFilter<D>
       changed: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ChangedFilter<D>
+      anyOf: <
+        const Filters extends readonly [
+          QueryModule.LifecycleFilter<ComponentDescriptor<S>>,
+          QueryModule.LifecycleFilter<ComponentDescriptor<S>>,
+          ...ReadonlyArray<QueryModule.LifecycleFilter<ComponentDescriptor<S>>>
+        ]
+      >(...filters: Filters) => QueryModule.AnyOfFilter<Filters[number]["descriptor"]>
       readRelation: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.RelationReadAccess<R, S, Root>
       optionalRelation: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.OptionalRelationReadAccess<R, S, Root>
       readRelated: <R extends RelationDescriptor<S>>(descriptor: R) => Relation.RelatedReadAccess<R, S, Root>

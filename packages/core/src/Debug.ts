@@ -155,6 +155,8 @@ export interface QueryDescription {
   readonly without: ReadonlyArray<string>
   readonly added: ReadonlyArray<string>
   readonly changed: ReadonlyArray<string>
+  /** One entry per `anyOf` filter: the components of its `added` and `changed` members. */
+  readonly anyOf: ReadonlyArray<{ readonly added: ReadonlyArray<string>; readonly changed: ReadonlyArray<string> }>
   /** Relation filters and reads, for example `with ChildOf` or `read Children`. */
   readonly relations: ReadonlyArray<string>
 }
