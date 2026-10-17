@@ -42,20 +42,29 @@ operations. Do not run the external steps as part of merging the preparation PR.
    npm maintainer session with permission in `@typeonce`. New package names need
    their own configuration; npm trust currently requires the package to exist.
    Use clean `main` at the reviewed version commit, run `pnpm install --frozen-lockfile`,
-   `pnpm run check`, and `pnpm pack:check`, then `npm login` and:
+   `pnpm run check`, and `pnpm pack:check`, then `npm login`. Pack each package
+   with pnpm and publish its archive directly with npm. For example, for the core
+   package at version 0.6.0:
 
    ```sh
-   NPM_CONFIG_PROVENANCE=false pnpm release
+   mkdir -p /tmp/ritmo-bootstrap
+   pnpm build
+   pnpm --dir packages/core pack --pack-destination /tmp/ritmo-bootstrap
+   npm publish /tmp/ritmo-bootstrap/typeonce-ritmo-0.6.0.tgz --access public --provenance=false --ignore-scripts
    ```
 
-   This one local invocation disables provenance because it cannot attest a
-   GitHub Actions build. It does not change the committed provenance setting.
-   The command builds and publishes with Changesets, which applies publish
-   configuration and resolves workspace dependency ranges. Inspect the six
-   registry versions and dependency ranges, retain the matching local release
-   tags, and push only those reviewed tags. Do not create placeholder packages.
-   If publication partially succeeds, inspect npm and rerun the same reviewed
-   release; published versions cannot be overwritten.
+   Use the actual reviewed version in the archive filename. Repeat in dependency
+   order for `packages/math`, `packages/browser`, `packages/render`,
+   `packages/pixi`, and `packages/devtools`, using each archive's matching name.
+   Packing with pnpm applies the compiled exports and resolves workspace ranges.
+   The explicit npm CLI flag disables provenance for this local bootstrap only;
+   keep `publishConfig.provenance: true` committed for CI. The environment variable
+   does not override that manifest setting, and pnpm 10.17.1 does not forward
+   `--provenance=false` to its npm subprocess.
+   Verify all six registry versions, dependency ranges, and clean installs before
+   creating and pushing package release tags at the reviewed commit. Do not create
+   placeholder packages. If publication partially succeeds, inspect npm and
+   publish only the missing archives; published versions cannot be overwritten.
 5. Configure a trusted publisher for every `@typeonce/ritmo*` package on npm:
 
    | Field | Value |
