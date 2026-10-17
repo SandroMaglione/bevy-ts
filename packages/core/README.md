@@ -26,4 +26,4 @@ Related packages, released together with the same version:
 - [`@typeonce/ritmo-pixi`](https://www.npmjs.com/package/@typeonce/ritmo-pixi): Pixi container adapter for the render-node registry
 - [`@typeonce/ritmo-devtools`](https://www.npmjs.com/package/@typeonce/ritmo-devtools): headless debug sessions and trace reports
 
-Source: https://github.com/SandroMaglione/ritmo
+Source: https://github.com/typeonce-dev/ritmo

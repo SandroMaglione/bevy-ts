@@ -37,4 +37,4 @@ For Pixi, [`@typeonce/ritmo-pixi`](https://www.npmjs.com/package/@typeonce/ritmo
 
 Released together with [`@typeonce/ritmo`](https://www.npmjs.com/package/@typeonce/ritmo), always with the same version.
 
-Source: https://github.com/SandroMaglione/ritmo
+Source: https://github.com/typeonce-dev/ritmo

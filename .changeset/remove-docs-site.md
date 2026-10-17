@@ -8,5 +8,6 @@
 ---
 
 Retire the generated documentation site and point package homepages, source links,
-and issue links to the Ritmo repository. Keep source JSDoc and repository guides,
-including the Pixi walkthrough in its example README.
+and issue links to the Ritmo repository in the Typeonce GitHub organization.
+Keep source JSDoc and repository guides, including the Pixi walkthrough in its
+example README.

@@ -21,4 +21,4 @@ pnpm add @typeonce/ritmo-math @typeonce/ritmo
 
 Released together with [`@typeonce/ritmo`](https://www.npmjs.com/package/@typeonce/ritmo), always with the same version.
 
-Source: https://github.com/SandroMaglione/ritmo
+Source: https://github.com/typeonce-dev/ritmo

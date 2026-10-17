@@ -6,13 +6,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SandroMaglione/ritmo.git",
+    "url": "git+https://github.com/typeonce-dev/ritmo.git",
     "directory": "packages/devtools"
   },
   "bugs": {
-    "url": "https://github.com/SandroMaglione/ritmo/issues"
+    "url": "https://github.com/typeonce-dev/ritmo/issues"
   },
-  "homepage": "https://github.com/SandroMaglione/ritmo#readme",
+  "homepage": "https://github.com/typeonce-dev/ritmo#readme",
   "keywords": [
     "ecs",
     "gamedev",
