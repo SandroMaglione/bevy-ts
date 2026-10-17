@@ -8,7 +8,8 @@
  *   at the first system failure, thrown defect, or violated invariant.
  * - `journal(filter)` lists what happened, one fact per line, filtered by
  *   frames, entity, component, resource, event, machine, system, or kind.
- * - `why(entity, component)` lists the latest changes to one component.
+ * - `why(entity, component)` lists the latest changes to one component, and
+ *   the systems whose declared `spawns` could have spawned the entity.
  * - `system(name)` shows one system's declared access and recent activity.
  * - `describe()`, `dump(filter)`, `streams()` render the core debug handle.
  * - `report()` summarizes per-system timing and warnings accumulated while
@@ -616,10 +617,28 @@ export const make = <
       : component.name in currentValue.components
         ? `e${entity} ${component.name} is now ${Format.value(currentValue.components[component.name], format)}`
         : `e${entity} has no ${component.name} now`
-    const header = lines.length === 0
+    const changes = lines.length === 0
       ? `${now}; no change to it in ${rangeText()}`
       : `${now}; last ${lines.length} changes (oldest first):`
+    const spawners = spawnersOf(currentValue === undefined ? [component.name] : Object.keys(currentValue.components), component.name)
+    const header = `${changes}\n${spawners.length === 0
+      ? `no described system declares spawns of ${component.name}`
+      : `could have spawned it: ${spawners.join(", ")}`}`
     return Rendered.make(lines, renderLines(header, lines))
+  }
+
+  /**
+   * The described systems whose declared `spawns` include `component` and
+   * cover every component the entity has that no described system may
+   * insert (so it can only have come from the spawn).
+   */
+  const spawnersOf = (has: ReadonlyArray<string>, component: string): Array<string> => {
+    const systems = debug.describe().systems
+    const insertable = new Set(systems.flatMap((system) => system.commands.inserts))
+    const fromSpawn = has.filter((name) => !insertable.has(name))
+    return systems
+      .filter((system) => system.commands.spawns.includes(component) && fromSpawn.every((name) => system.commands.spawns.includes(name)))
+      .map((system) => system.name)
   }
 
   const whyResource = (resource: Schema.ResourceDescriptor<S>, whyOptions: { readonly limit?: number } = {}) => {

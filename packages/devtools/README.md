@@ -34,7 +34,8 @@ with `debug: true`. Production runtimes carry no handle and pay nothing.
    first frame the invariant fails, a system fails, or a system throws.
 4. **Explain.** `session.why(entity, Component)` and
    `session.whyResource(Resource)` show the latest changes and which system
-   made them. `session.journal({ frames: [from, to], entity })`
+   made them; `why` also names the systems whose declared `spawns` could
+   have spawned the entity. `session.journal({ frames: [from, to], entity })`
    shows everything that touched an entity around the failure.
    `session.report()` lists warnings the trace collected and the current
    entity counts per component. `run()` prints the warnings it raised.

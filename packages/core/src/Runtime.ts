@@ -829,6 +829,22 @@ const makeValidatedRuntime = <
    */
   const relationMutations = new Map<string, Set<string>>()
   let commandOrigin = "(unknown)"
+  /**
+   * With `debug: true`, what each system's applied commands did, as
+   * `kind:name` (`spawns:Enemy`, `despawns:Enemy` for every component the
+   * despawned entity had), and the systems that ran: for the
+   * `command-permission-unused` lint.
+   */
+  const commandUses = new Map<string, Set<string>>()
+  const ranSystems = new Set<string>()
+  const noteCommand = (kind: string, name: string): void => {
+    let uses = commandUses.get(commandOrigin)
+    if (uses === undefined) {
+      uses = new Set()
+      commandUses.set(commandOrigin, uses)
+    }
+    uses.add(`${kind}:${name}`)
+  }
   const noteRelationMutation = (relation: Relation.Relation.Any): void => {
     let systems = relationMutations.get(relation.name)
     if (systems === undefined) {
@@ -843,25 +859,38 @@ const makeValidatedRuntime = <
    */
   const commandWorld: Command.InternalWorld<S> = {
     spawnEntity(id, components) {
+      if (debugEnabled) for (const [descriptor] of components) noteCommand("spawns", descriptor.name)
       world.spawnEntity(id, components)
     },
     destroyEntity(id) {
+      if (debugEnabled) {
+        const record = world.records.get(id)
+        record?.values.forEach((value, ordinal) => {
+          if (value !== ABSENT) noteCommand("despawns", world.descriptorAt(ordinal).name)
+        })
+      }
       world.destroyEntity(id)
     },
     assignEntityScope(id, scope) {
       world.assignEntityScope(id, scope.key)
     },
     destroyEntityScope(scope) {
+      if (debugEnabled) noteCommand("despawnsScope", scope.name)
       world.destroyEntityScope(scope.key)
     },
     removeComponent(id, descriptor) {
+      if (debugEnabled) noteCommand("removes", descriptor.name)
       world.removeComponent(id, descriptor)
     },
     writeComponent(id, descriptor, value) {
+      if (debugEnabled) noteCommand("inserts", descriptor.name)
       world.writeComponent(id, descriptor, value)
     },
     tryRelate(id, relation, target) {
-      if (debugEnabled) noteRelationMutation(relation)
+      if (debugEnabled) {
+        noteRelationMutation(relation)
+        noteCommand("relates", relation.name)
+      }
       const result = world.tryRelate(id, relation, target)
       if (!result.ok) {
         appendRelationFailure(relation, "relate", id, target, result.error)
@@ -869,10 +898,14 @@ const makeValidatedRuntime = <
       return result
     },
     unrelate(id, relation) {
+      if (debugEnabled) noteCommand("relates", relation.name)
       world.unrelate(id, relation)
     },
     reorderChildren(id, relation, children) {
-      if (debugEnabled) noteRelationMutation(relation)
+      if (debugEnabled) {
+        noteRelationMutation(relation)
+        noteCommand("relates", relation.name)
+      }
       const result = world.reorderChildren(id, relation, children.map((child) => child))
       if (!result.ok) {
         const targetId = result.error._tag === "MissingChildEntity"
@@ -1463,6 +1496,7 @@ const makeValidatedRuntime = <
       }
     }
     const { context, commands, reader } = slotOf(system, true)
+    if (debugEnabled) ranSystems.add(system.name)
     // Changes stamped after the previous completed run are visible to this run.
     reader.since = reader.lastRun
     reader.streamSince = reader.streamLastRun
@@ -2115,6 +2149,8 @@ const makeValidatedRuntime = <
       providedServices: Object.keys(providedServices),
       externallyWrittenEvents: new Set([...externallyWrittenEvents, ...hostEvents]),
       relationMutations,
+      commandUses,
+      ranSystems,
       hasResource: (descriptor) => resources.has(descriptor.key),
       schedules: [...scheduleNames].map(([schedule, name]) => [name, schedule as ExecutableScheduleDefinition<S>] as const)
     }),

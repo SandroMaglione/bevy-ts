@@ -170,12 +170,28 @@ export interface SystemDescription {
   /** Events and resources read with `Game.System.thisTick`, and query slots as `queries.<slot>`. */
   readonly thisTick: ReadonlyArray<string>
   readonly services: ReadonlyArray<string>
+  /**
+   * The declared command permissions (`Game.System.commands(...)`), by
+   * kind: component names for spawns, inserts, removes and despawns, scope
+   * names for despawnsScope, relation names for relates.
+   */
+  readonly commands: CommandPermissions
   /** Run conditions, rendered, for example `stateChanged(Game/Flow)`. */
   readonly when: ReadonlyArray<string>
   /** Pause conditions, rendered: while one fails the system waits and holds its stream entries. */
   readonly pauseWhen: ReadonlyArray<string>
   /** Whether the system declares `local` scratch state. */
   readonly local: boolean
+}
+
+/** Declared command permissions of one system, by kind. Empty lists when it declares none. */
+export interface CommandPermissions {
+  readonly spawns: ReadonlyArray<string>
+  readonly inserts: ReadonlyArray<string>
+  readonly removes: ReadonlyArray<string>
+  readonly despawns: ReadonlyArray<string>
+  readonly despawnsScope: ReadonlyArray<string>
+  readonly relates: ReadonlyArray<string>
 }
 
 export type StepDescription =
@@ -208,6 +224,7 @@ export interface Lint {
     | "component-never-read"
     | "read-before-write"
     | "this-tick-order"
+    | "command-permission-unused"
   readonly message: string
   readonly subject: string
   /** What to change to resolve it (or, for `info`, when it is fine as it is). */
@@ -233,7 +250,8 @@ export interface Description {
   readonly systems: ReadonlyArray<SystemDescription>
   /**
    * Readers and writers across the named schedules. Component writers are
-   * systems with a write query slot; command inserts are not static.
+   * systems with a write query slot or a declared `spawns`, `inserts`, or
+   * `removes` permission for it.
    */
   readonly access: {
     readonly components: ReadonlyArray<AccessIndexEntry>

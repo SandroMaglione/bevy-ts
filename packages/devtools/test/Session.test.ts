@@ -161,6 +161,7 @@ describe("Session", () => {
     const why = session.why(1, Position, { limit: 3 })
     expect(why.text).toBe([
       "e1 Dev/Position is now {x:2}; last 3 changes (oldest first):",
+      "could have spawned it: Dev/Spawn",
       "f1 setup  Dev/Spawn  applyStateTransitions: spawn e1 Dev/Position={x:0} Dev/Health=3",
       "f2 update  Dev/Move  write e1 Dev/Position {x:0} -> {x:1}",
       "f3 update  Dev/Move  write e1 Dev/Position {x:1} -> {x:2}"

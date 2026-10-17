@@ -115,6 +115,29 @@ const describeQuery = (slot: string, query: Query.Query.Any<any>): Debug.QueryDe
 }
 
 type Mode = { readonly mode: "read" | "write"; readonly descriptor: Descriptor.Any }
+type CommandAccess = { readonly permissions: ReadonlyArray<{ readonly permission: keyof Debug.CommandPermissions; readonly values: ReadonlyArray<{ readonly name: string }> }> }
+
+const permissionsOf = (access: CommandAccess | undefined): Debug.CommandPermissions => {
+  const of = (kind: keyof Debug.CommandPermissions) =>
+    [...new Set((access?.permissions ?? []).filter((p) => p.permission === kind).flatMap((p) => p.values.map((value) => value.name)))]
+  return {
+    spawns: of("spawns"),
+    inserts: of("inserts"),
+    removes: of("removes"),
+    despawns: of("despawns"),
+    despawnsScope: of("despawnsScope"),
+    relates: of("relates")
+  }
+}
+
+const permissionVerb: Record<keyof Debug.CommandPermissions, string> = {
+  spawns: "spawn",
+  inserts: "insert",
+  removes: "remove",
+  despawns: "despawn",
+  despawnsScope: "despawn the scope",
+  relates: "relate"
+}
 type ThisTickAccess = Mode & { readonly thisTick?: true }
 
 export const describeSystem = (system: AnySystem, placements: ReadonlyArray<string>): Debug.SystemDescription => {
@@ -159,6 +182,7 @@ export const describeSystem = (system: AnySystem, placements: ReadonlyArray<stri
         .map(([slot]) => `queries.${slot}`)
     ],
     services: names(spec.services as Record<string, { readonly descriptor: Descriptor.Any }>, (access) => access.descriptor.name),
+    commands: permissionsOf(spec.commands as CommandAccess | undefined),
     when: (spec.when as ReadonlyArray<Machine.Condition>).map(renderCondition),
     pauseWhen: (spec.pauseWhen as ReadonlyArray<Machine.Condition>).map(renderCondition),
     local: spec.local !== undefined
@@ -240,6 +264,10 @@ export interface DescribeInput {
   readonly externallyWrittenEvents: ReadonlySet<string>
   /** Relations commands have tried to relate or reorder, by the queuing systems. */
   readonly relationMutations: ReadonlyMap<string, ReadonlySet<string>>
+  /** What each system's applied commands did, as `kind:name`; see `Runtime`. */
+  readonly commandUses: ReadonlyMap<string, ReadonlySet<string>>
+  /** Systems that ran in this session. */
+  readonly ranSystems: ReadonlySet<string>
   readonly hasResource: (descriptor: Descriptor.Any) => boolean
   readonly schedules: ReadonlyArray<readonly [string, AnySchedule]>
 }
@@ -281,6 +309,7 @@ export const describe = (input: DescribeInput): Debug.Description => {
       }
     }
     for (const name of system.removed) components.read(name, system.name)
+    for (const name of [...system.commands.spawns, ...system.commands.inserts, ...system.commands.removes]) components.write(name, system.name)
     for (const name of system.resources.reads) resources.read(name, system.name)
     for (const name of system.resources.writes) resources.write(name, system.name)
     for (const name of system.events.reads) events.read(name, system.name)
@@ -326,7 +355,13 @@ export const describe = (input: DescribeInput): Debug.Description => {
       }
     }
     const failureReaders = new Set(systems.flatMap((system) => system.relationFailures))
-    for (const [name, queuers] of input.relationMutations) {
+    // Declared `relates` permissions, and relations that commands were seen to relate (drafts relate without one).
+    const relaters = new Map<string, Set<string>>()
+    for (const system of systems) {
+      for (const name of system.commands.relates) relaters.set(name, new Set([...(relaters.get(name) ?? []), system.name]))
+    }
+    for (const [name, queuers] of input.relationMutations) relaters.set(name, new Set([...(relaters.get(name) ?? []), ...queuers]))
+    for (const [name, queuers] of relaters) {
       if (failureReaders.has(name)) continue
       lints.push({
         severity: "warning",
@@ -340,6 +375,21 @@ export const describe = (input: DescribeInput): Debug.Description => {
     for (const [name, schedule] of input.schedules) {
       for (const issue of OrderInternal.tickOrderIssues(schedule.steps)) {
         lints.push({ severity: "warning", code: "this-tick-order", subject: issue.data, message: `in ${name}, ${issue.message}` })
+      }
+    }
+    // Observed with debug: only systems that ran, so an unplayed session reports nothing.
+    for (const system of systems) {
+      if (!input.ranSystems.has(system.name)) continue
+      const uses = input.commandUses.get(system.name) ?? new Set<string>()
+      for (const kind of Object.keys(permissionVerb) as Array<keyof Debug.CommandPermissions>) {
+        const unused = system.commands[kind].filter((name) => !uses.has(`${kind}:${name}`))
+        if (unused.length === 0) continue
+        lints.push({
+          severity: "info",
+          code: "command-permission-unused",
+          subject: system.name,
+          message: `${system.name} may ${permissionVerb[kind]} ${unused.join(", ")} but never did in this session`
+        })
       }
     }
     for (const entry of components.list()) {
@@ -402,6 +452,8 @@ const fixFor = (code: Debug.Lint["code"], subject: string): string => {
       return "move the writer before the reader in the schedule (the message names both), or read without Game.System.thisTick"
     case "component-never-read":
       return `fine if ${subject} is read outside the described schedules (rendering, inspectors); otherwise stop writing it`
+    case "command-permission-unused":
+      return `fine if the session did not reach the case where ${subject} uses it; otherwise drop the permission from its Game.System.commands(...)`
     case "read-before-write":
       return "fine when a one-run lag is intended (input before movement); otherwise move the reader after the writer, or read with Game.System.thisTick to make it an error"
   }

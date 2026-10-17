@@ -51,3 +51,11 @@ describe("Runtime debug option", () => {
     expect(runtime.debug.nameSchedules).type.not.toBeCallableWith({ foreign })
   })
 })
+
+describe("Debug descriptions", () => {
+  it("describe each system's declared command permissions by kind", () => {
+    expect<Debug.SystemDescription["commands"]>().type.toBe<Debug.CommandPermissions>()
+    expect<Debug.CommandPermissions["spawns"]>().type.toBe<ReadonlyArray<string>>()
+    expect<Extract<Debug.Lint["code"], "command-permission-unused">>().type.toBe<"command-permission-unused">()
+  })
+})
