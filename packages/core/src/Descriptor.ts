@@ -167,6 +167,44 @@ export interface TransientDescriptor<
 }
 
 /**
+ * Marks a component that is never edited in place: `Game.Query.write(...)`
+ * rejects it, and the only way to change its value is to replace it with
+ * `commands.insert(...)` (applied at `applyDeferred()`, seen by
+ * `Game.Query.changed(...)`).
+ */
+export interface Immutable {
+  readonly immutable: true
+}
+
+/**
+ * Options of the component descriptor constructors (`Component`,
+ * `ConstructedComponent`, `TransientComponent`).
+ */
+export interface ComponentOptions {
+  /**
+   * `true` for data that says what an entity is (a kind, a team, a tile) and
+   * is replaced, never edited: queries can only read it, and
+   * `commands.insert(...)` replaces it. Leave it out for state that systems
+   * update every frame.
+   */
+  readonly immutable?: true
+}
+
+/** The descriptor a component constructor returns for `Options`: `D`, plus `Immutable` when `immutable: true`. */
+export type WithComponentOptions<D, Options extends ComponentOptions> =
+  Options extends { readonly immutable: true } ? D & Immutable : D
+
+const applyComponentOptions = <D extends object>(descriptor: D, options: ComponentOptions | undefined): D =>
+  options?.immutable === true ? { ...descriptor, immutable: true } : descriptor
+
+/**
+ * Whether a component descriptor was declared `immutable: true` (readable by
+ * queries, replaced only with `commands.insert(...)`).
+ */
+export const isImmutable = (descriptor: Descriptor.Any): descriptor is Descriptor.Any & Immutable =>
+  "immutable" in descriptor && descriptor.immutable === true
+
+/**
  * Type-level helpers for working with descriptors.
  */
 export namespace Descriptor {
@@ -254,11 +292,15 @@ const makeConstructedDescriptor = <
  * @example
  * ```ts
  * const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
+ * // What an entity is, replaced with commands.insert and never written by a query:
+ * const EnemyKind = Descriptor.Component<"grunt" | "boss">()("EnemyKind", { immutable: true })
  * ```
  */
-export const Component = <Value>() => <const Name extends string>(
-  name: Name
-): Descriptor<"component", Name, Value> => makeDescriptor("component", name)
+export const Component = <Value>() => <const Name extends string, const Options extends ComponentOptions = {}>(
+  name: Name,
+  options?: Options
+): WithComponentOptions<Descriptor<"component", Name, Value>, Options> =>
+  applyComponentOptions(makeDescriptor("component", name), options) as WithComponentOptions<Descriptor<"component", Name, Value>, Options>
 
 /**
  * Defines a component descriptor that also knows how to validate raw values.
@@ -275,10 +317,11 @@ export const Component = <Value>() => <const Name extends string>(
  */
 export const ConstructedComponent = <Value, Raw, Error, Constructor extends {} = {}>(
   constructor: ResultConstructor<Value, Raw, Error> & Constructor
-) => <const Name extends string>(
-  name: Name
-): ConstructedFor<"component", Name, Value, Raw, Error, Constructor> =>
-  makeConstructedDescriptor("component", name, constructor) as ConstructedFor<"component", Name, Value, Raw, Error, Constructor>
+) => <const Name extends string, const Options extends ComponentOptions = {}>(
+  name: Name,
+  options?: Options
+): WithComponentOptions<ConstructedFor<"component", Name, Value, Raw, Error, Constructor>, Options> =>
+  applyComponentOptions(makeConstructedDescriptor("component", name, constructor), options) as WithComponentOptions<ConstructedFor<"component", Name, Value, Raw, Error, Constructor>, Options>
 
 /**
  * Defines a component descriptor that snapshots skip.
@@ -291,9 +334,11 @@ export const ConstructedComponent = <Value, Raw, Error, Constructor extends {} =
  * const SpriteRef = Descriptor.TransientComponent<{ frame: number }>()("SpriteRef")
  * ```
  */
-export const TransientComponent = <Value>() => <const Name extends string>(
-  name: Name
-): TransientDescriptor<"component", Name, Value> => makeTransientDescriptor("component", name)
+export const TransientComponent = <Value>() => <const Name extends string, const Options extends ComponentOptions = {}>(
+  name: Name,
+  options?: Options
+): WithComponentOptions<TransientDescriptor<"component", Name, Value>, Options> =>
+  applyComponentOptions(makeTransientDescriptor("component", name), options) as WithComponentOptions<TransientDescriptor<"component", Name, Value>, Options>
 
 /**
  * Defines a marker component: no data, only presence (`[Player, {}]`).

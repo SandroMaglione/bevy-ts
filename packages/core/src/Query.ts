@@ -69,6 +69,7 @@
  * Query authoring helpers for selecting components and declaring explicit filters.
  */
 import type { DecodeError } from "./Decode.ts"
+import * as DescriptorModule from "./Descriptor.ts"
 import type { Descriptor, EntityStateValue } from "./Descriptor.ts"
 import type { EntityId, EntityMut, EntityRef } from "./Entity.ts"
 import type * as Result from "./Result.ts"
@@ -217,11 +218,29 @@ export const read = <D extends ComponentDescriptor>(descriptor: D): ReadAccess<D
  * place. A write slot both requires component presence and exposes the slot as
  * a `WriteCell`, so mutation capability stays visible in the query spec rather
  * than appearing ad hoc in the loop body.
+ *
+ * Components declared `immutable: true` cannot be written: replace them with
+ * `commands.insert(...)` instead.
  */
-export const write = <D extends ComponentDescriptor>(descriptor: D): WriteAccess<D> => ({
-  mode: "write",
-  descriptor
-})
+export const write = <D extends ComponentDescriptor>(descriptor: D & Writable<D>): WriteAccess<D> => {
+  if (DescriptorModule.isImmutable(descriptor)) {
+    throw new Error(immutableMessage(descriptor.name))
+  }
+  return { mode: "write", descriptor }
+}
+
+const immutableMessage = (name: string) =>
+  `${name} is immutable: replace it with commands.insert(entity, Game.Command.entry(${name}, ...))`
+
+type NameOf<D> = D extends { readonly name: infer Name extends string } ? Name : never
+
+/**
+ * `unknown` for a component a query may write; for one declared
+ * `immutable: true`, an argument error naming the fix.
+ */
+export type Writable<D> = D extends DescriptorModule.Immutable
+  ? { readonly __immutable__: `${NameOf<D>} is immutable: replace it with commands.insert(entity, Game.Command.entry(${NameOf<D>}, ...))` }
+  : unknown
 
 /**
  * Declares maybe-present read-only access to a component in a query

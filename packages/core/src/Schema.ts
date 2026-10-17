@@ -520,7 +520,7 @@ export namespace Schema {
         // Uninferred: an omitted list is `[]`, never inferred from the spec it is written in (`queries: { ... }`).
       }): QueryModule.QuerySpec<Selection, QueryModule.Uninferred<With, ReadonlyArray<ComponentDescriptor<S>>>, QueryModule.Uninferred<Without, ReadonlyArray<ComponentDescriptor<S>>>, QueryModule.Uninferred<Filters, ReadonlyArray<QueryModule.Filter<ComponentDescriptor<S>>>>, QueryModule.Uninferred<WithRelations, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithoutRelations, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithRelated, ReadonlyArray<Relation.Relation.Any>>, QueryModule.Uninferred<WithoutRelated, ReadonlyArray<Relation.Relation.Any>>, Root>
       read: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ReadAccess<D>
-      write: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.WriteAccess<D>
+      write: <D extends ComponentDescriptor<S>>(descriptor: D & QueryModule.Writable<D>) => QueryModule.WriteAccess<D>
       optional: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.OptionalReadAccess<D>
       added: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.AddedFilter<D>
       changed: <D extends ComponentDescriptor<S>>(descriptor: D) => QueryModule.ChangedFilter<D>
