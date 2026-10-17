@@ -67,13 +67,23 @@ export interface Source<Data> {
   readonly snapshot: () => Data
 }
 
-/** Whether a type is plain data (what JSON keeps): no functions, maps, sets, or class instances with methods. */
-export type IsPlain<T> =
-  [T] extends [string | number | boolean | null | undefined] ? true
+/**
+ * Whether a type is plain data (what JSON keeps): no functions, maps, sets,
+ * or class instances with methods. Recursive types are checked once.
+ */
+export type IsPlain<T> = false extends PlainMember<T, never> ? false : true
+
+// Checks one member of a union at a time (the conditional distributes), so a
+// recursive type is recognised when it comes back (`Seen`).
+type PlainMember<T, Seen> =
+  T extends string | number | boolean | null | undefined ? true
+  : [T] extends [Seen] ? true
   : T extends (...args: ReadonlyArray<never>) => unknown ? false
-  : T extends ReadonlyArray<infer Element> ? IsPlain<Element>
-  : T extends object ? (false extends { [K in keyof T]-?: IsPlain<T[K]> }[keyof T] ? false : true)
+  : T extends ReadonlyArray<infer Element> ? PlainMember<Element, Seen | T>
+  : T extends object ? PlainField<T, keyof T, Seen | T>
   : false
+
+type PlainField<T, K extends keyof T, Seen> = K extends keyof T ? PlainMember<T[K], Seen> : never
 
 type ServiceNeeds<Schedule> = Extract<Requirement.Of<Schedule>, Descriptor<"service", string, any>>
 

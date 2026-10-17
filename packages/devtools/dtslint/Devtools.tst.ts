@@ -150,5 +150,9 @@ describe("Replay.recorder", () => {
     expect<Replay.IsPlain<{ readonly f: () => void }>>().type.toBe<false>()
     expect<Replay.IsPlain<Map<string, number>>>().type.toBe<false>()
     expect<Replay.IsPlain<Set<number>>>().type.toBe<false>()
+    interface Upgrade { readonly cost: number; readonly next: Upgrade | null }
+    expect<Replay.IsPlain<{ readonly upgrade: Upgrade }>>().type.toBe<true>()
+    interface Broken { readonly next: Broken | null; readonly run: () => void }
+    expect<Replay.IsPlain<Broken>>().type.toBe<false>()
   })
 })
