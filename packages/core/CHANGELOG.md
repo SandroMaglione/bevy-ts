@@ -1,4 +1,28 @@
-# @typeonce/bevy-ts
+# @typeonce/ritmo
+
+## 0.6.0
+
+### Minor Changes
+
+- 130cb6e: Rename the package family from `@typeonce/bevy-ts*` to `@typeonce/ritmo*`.
+  Update imports, workspace dependencies, type identity markers, examples, and
+  documentation together. There are no compatibility aliases; use the matching
+  Ritmo package for each previous Bevy TS package. The separate release preparation
+  change coordinates the repository rename and retirement of the generated
+  documentation site.
+  Use "The agent-first type safe ECS runtime" in package metadata,
+  documentation, and brand assets.
+- a1f18a8: Two fixes:
+
+  - **Snapshots keep entity scopes.** `snapshot()` now saves scope membership (`scopes`: per scope name, its members' ids) and `restore()` rebuilds it, so `despawnScope` finds restored entities. The format moves to version 2. Version 1 snapshots had no scopes and are rejected with `UnsupportedVersion` instead of being restored with every scoped entity loose. Invalid membership (an id that is not a saved entity, or one in two scopes) fails with `InvalidScope`.
+  - **RenderSync follows membership.** A node now exists exactly while its entity has the renderable, the transform, and every required `select` slot. It is created whichever of them arrives last, and destroyed when any of them is removed (before, only the renderable's arrival and removal counted). The redundant despawn read is gone, because despawns are recorded as removals.
+
+### Patch Changes
+
+- a8e0473: Retire the generated documentation site and point package homepages, source links,
+  and issue links to the Ritmo repository in the Typeonce GitHub organization.
+  Keep source JSDoc and repository guides, including the Pixi walkthrough in its
+  example README.
 
 ## 0.5.0
 
