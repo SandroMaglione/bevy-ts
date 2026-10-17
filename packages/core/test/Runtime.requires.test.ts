@@ -27,7 +27,7 @@ const Promote = Game.System("Requires/Promote", {
   queries: { movers: Movers },
   commands: Game.System.commands(Game.System.inserts(Player))
 }, ({ queries, commands }) => {
-  for (const match of queries.movers.each()) commands.insert(match.entity.id, [Player, {}])
+  for (const match of queries.movers.each()) commands.insert(match.entity, [Player, {}])
 })
 
 /** Stops every mover: fine for its proof (`without: [Player]`), stale once Promote's insert is applied first. */
@@ -35,7 +35,7 @@ const Stop = Game.System("Requires/Stop", {
   queries: { movers: Movers },
   commands: Game.System.commands(Game.System.removes(Velocity))
 }, ({ queries, commands }) => {
-  for (const match of queries.movers.each()) commands.remove(match.entity.id, Velocity)
+  for (const match of queries.movers.each()) commands.remove(match.entity, Velocity)
 })
 
 const kinds = (runtime: ReturnType<typeof makeRuntime>) =>
@@ -68,10 +68,7 @@ describe("Schema.requires at runtime", () => {
       queries: { players: Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Player] }) },
       commands: Game.System.commands(Game.System.removes(Player, Velocity))
     }, ({ queries, commands }) => {
-      for (const match of queries.players.each()) {
-        commands.remove(match.entity.id, Player)
-        commands.remove(match.entity.id, Velocity)
-      }
+      for (const match of queries.players.each()) commands.remove(match.entity, Player, Velocity)
     })
     runtime.tick(Game.Schedule(SpawnMover, Game.Schedule.applyDeferred(), Promote, Game.Schedule.applyDeferred()))
     runtime.tick(Game.Schedule(Demote, Game.Schedule.applyDeferred()))

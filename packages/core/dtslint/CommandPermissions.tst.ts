@@ -75,14 +75,35 @@ describe("declared commands", () => {
 
   it("inserts and removes only the declared components", () => {
     Game.System("Perms/InsertRemove", {
+      queries: { positions: Positions },
       commands: Game.System.commands(Game.System.inserts(Turned), Game.System.removes(Turned))
-    }, ({ commands }) => {
+    }, ({ queries, commands }) => {
       commands.insert(id, [Turned, { seconds: 1 }])
-      commands.remove(id, Turned)
       // @ts-expect-error Perms/Noise is not declared in this system's commands: add it to Game.System.inserts(...)
       commands.insert(id, [Turned, { seconds: 1 }], [Noise, 2])
-      // @ts-expect-error Perms/Position is not declared in this system's commands: add it to Game.System.removes(...)
-      commands.remove(id, Position)
+      for (const match of queries.positions.each()) {
+        commands.insert(match.entity, [Turned, { seconds: 1 }])
+        commands.remove(match.entity, Turned)
+        // @ts-expect-error Perms/Position is not declared in this system's commands: add it to Game.System.removes(...)
+        commands.remove(match.entity, Position)
+      }
+    })
+  })
+
+  it("removes only from a query match or a spawned id, never a raw id", () => {
+    Game.System("Perms/RemoveTarget", {
+      queries: { positions: Positions },
+      commands: Game.System.commands(Game.System.spawns(Turned), Game.System.removes(Turned))
+    }, ({ queries, commands }) => {
+      const spawned = commands.spawn(Game.Command.spawn([Turned, { seconds: 1 }]))
+      commands.remove(spawned, Turned)
+      for (const match of queries.positions.each()) {
+        commands.remove(match.entity, Turned)
+        // @ts-expect-error remove needs an entity from a query (pass match.entity) or the id spawn returned in this run, not a raw id
+        commands.remove(match.entity.id, Turned)
+      }
+      // @ts-expect-error remove needs an entity from a query (pass match.entity)
+      commands.remove(id, Turned)
     })
   })
 

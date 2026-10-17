@@ -566,6 +566,54 @@ type DraftRequirementsMet<S extends Schema.Any, Held extends string> =
     ? unknown
     : Fix<`${MissingMessages<MissingPairs<S, Held>>}: add the missing entries to the draft`>
 
+/** What an insert or remove target is known to hold: a query match's proof, or a `SpawnedId`'s draft. A raw id proves nothing. */
+type TargetHolds<E> =
+  E extends { readonly kind: "EntityRef" | "EntityMut"; readonly __proves?: (_: never) => infer Proves }
+    ? Names<Proves>
+    : E extends { readonly [spawnedTypeId]: (_: never) => infer Spawned extends string }
+      ? Spawned
+      : never
+
+/** What a remove target is known to lack: its query's `without`. */
+type TargetLacks<E> =
+  E extends { readonly kind: "EntityRef" | "EntityMut"; readonly __lacks?: (_: never) => infer Lacks }
+    ? Names<Lacks>
+    : never
+
+type EntryNames<Entries extends ReadonlyArray<readonly [ComponentDescriptor, unknown]>> = Names<Entries[number][0]>
+
+/** Inserted components with requirements neither inserted alongside nor proven held by the target. */
+type InsertRequirementsMet<S extends Schema.Any, E, Entries extends ReadonlyArray<readonly [ComponentDescriptor, unknown]>> =
+  [MissingPairs<S, EntryNames<Entries> | TargetHolds<E>> & readonly [EntryNames<Entries>, string]] extends [never]
+    ? unknown
+    : Fix<`${MissingMessages<MissingPairs<S, EntryNames<Entries> | TargetHolds<E>> & readonly [EntryNames<Entries>, string]>}: insert it in the same call, or pass match.entity from a query that proves it`>
+
+/**
+ * Removing `Removed` is sound when every component that requires one of
+ * them is removed in the same call or proven absent by the target's query
+ * (`without`): otherwise the entity may keep a requirer without its
+ * requirement.
+ */
+type RemoveViolations<S extends Schema.Any, E, Removed extends string> =
+  Extract<Schema.Requires<S>, readonly [string, Removed]> extends infer Pair
+    ? Pair extends readonly [infer From extends string, infer To extends string]
+      ? From extends Removed | TargetLacks<E>
+        ? never
+        : `${To} is required by ${From}: remove ${From} in the same call, or match the entity with a query that has without: [${From}]`
+      : never
+    : never
+
+type RemoveRequirementsMet<S extends Schema.Any, E, Removed extends string> =
+  [RemoveViolations<S, E, Removed>] extends [never] ? unknown : Fix<RemoveViolations<S, E, Removed>>
+
+/** A remove target: `match.entity`, or the id `spawn` returned in this run; never a raw id. */
+type RemoveTargetAllowed<S extends Schema.Any, Root, E> =
+  E extends { readonly kind: "EntityRef" | "EntityMut"; readonly id: Entity.EntityId<S, Root> }
+    ? unknown
+    : E extends SpawnedId<S, Root, string>
+      ? unknown
+      : Fix<"remove needs an entity from a query (pass match.entity) or the id spawn returned in this run, not a raw id">
+
 /** The transitive closure of the names `N` require (cycles stop). */
 type RequiredClosure<Pairs extends RequirementPair, N extends string, Seen extends string = never> =
   [Exclude<N, Seen>] extends [never]
@@ -580,6 +628,13 @@ export type RequiredDescriptors<S extends Schema.Any, Names extends string> =
   [Extract<Schema.Requires<S>, readonly [Names, string]>] extends [never]
     ? never
     : Extract<Schema.ComponentDescriptor<S>, { readonly name: Exclude<RequiredClosure<Schema.Requires<S>, Names>, Names> }>
+
+type SchemaComponent<S extends Schema.Any> = Extract<Schema.Components<S>[keyof Schema.Components<S>], ComponentDescriptor>
+
+/** An entity a system has proven something about: `match.entity`, or the id `spawn` returned. */
+type EntityTarget<S extends Schema.Any, Root> =
+  | { readonly kind: "EntityRef" | "EntityMut"; readonly id: Entity.EntityId<S, Root> }
+  | SpawnedId<S, Root, string>
 
 /** The keys every member of a union of proofs requires (what a draft holds in every case). */
 type RequiredKeys<P> = P extends unknown ? { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P] & string : never
@@ -634,16 +689,23 @@ export interface CommandsApi<
   /**
    * Queues component inserts (or replacements) on an existing entity, applied
    * at the next `applyDeferred()`. To change a value now, on an entity you
-   * matched, write through a query (`Game.Query.write`) instead.
+   * matched, write through a query (`Game.Query.write`) instead; components
+   * declared `immutable: true` change only through `insert`.
+   *
+   * Pass `match.entity`: its query proves what the entity holds, which must
+   * cover what the inserted components require (`Schema.requires`) together
+   * with the entries inserted in the same call. The id `spawn` returned in
+   * this run proves its draft. A raw `EntityId` proves nothing, so it only
+   * inserts components without requirements.
    *
    * Entries must already be valid; validate raw input with
    * `Game.Command.entryRaw(...)` first.
    */
   readonly insert: [Inserts] extends [never]
     ? MethodNotDeclared<"insert", "inserts">
-    : <const Entries extends ReadonlyArray<SchemaEntry<S>>>(
-        entity: Entity.EntityId<S, Root>,
-        ...entries: Entries & EntriesAllowed<Entries, Inserts>
+    : <const E extends Entity.EntityId<S, Root> | EntityTarget<S, Root>, const Entries extends ReadonlyArray<SchemaEntry<S>>>(
+        entity: E,
+        ...entries: Entries & EntriesAllowed<Entries, Inserts> & InsertRequirementsMet<S, E, Entries>
       ) => Entity.EntityId<S, Root>
   /**
    * Queues an entity removal. A despawned entity stays visible to queries
@@ -664,13 +726,22 @@ export interface CommandsApi<
     ? MethodNotDeclared<"despawnScope", "despawnsScope">
     : (scope: Scopes) => void
   /**
-   * Queues a component removal on an existing entity.
+   * Queues the removal of one or more components from an existing entity,
+   * applied together at the next `applyDeferred()`.
+   *
+   * Pass `match.entity` from a query, or the id `spawn` returned in this run;
+   * never a raw id. A component another one requires (`Schema.requires`) can
+   * only go together with that requirer, in the same call, or from an
+   * entity whose query has `without: [Requirer]`.
    */
   readonly remove: [Removes] extends [never]
     ? MethodNotDeclared<"remove", "removes">
-    : <D extends Extract<Schema.Components<S>[keyof Schema.Components<S>], ComponentDescriptor>>(
-        entity: Entity.EntityId<S, Root>,
-        descriptor: D & RemoveAllowed<D, Removes>
+    : <
+        const E,
+        const Ds extends readonly [SchemaComponent<S>, ...Array<SchemaComponent<S>>]
+      >(
+        entity: E & RemoveTargetAllowed<S, Root, E>,
+        ...descriptors: Ds & RemoveAllowed<Ds[number], Removes> & RemoveRequirementsMet<S, E, Names<Ds[number]>>
       ) => Entity.EntityId<S, Root>
   /**
    * Queues one live relation mutation for deferred application.
@@ -707,10 +778,10 @@ export interface CommandsApi<
 export interface CommandQueue<S extends Schema.Any, Root = unknown> {
   readonly spawn: (draft: Entity.EntityDraft<S, any, Root>) => Entity.EntityId<S, Root>
   readonly spawnIn: (scope: EntityScope.EntityScope<string, Root>, draft: Entity.EntityDraft<S, any, Root>) => Entity.EntityId<S, Root>
-  readonly insert: (entity: Entity.EntityId<S, Root>, ...entries: ReadonlyArray<SchemaEntry<S>>) => Entity.EntityId<S, Root>
+  readonly insert: (entity: Entity.EntityId<S, Root> | { readonly id: Entity.EntityId<S, Root> }, ...entries: ReadonlyArray<SchemaEntry<S>>) => Entity.EntityId<S, Root>
   readonly despawn: (entity: Entity.EntityId<S, Root> | { readonly id: Entity.EntityId<S, Root> }) => void
   readonly despawnScope: (scope: EntityScope.EntityScope<string, Root>) => void
-  readonly remove: (entity: Entity.EntityId<S, Root>, descriptor: ComponentDescriptor) => Entity.EntityId<S, Root>
+  readonly remove: (entity: Entity.EntityId<S, Root> | { readonly id: Entity.EntityId<S, Root> }, ...descriptors: ReadonlyArray<ComponentDescriptor>) => Entity.EntityId<S, Root>
   readonly relate: (entity: Entity.EntityId<S, Root>, relation: Relation.Relation.Any, target: Entity.EntityId<S, Root>) => void
   readonly unrelate: (entity: Entity.EntityId<S, Root>, relation: Relation.Relation.Any) => void
   readonly reorderChildren: (entity: Entity.EntityId<S, Root>, relation: Relation.Relation.Hierarchy, children: ReadonlyArray<Entity.EntityId<S, Root>>) => void
@@ -765,7 +836,8 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
       })
       return id
     },
-    insert(entity, ...entries) {
+    insert(target, ...entries) {
+      const entity = typeof target === "object" ? target.id : target
       queue.push({
         tag: "insert",
         apply(world) {
@@ -791,11 +863,12 @@ export const makeCommands = <S extends Schema.Any, Root = unknown>(
         }
       })
     },
-    remove(entity, descriptor) {
+    remove(target, ...descriptors) {
+      const entity = typeof target === "object" ? target.id : target
       queue.push({
         tag: "remove",
         apply(world) {
-          world.removeComponents(entity, [descriptor])
+          world.removeComponents(entity, descriptors)
         }
       })
       return entity

@@ -368,7 +368,7 @@ describe("Runtime debug handle", () => {
       queries: { tagged: Game.Query({ selection: { tagged: Game.Query.read(Tagged) } }) },
       commands: Game.System.commands(Game.System.removes(Tagged))
     }, ({ queries, commands }) => {
-      for (const match of queries.tagged.each()) commands.remove(match.entity.id, Tagged)
+      for (const match of queries.tagged.each()) commands.remove(match.entity, Tagged)
     })
     const read = Game.Schedule(ReadRemoved)
     runtime.tick(read)

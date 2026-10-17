@@ -448,6 +448,9 @@ export namespace Query {
   /** The component descriptors a query proves its matches have: required selection slots and `with`. */
   export type Proven<T extends Any> = RequiredSelectionDescriptors<T> | T["with"][number]
 
+  /** The component descriptors a query proves its matches lack: its `without`. */
+  export type Excluded<T extends Any> = T["without"][number]
+
   /**
    * The readable proof produced by a query.
    */
@@ -682,11 +685,11 @@ export type OptionalReadCell<T> = PresentOptionalReadCell<T> | AbsentOptionalRea
 export type QueryMatch<S extends Schema.Any, Q extends Query.Any> =
   keyof Query.WriteProof<Q> extends never
     ? {
-        readonly entity: EntityRef<S, Query.ReadProof<Q>, Query.Root<Q>, Query.Proven<Q>>
+        readonly entity: EntityRef<S, Query.ReadProof<Q>, Query.Root<Q>, Query.Proven<Q>, Query.Excluded<Q>>
         readonly data: Query.Cells<Q>
       }
     : {
-        readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>, Query.Root<Q>, Query.Proven<Q>>
+        readonly entity: EntityMut<S, Query.ReadProof<Q>, Query.WriteProof<Q>, Query.Root<Q>, Query.Proven<Q>, Query.Excluded<Q>>
         readonly data: Query.Cells<Q>
       }
 

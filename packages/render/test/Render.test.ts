@@ -221,8 +221,11 @@ describe("@typeonce/ritmo-render", () => {
     const Spawn = Game.System("RenderTest/SpawnReadd", { commands: Game.System.commands(Game.System.spawns(Position, Sprite)) }, ({ commands }) => {
       ids.push(commands.spawn(Game.Command.spawn([Position, { x: 0, y: 0 }], [Sprite, { label: "old" }])))
     })
-    const Swap = Game.System("RenderTest/Swap", { commands: Game.System.commands(Game.System.removes(Sprite)) }, ({ commands }) => {
-      commands.remove(ids[0]!, Sprite)
+    const Swap = Game.System("RenderTest/Swap", {
+      queries: { sprites: Game.Query({ selection: { sprite: Game.Query.read(Sprite) } }) },
+      commands: Game.System.commands(Game.System.removes(Sprite))
+    }, ({ queries, commands }) => {
+      for (const match of queries.sprites.each()) commands.remove(match.entity, Sprite)
     })
     const Readd = Game.System("RenderTest/ReaddSprite", { commands: Game.System.commands(Game.System.inserts(Sprite)) }, ({ commands }) => {
       commands.insert(ids[0]!, [Sprite, { label: "new" }])

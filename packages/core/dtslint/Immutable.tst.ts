@@ -43,7 +43,7 @@ describe("immutable components", () => {
       commands: Game.System.commands(Game.System.inserts(Kind))
     }, ({ queries, commands }) => {
       for (const match of queries.kinds.each()) {
-        commands.insert(match.entity.id, Game.Command.entry(Kind, "pickup"))
+        commands.insert(match.entity, Game.Command.entry(Kind, "pickup"))
       }
     })
   })

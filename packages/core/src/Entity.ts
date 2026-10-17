@@ -168,17 +168,23 @@ export type StagedComponent = readonly [Descriptor<"component", string, any>, un
  *
  * Query execution is the main source of `EntityRef` values.
  */
-export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown, out Proves = unknown> {
+export interface EntityRef<S extends Schema.Any, out P extends ComponentProof, Root = unknown, out Proves = unknown, out Lacks = never> {
   /**
    * Runtime tag for debugging and pattern matching.
    */
   readonly kind: "EntityRef"
   /**
    * The component descriptors the query that produced this ref proves (its
-   * required slots and `with`): what `commands.despawn` checks against the
-   * system's `despawns` permission. Type-level only.
+   * required slots and `with`): what `commands.despawn`, `insert`, and
+   * `remove` check. Type-level only.
    */
   readonly __proves?: (_: never) => Proves
+  /**
+   * The component descriptors the producing query proves absent (its
+   * `without`): what `commands.remove` checks against `Schema.requires`.
+   * Type-level only.
+   */
+  readonly __lacks?: (_: never) => Lacks
   /**
    * The schema-bound entity identity.
    */
@@ -201,7 +207,8 @@ export interface EntityMut<
   out P extends ComponentProof,
   out W extends ComponentProof,
   Root = unknown,
-  out Proves = unknown
+  out Proves = unknown,
+  out Lacks = never
 > {
   /**
    * Runtime tag for debugging and pattern matching.
@@ -209,6 +216,8 @@ export interface EntityMut<
   readonly kind: "EntityMut"
   /** The component descriptors the producing query proves; see `EntityRef`. */
   readonly __proves?: (_: never) => Proves
+  /** The component descriptors the producing query proves absent; see `EntityRef`. */
+  readonly __lacks?: (_: never) => Lacks
   /**
    * The schema-bound entity identity.
    */

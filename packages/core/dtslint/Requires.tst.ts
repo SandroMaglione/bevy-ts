@@ -93,3 +93,83 @@ describe("commands.spawn with requirements", () => {
     })
   })
 })
+
+const Bodies = Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Body] })
+const Players = Game.Query({ selection: { position: Game.Query.read(Position) }, with: [Player, Body, Velocity] })
+const MaybeBody = Game.Query({ selection: { position: Game.Query.read(Position), body: Game.Query.optional(Body) } })
+
+describe("commands.insert with requirements", () => {
+  it("checks inserts against the target's proof plus the inserted entries", () => {
+    Game.System("Req/Insert", {
+      queries: { bodies: Bodies, maybe: MaybeBody },
+      commands: Game.System.commands(Game.System.inserts(Player, Velocity, Noise))
+    }, ({ queries, commands }) => {
+      for (const match of queries.bodies.each()) {
+        expect(commands.insert(match.entity, [Player, {}], [Velocity, { x: 0 }])).type.toBe<typeof match.entity.id>()
+        // @ts-expect-error Req/Player requires Req/Velocity: insert it in the same call, or pass match.entity from a query that proves it
+        commands.insert(match.entity, [Player, {}])
+        // a raw id proves nothing
+        // @ts-expect-error Req/Player requires Req/Body
+        commands.insert(match.entity.id, [Player, {}], [Velocity, { x: 0 }])
+        // components without requirements still take raw ids
+        commands.insert(match.entity.id, [Noise, 1])
+      }
+      for (const match of queries.maybe.each()) {
+        // optional(Body) does not prove Body
+        // @ts-expect-error Req/Player requires Req/Body
+        commands.insert(match.entity, [Player, {}], [Velocity, { x: 0 }])
+      }
+    })
+  })
+
+  it("lets the id spawn returned prove its draft", () => {
+    Game.System("Req/InsertSpawned", {
+      commands: Game.System.commands(Game.System.spawns(Body), Game.System.inserts(Player, Velocity))
+    }, ({ commands }) => {
+      const body = commands.spawn(Game.Command.spawn([Body, {}], [Position, { x: 0 }]))
+      commands.insert(body, [Player, {}], [Velocity, { x: 0 }])
+    })
+  })
+})
+
+describe("commands.remove with requirements", () => {
+  it("rejects removing a component the target may still need", () => {
+    Game.System("Req/Remove", {
+      queries: {
+        players: Players,
+        moving: Game.Query({ selection: { velocity: Game.Query.read(Velocity) } }),
+        notPlayers: Game.Query({ selection: { velocity: Game.Query.read(Velocity) }, without: [Player] })
+      },
+      commands: Game.System.commands(Game.System.removes(Velocity, Noise, Player))
+    }, ({ queries, commands }) => {
+      for (const match of queries.players.each()) {
+        // @ts-expect-error Req/Velocity is required by Req/Player: remove Req/Player in the same call, or match the entity with a query that has without: [Req/Player]
+        commands.remove(match.entity, Velocity)
+        commands.remove(match.entity, Noise)
+        commands.remove(match.entity, Player)
+        expect(commands.remove(match.entity, Player, Velocity)).type.toBe<typeof match.entity.id>()
+      }
+      // The query proves Velocity but not Player: the entity may still hold Player.
+      for (const match of queries.moving.each()) {
+        // @ts-expect-error Req/Velocity is required by Req/Player
+        commands.remove(match.entity, Velocity)
+      }
+      // without: [Player] proves Player is absent.
+      for (const match of queries.notPlayers.each()) {
+        commands.remove(match.entity, Velocity)
+      }
+    })
+  })
+
+  it("removes from the id spawn returned, as from a match", () => {
+    Game.System("Req/RemoveSpawned", {
+      commands: Game.System.commands(Game.System.spawns(Noise, Velocity), Game.System.removes(Noise, Velocity))
+    }, ({ commands }) => {
+      const spawned = commands.spawn(Game.Command.spawn([Noise, 1], [Velocity, { x: 0 }]))
+      commands.remove(spawned, Noise)
+      // the entity may gain Player before this applies: only a query's without proves it absent
+      // @ts-expect-error Req/Velocity is required by Req/Player
+      commands.remove(spawned, Velocity)
+    })
+  })
+})
