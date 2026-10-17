@@ -19,7 +19,7 @@ export const palette = {
   line: "#D9D5CC"
 }
 
-export const tagline = "the agent-first typed ECS runtime"
+export const tagline = "The agent-first type safe ECS runtime"
 
 // Wordmark geometry, in wordmark units: stroke 12, x-height 40..100, one gap between letters.
 const GAP = 16

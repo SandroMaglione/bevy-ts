@@ -7,7 +7,7 @@
 
 # Brand
 
-Ritmo is the agent-first typed ECS runtime.
+The agent-first type safe ECS runtime
 
 The assets share one geometry and motion model. Edit the generators, never their output:
 

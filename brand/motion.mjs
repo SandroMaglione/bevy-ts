@@ -29,7 +29,7 @@ export const html = `<!doctype html>
   footer { margin: 16px 0 0; color: var(--muted-foreground, #60656e); font-size: 12px; }
   @media (max-width: 430px) { .stage { height: 310px; } button, select { padding: 8px 10px; } }
 </style></head><body><main>
-<p class="intro">Ritmo: ${tagline}.</p>
+<p class="intro">${tagline}</p>
 <div class="controls">
   <button id="play" type="button">Pause</button><button id="replay" type="button">Replay</button>
   <label>Speed <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select></label>

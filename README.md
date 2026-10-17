@@ -7,7 +7,7 @@
 
 # Ritmo
 
-The agent-first typed ECS runtime.
+The agent-first type safe ECS runtime
 
 You direct the mechanics and feel. Your coding agent builds the simulation with
 closed schemas, declared system access, explicit schedule boundaries, and typed
@@ -20,7 +20,7 @@ input, timing, math, and renderer bridges. Drawing stays in the game.
 <p align="center">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="./brand/assets/ritmo-motion-still.svg">
-    <img alt="Ritmo: the agent-first typed ECS runtime" src="./brand/assets/ritmo-banner.gif" width="720">
+    <img alt="Ritmo: The agent-first type safe ECS runtime" src="./brand/assets/ritmo-banner.gif" width="720">
   </picture>
 </p>
 

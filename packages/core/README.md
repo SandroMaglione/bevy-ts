@@ -1,6 +1,6 @@
 # `@typeonce/ritmo`
 
-Ritmo is the agent-first typed ECS runtime.
+The agent-first type safe ECS runtime
 
 Closed schemas, declared system access, explicit schedule boundaries, typed
 services, and no user-facing casts for normal usage.
