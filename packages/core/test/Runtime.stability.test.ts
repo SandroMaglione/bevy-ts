@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Descriptor, Fx, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Fx, Schema } from "@typeonce/ritmo"
 
 describe("Runtime stabilization APIs", () => {
   it("rolls back ECS writes and commands from an expected system failure", () => {

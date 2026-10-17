@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import * as Runtime from "@typeonce/bevy-ts/Runtime"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import * as Runtime from "@typeonce/ritmo/Runtime"
 
 const Freeze = Descriptor.Resource<{ readonly remaining: number }>()("Check/Freeze")
 const Log = Descriptor.Resource<ReadonlyArray<string>>()("Check/Log")

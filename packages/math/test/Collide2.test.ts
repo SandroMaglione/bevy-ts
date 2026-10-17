@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Box2, Collide2, Random } from "@typeonce/bevy-ts-math"
+import { Box2, Collide2, Random } from "@typeonce/ritmo-math"
 
 describe("Collide2", () => {
   const thin: Box2.Box2 = { minX: 100, minY: -1000, maxX: 102, maxY: 1000 }

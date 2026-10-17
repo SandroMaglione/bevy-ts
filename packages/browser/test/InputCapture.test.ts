@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { InputCapture, Keyboard } from "@typeonce/bevy-ts-browser"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { InputCapture, Keyboard } from "@typeonce/ritmo-browser"
+import { Descriptor, Schema } from "@typeonce/ritmo"
 
 const bindings = { jump: [" "], left: ["ArrowLeft"] } as const
 

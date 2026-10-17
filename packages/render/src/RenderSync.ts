@@ -42,11 +42,11 @@
  * const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), Render)
  * ```
  */
-import type { Descriptor } from "@typeonce/bevy-ts/Descriptor"
-import type { Condition, ConditionNeedsFromConditions } from "@typeonce/bevy-ts/Machine"
-import type * as Entity from "@typeonce/bevy-ts/Entity"
-import type { OptionalReadAccess, OptionalReadCell, ReadAccess, ReadCell, ReadonlyValue } from "@typeonce/bevy-ts/Query"
-import type { Schema } from "@typeonce/bevy-ts/Schema"
+import type { Descriptor } from "@typeonce/ritmo/Descriptor"
+import type { Condition, ConditionNeedsFromConditions } from "@typeonce/ritmo/Machine"
+import type * as Entity from "@typeonce/ritmo/Entity"
+import type { OptionalReadAccess, OptionalReadCell, ReadAccess, ReadCell, ReadonlyValue } from "@typeonce/ritmo/Query"
+import type { Schema } from "@typeonce/ritmo/Schema"
 import type { NodeRegistry } from "./NodeRegistry.ts"
 
 type RegistryService = Descriptor<"service", string, NodeRegistry<any>>

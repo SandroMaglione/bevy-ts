@@ -1,8 +1,8 @@
 import { Application, Container, Sprite, Texture } from "pixi.js";
 
-import { Descriptor, Schema } from "@typeonce/bevy-ts";
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render";
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi";
+import { Descriptor, Schema } from "@typeonce/ritmo";
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render";
+import { PixiNodeRegistry } from "@typeonce/ritmo-pixi";
 
 export interface BrowserExampleHandle {
   destroy(): Promise<void>

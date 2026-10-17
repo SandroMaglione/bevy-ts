@@ -1,5 +1,5 @@
 /** Simulation-owned time and random state. No clock or host capture is needed. */
-import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Decode, Descriptor, Schema } from "@typeonce/ritmo"
 
 const Time = Descriptor.ConstructedResource(Decode.struct({ step: Decode.integer, elapsed: Decode.number, dt: Decode.number }))("Recipes/Time")
 const Random = Descriptor.ConstructedResource(Decode.integer)("Recipes/Random")

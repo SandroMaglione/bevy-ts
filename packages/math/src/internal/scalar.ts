@@ -1,5 +1,5 @@
-import * as Brand from "@typeonce/bevy-ts/Brand"
-import * as Result from "@typeonce/bevy-ts/Result"
+import * as Brand from "@typeonce/ritmo/Brand"
+import * as Result from "@typeonce/ritmo/Result"
 import type * as Scalar from "../Scalar.ts"
 
 const finiteBrand = Brand.refine<Scalar.Finite, number, Scalar.Error>((value) =>

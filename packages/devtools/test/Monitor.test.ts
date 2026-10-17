@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { Collector, recentSchedule, recentSystem } from "@typeonce/bevy-ts-devtools/Monitor"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import { Collector, recentSchedule, recentSystem } from "@typeonce/ritmo-devtools/Monitor"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("Mon/Position")
 const Shot = Descriptor.Component<{ readonly speed: number }>()("Mon/Shot")

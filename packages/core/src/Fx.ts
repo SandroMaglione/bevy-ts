@@ -39,12 +39,12 @@ import * as Result from "./Result.ts"
 /**
  * String-literal type id used to mirror Effect's current `~effect/...` style.
  */
-export type FxTypeId = "~bevy-ts/Fx"
+export type FxTypeId = "~ritmo/Fx"
 
 /**
  * Runtime value for the `Fx` type id.
  */
-const fxTypeId: FxTypeId = "~bevy-ts/Fx"
+const fxTypeId: FxTypeId = "~ritmo/Fx"
 
 /**
  * A minimal Effect-style computation used by the runtime.

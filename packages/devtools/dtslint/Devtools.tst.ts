@@ -1,5 +1,5 @@
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
-import { Session } from "@typeonce/bevy-ts-devtools"
+import { Descriptor, Schema } from "@typeonce/ritmo"
+import { Session } from "@typeonce/ritmo-devtools"
 import { describe, expect, it } from "tstyche"
 
 const Position = Descriptor.Component<{ readonly x: number }>()("DevtoolsTypes/Position")

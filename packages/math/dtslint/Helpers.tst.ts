@@ -1,4 +1,4 @@
-import { Box2, Collide2, FlowField, Random, Scalar, SpatialGrid, Vec2, Vector2 } from "@typeonce/bevy-ts-math"
+import { Box2, Collide2, FlowField, Random, Scalar, SpatialGrid, Vec2, Vector2 } from "@typeonce/ritmo-math"
 import { describe, expect, it } from "tstyche"
 
 declare const size: Scalar.Positive

@@ -1,7 +1,7 @@
 {
-  "name": "@typeonce/bevy-ts-math",
+  "name": "@typeonce/ritmo-math",
   "version": "0.5.0",
-  "description": "Validated math values and hot-path game helpers (collision, spatial grid, flow field, random) for bevy-ts games",
+  "description": "Validated math values and hot-path game helpers (collision, spatial grid, flow field, random) for Ritmo games",
   "author": "Sandro Maglione",
   "license": "MIT",
   "repository": {
@@ -16,7 +16,7 @@
   "keywords": [
     "ecs",
     "gamedev",
-    "bevy",
+    "ritmo",
     "math",
     "vector"
   ],
@@ -63,7 +63,7 @@
     "check": "tsc -b tsconfig.json --pretty false"
   },
   "dependencies": {
-    "@typeonce/bevy-ts": "workspace:^"
+    "@typeonce/ritmo": "workspace:^"
   },
   "engines": {
     "node": ">=20"

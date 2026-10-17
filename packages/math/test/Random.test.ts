@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Random } from "@typeonce/bevy-ts-math"
+import { Random } from "@typeonce/ritmo-math"
 
 describe("Random", () => {
   it("draws the mulberry32 sequence, continuing exactly from a stored state", () => {

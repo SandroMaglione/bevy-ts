@@ -1,5 +1,5 @@
-import { Decode, Descriptor, Fx, Result, Schema } from "@typeonce/bevy-ts"
-import type { Handle } from "@typeonce/bevy-ts/Entity"
+import { Decode, Descriptor, Fx, Result, Schema } from "@typeonce/ritmo"
+import type { Handle } from "@typeonce/ritmo/Entity"
 import { describe, expect, it } from "tstyche"
 
 describe("Result", () => {

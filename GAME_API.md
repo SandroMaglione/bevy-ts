@@ -1,4 +1,4 @@
-# Building a game with `bevy-ts`
+# Building a game with `ritmo`
 
 The library now has a small, renderer-independent gameplay core. A game is a
 closed schema, systems with declared capabilities, explicit schedules, and one
@@ -7,7 +7,7 @@ runtime. Browser timing and rendering stay outside the ECS.
 ## 1. Define the world
 
 ```ts
-import { Descriptor, Fx, Result, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Fx, Result, Schema } from "@typeonce/ritmo"
 
 const Position = Descriptor.Component<{ x: number; y: number }>()("Game/Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Game/Velocity")
@@ -59,7 +59,7 @@ The callback cannot access undeclared world data. A write query exposes writable
 cells; a read query does not. Values returned by `get()` are deeply readonly;
 changes go through `set`, `update`, or a validated write helper. Type helper
 functions that take such values as `ReadonlyValue<T>` (from
-`@typeonce/bevy-ts/Query`) so they accept `get()` results without casts.
+`@typeonce/ritmo/Query`) so they accept `get()` results without casts.
 
 ## 3. Keep expected failures in the type
 
@@ -189,7 +189,7 @@ world untouched on failure.
 Both methods only exist when every component and resource is either
 transient (never saved) or constructed with a validator that accepts
 untrusted input: a `result(raw: unknown)`, or a `decode(raw: unknown)` next to
-a typed `result` (every validated value module in `@typeonce/bevy-ts-math` exports one). Otherwise calling
+a typed `result` (every validated value module in `@typeonce/ritmo-math` exports one). Otherwise calling
 them fails to compile, and the error lists each descriptor to fix:
 
 ```ts
@@ -213,7 +213,7 @@ world, `observe(listener)` for a trace of every system run, applied command,
 and transition, and `streams()` for event retention. Runtimes made without it
 have no handle.
 
-`@typeonce/bevy-ts-devtools` wraps the handle in a session that runs schedules headless
+`@typeonce/ritmo-devtools` wraps the handle in a session that runs schedules headless
 and answers questions as text:
 
 ```ts
@@ -237,10 +237,10 @@ and feed input through `Keyboard.scripted(...)`. See
 
 ## 6. Drive fixed updates from any renderer
 
-`@typeonce/bevy-ts-browser` supplies timing policy without owning the ECS or renderer.
+`@typeonce/ritmo-browser` supplies timing policy without owning the ECS or renderer.
 
 ```ts
-import { FixedLoop } from "@typeonce/bevy-ts-browser"
+import { FixedLoop } from "@typeonce/ritmo-browser"
 
 const source = FixedLoop.animationFrames(window)
 const loop = FixedLoop.start({
@@ -282,7 +282,7 @@ Keyboard input is exposed the same way: bind named actions once, and let
 systems read like any other world data.
 
 ```ts
-import { InputCapture, Keyboard } from "@typeonce/bevy-ts-browser"
+import { InputCapture, Keyboard } from "@typeonce/ritmo-browser"
 
 const bindings = { left: ["ArrowLeft", "a"], right: ["ArrowRight", "d"], jump: [" ", "ArrowUp", "w"] } as const
 
@@ -359,12 +359,12 @@ snapshot and verifies that the next step produces the same time and seed.
 
 ## 7. Mirror entities into a renderer
 
-`@typeonce/bevy-ts-render` owns the node bookkeeping for any renderer (Pixi,
+`@typeonce/ritmo-render` owns the node bookkeeping for any renderer (Pixi,
 Three.js, the DOM); what a node looks like, and how it joins and leaves the
 scene, stays yours.
 
 ```ts
-import { NodeRegistry, RenderSync } from "@typeonce/bevy-ts-render"
+import { NodeRegistry, RenderSync } from "@typeonce/ritmo-render"
 
 const RenderNodes = Descriptor.Service<NodeRegistry.NodeRegistry<Mesh>>()("Game/RenderNodes")
 
@@ -389,10 +389,10 @@ const runtime = Game.Runtime.make({
 const update = Game.Schedule(Gameplay, Game.Schedule.applyDeferred(), render)
 ```
 
-For Pixi, import `PixiNodeRegistry` from `@typeonce/bevy-ts-pixi` and provide
+For Pixi, import `PixiNodeRegistry` from `@typeonce/ritmo-pixi` and provide
 `PixiNodeRegistry.make(actorLayer)` as the same registry service. Nodes are
 attached to the container and destroyed with their children when removed.
-Keep `NodeRegistry` and `RenderSync` imports in `@typeonce/bevy-ts-render`.
+Keep `NodeRegistry` and `RenderSync` imports in `@typeonce/ritmo-render`.
 
 The registry service is a normal requirement: ticking the render system on a
 runtime that does not provide it is a compile error. `select`, `resources`,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { Pointer } from "@typeonce/bevy-ts-browser"
+import { Pointer } from "@typeonce/ritmo-browser"
 
 const makeTarget = (rect = { left: 10, top: 20 }) => {
   const listeners = new Map<string, Set<(event?: any) => void>>()

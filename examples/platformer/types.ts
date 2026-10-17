@@ -1,8 +1,8 @@
-import type { NodeRegistry } from "@typeonce/bevy-ts-render"
+import type { NodeRegistry } from "@typeonce/ritmo-render"
 import type { Application, Container } from "pixi.js"
-import type * as Scalar from "@typeonce/bevy-ts-math/Scalar"
-import type * as Size2Value from "@typeonce/bevy-ts-math/Size2"
-import type * as Vector2Value from "@typeonce/bevy-ts-math/Vector2"
+import type * as Scalar from "@typeonce/ritmo-math/Scalar"
+import type * as Size2Value from "@typeonce/ritmo-math/Size2"
+import type * as Vector2Value from "@typeonce/ritmo-math/Vector2"
 
 export type Vector2 = Vector2Value.Vector2
 export type Size2 = Size2Value.Size2

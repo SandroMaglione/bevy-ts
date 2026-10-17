@@ -1,4 +1,4 @@
-import { InputCapture } from "@typeonce/bevy-ts-browser"
+import { InputCapture } from "@typeonce/ritmo-browser"
 import {
   DeltaTime,
   FrameContext,

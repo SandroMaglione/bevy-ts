@@ -1,17 +1,35 @@
-# `bevy-ts`
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./brand/assets/ritmo-lockup-padded-inverse.svg">
+    <img alt="Ritmo" src="./brand/assets/ritmo-lockup-padded.svg" width="360">
+  </picture>
+</p>
 
-`bevy-ts` is a type-safe, game-loop-agnostic ECS runtime for TypeScript.
+# Ritmo
 
-It keeps Bevy-style ECS concepts, but the public API is stricter and more explicit: closed schemas, declared system access, explicit schedule boundaries, typed services, and no user-facing casts for normal usage.
+The agent-first type safe ECS runtime
 
-Documentation: https://sandromaglione.github.io/bevy-ts/
+You direct the mechanics and feel. Your coding agent builds the simulation with
+closed schemas, declared system access, explicit schedule boundaries, and typed
+services. Compile-time checks reject undeclared access and missing requirements;
+headless sessions expose lints, invariants, journals, and the causes of changes.
+
+Ritmo works with your renderer and game loop. Its packages provide simulation,
+input, timing, math, and renderer bridges. Drawing stays in the game.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="./brand/assets/ritmo-motion-still.svg">
+    <img alt="Ritmo: The agent-first type safe ECS runtime" src="./brand/assets/ritmo-banner.gif" width="720">
+  </picture>
+</p>
 
 New to the library? Start with [CONCEPTS.md](./CONCEPTS.md) (the model in five
 minutes), then [GAME_API.md](./GAME_API.md). Type architecture and storage are
 documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```sh
-pnpm add @typeonce/bevy-ts
+pnpm add @typeonce/ritmo
 ```
 
 Requires TypeScript 5.9 or newer. The type tests run on every TypeScript
@@ -19,24 +37,24 @@ version from 5.9 up, and the packages build with TypeScript 7.
 
 | Package | Contents |
 |---|---|
-| `@typeonce/bevy-ts` | The ECS runtime |
-| `@typeonce/bevy-ts-math` | Validated vectors, sizes, and bounding boxes; swept collision, spatial grid, flow field, deterministic random |
-| `@typeonce/bevy-ts-browser` | Fixed-step loop, keyboard, pointer, and touch input, input capture |
-| `@typeonce/bevy-ts-render` | Entity to renderer node sync, for any renderer |
-| `@typeonce/bevy-ts-pixi` | Pixi container adapter (`PixiNodeRegistry.make`) |
-| `@typeonce/bevy-ts-devtools` | Headless debug sessions and trace reports ([README](./packages/devtools/README.md)) |
+| `@typeonce/ritmo` | The ECS runtime |
+| `@typeonce/ritmo-math` | Validated vectors, sizes, and bounding boxes; swept collision, spatial grid, flow field, deterministic random |
+| `@typeonce/ritmo-browser` | Fixed-step loop, keyboard, pointer, and touch input, input capture |
+| `@typeonce/ritmo-render` | Entity to renderer node sync, for any renderer |
+| `@typeonce/ritmo-pixi` | Pixi container adapter (`PixiNodeRegistry.make`) |
+| `@typeonce/ritmo-devtools` | Headless debug sessions and trace reports ([README](./packages/devtools/README.md)) |
 
 All packages are released together with the same version.
 
 ```ts
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+import { Descriptor, Schema } from "@typeonce/ritmo"
 
 // Define the ECS world shape once.
 const Position = Descriptor.Component<{ x: number; y: number }>()("Position")
 const Velocity = Descriptor.Component<{ x: number; y: number }>()("Velocity")
 const DeltaTime = Descriptor.Resource<number>()("DeltaTime")
 
-// Compose one or more fragments and bind the runtime-facing API surface.
+// Bind the schema to its game-facing APIs.
 const Game = Schema.bind(Schema.fragment({ components: { Position, Velocity }, resources: { DeltaTime } }))
 
 // Systems only receive the access they declare here.
@@ -58,9 +76,7 @@ const runtime = Game.Runtime.make({
 runtime.tick(Game.Schedule(Move))
 ```
 
-Start with the docs homepage for the full step-by-step Pixi example:
-
-- https://sandromaglione.github.io/bevy-ts/
+Start with the [Pixi walkthrough](./scripts/homepage.md) for the full step-by-step example.
 
 ## Runtime semantics
 
@@ -82,4 +98,12 @@ pnpm bench:update   # record a new baseline
 ```
 
 CI measures every pull request against its base commit on the same runner and fails on runtime regressions over 25%, or type-checker growth over 5%.
+
+## Naming note
+
+Ritmo was previously named `bevy-ts`. The [hosted documentation](https://sandromaglione.github.io/bevy-ts/)
+still uses the existing repository address. The package names here are prepared for
+the separate npm publication and GitHub rename.
+
+<sub>[Brand assets and palette](./brand/README.md)</sub>
 

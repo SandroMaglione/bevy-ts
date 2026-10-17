@@ -121,22 +121,22 @@ import type {
 /**
  * String-literal type id used to brand descriptor-based runtime service maps.
  */
-export type RuntimeServicesTypeId = "~bevy-ts/RuntimeServices"
+export type RuntimeServicesTypeId = "~ritmo/RuntimeServices"
 
 /**
  * Runtime value for the service-map type id.
  */
-const runtimeServicesTypeId: RuntimeServicesTypeId = "~bevy-ts/RuntimeServices"
+const runtimeServicesTypeId: RuntimeServicesTypeId = "~ritmo/RuntimeServices"
 
 /**
  * String-literal type id used to brand machine initialization maps.
  */
-export type RuntimeMachinesTypeId = "~bevy-ts/RuntimeMachines"
+export type RuntimeMachinesTypeId = "~ritmo/RuntimeMachines"
 
 /**
  * Runtime value for the machine-map type id.
  */
-const runtimeMachinesTypeId: RuntimeMachinesTypeId = "~bevy-ts/RuntimeMachines"
+const runtimeMachinesTypeId: RuntimeMachinesTypeId = "~ritmo/RuntimeMachines"
 const runtimeMachinesEntries = Symbol("RuntimeMachinesEntries")
 
 /**
@@ -1009,7 +1009,7 @@ const makeValidatedRuntime = <
    * discarded; on success, buffered events are published at a fresh tick,
    * so every reader (including the emitter's next run) sees them.
    */
-  const absentValue = Symbol("bevy-ts/absent-value")
+  const absentValue = Symbol("ritmo/absent-value")
   const resourceOriginals = new Map<symbol, unknown>()
   const machineOriginals = new Map<symbol, { value: unknown; skipIfSame: boolean } | typeof absentValue>()
   const emittedEvents = new Map<symbol, Array<unknown>>()
