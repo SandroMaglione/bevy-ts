@@ -186,6 +186,23 @@ Game.Schedule.when([Game.Condition.inState(Flow, "Playing")],
 )
 ```
 
+A mode that only exists inside another one (a battle phase while playing) is a
+sub-state:
+
+```ts
+const Phase = Game.StateMachine("Concepts/Phase", ["Setup", "Battle"], { within: [Flow, "Playing"] })
+// Game.Runtime.machine(Phase, "Setup") → the value it enters each time Flow enters Playing
+// when: [Game.Condition.inState(Phase, "Battle")] → implies Flow is Playing
+// machines.phase.get() → "Setup" | "Battle" | undefined (undefined while Flow is elsewhere)
+// nextMachines.phase.set("Battle") → Result: fails with SubStateInactive while Flow is elsewhere
+```
+
+- Leaving `Playing` runs the sub-state's `onExit` schedules before the parent's and drops its value; entering runs the parent's `onEnter` first, then the sub-state's.
+- Setting the parent to the same state again (`set`, not `setIfChanged`) re-runs its exit and enter, so the sub-state restarts too.
+- Use two top-level machines instead when each keeps its value whatever the other does.
+
+A scope can end with a state change: `Game.EntityScope("Concepts/Run", { despawnOnExit: [Flow, "Playing"] })` despawns its members when `applyStateTransitions` commits leaving `Playing`, with no despawn system.
+
 `when` discards event messages across mode changes. `pauseWhen` holds them
 while a condition is false, up to the normal stream capacity. All `when`
 conditions are checked before pause conditions, regardless of nesting order.
