@@ -625,8 +625,11 @@ type RequiredClosure<Pairs extends RequirementPair, N extends string, Seen exten
  * (`Schema.requires`): what `Game.System.spawns(...)` also allows.
  */
 export type RequiredDescriptors<S extends Schema.Any, Names extends string> =
-  // `any` names (an unresolved descriptor) would never close: leave the error to the descriptor.
+  // Non-literal names (an unresolved descriptor, alone or next to known ones) would never
+  // close: leave the error to the descriptor.
   0 extends 1 & Names
+    ? never
+    : string extends Names
     ? never
     : [Extract<Schema.Requires<S>, readonly [Names, string]>] extends [never]
     ? never

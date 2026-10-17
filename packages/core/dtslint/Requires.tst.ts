@@ -56,6 +56,16 @@ describe("Schema.requires", () => {
     // a cycle terminates
     expect(Game.System.spawns(A)).type.toBe<Command.Permission<"spawns", typeof A | typeof B>>()
   })
+
+  it("reports a missing import next to a requiring component as only that missing name", () => {
+    // The expansion must not recurse on the unresolved name: an excessive-depth error
+    // would be reported on the call's first line, which nothing here suppresses.
+    Game.System.spawns(
+      Player,
+      // @ts-expect-error Cannot find name 'Missing'
+      Missing
+    )
+  })
 })
 
 describe("commands.spawn with requirements", () => {
