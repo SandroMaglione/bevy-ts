@@ -225,16 +225,18 @@ export const system = <
     ...Object.values(options.select ?? {}).flatMap((access) => access.mode === "read" ? [access.descriptor] : [])
   ].filter((descriptor, index, all) => all.indexOf(descriptor) === index)
 
-  // One `added` query per required component (the node appears whichever
-  // arrives last) and one `changed` query per trigger; filters within one
-  // query must all match.
-  const triggers = [...(transform === undefined ? [] : [transform]), ...(options.redrawOn ?? [])]
+  // A changed query also sees additions. Reuse it for membership rather
+  // than querying a moving transform twice on every frame.
+  const triggers = [...new Set([...(transform === undefined ? [] : [transform]), ...(options.redrawOn ?? [])])]
+  const additions = required.filter((descriptor) => !triggers.includes(descriptor))
   const queries: Record<string, object> = {}
   const removedReads: Record<string, unknown> = {}
   required.forEach((descriptor, index) => {
-    queries[`added${index}`] = Query({ selection, filters: [Game.Query.added(descriptor)] })
     // Despawns are recorded as removals of every component, so these cover them too.
     removedReads[`removed${index}`] = Game.System.readRemoved(descriptor)
+  })
+  additions.forEach((descriptor, index) => {
+    queries[`added${index}`] = Query({ selection, filters: [Game.Query.added(descriptor)] })
   })
   triggers.forEach((trigger, index) => {
     queries[`changed${index}`] = Query({ selection, filters: [Game.Query.changed(trigger)] })
@@ -255,7 +257,7 @@ export const system = <
     }
 
     const applied = new Set<number>()
-    for (let index = 0; index < required.length; index++) {
+    for (let index = 0; index < additions.length; index++) {
       for (const { entity, data } of queries[`added${index}`].each()) {
         if (applied.has(entity.id)) continue
         const context = contextOf(entity, data, services, resources)
@@ -267,8 +269,9 @@ export const system = <
       for (const { entity, data } of queries[`changed${index}`].each()) {
         if (applied.has(entity.id)) continue
         applied.add(entity.id)
-        const node = registry.get(entity.id)
-        if (node !== undefined) options.apply(node, contextOf(entity, data, services, resources))
+        const context = contextOf(entity, data, services, resources)
+        const node = registry.get(entity.id) ?? registry.ensure(entity.id, () => options.create(context))
+        options.apply(node, context)
       }
     }
   }) as RenderSystem<S, Root, Registry | Services[keyof Services] | Resources[keyof Resources] | ConditionNeedsFromConditions<When>>
